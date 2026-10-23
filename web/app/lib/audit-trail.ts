@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from './supabase/server';
 import type { AdminScope } from './admin-scope';
+import { isMissingColumn } from './auth/live-user';
+import { parseAdminTitle } from './role-labels';
 
 const MAX_LIMIT = 200;
 
@@ -75,13 +77,25 @@ export async function readAuditTrail(
     const actorIds = [...new Set((logs ?? []).map((l) => l.actor_id).filter((id): id is string => !!id))];
     const actorsById = new Map<
       string,
-      { id: string; name: string; email: string; picture_url: string | null; sex: string | null }
+      {
+        id: string;
+        name: string;
+        email: string;
+        picture_url: string | null;
+        sex: string | null;
+        /** Tells a Program Chair from a Dean, who share actor_role 'admin' (080). */
+        admin_title: string | null;
+      }
     >();
     if (actorIds.length > 0) {
-      const { data: actors } = await supabase
+      const titled = await supabase
         .from('users')
-        .select('id, name, email, picture_url, sex')
+        .select('id, name, email, picture_url, sex, admin_title')
         .in('id', actorIds);
+      // admin_title arrives with 080; until then every Dean-level actor reads as a Dean.
+      const actors = isMissingColumn(titled.error)
+        ? (await supabase.from('users').select('id, name, email, picture_url, sex').in('id', actorIds)).data
+        : titled.data;
       for (const a of actors ?? []) {
         actorsById.set(a.id, {
           id: a.id,
@@ -89,6 +103,7 @@ export async function readAuditTrail(
           email: a.email,
           picture_url: a.picture_url ?? null,
           sex: a.sex ?? null,
+          admin_title: 'admin_title' in a ? parseAdminTitle(a.admin_title) : null,
         });
       }
     }

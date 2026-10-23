@@ -45,7 +45,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Instructor not found' }, { status: 404 });
     }
     if (scope && studentIds.some((id) => !scope.studentIds.includes(id))) {
-      return NextResponse.json({ error: 'Some students belong to another dean' }, { status: 403 });
+      return NextResponse.json({ error: 'Some students belong to another Dean or Program Chair' }, { status: 403 });
     }
 
     if (studentIds.length > 0) {

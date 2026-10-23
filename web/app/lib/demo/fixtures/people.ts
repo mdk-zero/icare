@@ -23,6 +23,8 @@ export interface DemoUser {
   team_id: string | null;
   /** Instructors: the dean who owns them. */
   admin_id: string | null;
+  /** Deans: 'program_chair' for a Program Chair (080); absent for a Dean. */
+  admin_title?: "program_chair" | null;
   student_number: string | null;
   created_at: string;
   last_sign_in_at: string | null;

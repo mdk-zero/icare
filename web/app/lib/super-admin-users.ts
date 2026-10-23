@@ -1,4 +1,5 @@
 import type { getSupabaseAdmin } from './supabase/server';
+import { parseAdminTitle, type AdminTitle } from './role-labels';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -14,32 +15,50 @@ const BASE_SELECT =
   'id, email, name, role, picture_url, sex, created_at, last_login_at, force_password_change, section_id, sections!section_id(name), campus_id, campuses(name)';
 
 /**
- * users.admin_id arrives with migration 053, which may not be applied yet.
- * Reads try it first and fall back without it; `ownerEnabled` tells the page
- * whether to offer the owning-admin field at all.
+ * users.admin_id (053) and users.admin_title (080) may not be applied yet.
+ * Reads try the newest columns first and drop them one migration at a time;
+ * `ownerEnabled` tells the page whether to offer the owning-Dean field, and
+ * `titleEnabled` whether it can make Program Chairs.
  */
+const ACCOUNT_COLUMNS = [
+  { columns: `${BASE_SELECT}, admin_id, admin_title`, ownerEnabled: true, titleEnabled: true },
+  { columns: `${BASE_SELECT}, admin_id`, ownerEnabled: true, titleEnabled: false },
+  { columns: BASE_SELECT, ownerEnabled: false, titleEnabled: false },
+];
+
 export async function selectAccounts(
   supabase: Supabase,
   filter?: { id?: string },
-): Promise<{ users: Record<string, unknown>[]; ownerEnabled: boolean; error?: unknown }> {
+): Promise<{ users: Record<string, unknown>[]; ownerEnabled: boolean; titleEnabled: boolean; error?: unknown }> {
   const run = (columns: string) => {
     let query = supabase.from('users').select(columns).order('created_at', { ascending: false });
     if (filter?.id) query = query.eq('id', filter.id);
     return query;
   };
-  const withOwner = await run(`${BASE_SELECT}, admin_id`);
-  if (!withOwner.error) {
-    return { users: (withOwner.data ?? []) as unknown as Record<string, unknown>[], ownerEnabled: true };
+  for (const [index, { columns, ownerEnabled, titleEnabled }] of ACCOUNT_COLUMNS.entries()) {
+    const { data, error } = await run(columns);
+    const last = index === ACCOUNT_COLUMNS.length - 1;
+    if (error && !last && (error.code === '42703' || error.code === 'PGRST204')) continue;
+    return {
+      users: (data ?? []) as unknown as Record<string, unknown>[],
+      ownerEnabled,
+      titleEnabled,
+      error: error ?? undefined,
+    };
   }
-  if (withOwner.error.code !== '42703' && withOwner.error.code !== 'PGRST204') {
-    return { users: [], ownerEnabled: false, error: withOwner.error };
-  }
-  const plain = await run(BASE_SELECT);
-  return {
-    users: (plain.data ?? []) as unknown as Record<string, unknown>[],
-    ownerEnabled: false,
-    error: plain.error ?? undefined,
-  };
+  return { users: [], ownerEnabled: false, titleEnabled: false };
+}
+
+/**
+ * The Dean-level title a request body sets (080): 'program_chair', null for a
+ * Dean, or undefined when the body doesn't say. Only a Dean-level account
+ * keeps one; the database clears it on every other role.
+ */
+export function parseAdminTitleField(value: unknown): { title?: AdminTitle | null; error?: string } {
+  if (value === undefined) return {};
+  if (value === null || value === '' || value === 'dean') return { title: null };
+  const title = parseAdminTitle(value);
+  return title ? { title } : { error: 'Title must be Dean or Program Chair' };
 }
 
 /** Flattens the embedded section and institution into name fields. */

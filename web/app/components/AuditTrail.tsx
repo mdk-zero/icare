@@ -27,6 +27,8 @@ interface AuditRow {
     email: string;
     picture_url: string | null;
     sex: "male" | "female" | null;
+    /** 'program_chair' on a Program Chair (080); actor_role alone says Dean. */
+    admin_title?: string | null;
   } | null;
 }
 
@@ -192,7 +194,7 @@ export default function AuditTrail({ scope }: { scope: "own" | "system" }) {
           >
             <option value="all">All Roles</option>
             {scope === "system" && <option value="super_admin">Admin</option>}
-            <option value="admin">Dean</option>
+            <option value="admin">Dean / Program Chair</option>
             <option value="faculty">Instructor</option>
             {scope === "system" && <option value="student">Student</option>}
           </FilterSelect>
@@ -323,7 +325,7 @@ export default function AuditTrail({ scope }: { scope: "own" | "system" }) {
                               <span
                                 className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${ROLE_BADGE[log.actor_role] ?? "bg-gray-100 text-gray-600"}`}
                               >
-                                {roleLabel(log.actor_role)}
+                                {roleLabel(log.actor_role, log.actor?.admin_title)}
                               </span>
                             )}
                           </div>

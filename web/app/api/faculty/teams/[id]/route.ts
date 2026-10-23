@@ -38,7 +38,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
   if (body.faculty_id !== undefined) {
     // Who supervises a group is the dean's call.
-    if (session.role !== 'admin') return NextResponse.json({ error: 'Only your dean can change who supervises a group' }, { status: 403 });
+    if (session.role !== 'admin') return NextResponse.json({ error: 'Only your Dean or Program Chair can change who supervises a group' }, { status: 403 });
     if (body.faculty_id !== null && typeof body.faculty_id !== 'string') {
       return NextResponse.json({ error: 'Invalid faculty_id' }, { status: 400 });
     }
@@ -63,7 +63,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
     // An admin puts only their own faculty in charge (migration 053).
     if (session.role === 'admin' && !ownsFaculty(await getAdminScope(supabase, session.uid), update.faculty_id)) {
-      return NextResponse.json({ error: 'That instructor belongs to another dean' }, { status: 403 });
+      return NextResponse.json({ error: 'That instructor belongs to another Dean or Program Chair' }, { status: 403 });
     }
   }
 

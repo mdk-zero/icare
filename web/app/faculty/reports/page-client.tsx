@@ -395,8 +395,8 @@ export default function FacultyReportsClient() {
         notice={
           noSections && (
             <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              You don&apos;t manage any sections yet, so there&apos;s nothing to report on. A dean
-              assigns sections from Dean → Instructors.
+              You don&apos;t manage any sections yet, so there&apos;s nothing to report on. Your Dean or
+              Program Chair assigns sections from their Instructors page.
             </p>
           )
         }

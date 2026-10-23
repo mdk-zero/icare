@@ -5,7 +5,7 @@ import { sendStudentInvitationEmail } from '@/app/lib/auth/email';
 import { appDownloadUrl } from '@/app/lib/mobile-app';
 import { generateRandomPassword, hashPassword } from '@/app/lib/auth/password';
 import { logAudit } from '@/app/lib/audit';
-import { parseSex } from '@/app/lib/auth/user';
+import { adminTitleOf, parseSex } from '@/app/lib/auth/user';
 import { adminVisibleUserIds, getAdminScope } from '@/app/lib/admin-scope';
 import { roleLabel } from '@/app/lib/role-labels';
 
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Section not found' }, { status: 400 });
       }
       if (scope && !scope.sectionIds.includes(sectionId)) {
-        return NextResponse.json({ error: 'That section belongs to another dean' }, { status: 403 });
+        return NextResponse.json({ error: 'That section belongs to another Dean or Program Chair' }, { status: 403 });
       }
     }
 
@@ -182,7 +182,12 @@ export async function POST(request: NextRequest) {
       tempPassword,
       role === 'student'
         ? { appUrl: appDownloadUrl(request.nextUrl.origin) }
-        : { roleLabel: roleLabel(role), signInUrl: `${request.nextUrl.origin}/login`, origin: 'dean' },
+        : {
+            roleLabel: roleLabel(role),
+            signInUrl: `${request.nextUrl.origin}/login`,
+            origin: 'dean',
+            deanLabel: roleLabel('admin', await adminTitleOf(supabase, session.uid)),
+          },
     );
     if (!emailResult.success) {
       warning = `User created, but the welcome email could not be sent. Share the temporary password below manually. Reason: ${emailResult.error}`;

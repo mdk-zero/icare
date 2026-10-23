@@ -203,7 +203,7 @@ export default function PatientFormModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (coursesEnabled && courses.length === 0) {
-      setError("You have no assigned courses yet. Ask your Dean to assign you a course before adding patients.");
+      setError("You have no assigned courses yet. Ask your Dean or Program Chair to assign you a course before adding patients.");
       return;
     }
     if (needsCourse) {
@@ -308,7 +308,7 @@ export default function PatientFormModal({
                 </p>
                 {courses.length === 0 ? (
                   <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                    You have no assigned courses yet. Ask your Dean to assign you a course.
+                    You have no assigned courses yet. Ask your Dean or Program Chair to assign you a course.
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-2" role="group" aria-label="Courses">

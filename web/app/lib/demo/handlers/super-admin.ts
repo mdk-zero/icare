@@ -26,6 +26,7 @@ function account(ctx: Ctx, u: DemoUser) {
     name: u.name,
     email: u.email,
     role: u.role,
+    admin_title: u.role === "admin" ? (u.admin_title ?? null) : null,
     picture_url: u.picture_url,
     sex: u.sex,
     created_at: u.created_at,
@@ -43,6 +44,7 @@ route("GET", "/api/super-admin/users", (ctx) => {
     users: ctx.db.users.slice().sort((a, b) => b.created_at.localeCompare(a.created_at)).map((u) => account(ctx, u)),
     sections: ctx.db.sections.map((s) => ({ id: s.id, name: s.name })),
     owner_enabled: true,
+    title_enabled: true,
   };
 });
 
@@ -67,6 +69,7 @@ route("POST", "/api/super-admin/users", (ctx) => {
     section_id: body.role === "student" && body?.section_id ? body.section_id : null,
     team_id: null,
     admin_id: body.role === "faculty" ? (body?.admin_id ?? null) : null,
+    admin_title: body.role === "admin" && body?.admin_title === "program_chair" ? "program_chair" : null,
     student_number: null,
     created_at: new Date().toISOString(),
     last_sign_in_at: null,
@@ -103,6 +106,8 @@ route("PATCH", "/api/super-admin/users/:id", (ctx) => {
   if (body?.sex === "male" || body?.sex === "female") user.sex = body.sex;
   if (body && "section_id" in body) user.section_id = user.role === "student" ? body.section_id || null : null;
   if (body && "admin_id" in body) user.admin_id = user.role === "faculty" ? body.admin_id || null : null;
+  if (user.role !== "admin") user.admin_title = null;
+  else if (body && "admin_title" in body) user.admin_title = body.admin_title === "program_chair" ? "program_chair" : null;
   audit(db, viewer, "user.update", "users", { message: `Edited ${user.name}'s account` }, user.id);
   return { user: account(ctx, user) };
 });
@@ -334,7 +339,10 @@ route("GET", "/api/super-admin/overview", (ctx) => {
   if (!adminOnly(ctx)) return forbidden();
   const { db } = ctx;
   const byRole: Record<string, number> = {};
-  for (const u of db.users) byRole[u.role] = (byRole[u.role] ?? 0) + 1;
+  for (const u of db.users) {
+    const key = u.role === "admin" && u.admin_title === "program_chair" ? "program_chair" : u.role;
+    byRole[key] = (byRole[key] ?? 0) + 1;
+  }
   const weekAgo = Date.now() - 7 * DAY_MS;
   const latest = (kind: string) => db.testRuns.find((r) => r.kind === kind) ?? null;
   const weeks = Array.from({ length: 8 }, (_, i) => {

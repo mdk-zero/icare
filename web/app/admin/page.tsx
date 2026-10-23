@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSupabaseAdmin } from "@/app/lib/supabase/server";
 import { readSession } from "@/app/lib/auth/session";
+import { adminTitleOf } from "@/app/lib/auth/user";
 import { adminVisibleUserIds, getAdminScope } from "@/app/lib/admin-scope";
 import { deanInstitution, viewerDeanId } from "@/app/lib/dean-scope";
 import { getStudentsWithWork } from "@/app/lib/faculty-dashboard";
@@ -65,7 +66,7 @@ async function loadDashboard(viewerId: string): Promise<DashboardData> {
     patientsRes,
     activityRes,
   ] = await Promise.all([
-    supabase.from("users").select("id, name, role, section_id"),
+    supabase.from("users").select("id, name, role, section_id, sex"),
     supabase.from("sections").select("id, name"),
     supabase.from("faculty_sections").select("faculty_id, section_id"),
     supabase
@@ -233,9 +234,12 @@ async function loadDashboard(viewerId: string): Promise<DashboardData> {
     }
   }
 
+  const viewer = users.find((u) => u.id === viewerId);
   return {
     // The masthead greets whoever is signed in, the way the faculty one does.
-    viewerName: users.find((u) => u.id === viewerId)?.name ?? null,
+    viewerName: viewer?.name ?? null,
+    viewerSex: viewer?.sex ?? null,
+    viewerTitle: await adminTitleOf(supabase, viewerId),
     institution: (await deanInstitution(supabase, viewerId))?.name ?? null,
     totalStudents: students.length,
     assessedCount,

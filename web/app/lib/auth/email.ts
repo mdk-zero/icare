@@ -374,8 +374,18 @@ export type AppLink = { appUrl: string | null };
  * the mobile app, so its welcome email names the role and links the site.
  * `origin` picks the opening line: an accepted access request, a dean adding
  * one of their instructors, or an Admin creating the account directly.
+ * `deanLabel` names that dean: "Dean", or "Program Chair" (080).
  */
-export type StaffWelcome = { roleLabel: string; signInUrl: string; origin: "request" | "dean" | "admin" };
+export type StaffWelcome = {
+  roleLabel: string;
+  signInUrl: string;
+  origin: "request" | "dean" | "admin";
+  deanLabel?: string;
+};
+
+function deanWord(staff: StaffWelcome): string {
+  return (staff.deanLabel ?? "Dean").toLowerCase();
+}
 
 const appInstallHint =
   "Open this email on your Android phone and tap the button, then open the downloaded file to install the app. If your phone asks, allow installs from your browser.";
@@ -384,7 +394,7 @@ function staffIntro(staff: StaffWelcome): string {
   const role = `<strong>${htmlEscape(staff.roleLabel)}</strong>`;
   const article = /^[aeiou]/i.test(staff.roleLabel) ? "an" : "a";
   if (staff.origin === "request") return `Your request was accepted and ${article} ${role} account has been created for you`;
-  if (staff.origin === "dean") return `Your dean has created ${article} ${role} account for you`;
+  if (staff.origin === "dean") return `Your ${deanWord(staff)} has created ${article} ${role} account for you`;
   return `${article === "an" ? "An" : "A"} ${role} account has been created for you`;
 }
 
@@ -465,7 +475,7 @@ function buildWelcomeHtml(name: string, email: string, password: string, link: S
                 </tr>
               </table>`}
               <p style="margin:0;font-size:13px;color:#94a3b8;">
-                If you believe this account was created in error, please contact ${staff ? (staff.origin === "dean" ? "your dean" : "the iCARE++ team") : "your instructor"}.
+                If you believe this account was created in error, please contact ${staff ? (staff.origin === "dean" ? `your ${deanWord(staff)}` : "the iCARE++ team") : "your instructor"}.
               </p>
             </td>
           </tr>

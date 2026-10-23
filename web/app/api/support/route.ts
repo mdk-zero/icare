@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
+import { adminTitleOf } from '@/app/lib/auth/user';
 import { sendSupportReceipt, sendSupportRequestEmail, type EmailAttachment } from '@/app/lib/auth/email';
 import { consumeRateLimit } from '@/app/lib/auth/rate-limit';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
@@ -83,7 +84,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const role = roleLabel(session.role);
+  const role = roleLabel(
+    session.role,
+    session.role === 'admin' ? await adminTitleOf(getSupabaseAdmin(), session.uid) : null,
+  );
   const requestId = await fileSupportRequest({
     user_id: session.uid,
     name,

@@ -74,7 +74,7 @@ export default function FacultyCoursesClient() {
           label: "Teaching",
         }}
         title="Courses"
-        subtitle="The courses your Dean assigned you, and what your students must accomplish in each"
+        subtitle="The courses your Dean or Program Chair assigned you, and what your students must accomplish in each"
       />
 
       {error && (
@@ -98,7 +98,7 @@ export default function FacultyCoursesClient() {
           <FontAwesomeIcon icon={faBookMedical} className="mb-3 h-8 w-8 text-gray-300" />
           <p className="font-semibold text-gray-700">No courses yet</p>
           <p className="mt-1 text-sm text-gray-500">
-            Your Dean assigns courses on their Courses page. They appear here once assigned.
+            Your Dean or Program Chair assigns courses on their Courses page. They appear here once assigned.
           </p>
         </div>
       ) : (

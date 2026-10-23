@@ -775,7 +775,7 @@ export default function NewScenarioClient({ editId }: { editId?: string } = {}) 
             ) : rooms.length === 0 ? (
               <p className="flex items-center gap-1.5 text-xs text-gray-500">
                 <FontAwesomeIcon icon={faTriangleExclamation} className="w-3 h-3" />
-                No rooms exist yet — create them in Dean → Wards.
+                No rooms exist yet. Your Dean or Program Chair creates them under Wards.
               </p>
             ) : (
               <div

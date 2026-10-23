@@ -623,7 +623,7 @@ export default function SupportRequestsClient({ contactEmail }: { contactEmail: 
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faLifeRing} />, label: "Support" }}
         title="Support Requests"
-        subtitle="Problems and questions sent from Help & Support by Instructors, Deans, and students. Your reply is emailed to them, with any images you attach."
+        subtitle="Problems and questions sent from Help & Support by Instructors, Deans, Program Chairs, and students. Your reply is emailed to them, with any images you attach."
       />
 
       <div

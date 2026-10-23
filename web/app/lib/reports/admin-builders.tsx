@@ -258,6 +258,15 @@ const ROLE_LABEL: Record<string, string> = {
   super_admin: 'Admin',
 };
 
+/**
+ * Role names for a report. A Dean's reports cover only their own people, so
+ * the one Dean-level account in them is the viewer, named by their own
+ * title: Dean or Program Chair (080).
+ */
+function roleNames(meta: ReportMeta): Record<string, string> {
+  return { ...ROLE_LABEL, admin: meta.deanLabel ?? ROLE_LABEL.admin };
+}
+
 // ---------------------------------------------------------------------------
 // Rooms — one room's details and current assignments
 // ---------------------------------------------------------------------------
@@ -399,10 +408,11 @@ export async function buildAdminUserReport(
       .order('name');
     if (visible) usersQuery = usersQuery.in('id', visible);
     const { data: users } = await usersQuery;
+    const roles = roleNames(meta);
 
     const rows = (users ?? []).map((u) => [
       `${u.name}\n${u.email}`,
-      ROLE_LABEL[u.role] ?? u.role,
+      roles[u.role] ?? u.role,
       fmtDate(u.created_at),
       fmtDate(u.last_login_at),
     ]);
@@ -415,7 +425,7 @@ export async function buildAdminUserReport(
     const studentCount = byRole.get('student') ?? 0;
     const facultyCount = byRole.get('faculty') ?? 0;
     const adminCount = byRole.get('admin') ?? 0;
-    const description = `This report covers all ${users?.length ?? 0} users: ${studentCount} students, ${facultyCount} instructors, and ${adminCount} deans.`;
+    const description = `This report covers all ${users?.length ?? 0} users: ${studentCount} students, ${facultyCount} instructors, and ${plural(adminCount, roles.admin.toLowerCase())}.`;
 
     const metaRows = [
       { label: 'Scope', value: 'All Users' },
@@ -435,7 +445,7 @@ export async function buildAdminUserReport(
           items={[
             { label: 'Students', value: studentCount },
             { label: 'Instructors', value: facultyCount },
-            { label: 'Deans', value: adminCount },
+            { label: `${roles.admin}s`, value: adminCount },
           ]}
         />
         <Text style={styles.sectionTitle}>User Roster</Text>
@@ -480,7 +490,7 @@ export async function buildAdminUserReport(
       metaRows={[
         { label: 'Name', value: user.name },
         { label: 'Email', value: user.email },
-        { label: 'Role', value: ROLE_LABEL[user.role] ?? user.role },
+        { label: 'Role', value: roleNames(meta)[user.role] ?? user.role },
         ...(isStudent
           ? [
               { label: 'Section', value: section?.name ?? 'Unassigned' },
@@ -598,7 +608,8 @@ export async function buildAdminSummaryReport(
   const inGroups = new Set([...load.values()].flatMap((l) => l.studentIds));
   const ungrouped = studentIds === null ? null : studentIds.filter((id) => !inGroups.has(id)).length;
 
-  const description = `Dean overview with ${plural(totalStudents, 'student')}, ${totalFaculty} instructors, ${plural(totalAdmins, 'dean')} and ${plural(totalRooms, 'room')} (${totalOccupied} of ${totalCapacity} places occupied).`;
+  const dean = roleNames(meta).admin;
+  const description = `${dean} overview with ${plural(totalStudents, 'student')}, ${totalFaculty} instructors, ${plural(totalAdmins, dean.toLowerCase())} and ${plural(totalRooms, 'room')} (${totalOccupied} of ${totalCapacity} places occupied).`;
 
   const metaRows = [
     { label: 'Scope', value: scope ? 'Your instructors and students' : 'Everyone' },
@@ -606,8 +617,8 @@ export async function buildAdminSummaryReport(
 
   const pdf = (
     <ReportShell
-      title="Dean Summary Report"
-      heading="Dean Summary Report"
+      title={`${dean} Summary Report`}
+      heading={`${dean} Summary Report`}
       meta={meta}
       metaRows={metaRows}
     >
@@ -617,7 +628,7 @@ export async function buildAdminSummaryReport(
         items={[
           { label: 'Students', value: totalStudents },
           { label: 'Instructors', value: totalFaculty },
-          { label: 'Deans', value: totalAdmins },
+          { label: `${dean}s`, value: totalAdmins },
           { label: 'Rooms', value: totalRooms },
         ]}
       />

@@ -33,6 +33,8 @@ export interface DbUser {
   picture_url: string | null;
   role: UserRole;
   sex: UserSex | null;
+  /** A Dean-level account's title (080); absent before it, null for a Dean. */
+  admin_title?: string | null;
   password_hash: string | null;
   force_password_change: boolean;
   created_at: string;

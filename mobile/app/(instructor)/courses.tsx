@@ -80,7 +80,7 @@ export default function CoursesScreen() {
       ) : error && !data ? (
         <EmptyState icon="cloud-offline-outline" message={error} />
       ) : groups.length === 0 ? (
-        <EmptyState icon="book-outline" message="No courses yet. Your Dean assigns them on the web portal." />
+        <EmptyState icon="book-outline" message="No courses yet. Your Dean or Program Chair assigns them on the web portal." />
       ) : (
         groups.map(({ term, status, offerings }) => (
           <View key={term.id} style={styles.group}>

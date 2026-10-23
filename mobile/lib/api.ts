@@ -31,6 +31,8 @@ export interface User {
   email: string;
   name: string;
   role: 'student' | 'faculty' | 'admin' | 'super_admin';
+  /** 'program_chair' marks a Program Chair, who has a Dean's access (080); null for a Dean. */
+  admin_title?: 'program_chair' | null;
   /** Null when unrecorded — faculty/admin set it on the roster (migration 032). */
   sex?: 'male' | 'female' | null;
   picture_url?: string | null;

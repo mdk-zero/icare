@@ -104,7 +104,7 @@ export default function SkillsTab({
             </div>
           </div>
           <p className="min-w-[14rem] flex-1 text-sm text-gray-500">
-            The skills {courseCode} covers, shared with your Dean and every instructor teaching it. Patient cases,
+            The skills {courseCode} covers, shared with your Dean or Program Chair and every instructor teaching it. Patient cases,
             quizzes and the Library use this list. Use Edit Skills to change it.
           </p>
         </div>

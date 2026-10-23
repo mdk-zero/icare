@@ -25,7 +25,7 @@ const pillars = [
     text: "Objective scoring and AI-assisted patient case creation, without the grading backlog.",
   },
   {
-    title: "For Deans",
+    title: "For Deans & Program Chairs",
     text: "Program-wide visibility into where every student actually stands.",
   },
 ];
@@ -76,7 +76,7 @@ const roles = [
     icon: ICONS.userGroup,
   },
   {
-    title: "Deans",
+    title: "Deans & Program Chairs",
     description:
       "Manage students, instructors, and rooms from a single system. Access institution-wide analytics, audit logs, and configuration settings to keep your program running smoothly.",
     action: "Set up your program",
@@ -883,7 +883,7 @@ export default function LandingPage() {
               index="05"
               eyebrow="Who it’s for"
               title="Designed for every role in nursing education"
-              intro="Whether you’re a student honing your skills, an instructor shaping the next generation, or a dean overseeing the program — iCARE++ has you covered."
+              intro="Whether you’re a student honing your skills, an instructor shaping the next generation, or a dean or program chair overseeing the program — iCARE++ has you covered."
             />
 
             <Reveal className="mt-14">

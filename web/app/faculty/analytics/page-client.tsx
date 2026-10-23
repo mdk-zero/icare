@@ -917,8 +917,8 @@ export default function FacultyAnalyticsClient() {
 
           {sections.length === 0 && (
             <p className="border-t border-hairline px-4 py-2.5 text-xs text-amber-700">
-              You don&apos;t manage any sections yet, so there is nothing to report on. A dean
-              assigns sections from Dean → Instructors.
+              You don&apos;t manage any sections yet, so there is nothing to report on. Your Dean or
+              Program Chair assigns sections from their Instructors page.
             </p>
           )}
         </div>

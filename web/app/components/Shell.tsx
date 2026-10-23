@@ -234,8 +234,11 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
         ? "/admin/notifications"
         : "/faculty/notifications";
 
-  const { logo, logoIsWordmark, portalLabel, mobileRoleLabel, profileHref, homeHref } =
-    config[role];
+  const { logo, logoIsWordmark, profileHref, homeHref } = config[role];
+  // A Program Chair works in the Dean portal under their own title (080).
+  const adminLabel = role === "admin" ? roleLabel(role, user?.admin_title) : null;
+  const portalLabel = adminLabel ? `${adminLabel} Portal` : config[role].portalLabel;
+  const mobileRoleLabel = adminLabel ?? config[role].mobileRoleLabel;
 
   const navGroups = useMemo(
     () =>
@@ -663,7 +666,7 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
                         {user.name}
                       </span>
                       <span className="block font-mono text-[10px] uppercase tracking-[0.14em] text-white/55 leading-none mt-1">
-                        {roleLabel(user.role)}
+                        {roleLabel(user.role, user.admin_title)}
                         {isDemo() && (
                           <span
                             title="Sample data — resets when you log out"

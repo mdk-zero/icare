@@ -100,7 +100,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const latest = await latestGradeEditRequest(supabase, id, session.uid);
     const state = toState(latest?.data ?? null);
     if (state.status === 'pending') {
-      return NextResponse.json({ error: 'You already asked; wait for your dean to answer' }, { status: 409 });
+      return NextResponse.json({ error: 'You already asked; wait for an answer' }, { status: 409 });
     }
     if (state.status === 'accepted') {
       return NextResponse.json({ error: 'You already have permission to change this grade' }, { status: 409 });
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       approvers = (admins ?? []).map((a) => a.id as string);
     }
     if (approvers.length === 0) {
-      return NextResponse.json({ error: 'There is no dean to ask' }, { status: 409 });
+      return NextResponse.json({ error: 'There is no Dean or Program Chair to ask' }, { status: 409 });
     }
 
     const facultyName = me?.name ?? session.email;

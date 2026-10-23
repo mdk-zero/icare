@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
+import { adminTitleOf } from '@/app/lib/auth/user';
+import { roleLabel } from '@/app/lib/role-labels';
 import { getAdminScope } from '@/app/lib/admin-scope';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
@@ -52,6 +54,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       campus: campus?.name ?? 'Batangas State University - The NEU ARASOF Nasugbu',
       generatedBy: admin?.name ?? session.email,
       generatedAt: new Date().toLocaleString('en-PH', { dateStyle: 'long', timeStyle: 'short' }),
+      deanLabel: roleLabel('admin', await adminTitleOf(supabase, session.uid)),
     };
 
     let result: BuildResult;

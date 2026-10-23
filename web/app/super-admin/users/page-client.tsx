@@ -21,11 +21,20 @@ import ChangeEmailDialog from "../../components/ChangeEmailDialog";
 
 type Role = "student" | "faculty" | "admin" | "super_admin";
 
+/**
+ * The roles this page offers. A Program Chair is stored as a Dean (role
+ * admin) with admin_title 'program_chair' (080), with exactly a Dean's
+ * access, so the page treats the title as one more role.
+ */
+type Kind = Role | "program_chair";
+
 interface Account {
   id: string;
   name: string;
   email: string;
   role: Role;
+  /** 'program_chair' on a Program Chair; null on a Dean, absent before 080. */
+  admin_title?: "program_chair" | null;
   picture_url: string | null;
   sex: "male" | "female" | null;
   created_at: string;
@@ -57,12 +66,14 @@ interface AccountsPayload {
   /** Absent in a demo, which has no institutions to pick from. */
   institutions?: Institution[];
   owner_enabled: boolean;
+  /** users.admin_title exists (080), so Program Chairs can be made. */
+  title_enabled?: boolean;
 }
 
 interface FormState {
   name: string;
   email: string;
-  role: Role;
+  role: Kind;
   sex: string;
   section_id: string;
   admin_id: string;
@@ -75,19 +86,22 @@ const NEW_INSTITUTION = "__new__";
 
 const EMPTY: AccountsPayload = { users: [], sections: [], owner_enabled: false };
 
-const ROLES: { value: Role; label: string; plural: string }[] = [
+const ROLES: { value: Kind; label: string; plural: string }[] = [
   { value: "student", label: "Student", plural: "Students" },
   { value: "faculty", label: "Instructor", plural: "Instructors" },
   { value: "admin", label: "Dean", plural: "Deans" },
+  { value: "program_chair", label: "Program Chair", plural: "Program Chairs" },
   { value: "super_admin", label: "Admin", plural: "Admins" },
 ];
 
-const ROLE_LABEL = Object.fromEntries(ROLES.map((r) => [r.value, r.label])) as Record<Role, string>;
+const ROLE_LABEL = Object.fromEntries(ROLES.map((r) => [r.value, r.label])) as Record<Kind, string>;
 
-const ROLE_PILL: Record<Role, string> = {
+const ROLE_PILL: Record<Kind, string> = {
   student: "bg-brand-600/10 text-brand-700",
   faculty: "bg-blue-500/10 text-blue-700",
+  // One colour for both: a Program Chair is a Dean in all but name.
   admin: "bg-amber-500/10 text-amber-700",
+  program_chair: "bg-amber-500/10 text-amber-700",
   // Not rose: red on a role read as an error beside every super admin. Blue
   // and purple (not sky or violet) because globals.css rethemes them for dark.
   super_admin: "bg-purple-500/10 text-purple-700",
@@ -105,6 +119,15 @@ const INPUT =
   "w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-surface text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-brand-600";
 const LABEL = "block text-sm font-medium text-gray-700 mb-1.5";
 
+function kindOf(user: Pick<Account, "role" | "admin_title">): Kind {
+  return user.role === "admin" && user.admin_title === "program_chair" ? "program_chair" : user.role;
+}
+
+/** A Dean or a Program Chair: the two have the same access and settings. */
+function isDeanLevel(kind: Kind): boolean {
+  return kind === "admin" || kind === "program_chair";
+}
+
 function formatDate(value: string | null): string {
   if (!value) return "Never";
   return new Date(value).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
@@ -120,7 +143,7 @@ async function readJson<T>(res: Response): Promise<T & { error?: string }> {
 
 export default function SuperAdminUsersClient() {
   const me = getCurrentUser();
-  const [roleFilter, setRoleFilter] = useState<"all" | Role>("all");
+  const [roleFilter, setRoleFilter] = useState<"all" | Kind>("all");
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; tone: "ok" | "error" } | null>(null);
@@ -147,9 +170,15 @@ export default function SuperAdminUsersClient() {
   const setUsers = (update: (previous: Account[]) => Account[]) =>
     setData((previous) => ({ ...(previous ?? EMPTY), users: update((previous ?? EMPTY).users) }));
 
+  // Before 080 there can be no Program Chairs, so the choice isn't offered.
+  const roles = payload.title_enabled ? ROLES : ROLES.filter((r) => r.value !== "program_chair");
+
   const counts = useMemo(() => {
-    const byRole: Record<Role, number> = { student: 0, faculty: 0, admin: 0, super_admin: 0 };
-    for (const u of users) if (u.role in byRole) byRole[u.role] += 1;
+    const byRole: Record<Kind, number> = { student: 0, faculty: 0, admin: 0, program_chair: 0, super_admin: 0 };
+    for (const u of users) {
+      const kind = kindOf(u);
+      if (kind in byRole) byRole[kind] += 1;
+    }
     return byRole;
   }, [users]);
 
@@ -157,7 +186,7 @@ export default function SuperAdminUsersClient() {
     const term = search.trim().toLowerCase();
     return users.filter(
       (u) =>
-        (roleFilter === "all" || u.role === roleFilter) &&
+        (roleFilter === "all" || kindOf(u) === roleFilter) &&
         (!term || u.name.toLowerCase().includes(term) || u.email.toLowerCase().includes(term)),
     );
   }, [users, roleFilter, search]);
@@ -205,7 +234,7 @@ export default function SuperAdminUsersClient() {
     setForm({
       name: user.name,
       email: user.email,
-      role: user.role,
+      role: kindOf(user),
       sex: user.sex ?? "",
       section_id: user.section_id ?? "",
       admin_id: user.admin_id ?? "",
@@ -217,7 +246,8 @@ export default function SuperAdminUsersClient() {
 
   const handleSave = async () => {
     if (!editing) return;
-    if (form.role === "admin" && form.campus_id === NEW_INSTITUTION && !form.new_institution.trim()) {
+    const deanLevel = isDeanLevel(form.role);
+    if (deanLevel && form.campus_id === NEW_INSTITUTION && !form.new_institution.trim()) {
       flash("Name the new institution", "error");
       return;
     }
@@ -225,13 +255,16 @@ export default function SuperAdminUsersClient() {
     const creating = editing === "new";
     const body: Record<string, unknown> = {
       name: form.name,
-      role: form.role,
+      role: deanLevel ? "admin" : form.role,
       sex: form.sex,
+      ...(deanLevel && payload.title_enabled
+        ? { admin_title: form.role === "program_chair" ? "program_chair" : null }
+        : {}),
       section_id: form.role === "student" ? form.section_id || null : null,
       // Only an instructor's Dean is picked here; a student's follows their
       // section (077), and other roles belong to no Dean.
       ...(payload.owner_enabled && form.role === "faculty" ? { admin_id: form.admin_id || null } : {}),
-      ...(form.role === "admin" && payload.institutions
+      ...(deanLevel && payload.institutions
         ? form.campus_id === NEW_INSTITUTION
           ? { new_institution: form.new_institution }
           : { campus_id: form.campus_id || null }
@@ -255,7 +288,7 @@ export default function SuperAdminUsersClient() {
     setUsers((prev) => (creating ? [saved, ...prev] : prev.map((u) => (u.id === saved.id ? saved : u))));
     // A new institution, or a Dean's move taking their people along (077):
     // the cached list is stale either way.
-    if (form.role === "admin") void refresh();
+    if (deanLevel) void refresh();
     let requestWarning: string | undefined;
     if (creating && fromRequest) {
       const settled = await resolveAccessRequest(fromRequest, "accepted");
@@ -329,8 +362,8 @@ export default function SuperAdminUsersClient() {
   // Shared by the phone cards and the desktop table.
   const rolePill = (user: Account) => (
     <>
-      <span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${ROLE_PILL[user.role] ?? ""}`}>
-        {ROLE_LABEL[user.role] ?? user.role}
+      <span className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${ROLE_PILL[kindOf(user)] ?? ""}`}>
+        {ROLE_LABEL[kindOf(user)] ?? user.role}
       </span>
       {user.force_password_change && (
         <span className="ml-2 text-[11px] text-amber-700" title="Must set a new password at next sign-in">
@@ -412,7 +445,7 @@ export default function SuperAdminUsersClient() {
           aria-label="Filter by role"
           className="flex flex-wrap gap-0.5 self-start rounded-xl border border-hairline bg-surface p-1"
         >
-          {[{ value: "all" as const, plural: "All accounts", count: users.length }, ...ROLES.map((r) => ({ ...r, count: counts[r.value] }))].map(
+          {[{ value: "all" as const, plural: "All accounts", count: users.length }, ...roles.map((r) => ({ ...r, count: counts[r.value] }))].map(
             (tab) => {
               const active = roleFilter === tab.value;
               return (
@@ -655,10 +688,10 @@ export default function SuperAdminUsersClient() {
                   id="acct-role"
                   value={form.role}
                   disabled={editing !== "new" && editing.id === me?.id}
-                  onChange={(e) => setForm({ ...form, role: e.target.value as Role })}
+                  onChange={(e) => setForm({ ...form, role: e.target.value as Kind })}
                   className={INPUT}
                 >
-                  {ROLES.map((r) => (
+                  {roles.map((r) => (
                     <option key={r.value} value={r.value}>
                       {r.label}
                     </option>
@@ -707,10 +740,10 @@ export default function SuperAdminUsersClient() {
                         </option>
                       ))}
                 </select>
-                <p className="mt-1.5 text-xs text-gray-500">The student belongs to the dean whose section this is.</p>
+                <p className="mt-1.5 text-xs text-gray-500">The student belongs to the Dean or Program Chair whose section this is.</p>
               </div>
             )}
-            {form.role === "admin" && payload.institutions && (
+            {isDeanLevel(form.role) && payload.institutions && (
               <div>
                 <label className={LABEL} htmlFor="acct-institution">Institution</label>
                 <select
@@ -738,24 +771,26 @@ export default function SuperAdminUsersClient() {
                   />
                 )}
                 <p className="mt-1.5 text-xs text-gray-500">
-                  Each dean sees only their own instructors, students and records, even beside another dean of the same
-                  institution. Their instructors and students take this institution too.
+                  Each Dean and Program Chair sees only their own instructors, students and records, even beside
+                  another of the same institution. Their instructors and students take this institution too.
                 </p>
               </div>
             )}
             {form.role === "faculty" && payload.owner_enabled && (
               <div>
-                <label className={LABEL} htmlFor="acct-owner">Assigned dean</label>
+                <label className={LABEL} htmlFor="acct-owner">Assigned Dean or Program Chair</label>
                 <select
                   id="acct-owner"
                   value={form.admin_id}
                   onChange={(e) => setForm({ ...form, admin_id: e.target.value })}
                   className={INPUT}
                 >
-                  <option value="">No dean</option>
+                  <option value="">None</option>
                   {admins.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.institution_name ? `${a.name} · ${a.institution_name}` : a.name}
+                      {[a.name, kindOf(a) === "program_chair" ? "Program Chair" : null, a.institution_name]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </option>
                   ))}
                 </select>

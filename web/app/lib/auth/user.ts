@@ -1,12 +1,15 @@
 import { getSupabaseAdmin, type DbUser, type UserRole, type UserSex } from '../supabase/server';
 import { isMissingColumn } from './live-user';
 import { isMissingMigration } from './super-admin';
+import { parseAdminTitle, type AdminTitle } from '../role-labels';
 
 export interface PublicUser {
   id: string;
   email: string;
   name: string;
   role: UserRole;
+  /** 'program_chair' for a Program Chair (080); null for a Dean and every other role. */
+  admin_title: AdminTitle | null;
   picture_url: string | null;
   /** Null when unrecorded; the mobile greeting drops the honorific then. */
   sex: UserSex | null;
@@ -21,8 +24,45 @@ export interface PublicUser {
  * added to PublicUser cannot reach some auth paths and miss others — `sex`
  * arriving in 032 would otherwise have had to be remembered in four places.
  */
-export const USER_SELECT =
+const USER_SELECT_BEFORE_080 =
   'id, email, name, role, picture_url, sex, password_hash, google_sub, force_password_change';
+const USER_SELECT = `${USER_SELECT_BEFORE_080}, admin_title`;
+
+/** A users row as USER_SELECT reads it; admin_title is missing before 080. */
+type UserRow = Pick<
+  DbUser,
+  | 'id'
+  | 'email'
+  | 'name'
+  | 'role'
+  | 'admin_title'
+  | 'picture_url'
+  | 'sex'
+  | 'password_hash'
+  | 'google_sub'
+  | 'force_password_change'
+>;
+
+/**
+ * A query's response with its rows typed as UserRow. The column list is
+ * chosen at run time, too late for the Supabase client to type it.
+ */
+type UserResponse<R> = R extends { data: infer D } ? Omit<R, 'data'> & { data: D extends null ? null : UserRow } : never;
+
+/**
+ * Runs an account read with USER_SELECT. Before migration 080, admin_title
+ * doesn't exist (42703) and the read runs again without it, so signing in
+ * never waits on 080; a Program Chair then reads as a Dean. A write that
+ * returns these columns fails whole on that error, so running it again is
+ * safe too.
+ */
+export async function withUserColumns<R extends { error: { code?: string } | null }>(
+  run: (columns: string) => PromiseLike<R>,
+): Promise<UserResponse<R>> {
+  const first = await run(USER_SELECT);
+  const result = first.error?.code === '42703' ? await run(USER_SELECT_BEFORE_080) : first;
+  return result as unknown as UserResponse<R>;
+}
 
 /**
  * Normalizes a `sex` value arriving from a form field or a CSV cell.
@@ -42,23 +82,35 @@ export function parseSex(value: unknown): { sex?: UserSex | null; error?: string
   return { error: 'Sex must be male or female' };
 }
 
-export function toPublicUser(
-  row: Pick<
-    DbUser,
-    'id' | 'email' | 'name' | 'role' | 'picture_url' | 'sex' | 'password_hash' | 'google_sub' | 'force_password_change'
-  >,
-): PublicUser {
+export function toPublicUser(row: UserRow): PublicUser {
   return {
     id: row.id,
     email: row.email,
     name: row.name,
     role: row.role,
+    admin_title: row.role === 'admin' ? parseAdminTitle(row.admin_title) : null,
     picture_url: row.picture_url,
     sex: row.sex ?? null,
     has_password: Boolean(row.password_hash),
     google_linked: Boolean(row.google_sub),
     force_password_change: row.force_password_change,
   };
+}
+
+/**
+ * A Dean-level account's title (080): 'program_chair', or null for a Dean,
+ * any other role, or before 080 adds the column.
+ */
+export async function adminTitleOf(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  userId: string,
+): Promise<AdminTitle | null> {
+  const { data, error } = await supabase.from('users').select('role, admin_title').eq('id', userId).maybeSingle();
+  if (error) {
+    if (!isMissingColumn(error)) console.error('Failed to read the title of', userId, error);
+    return null;
+  }
+  return data?.role === 'admin' ? parseAdminTitle(data.admin_title) : null;
 }
 
 /**
@@ -78,22 +130,18 @@ export async function sectionNameOf(userId: string): Promise<string | null> {
 
 export async function findUserByEmail(email: string) {
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
-    .from('users')
-    .select(USER_SELECT)
-    .eq('email', email)
-    .maybeSingle();
+  const { data, error } = await withUserColumns((columns) =>
+    supabase.from('users').select(columns).eq('email', email).maybeSingle(),
+  );
   if (error) throw error;
   return data;
 }
 
 export async function findUserByGoogleSub(sub: string) {
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
-    .from('users')
-    .select(USER_SELECT)
-    .eq('google_sub', sub)
-    .maybeSingle();
+  const { data, error } = await withUserColumns((columns) =>
+    supabase.from('users').select(columns).eq('google_sub', sub).maybeSingle(),
+  );
   if (error) throw error;
   return data;
 }
@@ -105,20 +153,22 @@ export async function upsertGoogleUser(profile: {
   picture: string | null;
 }) {
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
-    .from('users')
-    .upsert(
-      {
-        google_sub: profile.sub,
-        email: profile.email,
-        name: profile.name,
-        picture_url: profile.picture,
-        last_login_at: new Date().toISOString(),
-      },
-      { onConflict: 'google_sub' },
-    )
-    .select(USER_SELECT)
-    .single();
+  const { data, error } = await withUserColumns((columns) =>
+    supabase
+      .from('users')
+      .upsert(
+        {
+          google_sub: profile.sub,
+          email: profile.email,
+          name: profile.name,
+          picture_url: profile.picture,
+          last_login_at: new Date().toISOString(),
+        },
+        { onConflict: 'google_sub' },
+      )
+      .select(columns)
+      .single(),
+  );
   if (error) throw error;
   return data;
 }
@@ -135,19 +185,21 @@ export async function createGoogleUser(
   sex: UserSex | null = null,
 ) {
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
-    .from('users')
-    .insert({
-      google_sub: profile.sub,
-      email: profile.email,
-      name: profile.name,
-      picture_url: profile.picture,
-      role,
-      sex,
-      last_login_at: new Date().toISOString(),
-    })
-    .select(USER_SELECT)
-    .single();
+  const { data, error } = await withUserColumns((columns) =>
+    supabase
+      .from('users')
+      .insert({
+        google_sub: profile.sub,
+        email: profile.email,
+        name: profile.name,
+        picture_url: profile.picture,
+        role,
+        sex,
+        last_login_at: new Date().toISOString(),
+      })
+      .select(columns)
+      .single(),
+  );
   if (error) throw error;
   return data;
 }

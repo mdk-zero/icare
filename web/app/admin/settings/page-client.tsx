@@ -13,9 +13,13 @@ import {
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import ProfileEditor from "../../components/ProfileEditor";
 import PageHeader from "../../components/PageHeader";
+import { getCurrentUser } from "../../lib/api";
+import { roleLabel } from "../../lib/role-labels";
 
 export default function SettingsClient() {
   const [activeSection, setActiveSection] = useState("profile");
+  // The Dean layout renders this only once the signed-in user is known.
+  const [title] = useState(() => roleLabel("admin", getCurrentUser()?.admin_title));
 
   const sections: { id: string; label: string; icon: IconDefinition }[] = [
     { id: "profile", label: "Profile", icon: faUser },
@@ -31,7 +35,7 @@ export default function SettingsClient() {
           icon: <FontAwesomeIcon icon={faGear} className="w-3.5 h-3.5" />,
           label: "Administration",
         }}
-        title="Dean Administration"
+        title={`${title} Administration`}
         subtitle="Manage system configuration and institutional settings"
       />
 

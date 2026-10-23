@@ -945,7 +945,7 @@ function MaterialEditor({
           <span className={labelClassName}>Sections ({chosen.size} selected)</span>
           {sections.length === 0 ? (
             <p className="text-sm text-gray-500">
-              {offering ? "This course has no sections yet — your dean adds them." : "Pick a course above to choose its sections."}
+              {offering ? "This course has no sections yet — your Dean or Program Chair adds them." : "Pick a course above to choose its sections."}
             </p>
           ) : (
             <div className="flex flex-wrap gap-2">

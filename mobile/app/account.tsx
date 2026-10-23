@@ -67,7 +67,7 @@ export default function AccountScreen() {
     }
   };
 
-  const roleName = user?.role ? roleLabel(user.role) : '—';
+  const roleName = user?.role ? roleLabel(user.role, user.admin_title) : '—';
   const detailValue = (key: 'email' | 'role' | 'section') => {
     if (key === 'email') return user?.email ?? '—';
     if (key === 'role') return roleName;

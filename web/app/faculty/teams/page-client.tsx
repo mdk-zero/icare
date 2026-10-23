@@ -409,7 +409,7 @@ export default function TeamsClient() {
             <div className="col-span-full rounded-xl border border-dashed border-gray-300 bg-surface p-12 text-center">
               <FontAwesomeIcon icon={faBookOpen} className="h-8 w-8 text-gray-300" />
               <p className="mt-3 font-semibold text-gray-700">No courses yet</p>
-              <p className="mt-1 text-sm text-gray-500">When your dean assigns you a course, its sections show up here.</p>
+              <p className="mt-1 text-sm text-gray-500">When your Dean or Program Chair assigns you a course, its sections show up here.</p>
             </div>
           )}
         </div>
@@ -450,7 +450,7 @@ export default function TeamsClient() {
               })}
             {course.sections.length === 0 && (
               <p className="col-span-full rounded-xl border border-dashed border-gray-300 bg-surface p-10 text-center text-sm text-gray-500">
-                This course has no sections yet. Your dean adds them.
+                This course has no sections yet. Your Dean or Program Chair adds them.
               </p>
             )}
           </div>

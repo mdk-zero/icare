@@ -62,7 +62,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
     const outside = (teams ?? []).filter((t) => !allowedSections.includes(t.section_id as string));
     if (outside.length > 0) {
-      return NextResponse.json({ error: 'Some groups belong to another dean' }, { status: 403 });
+      return NextResponse.json({ error: 'Some groups belong to another Dean or Program Chair' }, { status: 403 });
     }
 
     // Release the groups they no longer supervise, then take the checked ones.

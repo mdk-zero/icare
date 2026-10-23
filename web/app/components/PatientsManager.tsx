@@ -983,7 +983,7 @@ export default function PatientsManager({
               </div>
             ) : (
               <p className="text-xs text-gray-500">
-                Arranged by a dean. Select a room to open its census.
+                Arranged by a Dean or Program Chair. Select a room to open its census.
               </p>
             )}
           </div>
@@ -1027,7 +1027,7 @@ export default function PatientsManager({
                 <p className="mt-3 rounded-xl border border-hairline bg-surface p-6 text-center text-sm text-gray-500">
                   {manageRooms
                     ? "No rooms have been placed yet. Choose Edit Layout to arrange them, or switch to Card Layout to browse the census."
-                    : "No rooms have been placed on the floor plan yet. A dean can arrange them under Wards, or switch to Card Layout to browse the census."}
+                    : "No rooms have been placed on the floor plan yet. A Dean or Program Chair can arrange them under Wards, or switch to Card Layout to browse the census."}
                 </p>
               )}
             </>

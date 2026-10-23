@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBuilding,
@@ -10,7 +10,8 @@ import {
   faUserTie,
   faUsers,
 } from "@fortawesome/free-solid-svg-icons";
-import { apiFetch } from "@/app/lib/api";
+import { apiFetch, getCurrentUser } from "@/app/lib/api";
+import { roleLabel } from "@/app/lib/role-labels";
 import { usePageData } from "@/app/lib/use-page-data";
 import type { RecentReport } from "@/app/lib/reports/types";
 import PageHeader from "../../components/PageHeader";
@@ -88,7 +89,13 @@ interface UserTarget extends Target {
 
 const byName = (a: Target, b: Target) => a.label.localeCompare(b.label);
 
-const ROLE_LABEL: Record<string, string> = { student: "Student", faculty: "Instructor", admin: "Dean" };
+/**
+ * A Dean sees only their own people, so the one Dean-level account here is
+ * the viewer, and it takes the viewer's own title: Dean or Program Chair.
+ */
+function roleNames(deanLabel: string): Record<string, string> {
+  return { student: "Student", faculty: "Instructor", admin: deanLabel };
+}
 
 /** What's worth pulling now — from the lists already on the page, no AI. */
 function suggestFor(
@@ -96,6 +103,7 @@ function suggestFor(
   rooms: RoomTarget[] | undefined,
   users: UserTarget[] | undefined,
   recent: RecentReport[] | undefined,
+  deanLabel: string,
 ): Suggestion[] {
   const out: Suggestion[] = [];
 
@@ -160,12 +168,12 @@ function suggestFor(
         id: "summary",
         icon: faBuilding,
         tone: "brand",
-        title: "Dean summary",
+        title: `${deanLabel} summary`,
         detail: last
           ? `Last pulled ${sinceLabel(last.created_at)}.`
           : "Instructors, rooms and users on one page.",
         cta: "Preview",
-        action: { kind: "preview", type: "summary", targetId: null, subject: "Dean summary" },
+        action: { kind: "preview", type: "summary", targetId: null, subject: `${deanLabel} summary` },
       });
     }
   }
@@ -177,6 +185,9 @@ export default function AdminReportsClient() {
   const faculty = usePageData("admin:reports:faculty", loadFaculty);
   const rooms = usePageData("admin:reports:rooms", loadRooms);
   const users = usePageData("admin:reports:users", loadUsers);
+  // The Dean layout renders this only once the signed-in user is known.
+  const [deanLabel] = useState(() => roleLabel("admin", getCurrentUser()?.admin_title));
+  const roles = useMemo(() => roleNames(deanLabel), [deanLabel]);
 
   const facultyTargets = useMemo<FacultyTarget[] | undefined>(
     () =>
@@ -232,7 +243,7 @@ export default function AdminReportsClient() {
           label: u.name,
           sub: [
             u.email,
-            ROLE_LABEL[u.role] ?? u.role,
+            roles[u.role] ?? u.role,
             u.last_login_at ? `signed in ${sinceLabel(u.last_login_at)}` : null,
           ]
             .filter(Boolean)
@@ -243,7 +254,7 @@ export default function AdminReportsClient() {
           idleDays,
         };
       }),
-    [users.data],
+    [users.data, roles],
   );
 
   const types = [
@@ -318,7 +329,7 @@ export default function AdminReportsClient() {
         ],
         facet: {
           label: "Role",
-          options: Object.entries(ROLE_LABEL).map(([id, label]) => ({ id, label })),
+          options: Object.entries(roles).map(([id, label]) => ({ id, label })),
           valueOf: (t) => t.role,
         },
         all: { label: "All users" },
@@ -326,7 +337,7 @@ export default function AdminReportsClient() {
     }),
     defineReportType({
       type: "summary",
-      label: "Dean summary",
+      label: `${deanLabel} summary`,
       icon: faBuilding,
       blurb: "Instructors, rooms, users and grading progress on one page — nothing to pick.",
       contents: ["Headcount by role", "Grading progress", "Instructor roster", "Room roster"],
@@ -349,7 +360,7 @@ export default function AdminReportsClient() {
         endpoint="/api/admin/reports"
         cachePrefix="admin"
         types={types}
-        suggest={(recent) => suggestFor(facultyTargets, roomTargets, userTargets, recent)}
+        suggest={(recent) => suggestFor(facultyTargets, roomTargets, userTargets, recent, deanLabel)}
       />
     </div>
   );

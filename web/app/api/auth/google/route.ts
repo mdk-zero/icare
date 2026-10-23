@@ -5,7 +5,7 @@ import {
   findUserByGoogleSub,
   toPublicUser,
   touchLastLogin,
-  USER_SELECT,
+  withUserColumns,
 } from '@/app/lib/auth/user';
 import { openSession, signGoogleOnboarding } from '@/app/lib/auth/session';
 
@@ -17,13 +17,15 @@ import { openSession, signGoogleOnboarding } from '@/app/lib/auth/session';
  */
 async function claimAccountByEmail(sub: string, email: string) {
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
-    .from('users')
-    .update({ google_sub: sub })
-    .eq('email', email.trim().toLowerCase())
-    .is('google_sub', null)
-    .select(USER_SELECT)
-    .maybeSingle();
+  const { data, error } = await withUserColumns((columns) =>
+    supabase
+      .from('users')
+      .update({ google_sub: sub })
+      .eq('email', email.trim().toLowerCase())
+      .is('google_sub', null)
+      .select(columns)
+      .maybeSingle(),
+  );
   if (error) throw error;
   return data;
 }

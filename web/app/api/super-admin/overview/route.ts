@@ -14,8 +14,14 @@ export async function GET() {
   // request_metrics keeps 30 days, so that is as far back as AI usage goes.
   const since30d = new Date(Date.now() - 30 * 86_400_000).toISOString();
 
-  const [accounts, metrics, runs, aiDay, aiMonth] = await Promise.all([
+  const [accounts, programChairs, metrics, runs, aiDay, aiMonth] = await Promise.all([
     supabase.from('users').select('role, created_at, last_login_at').limit(20000),
+    // Program Chairs are Deans with a title (080); before it, there are none.
+    supabase
+      .from('users')
+      .select('id', { count: 'exact', head: true })
+      .eq('role', 'admin')
+      .eq('admin_title', 'program_chair'),
     supabase.rpc('super_admin_metrics_summary', { p_since: since24h, p_bucket: 'hour' }),
     supabase
       .from('system_test_runs')
@@ -57,6 +63,11 @@ export async function GET() {
       const index = Math.floor((created - firstWeek) / (7 * 86_400_000));
       if (weeks[index]) weeks[index].count += 1;
     }
+  }
+
+  if (!programChairs.error && programChairs.count) {
+    byRole.program_chair = programChairs.count;
+    byRole.admin -= programChairs.count;
   }
 
   const pending = isMissingMigration(metrics.error) || isMissingMigration(runs.error);

@@ -13,6 +13,7 @@ export function publicUser(user: DemoUser) {
     email: user.email,
     name: user.name,
     role: user.role,
+    admin_title: user.role === "admin" ? (user.admin_title ?? null) : null,
     picture_url: user.picture_url,
     sex: user.sex,
     has_password: true,

@@ -55,11 +55,13 @@ interface Overview {
   pending_migration: boolean;
 }
 
-// Same hues as the Dean's "Users by Role" donut, plus one for Admins.
+// Same hues as the Dean's "Users by Role" donut, plus one for Admins. Program
+// Chairs, Deans in all but name, take a lighter shade of the Dean violet.
 const ROLES = [
   { key: "student", label: "Students", color: "#2a8a98" },
   { key: "faculty", label: "Instructors", color: "#f59e0b" },
   { key: "admin", label: "Deans", color: "#7c3aed" },
+  { key: "program_chair", label: "Program Chairs", color: "#a78bfa" },
   { key: "super_admin", label: "Admins", color: "#e87ba4" },
 ];
 

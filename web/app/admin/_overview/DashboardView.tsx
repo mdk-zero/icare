@@ -11,7 +11,8 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "@/app/components/PageHeader";
 import StatTile from "@/app/components/StatTile";
-import { lastName } from "@/app/faculty/_overview/format";
+import { addressedName, lastName } from "@/app/faculty/_overview/format";
+import { roleLabel, type AdminTitle } from "@/app/lib/role-labels";
 import { SkeletonActivityItem, SkeletonStatTile } from "@/app/components/skeletons";
 
 /**
@@ -42,6 +43,10 @@ export interface AttentionItem {
 
 export interface DashboardData {
   viewerName: string | null;
+  /** The viewer's recorded sex, for a Program Chair's Sir/Ma'am greeting. */
+  viewerSex?: "male" | "female" | null;
+  /** 'program_chair' for a Program Chair (080); null or absent for a Dean. */
+  viewerTitle?: AdminTitle | null;
   /** The Dean's institution (077); null when none is set. */
   institution?: string | null;
   totalStudents: number;
@@ -143,6 +148,8 @@ function EmptyState({ title, hint }: { title: string; hint: string }) {
 export function DashboardView({ data }: { data: DashboardData }) {
   const {
     viewerName,
+    viewerSex,
+    viewerTitle,
     totalStudents,
     assessedCount,
     atRiskCount,
@@ -158,7 +165,13 @@ export function DashboardView({ data }: { data: DashboardData }) {
     activity,
   } = data;
 
+  // "Dean Santos" is how a Dean is addressed. "Program Chair" isn't an
+  // honorific, so a Program Chair is greeted the way an instructor is.
+  const title = roleLabel("admin", viewerTitle);
   const surname = viewerName ? lastName(viewerName) : null;
+  const addressed = viewerTitle
+    ? addressedName({ name: viewerName, sex: viewerSex })
+    : surname && `Dean ${surname}`;
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
@@ -179,9 +192,9 @@ export function DashboardView({ data }: { data: DashboardData }) {
       <PageHeader
         badge={{
           icon: <FontAwesomeIcon icon={faHouse} className="w-3.5 h-3.5" />,
-          label: "Dean Dashboard",
+          label: `${title} Dashboard`,
         }}
-        title={surname ? `Welcome back, Dean ${surname}!` : "Welcome back!"}
+        title={addressed ? `Welcome back, ${addressed}!` : "Welcome back!"}
         subtitle={
           data.institution
             ? `${data.institution} • ${today}`
@@ -232,7 +245,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
           {activity.length === 0 ? (
             <EmptyState
               title="No recorded activity yet"
-              hint="Dean and instructor actions are logged here as they happen."
+              hint={`${title} and instructor actions are logged here as they happen.`}
             />
           ) : (
             <div className="p-4">
@@ -265,7 +278,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
           )}
         </Panel>
         <Panel className="lg:col-span-2">
-          <PanelHeader title="Needs Your Attention" subtitle="Things only a dean can fix">
+          <PanelHeader title="Needs Your Attention" subtitle={`Things only a ${title.toLowerCase()} can fix`}>
             {attention.length > 0 && (
               <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700">
                 {attention.length} open

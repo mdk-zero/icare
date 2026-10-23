@@ -11,6 +11,7 @@ import {
   isAccountRole,
   listInstitutions,
   listSectionsWithOwner,
+  parseAdminTitleField,
   resolveInstitution,
   selectAccounts,
   toAccount,
@@ -38,6 +39,7 @@ export async function GET() {
       sections,
       institutions,
       owner_enabled: accounts.ownerEnabled,
+      title_enabled: accounts.titleEnabled,
     });
   } catch (err) {
     console.error('List accounts failed', err);
@@ -64,6 +66,10 @@ export async function POST(request: NextRequest) {
 
   const parsedSex = parseSex(body.sex);
   if (parsedSex.error) return NextResponse.json({ error: parsedSex.error }, { status: 400 });
+  // A Program Chair is a Dean with a title (080); only a Dean-level account takes one.
+  const parsedTitle = parseAdminTitleField(body.admin_title);
+  if (parsedTitle.error) return NextResponse.json({ error: parsedTitle.error }, { status: 400 });
+  const adminTitle = role === 'admin' ? (parsedTitle.title ?? null) : null;
 
   const sectionId = typeof body.section_id === 'string' && body.section_id ? body.section_id : null;
   if (sectionId && role !== 'student') {
@@ -71,7 +77,7 @@ export async function POST(request: NextRequest) {
   }
   const adminId = typeof body.admin_id === 'string' && body.admin_id ? body.admin_id : null;
   if (adminId && role !== 'faculty' && role !== 'student') {
-    return NextResponse.json({ error: 'Only instructors and students belong to a dean' }, { status: 400 });
+    return NextResponse.json({ error: 'Only instructors and students belong to a Dean or Program Chair' }, { status: 400 });
   }
 
   try {
@@ -121,6 +127,8 @@ export async function POST(request: NextRequest) {
         force_password_change: true,
         section_id: sectionId,
         ...(adminId ? { admin_id: adminId } : {}),
+        // Left out for a Dean, so making one doesn't wait on 080.
+        ...(adminTitle ? { admin_title: adminTitle } : {}),
         ...(institution ? { campus_id: institution.id } : {}),
         ...(googleSub ? { google_sub: googleSub } : {}),
       })
@@ -128,9 +136,11 @@ export async function POST(request: NextRequest) {
       .single();
     if (error || !created) {
       console.error('Failed to create account', error);
-      const message = error?.message?.includes('admin_id')
-        ? 'The owning dean must be a dean account'
-        : 'Unable to create user';
+      const message = error?.message?.includes('admin_title')
+        ? "Program Chairs need migration 080, which isn't applied yet"
+        : error?.message?.includes('admin_id')
+          ? 'The owning Dean or Program Chair must be a Dean-level account'
+          : 'Unable to create user';
       return NextResponse.json({ error: message }, { status: 500 });
     }
 
@@ -140,7 +150,7 @@ export async function POST(request: NextRequest) {
         action: 'user.create',
         entityType: 'users',
         entityId: created.id,
-        details: { role, by: 'super_admin', google_linked: Boolean(googleSub) },
+        details: { role, ...(adminTitle ? { admin_title: adminTitle } : {}), by: 'super_admin', google_linked: Boolean(googleSub) },
       },
       request,
     );
@@ -156,7 +166,7 @@ export async function POST(request: NextRequest) {
       role === 'student'
         ? { appUrl: appDownloadUrl(request.nextUrl.origin) }
         : {
-            roleLabel: roleLabel(role),
+            roleLabel: roleLabel(role, adminTitle),
             signInUrl: `${request.nextUrl.origin}/login`,
             origin: requestId ? 'request' : 'admin',
           },

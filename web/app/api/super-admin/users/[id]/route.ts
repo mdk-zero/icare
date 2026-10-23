@@ -3,7 +3,14 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { requireSuperAdmin } from '@/app/lib/auth/super-admin';
 import { applyRoleChangeReporting, parseSex } from '@/app/lib/auth/user';
 import { logAudit } from '@/app/lib/audit';
-import { countSuperAdmins, isAccountRole, resolveInstitution, selectAccounts, toAccount } from '@/app/lib/super-admin-users';
+import {
+  countSuperAdmins,
+  isAccountRole,
+  parseAdminTitleField,
+  resolveInstitution,
+  selectAccounts,
+  toAccount,
+} from '@/app/lib/super-admin-users';
 import { updateUser } from '@/app/lib/auth/session';
 
 interface RouteParams {
@@ -33,9 +40,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const parsedSex = parseSex(body.sex);
   if (parsedSex.error) return NextResponse.json({ error: parsedSex.error }, { status: 400 });
   if (parsedSex.sex !== undefined) updates.sex = parsedSex.sex;
+  // Dean or Program Chair (080). The database drops it on any other role.
+  const parsedTitle = parseAdminTitleField(body.admin_title);
+  if (parsedTitle.error) return NextResponse.json({ error: parsedTitle.error }, { status: 400 });
+  if (parsedTitle.title !== undefined) updates.admin_title = parsedTitle.title;
   if (body.admin_id !== undefined) {
     if (body.admin_id !== null && typeof body.admin_id !== 'string') {
-      return NextResponse.json({ error: 'Invalid dean' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid Dean or Program Chair' }, { status: 400 });
     }
     updates.admin_id = body.admin_id || null;
   }
@@ -89,9 +100,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     });
     if (error) {
       console.error('Failed to update account', error);
-      const message = error.message?.includes('admin_id')
-        ? 'The owning dean must be a dean account'
-        : 'Unable to update user';
+      const message = error.message?.includes('admin_title')
+        ? "Program Chairs need migration 080, which isn't applied yet"
+        : error.message?.includes('admin_id')
+          ? 'The owning Dean or Program Chair must be a Dean-level account'
+          : 'Unable to update user';
       return NextResponse.json({ error: message }, { status: 500 });
     }
 

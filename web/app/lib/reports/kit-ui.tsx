@@ -97,6 +97,8 @@ export interface ReportMeta {
   campus: string;
   generatedBy: string;
   generatedAt: string;
+  /** What a Dean-level viewer is called: "Dean", or "Program Chair" (080). Dean reports only. */
+  deanLabel?: string;
 }
 
 /** Letterhead, meta block and footer shared by every report type. */

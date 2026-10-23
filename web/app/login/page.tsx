@@ -27,7 +27,7 @@ import DemoPicker from "./DemoPicker";
 import { endDemo } from "../lib/demo/session";
 import { holdTabPresence } from "../lib/tab-presence";
 
-const STUDENT_MESSAGE = "Students sign in on the iCARE++ mobile app. The web portal is for instructors, deans and admins.";
+const STUDENT_MESSAGE = "Students sign in on the iCARE++ mobile app. The web portal is for instructors, deans, program chairs and admins.";
 const REPLACED_MESSAGE =
   "You were signed out because someone signed in to your account on another browser. If that wasn't you, sign in and change your password.";
 /** What the proxy's `?reason=` means, said on arrival. */

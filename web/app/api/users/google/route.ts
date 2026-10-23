@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { verifyGoogleIdToken } from '@/app/lib/auth/google';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { toPublicUser, USER_SELECT } from '@/app/lib/auth/user';
+import { toPublicUser, withUserColumns } from '@/app/lib/auth/user';
 import { logAudit } from '@/app/lib/audit';
 
 /**
@@ -43,12 +43,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
-      .from('users')
-      .update({ google_sub: profile.sub })
-      .eq('id', session.uid)
-      .select(USER_SELECT)
-      .single();
+    const { data, error } = await withUserColumns((columns) =>
+      supabase
+        .from('users')
+        .update({ google_sub: profile.sub })
+        .eq('id', session.uid)
+        .select(columns)
+        .single(),
+    );
     if (error) {
       // The unique index settles a race with another account connecting it.
       if ((error as { code?: string }).code === '23505') {
@@ -93,12 +95,14 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
-      .from('users')
-      .update({ google_sub: null })
-      .eq('id', session.uid)
-      .select(USER_SELECT)
-      .single();
+    const { data, error } = await withUserColumns((columns) =>
+      supabase
+        .from('users')
+        .update({ google_sub: null })
+        .eq('id', session.uid)
+        .select(columns)
+        .single(),
+    );
     if (error) throw error;
 
     await logAudit(

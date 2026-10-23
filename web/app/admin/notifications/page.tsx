@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import FacultyNotificationsClient from "../../faculty/notifications/page-client";
 
 export const metadata: Metadata = {
-  title: "Notifications | iCARE++ Dean",
+  title: "Notifications | iCARE++",
 };
 
 /** The faculty feed, pointed at what reaches an admin: grade change requests. */

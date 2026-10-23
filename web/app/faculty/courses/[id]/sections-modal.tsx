@@ -115,7 +115,7 @@ export default function SectionsModal({
             </p>
           ) : choices !== null && choices.length === 0 ? (
             <p className="p-6 text-center text-sm text-gray-500">
-              There are no sections to choose from yet. Ask your Dean to add them.
+              There are no sections to choose from yet. Ask your Dean or Program Chair to add them.
             </p>
           ) : (
             <ul className="space-y-0.5">

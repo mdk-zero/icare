@@ -516,7 +516,7 @@ export default function AssignmentGrader({
     } else if (state.status === "accepted" || state.status === "not_required") {
       setEditing(true);
     } else if (state.status === "pending") {
-      toast("Your request is still waiting for your dean's answer.");
+      toast("Your request is still waiting for an answer.");
     } else {
       setRequestError(null);
       setRequestReason("");
@@ -539,7 +539,7 @@ export default function AssignmentGrader({
     }
     setRequestReason(null);
     void refreshEditState();
-    toast("Request sent. You'll be notified when your dean answers.");
+    toast("Request sent. You'll be notified when it's answered.");
   };
 
   // The checklist's column headers dock right under the pinned header above
@@ -804,12 +804,12 @@ export default function AssignmentGrader({
                   {editState?.status === "not_required"
                     ? "Edit to change a rating or note."
                     : editState?.status === "accepted"
-                      ? `${editState.resolved_by_name ?? "Your dean"} approved a change. Saving it uses the approval up.`
+                      ? `${editState.resolved_by_name ?? "Your Dean or Program Chair"} approved a change. Saving it uses the approval up.`
                       : editState?.status === "pending"
-                        ? `Change requested ${formatWhen(editState.requested_at)} and waiting for your dean.`
+                        ? `Change requested ${formatWhen(editState.requested_at)} and waiting for an answer.`
                         : editState?.status === "declined"
-                          ? `${editState.resolved_by_name ?? "Your dean"} declined your last request. You can ask again.`
-                          : "Changing a saved grade needs your dean's permission."}
+                          ? `${editState.resolved_by_name ?? "Your Dean or Program Chair"} declined your last request. You can ask again.`
+                          : "Changing a saved grade needs permission from your Dean or Program Chair."}
                 </p>
               </>
             ) : (
@@ -953,7 +953,7 @@ export default function AssignmentGrader({
           onClose={() => setRequestReason(null)}
           config={{
             title: "Ask to change this grade",
-            message: `${selected.student_name}'s grade on "${selected.scenario_title}" is saved. Your dean will be notified, and you can edit it once they accept.`,
+            message: `${selected.student_name}'s grade on "${selected.scenario_title}" is saved. Your Dean or Program Chair will be notified, and you can edit it once they accept.`,
             confirmLabel: "Send request",
             danger: false,
             loading: requesting,

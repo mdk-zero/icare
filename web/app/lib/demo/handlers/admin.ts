@@ -63,6 +63,8 @@ route("GET", "/api/admin/overview", (ctx) => {
 
   return {
     viewerName: ctx.viewer.name,
+    viewerSex: ctx.viewer.sex,
+    viewerTitle: ctx.viewer.admin_title ?? null,
     institution: DEMO_INSTITUTION,
     totalStudents: all.length,
     assessedCount: assessed.length,

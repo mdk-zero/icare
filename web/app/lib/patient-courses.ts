@@ -128,7 +128,7 @@ export function parseCourseIds(body: Record<string, unknown>): string[] | null {
 export function courseIdsError(scope: PatientCourseScope, courseIds: string[]): string | null {
   if (!scope.enabled) return null;
   if (scope.courses.length === 0) {
-    return 'You have no assigned courses yet, so you cannot add patients. Ask your Dean to assign you a course.';
+    return 'You have no assigned courses yet, so you cannot add patients. Ask your Dean or Program Chair to assign you a course.';
   }
   if (courseIds.length === 0) return 'Choose at least one course for this patient.';
   const allowed = new Set(scope.courses.map((c) => c.id));

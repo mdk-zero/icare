@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { toPublicUser, USER_SELECT } from '@/app/lib/auth/user';
+import { toPublicUser, withUserColumns } from '@/app/lib/auth/user';
 
 export async function GET() {
   const session = await readSession();
@@ -11,11 +11,9 @@ export async function GET() {
 
   try {
     const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase
-      .from('users')
-      .select(USER_SELECT)
-      .eq('id', session.uid)
-      .maybeSingle();
+    const { data, error } = await withUserColumns((columns) =>
+      supabase.from('users').select(columns).eq('id', session.uid).maybeSingle(),
+    );
 
     if (error) throw error;
     if (!data) {
@@ -54,12 +52,14 @@ export async function PATCH(request: Request) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase
-      .from('users')
-      .update({ name: trimmedName })
-      .eq('id', session.uid)
-      .select(USER_SELECT)
-      .single();
+    const { data, error } = await withUserColumns((columns) =>
+      supabase
+        .from('users')
+        .update({ name: trimmedName })
+        .eq('id', session.uid)
+        .select(columns)
+        .single(),
+    );
 
     if (error) throw error;
     if (!data) {

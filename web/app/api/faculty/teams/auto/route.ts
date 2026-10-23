@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     (existing ?? []).some((t) => (t as { faculty_id?: string | null }).faculty_id !== session.uid)
   ) {
     return NextResponse.json(
-      { error: 'Another instructor has groups in this section, so it can only be regrouped by your dean' },
+      { error: 'Another instructor has groups in this section, so it can only be regrouped by your Dean or Program Chair' },
       { status: 403 },
     );
   }

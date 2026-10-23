@@ -20,7 +20,7 @@ export default function WebPortalScreen() {
   const { user, logout } = useAuth();
   const { Palette, Accent, Type } = useTheme();
   const styles = useMemo(() => createStyles(Palette), [Palette]);
-  const role = roleLabel(user?.role);
+  const role = roleLabel(user?.role, user?.admin_title);
   const portal = user?.role === "super_admin" ? `${API_URL}/super-admin` : `${API_URL}/admin`;
 
   return (

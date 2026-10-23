@@ -50,7 +50,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       const allowed = new Set([...scope.sectionIds, ...(current ?? []).map((c) => c.section_id as string)]);
       const outside = sectionIds.filter((id) => !allowed.has(id));
       if (outside.length > 0) {
-        return NextResponse.json({ error: 'Some sections belong to another dean', invalid: outside }, { status: 403 });
+        return NextResponse.json({ error: 'Some sections belong to another Dean or Program Chair', invalid: outside }, { status: 403 });
       }
     }
 
