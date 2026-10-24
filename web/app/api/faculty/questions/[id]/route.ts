@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { citedSkillId, isMissingSkillColumn, isSkillId } from '@/app/lib/taylor-skills';
 import { logAudit } from '@/app/lib/audit';
 import { guardAssessmentEdit } from '@/app/lib/assessment-access';
+import { minOptions, SHORT_ANSWER } from '@/app/lib/short-answer';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -63,8 +64,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     sanitizedOptions = Array.isArray(options)
       ? options.filter((o): o is string => typeof o === 'string' && o.trim().length > 0)
       : [];
-    if (sanitizedOptions.length < 2) {
-      return NextResponse.json({ error: 'At least two options are required' }, { status: 400 });
+    // The type sent with it, if any; a PATCH of options alone is checked against two.
+    if (sanitizedOptions.length < minOptions(question_type)) {
+      return NextResponse.json(
+        {
+          error:
+            question_type === SHORT_ANSWER
+              ? 'A short answer question needs at least one accepted answer'
+              : 'At least two options are required',
+        },
+        { status: 400 },
+      );
     }
     updates.options = sanitizedOptions;
   }

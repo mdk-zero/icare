@@ -1,6 +1,7 @@
 "use client";
 
 import { DEFAULT_ATTEMPTS, MIN_ATTEMPTS } from "@/app/lib/quiz-attempts";
+import { acceptedAnswers } from "@/app/lib/short-answer";
 import { describeTimeLimit, formatTimeLimit, parseTimeLimit } from "@/app/lib/time-limit";
 import TimeLimitInput from "../time-limit-input";
 import CoursePicker, { useActivityCourses } from "../../../components/CoursePicker";
@@ -347,7 +348,12 @@ export default function AssessmentQuestionsClient({
         for (const q of loaded) {
           builders[q.id] = {
             content: q.content,
-            options: q.options.length >= 2 ? [...q.options] : ["", ""],
+            options:
+              q.question_type === "short_answer"
+                ? (acceptedAnswers(q.options, q.explanation).length > 0 ? acceptedAnswers(q.options, q.explanation) : [""])
+                : q.options.length >= 2
+                  ? [...q.options]
+                  : ["", ""],
             correct_index: q.correct_index,
             question_type: q.question_type || "multiple_choice",
             points: q.points || 1,
@@ -421,6 +427,18 @@ export default function AssessmentQuestionsClient({
     markDirty(qId);
   };
 
+  /** Short answer keeps accepted answers where the choices go, so switching to or from it starts that list afresh. */
+  const changeQuestionType = (qId: string, type: string) => {
+    setQuestionBuilders((prev) => {
+      const form = prev[qId];
+      if (!form) return prev;
+      const crossing = (form.question_type === "short_answer") !== (type === "short_answer");
+      const options = !crossing ? form.options : type === "short_answer" ? [""] : ["", ""];
+      return { ...prev, [qId]: { ...form, question_type: type, options, correct_index: crossing ? 0 : form.correct_index } };
+    });
+    markDirty(qId);
+  };
+
   const updateBuilderOption = (qId: string, index: number, value: string) => {
     setQuestionBuilders((prev) => {
       const form = prev[qId];
@@ -468,7 +486,12 @@ export default function AssessmentQuestionsClient({
     // True / False draws its own two choices, so the typed options (left over from multiple choice) don't count.
     const filledOptions =
       form.question_type === "true_false" ? ["True", "False"] : form.options.filter((o) => o.trim().length > 0);
-    if (!form.content.trim() || filledOptions.length < 2) {
+    if (form.question_type === "short_answer") {
+      if (!form.content.trim() || filledOptions.length < 1) {
+        toast("Question needs content and at least one accepted answer");
+        return false;
+      }
+    } else if (!form.content.trim() || filledOptions.length < 2) {
       toast("Question needs content and at least two options");
       return false;
     }
@@ -484,7 +507,7 @@ export default function AssessmentQuestionsClient({
     const payload = {
       content: form.content,
       options: filledOptions,
-      correct_index: form.correct_index,
+      correct_index: form.question_type === "short_answer" ? 0 : form.correct_index,
       question_type: form.question_type,
       points: form.points,
       explanation: form.explanation,
@@ -1036,15 +1059,13 @@ export default function AssessmentQuestionsClient({
               </span>
               <select
                 value={form.question_type}
-                onChange={(e) =>
-                  updateBuilderField(q.id, "question_type", e.target.value)
-                }
+                onChange={(e) => changeQuestionType(q.id, e.target.value)}
                 disabled={!isEditing}
                 className="text-xs border border-gray-300 rounded-lg px-2 py-1 text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="multiple_choice">Multiple choice</option>
                 <option value="true_false">True / False</option>
-                <option value="short_answer">Short answer</option>
+                <option value="short_answer">Identification</option>
               </select>
             </div>
             {isEditing && (dirtyQuestions.has(q.id) || q.id.startsWith("new_")) && (
@@ -1148,11 +1169,42 @@ export default function AssessmentQuestionsClient({
             </div>
           )}
 
-          {/* Short answer */}
+          {/* Short answer: the student types it; it is right when it matches an accepted answer */}
           {form.question_type === "short_answer" && (
-            <p className={`text-xs italic ${isEditing ? "text-gray-400" : "text-gray-300"}`}>
-              Students will type a free-text response.
-            </p>
+            <div className="space-y-1.5">
+              <p className={`text-xs ${isEditing ? "text-gray-500" : "text-gray-400"}`}>
+                Students type the answer. It counts as correct when it matches one of these, ignoring capitals,
+                spacing and punctuation.
+              </p>
+              {(form.options.length > 0 ? form.options : [""]).map((opt, idx) => (
+                <div key={idx} className={`flex items-center gap-2 ${!isEditing ? "opacity-60" : ""}`}>
+                  <FontAwesomeIcon icon={faCheck} className="w-4 h-4 text-green-600 shrink-0" />
+                  <input
+                    value={opt}
+                    onChange={(e) => isEditing && updateBuilderOption(q.id, idx, e.target.value)}
+                    placeholder={idx === 0 ? "Accepted answer" : "Another accepted answer"}
+                    disabled={!isEditing}
+                    className="flex-1 px-3 py-1.5 bg-surface border border-gray-400 rounded-lg text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 transition-all"
+                  />
+                  {isEditing && form.options.length > 1 && (
+                    <button
+                      onClick={() => removeBuilderOption(q.id, idx)}
+                      className="text-gray-400 hover:text-red-600 shrink-0"
+                    >
+                      <FontAwesomeIcon icon={faTimes} className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {isEditing && (
+                <button
+                  onClick={() => addBuilderOption(q.id)}
+                  className="text-xs text-brand-600 font-medium hover:underline"
+                >
+                  + Add another accepted answer
+                </button>
+              )}
+            </div>
           )}
         </div>
 

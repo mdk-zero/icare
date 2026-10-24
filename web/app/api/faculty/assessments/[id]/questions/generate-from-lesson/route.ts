@@ -105,7 +105,8 @@ function sanitizeDrafts(
       const mentionsExpected = expected && explanation.toLowerCase().includes(expected.toLowerCase());
       drafts.push({
         content,
-        options: [],
+        // The accepted answer, which is what a typed answer is checked against.
+        options: expected ? [expected] : [],
         correct_index: 0,
         question_type: 'short_answer',
         points: 1,

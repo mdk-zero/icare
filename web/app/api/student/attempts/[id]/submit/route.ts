@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { deriveCompetencyScoresForAttempt } from '@/app/lib/competency';
 import { isLateSubmission } from '@/app/lib/assessment-timing';
+import { acceptedAnswers, matchesShortAnswer, SHORT_ANSWER } from '@/app/lib/short-answer';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -12,6 +13,8 @@ interface RouteParams {
 interface SubmittedAnswer {
   question_id: string;
   selected_index: number | null;
+  /** What the student typed, for a short answer question. */
+  answer_text?: string | null;
   time_spent_seconds?: number;
 }
 
@@ -37,7 +40,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
   const answers: SubmittedAnswer[] = rawAnswers
     .filter(
-      (a): a is { question_id: string; selected_index: unknown; time_spent_seconds?: unknown } =>
+      (a): a is {
+        question_id: string;
+        selected_index: unknown;
+        answer_text?: unknown;
+        time_spent_seconds?: unknown;
+      } =>
         !!a && typeof a === 'object' && typeof (a as { question_id?: unknown }).question_id === 'string',
     )
     .map((a) => ({
@@ -46,6 +54,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         a.selected_index === null || a.selected_index === undefined
           ? null
           : Number(a.selected_index),
+      answer_text: typeof a.answer_text === 'string' ? a.answer_text.slice(0, 500) : null,
       time_spent_seconds:
         a.time_spent_seconds === undefined ? undefined : Math.max(0, Number(a.time_spent_seconds)),
     }));
@@ -101,7 +110,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const { data: questionRows, error: qError } = await supabase
       .from('questions')
-      .select('id, correct_index, explanation')
+      .select('id, correct_index, explanation, question_type, options')
       .in(
         'id',
         served.map((s) => s.question_id),
@@ -122,6 +131,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const answerByQuestion = new Map(answers.map((a) => [a.question_id, a]));
     const graded = questions.map((q) => {
       const submitted = answerByQuestion.get(q.id);
+      if (q.question_type === SHORT_ANSWER) {
+        const typed = submitted?.answer_text?.trim() || null;
+        const accepted = acceptedAnswers(q.options, q.explanation);
+        return {
+          question_id: q.id,
+          position: q.position,
+          selected_index: null,
+          correct_index: 0,
+          explanation: q.explanation,
+          is_correct: matchesShortAnswer(typed, accepted),
+          answer_text: typed,
+          accepted_answer: accepted[0] ?? null,
+          time_spent_seconds: submitted?.time_spent_seconds ?? null,
+        };
+      }
       const selected =
         submitted?.selected_index !== null &&
         submitted?.selected_index !== undefined &&
@@ -135,6 +159,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         correct_index: q.correct_index,
         explanation: q.explanation,
         is_correct: selected !== null && selected === q.correct_index,
+        answer_text: null,
+        accepted_answer: null,
         time_spent_seconds: submitted?.time_spent_seconds ?? null,
       };
     });
@@ -205,6 +231,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             correct_index: g.correct_index,
             is_correct: g.is_correct,
             explanation: g.explanation,
+            // Short answer only: what was typed, and the answer it was checked against.
+            ...(g.accepted_answer !== null
+              ? { answer_text: g.answer_text, accepted_answer: g.accepted_answer }
+              : {}),
           })),
       });
 
