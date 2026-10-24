@@ -9,6 +9,7 @@ import { caseAverage, demoAttendanceRows, lastActivity, mean, quizAverage, submi
 import { activityLabel, byActivity, tallyAttendance } from "../attendance";
 import { sectionName, teamLabel as teamLabelUi, userById, visibleSections, visibleStudents } from "./handlers/scope";
 import { DEMO_INSTITUTION } from "./fixtures/school";
+import { roleLabel } from "../role-labels";
 
 /** The PDF's built-in Helvetica has no middle dot, so labels use an en dash. */
 const teamLabel: typeof teamLabelUi = (db, id) => teamLabelUi(db, id)?.replace(" – ", " – ") ?? null;
@@ -349,7 +350,7 @@ function usersReport(ctx: Ctx, id: string): Built {
     doc: (
       <Shell ctx={ctx} title="Account report" heading="Account Report" rows={[{ label: "Accounts", value: String(users.length) }]}>
         <Table head={["Name", "Role", "Section", "Last sign-in"]} widths={[3, 1.2, 1.4, 1.4]} rows={users.map((u) => [
-          u.name, u.role === "admin" ? "Dean" : u.role === "faculty" ? "Instructor" : "Student", sectionName(db, u.section_id) ?? "—", date(u.last_sign_in_at),
+          u.name, roleLabel(u.role, u.admin_title), sectionName(db, u.section_id) ?? "—", date(u.last_sign_in_at),
         ])} />
       </Shell>
     ),
@@ -359,10 +360,11 @@ function usersReport(ctx: Ctx, id: string): Built {
 function summaryReport(ctx: Ctx): Built {
   const { db } = ctx;
   const students = db.users.filter((u) => u.role === "student");
+  const title = `${roleLabel("admin", ctx.viewer.admin_title)} summary`;
   return {
-    subject: "Dean summary",
+    subject: title,
     doc: (
-      <Shell ctx={ctx} title="Dean summary" heading="Program Summary" rows={[{ label: "Sections", value: db.sections.map((s) => s.name).join(", ") }]}>
+      <Shell ctx={ctx} title={title} heading="Program Summary" rows={[{ label: "Sections", value: db.sections.map((s) => s.name).join(", ") }]}>
         <StatGrid items={[
           { label: "Students", value: students.length },
           { label: "Instructors", value: db.users.filter((u) => u.role === "faculty").length },

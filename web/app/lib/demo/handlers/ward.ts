@@ -183,7 +183,7 @@ function canSee(ctx: Ctx, p: DemoPatient): boolean {
 
 function courseIdsError(ctx: Ctx, ids: string[]): string | null {
   const mine = viewerCourses(ctx);
-  if (mine.length === 0) return "You have no assigned courses yet, so you cannot add patients. Ask your Dean to assign you a course.";
+  if (mine.length === 0) return "You have no assigned courses yet, so you cannot add patients. Ask your Dean or Program Chair to assign you a course.";
   if (ids.length === 0) return "Choose at least one course for this patient.";
   const allowed = new Set(mine.map((c) => c.id));
   return ids.some((id) => !allowed.has(id)) ? "You can only add patients to courses you handle." : null;

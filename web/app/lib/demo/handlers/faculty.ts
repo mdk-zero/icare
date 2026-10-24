@@ -740,7 +740,7 @@ route("PATCH", "/api/faculty/teams/:id", (ctx) => {
   const team = db.teams.find((t) => t.id === params.id);
   if (!team || (ctx.role === "faculty" && team.faculty_id !== ctx.viewer.id)) return notFound("Team not found");
   if (ctx.role === "faculty" && "faculty_id" in (body ?? {})) {
-    return json({ error: "Only your dean can change who supervises a group" }, 403);
+    return json({ error: "Only your Dean or Program Chair can change who supervises a group" }, 403);
   }
   if (typeof body?.name === "string") {
     const name = body.name.trim();
@@ -777,7 +777,7 @@ route("POST", "/api/faculty/teams/auto", (ctx) => {
   }
   const existing = db.teams.filter((t) => t.section_id === sectionId).sort((a, b) => a.name.localeCompare(b.name));
   if (ctx.role === "faculty" && existing.some((t) => t.faculty_id !== ctx.viewer.id)) {
-    return json({ error: "Another instructor has groups in this section, so it can only be regrouped by your dean" }, 403);
+    return json({ error: "Another instructor has groups in this section, so it can only be regrouped by your Dean or Program Chair" }, 403);
   }
   const teams = [...existing];
   for (let i = existing.length; i < count; i++) {
@@ -1180,7 +1180,7 @@ function latestEditRequest(ctx: Ctx, assignmentId: string): Record<string, unkno
   return (rows[0]?.data as Record<string, unknown>) ?? null;
 }
 
-const EDIT_NEEDS_APPROVAL = "This grade is saved. Ask your dean for permission before changing it.";
+const EDIT_NEEDS_APPROVAL = "This grade is saved. Ask your Dean or Program Chair for permission before changing it.";
 
 route("PUT", "/api/faculty/scenarios/assignments/:id/tasks", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
@@ -1319,7 +1319,7 @@ route("POST", "/api/faculty/scenarios/assignments/:id/edit-request", (ctx) => {
   if (reason.length > 500) return json({ error: "Keep the reason under 500 characters" }, 400);
   if (a.status !== "completed") return json({ error: "This grade is not saved yet, so it can be changed freely" }, 409);
   const state = editState(latestEditRequest(ctx, a.id));
-  if (state.status === "pending") return json({ error: "You already asked; wait for your dean to answer" }, 409);
+  if (state.status === "pending") return json({ error: "You already asked; wait for an answer" }, 409);
   if (state.status === "accepted") return json({ error: "You already have permission to change this grade" }, 409);
   const student = userById(db, a.student_id);
   const title = db.scenarios.find((s) => s.id === a.scenario_id)?.title ?? "a patient case";

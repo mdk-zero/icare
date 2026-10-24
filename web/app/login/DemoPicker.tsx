@@ -7,25 +7,50 @@ import {
   faBuildingColumns,
   faChalkboardUser,
   faChevronRight,
+  faSitemap,
   faXmark,
   type IconDefinition,
 } from "@fortawesome/free-solid-svg-icons";
 import { EcgLoader } from "../components/EcgLoader";
 import { demoHome, startDemo, type DemoRole } from "../lib/demo/session";
 import { DEMO_VIEWERS, seedPeople } from "../lib/demo/fixtures/people";
+import type { AdminTitle } from "../lib/role-labels";
 
-const ROLES: { role: DemoRole; label: string; description: string; icon: IconDefinition }[] = [
+interface DemoChoice {
+  key: string;
+  role: DemoRole;
+  /**
+   * A Program Chair is a Dean with a title (migration 080), so their demo is
+   * the Dean's, signed in as the same account titled Program Chair.
+   */
+  adminTitle?: AdminTitle;
+  label: string;
+  description: string;
+  icon: IconDefinition;
+}
+
+const CHOICES: DemoChoice[] = [
   {
+    key: "faculty",
     role: "faculty",
     label: "Instructor",
     description: "Groups, patient cases, quizzes and grading",
     icon: faChalkboardUser,
   },
   {
+    key: "dean",
     role: "admin",
     label: "Dean",
     description: "Instructors, students, wards and school-wide analytics",
     icon: faBuildingColumns,
+  },
+  {
+    key: "program_chair",
+    role: "admin",
+    adminTitle: "program_chair",
+    label: "Program Chair",
+    description: "Everything a Dean has, under the Program Chair title",
+    icon: faSitemap,
   },
 ];
 
@@ -35,7 +60,7 @@ const ROLES: { role: DemoRole; label: string; description: string; icon: IconDef
  * change is dropped at logout.
  */
 export default function DemoPicker({ onClose }: { onClose: () => void }) {
-  const [starting, setStarting] = useState<DemoRole | null>(null);
+  const [starting, setStarting] = useState<string | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -45,20 +70,29 @@ export default function DemoPicker({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, starting]);
 
-  const start = (role: DemoRole) => {
-    setStarting(role);
+  const start = async ({ key, role, adminTitle }: DemoChoice) => {
+    setStarting(key);
     const user = seedPeople().users.find((u) => u.id === DEMO_VIEWERS[role])!;
     startDemo(role, {
       id: user.id,
       email: user.email,
       name: user.name,
       role: user.role,
+      admin_title: adminTitle ?? null,
       picture_url: user.picture_url,
       sex: user.sex,
       has_password: true,
       google_linked: false,
       force_password_change: false,
     });
+    if (adminTitle) {
+      // Loaded here, not with the page: the whole demo dataset comes with it.
+      const { seedStoreWith } = await import("../lib/demo/store");
+      seedStoreWith((fresh) => {
+        const viewer = fresh.users.find((u) => u.id === user.id);
+        if (viewer) viewer.admin_title = adminTitle;
+      });
+    }
     // A full load, so the portal starts with empty caches and the demo's fetch routing on.
     window.location.assign(demoHome(role));
   };
@@ -100,24 +134,24 @@ export default function DemoPicker({ onClose }: { onClose: () => void }) {
         </div>
 
         <ul className="space-y-2.5">
-          {ROLES.map(({ role, label, description, icon }) => (
-            <li key={role}>
+          {CHOICES.map((choice) => (
+            <li key={choice.key}>
               <button
                 type="button"
-                onClick={() => start(role)}
+                onClick={() => void start(choice)}
                 disabled={starting !== null}
                 className="group flex w-full cursor-pointer items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left transition-all duration-200 hover:border-(--auth-accent)/60 hover:bg-white/[0.08] focus:outline-none focus-visible:ring-2 focus-visible:ring-(--auth-accent)/40 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-(--auth-accent)">
-                  <FontAwesomeIcon icon={icon} className="h-5 w-5" />
+                  <FontAwesomeIcon icon={choice.icon} className="h-5 w-5" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block font-semibold leading-tight text-white">{label}</span>
+                  <span className="block font-semibold leading-tight text-white">{choice.label}</span>
                   <span className="mt-0.5 block text-sm leading-snug text-white/55">
-                    {description}
+                    {choice.description}
                   </span>
                 </span>
-                {starting === role ? (
+                {starting === choice.key ? (
                   <EcgLoader className="text-(--auth-accent)" />
                 ) : (
                   <FontAwesomeIcon

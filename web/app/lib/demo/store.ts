@@ -28,6 +28,23 @@ export function getStore(): DemoDb {
   return db;
 }
 
+/**
+ * Starts a demo from a variant of the fixtures: seeds them, applies `change`,
+ * and stores the result where getStore() will find it on the next page. Call
+ * it after startDemo(), which drops any earlier copy. If storage is blocked
+ * the demo still opens, on the plain fixtures.
+ */
+export function seedStoreWith(change: (fresh: DemoDb) => void) {
+  const fresh = seed();
+  change(fresh);
+  db = fresh;
+  try {
+    sessionStorage.setItem(DEMO_STORE_KEY, JSON.stringify(fresh));
+  } catch {
+    // Blocked or full: this page keeps the variant, a reload loses it.
+  }
+}
+
 let pending: ReturnType<typeof setTimeout> | null = null;
 
 /**
