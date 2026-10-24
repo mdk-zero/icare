@@ -18,7 +18,7 @@ import {
   saveBlob,
 } from "../lib/reports/client";
 import type { RecentReport } from "../lib/reports/types";
-import { timeAgo } from "../faculty/_overview/format";
+import { timeAgo } from "../instructor/_overview/format";
 import ReportPreviewModal, { type PreviewState } from "./ReportPreviewModal";
 import { CardLabel } from "./Card";
 import { EcgLoader } from "./EcgLoader";

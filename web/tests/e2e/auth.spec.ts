@@ -27,10 +27,15 @@ test.describe('Sign-in page', () => {
 });
 
 test.describe('Signed-out access', () => {
-  for (const path of ['/admin', '/faculty', '/super-admin', '/super-admin/users']) {
+  for (const path of ['/dean', '/instructor', '/admin', '/admin/users']) {
     test(`${path} sends a signed-out visitor to sign in`, async ({ page }) => {
       await page.goto(path);
       await expect(page).toHaveURL(new RegExp(`/login\\?next=${encodeURIComponent(path)}`));
     });
   }
+
+  test('an old portal address signs in to the new one', async ({ page }) => {
+    await page.goto('/faculty/courses');
+    await expect(page).toHaveURL(new RegExp(`/login\\?next=${encodeURIComponent('/instructor/courses')}`));
+  });
 });

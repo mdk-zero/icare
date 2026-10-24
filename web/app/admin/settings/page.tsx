@@ -1,11 +1,16 @@
 import type { Metadata } from "next";
+import PageHeader from "../../components/PageHeader";
+import ProfileEditor from "../../components/ProfileEditor";
 
 export const metadata: Metadata = {
   title: "Settings | iCARE++",
 };
 
-import SettingsClient from "./page-client";
-
-export default function SettingsPage() {
-  return <SettingsClient />;
+export default function SuperAdminSettingsPage() {
+  return (
+    <div>
+      <PageHeader title="Settings" subtitle="Your profile and password" />
+      <ProfileEditor changePasswordHref="/admin/settings/change-password" />
+    </div>
+  );
 }

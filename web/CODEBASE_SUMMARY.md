@@ -34,8 +34,9 @@ icare-web/
 
 | Role | Description | Portal |
 |------|-------------|--------|
-| **Super Administrator (Dean)** | Full system access, user management, analytics, data privacy compliance | `/admin` |
-| **Faculty** | Student management, grading, performance monitoring, room oversight | `/admin/faculty` |
+| **Admin** (`super_admin`) | Accounts, system health, support requests | `/admin` |
+| **Dean** (`admin`) | Full system access, analytics, data privacy compliance | `/dean` |
+| **Instructor** (`faculty`) | Student management, grading, performance monitoring, room oversight | `/instructor` |
 | **Student** | Clinical tasks, quizzes, patient monitoring, learning recommendations | `/dashboard` |
 
 ---
@@ -91,12 +92,12 @@ The application uses a cohesive teal-based color scheme aligned with the brand c
 
 ### Admin Portal (Dean/Super Admin)
 
-#### `/app/admin/layout.tsx`
+#### `/app/dean/layout.tsx`
 - Admin sidebar navigation with teal (#1B6B7B) scrollbar
 - Navigation items: Overview, Students, Analytics, Reports, Rooms, Faculty, Users
 - User dropdown with logout functionality
 
-#### `/app/admin/page.tsx` (Overview)
+#### `/app/dean/page.tsx` (Overview)
 - Welcome banner with Admin badge and Academic Year
 - **Stats Cards**: Total Students, At-Risk Students, Average Score, Quizzes Completed
 - **Weekly Activity Heatmap**: Visual activity tracking
@@ -107,14 +108,14 @@ The application uses a cohesive teal-based color scheme aligned with the brand c
 - **Student Distribution**: Donut chart (Safe vs At-Risk) using teal and rose
 - **Students Requiring Attention**: List of at-risk students with rose theme
 
-#### `/app/admin/student-management/page.tsx`
+#### `/app/dean/student-management/page.tsx`
 - Student list with search and filtering
 - Stats: Total Students, Safe Students (emerald), At Risk (rose), Total Quizzes
 - Table columns: Student info, Quizzes completed (progress bar), Average Score, Status, Last Active
 - Sorting functionality
 - Enroll Student button
 
-#### `/app/admin/analytics/page.tsx`
+#### `/app/dean/analytics/page.tsx`
 - **Header**: Academic year filter, Export Report button
 - **Stats Cards**: Total Students (8), At-Risk (3), Active Rooms (8), Avg Score (82%)
 - **Weekly Quiz Performance**: Bar chart with hover tooltips
@@ -124,22 +125,22 @@ The application uses a cohesive teal-based color scheme aligned with the brand c
 - **Competency Assessment Summary**: Full table with pass rates and trends
 - Uses emerald for positive, rose for negative
 
-#### `/app/admin/rooms/page.tsx`
+#### `/app/dean/rooms/page.tsx`
 - Room management interface
 
-#### `/app/admin/faculty/page.tsx`
+#### `/app/dean/instructors/page.tsx`
 - Faculty management interface
 
-#### `/app/admin/users/page.tsx`
+#### `/app/dean/users/page.tsx`
 - User account management
 - Roles: student, faculty, administrator, super_admin
 
-#### `/app/admin/reports/page.tsx`
+#### `/app/dean/reports/page.tsx`
 - Report generation
 - Activity Log (audit trail)
 - Competency reports
 
-#### `/app/admin/settings/page.tsx` (Dean Settings)
+#### `/app/dean/settings/page.tsx` (Dean Settings)
 - **Profile**: Dean profile with Super Administrator role
 - **Access Control**: RBAC configuration, security settings (password policy, 2FA)
 - **Data Privacy**: Philippine Data Privacy Act compliance status (Data Protection, Access Control, Audit Trail)

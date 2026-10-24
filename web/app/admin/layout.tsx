@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import ClientAdminLayout from "./layout-client";
+import ClientSuperAdminLayout from "./layout-client";
 import { EcgLoader } from "../components/EcgLoader";
 
 export const metadata: Metadata = {
-  title: "iCARE++",
+  title: "System Administration | iCARE++",
 };
 
-export default function AdminLayout({
+export default function SuperAdminLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -20,7 +20,7 @@ export default function AdminLayout({
         </div>
       }
     >
-      <ClientAdminLayout>{children}</ClientAdminLayout>
+      <ClientSuperAdminLayout>{children}</ClientSuperAdminLayout>
     </Suspense>
   );
 }

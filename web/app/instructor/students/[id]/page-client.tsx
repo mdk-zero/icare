@@ -1,0 +1,962 @@
+"use client";
+
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useRouter, useParams } from "next/navigation";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faChevronLeft,
+  faBolt,
+  faWandMagicSparkles,
+  faCircleCheck,
+  faClipboardCheck,
+  faChartLine,
+  faClipboardList,
+  faClock,
+  faShieldHalved,
+  faTriangleExclamation,
+  faStethoscope,
+  faListCheck,
+  faBullseye,
+  faBookMedical,
+  faXmark,
+  faArrowsRotate,
+  faCalendarCheck,
+} from "@fortawesome/free-solid-svg-icons";
+import {
+  resolveCompetencies,
+  COMPETENCY_LEVEL_LABEL,
+  COMPETENCY_LEVEL_TONE,
+  COMPETENCY_LEVEL_BAR,
+  type ResolvedCompetency,
+} from "../../../lib/competency";
+import {
+  fetchFacultyStudentDetail,
+  fetchLatestPrediction,
+  logAuditAction,
+  getCurrentFacultyUser,
+  fetchAssignmentsForStudent,
+  scenarioHistoryFrom,
+  type ScenarioAssignment,
+  fetchCompetencyScores,
+  generateStudentSummary,
+  CompetencyScore,
+  type StudentQuizAttempt,
+} from "../../../lib/api";
+import {
+  SkeletonProfileHeader,
+  SkeletonRiskPredictionCard,
+  SkeletonTabContent,
+  SkeletonTabTiles,
+} from "../../../components/skeletons";
+import Card from "../../../components/Card";
+import Avatar from "../../../components/Avatar";
+import StatTile from "../../../components/StatTile";
+import { usePageData } from "../../../lib/use-page-data";
+import LiveClock from "../../../components/LiveClock";
+import AiThinking from "../../../components/AiThinking";
+import ReflectionsTab from "./reflections-tab";
+import RequirementsTab, { requirementsTally, useStudentRequirements } from "./requirements-tab";
+import AttendanceTab, { useStudentAttendance } from "./attendance-tab";
+import { fetchStudentReflections, type FacultyReflection } from "../../../lib/api";
+import SkillAreaTrend from "./skill-area-trend";
+import { SendAppLinkButton } from "../../../components/AppLink";
+import QuizHistory, { groupAttempts, scoreColor } from "./quiz-history";
+import AssignmentGrader, { ScenarioSummaryCard } from "../../scenarios/review/assignment-grader";
+import {
+  AssignmentFilterTabs,
+  EmptyPanel,
+  initialFilter,
+  matchesFilter,
+  type Filter,
+} from "../../scenarios/review/assignment-list";
+
+/** Shown in turn while the summary is written, following what it draws on. */
+const STUDENT_SUMMARY_PHRASES = [
+  "Thinking…",
+  "Reviewing quiz scores…",
+  "Going through patient cases…",
+  "Analyzing skill areas…",
+  "Checking the risk prediction…",
+  "Drafting recommendations…",
+];
+
+/**
+ * One slot per student, surviving a hard refresh via localStorage. Each entry
+ * remembers the data signature it was generated for, so opening the modal
+ * can tell whether the student's quizzes/scenarios/competencies/risk
+ * prediction have moved on since. A failed generation is never persisted, so
+ * a retry after a transient error or rate limit tries again instead of
+ * replaying the failure. Capped so a semester-long roster doesn't grow this
+ * without bound.
+ */
+const SUMMARY_STORAGE_PREFIX = "icare:student-summary:";
+const SUMMARY_STORAGE_INDEX_KEY = "icare:student-summary:index";
+const SUMMARY_STORAGE_MAX_ENTRIES = 100;
+/** How often figures that have changed are allowed to spend a new AI call. */
+const SUMMARY_REFRESH_THROTTLE_MS = 10 * 60 * 1000;
+
+type SummaryResult = Awaited<ReturnType<typeof generateStudentSummary>>;
+
+interface StoredSummary {
+  signature: string;
+  result: SummaryResult;
+}
+
+function readStoredSummary(studentId: string): StoredSummary | null {
+  try {
+    const raw = localStorage.getItem(SUMMARY_STORAGE_PREFIX + studentId);
+    return raw ? (JSON.parse(raw) as StoredSummary) : null;
+  } catch {
+    // Private browsing, disabled storage, or corrupt JSON — just miss the cache.
+    return null;
+  }
+}
+
+function writeStoredSummary(studentId: string, entry: StoredSummary) {
+  try {
+    localStorage.setItem(SUMMARY_STORAGE_PREFIX + studentId, JSON.stringify(entry));
+    const raw = localStorage.getItem(SUMMARY_STORAGE_INDEX_KEY);
+    const index: string[] = raw ? (JSON.parse(raw) as string[]) : [];
+    const next = [...index.filter((id) => id !== studentId), studentId];
+    while (next.length > SUMMARY_STORAGE_MAX_ENTRIES) {
+      const evicted = next.shift();
+      if (evicted) localStorage.removeItem(SUMMARY_STORAGE_PREFIX + evicted);
+    }
+    localStorage.setItem(SUMMARY_STORAGE_INDEX_KEY, JSON.stringify(next));
+  } catch {
+    // Storage full or unavailable — the in-memory cache still covers this tab.
+  }
+}
+
+// Stable empty fallbacks, so nothing downstream sees a new array each render.
+const NO_PERFORMANCE_HISTORY: StudentQuizAttempt[] = [];
+const NO_ASSIGNMENTS: ScenarioAssignment[] = [];
+const NO_COMPETENCIES: ResolvedCompetency[] = [];
+const NO_SCORE_HISTORY: CompetencyScore[] = [];
+
+/**
+ * Plain-language reading of this student's record, in a popup opened from
+ * the profile card. It only opens on request, so an AI call is spent only
+ * when someone actually wants one.
+ */
+function StudentSummaryModal({
+  studentName,
+  summary,
+  generatedAt,
+  loading,
+  error,
+  stale,
+  onRetry,
+  onClose,
+}: {
+  studentName: string;
+  summary: NonNullable<SummaryResult["summary"]> | null;
+  generatedAt: string | null;
+  loading: boolean;
+  error: string | null;
+  /** True when newer activity exists but the 10-minute cooldown held this back. */
+  stale: boolean;
+  onRetry: () => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const lists = summary
+    ? [
+        { title: "Strengths", items: summary.strengths, dot: "bg-emerald-600" },
+        {
+          title: "Areas for Improvement",
+          items: summary.areas_for_improvement,
+          dot: "bg-amber-600",
+        },
+        { title: "Recommendations", items: summary.recommendations, dot: "bg-brand-600" },
+      ]
+    : [];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="student-summary-title"
+        className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-hairline bg-surface shadow-overlay"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-hairline bg-subtle px-5 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10">
+              <FontAwesomeIcon
+                icon={faWandMagicSparkles}
+                className="h-4 w-4 text-brand-600"
+              />
+            </span>
+            <div className="min-w-0">
+              <h2
+                id="student-summary-title"
+                className="font-display text-lg font-semibold text-gray-900"
+              >
+                AI Performance Summary
+              </h2>
+              <p className="truncate text-sm text-gray-500">{studentName}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+            aria-label="Close"
+          >
+            <FontAwesomeIcon icon={faXmark} className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          {error && !loading && (
+            <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+              {error}
+            </p>
+          )}
+
+          {loading && (
+            <AiThinking
+              phrases={STUDENT_SUMMARY_PHRASES}
+              label="Generating the AI performance summary"
+            />
+          )}
+
+          {!loading && summary && (
+            <div className="space-y-4">
+              <p className="text-sm leading-relaxed text-gray-700">{summary.overview}</p>
+
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                {lists.map((list) => (
+                  <div key={list.title} className="rounded-xl bg-subtle p-4">
+                    <p className="mb-2 text-sm font-semibold text-gray-900">{list.title}</p>
+                    {list.items.length === 0 ? (
+                      <p className="text-sm text-gray-400">Nothing noted.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {list.items.map((item, idx) => (
+                          <li
+                            key={idx}
+                            className="flex items-start gap-2 text-sm text-gray-600"
+                          >
+                            <span
+                              className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${list.dot}`}
+                            />
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-hairline px-5 py-3">
+          <p className="text-xs text-gray-400">
+            {!loading && summary && generatedAt
+              ? `AI-generated ${new Date(generatedAt).toLocaleString()} — review before acting on it.${
+                  stale
+                    ? " Newer activity is on the way in — this refreshes automatically once the 10-minute cooldown clears."
+                    : ""
+                }`
+              : null}
+          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            {error && !loading && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="flex items-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
+              >
+                <FontAwesomeIcon
+                  icon={faArrowsRotate}
+                  className="h-3.5 w-3.5"
+                />
+                Retry
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-gray-200 bg-surface px-3.5 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function StudentDetailClient() {
+  const router = useRouter();
+  const params = useParams();
+  const studentId = params?.id as string;
+  
+  const [activeTab, setActiveTab] = useState("performance");
+  const [reflections, setReflections] = useState<FacultyReflection[] | null>(null);
+  const [reflectionsEnabled, setReflectionsEnabled] = useState(true);
+  useEffect(() => {
+    let live = true;
+    void fetchStudentReflections(studentId).then((r) => {
+      if (!live) return;
+      setReflections(r.reflections);
+      setReflectionsEnabled(r.enabled);
+    });
+    return () => {
+      live = false;
+    };
+  }, [studentId]);
+  const loggedRef = useRef(false);
+
+  useEffect(() => {
+    if (!studentId || loggedRef.current) return;
+    loggedRef.current = true;
+    const faculty = getCurrentFacultyUser();
+    if (faculty) {
+      logAuditAction({
+        faculty_id: faculty.id,
+        faculty_name: faculty.name,
+        tab: 'student_detail',
+        action: 'view_student',
+        details: `Viewed student detail page`,
+        target_type: 'student',
+        target_id: studentId,
+      });
+    }
+  }, [studentId]);
+
+  // Keyed by student, so stepping back to the roster and into the same student
+  // again reads the whole profile from memory.
+  const { data, loading, setData } = usePageData(
+    studentId ? `faculty:student:${studentId}` : null,
+    async () => {
+      const [detail, riskPrediction, assignments, scoreHistory] = await Promise.all([
+        fetchFacultyStudentDetail(studentId),
+        fetchLatestPrediction(studentId),
+        fetchAssignmentsForStudent(studentId),
+        fetchCompetencyScores(studentId),
+      ]);
+
+      return {
+        student: detail?.student ?? null,
+        performanceHistory: detail?.performance_history ?? NO_PERFORMANCE_HISTORY,
+        riskPrediction,
+        assignments,
+        scoreHistory,
+        // A faculty validation outranks a quiz result; assessment-derived scores
+        // fill every competency nobody has reviewed by hand.
+        competencies: resolveCompetencies(scoreHistory),
+      };
+    },
+  );
+
+  const student = data?.student ?? null;
+  const requirements = useStudentRequirements(studentId);
+  const requirementCount = requirementsTally(requirements.data?.data);
+  const attendanceRate = useStudentAttendance(studentId).data?.data?.tally.rate ?? null;
+  const performanceHistory = data?.performanceHistory ?? NO_PERFORMANCE_HISTORY;
+  // Retakes of a quiz count once, as the Performance tab lists them.
+  const quizCount = useMemo(() => groupAttempts(performanceHistory).length, [performanceHistory]);
+  // Every scenario assigned to the student; the graded ones are their scenario history.
+  const assignments = data?.assignments ?? NO_ASSIGNMENTS;
+  const scenarioHistory = useMemo(() => scenarioHistoryFrom(assignments), [assignments]);
+  // Null until the faculty member picks a filter; until then it opens on what needs grading.
+  const [scenarioFilter, setScenarioFilter] = useState<Filter | null>(null);
+  const activeFilter = scenarioFilter ?? initialFilter(assignments);
+  const visibleAssignments = assignments.filter((a) => matchesFilter(a, activeFilter));
+  // The scenario opened to its checklist. Undefined until one is opened or
+  // closed: until then the first one still to grade opens by itself.
+  const [openedId, setOpenedId] = useState<string | null | undefined>(undefined);
+  const selectedAssignment =
+    visibleAssignments.find((a) => (openedId === undefined ? a.status !== "completed" : a.id === openedId)) ??
+    null;
+  // Whether the open sheet has ratings or notes not saved yet (the grader reports it).
+  const [gradingDirty, setGradingDirty] = useState(false);
+  const confirmDiscard = () => !gradingDirty || window.confirm("Discard your unsaved ratings and notes?");
+  // Opening one card closes the other, so unsaved ratings are asked about first.
+  const openAssignment = (id: string | null) => {
+    if (id === (selectedAssignment?.id ?? null) || !confirmDiscard()) return;
+    setOpenedId(id);
+  };
+  const changeScenarioFilter = (next: Filter) => {
+    if (next === activeFilter) return;
+    const stays = selectedAssignment !== null && matchesFilter(selectedAssignment, next);
+    if (!stays && !confirmDiscard()) return;
+    setScenarioFilter(next);
+  };
+  const updateAssignment = (id: string, patch: Partial<ScenarioAssignment>) =>
+    // Only reachable from a loaded profile, so there is always data to patch.
+    setData((previous) => ({
+      ...previous!,
+      assignments: previous!.assignments.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+    }));
+  const competencies = data?.competencies ?? NO_COMPETENCIES;
+  const scoreHistory = data?.scoreHistory ?? NO_SCORE_HISTORY;
+  const riskPrediction = data?.riskPrediction ?? null;
+
+  /* --- AI summary ------------------------------------------------------ */
+
+  // A signature of the figures the summary would describe. Reopening the
+  // modal for a profile whose quizzes, scenarios, competencies, and risk
+  // prediction haven't changed reuses the cached reading instead of spending
+  // another AI call to describe activity that hasn't moved.
+  const summaryDataSignature = data
+    ? JSON.stringify({
+        quizzes: performanceHistory.map((h) => [h.quiz_title, h.score, h.submitted_at]),
+        scenarios: scenarioHistory.map((s) => [s.id, s.score, s.completed_at]),
+        competencies: scoreHistory.map((c) => [c.competency_id, c.score, c.source, c.created_at]),
+        risk: riskPrediction
+          ? [riskPrediction.risk, riskPrediction.probability, riskPrediction.predicted_at]
+          : null,
+      })
+    : null;
+
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryResult, setSummaryResult] = useState<SummaryResult | null>(null);
+  // True when the figures have moved on since this reading was generated,
+  // but the 10-minute cooldown held back a new AI call for it.
+  const [summaryStale, setSummaryStale] = useState(false);
+
+  // Opens the modal and, unless a cached reading already covers the current
+  // figures (or the last real call was under 10 minutes ago), spends one AI
+  // call to write a fresh one. Runs every time the button is clicked, not
+  // just the first, so activity from later in the session is picked up.
+  // `force` skips the cache/cooldown check entirely — used to retry after an
+  // error, so it can't silently resurface an unrelated stale reading instead.
+  const requestSummary = (opts?: { force?: boolean }) => {
+    setSummaryOpen(true);
+    if (!summaryDataSignature) return;
+
+    const stored = opts?.force ? null : readStoredSummary(studentId);
+    if (stored) {
+      const sameData = stored.signature === summaryDataSignature;
+      const generatedAtMs = stored.result.generated_at
+        ? new Date(stored.result.generated_at).getTime()
+        : 0;
+      const withinThrottle = Date.now() - generatedAtMs < SUMMARY_REFRESH_THROTTLE_MS;
+      if (sameData || withinThrottle) {
+        setSummaryResult(stored.result);
+        setSummaryStale(!sameData);
+        setSummaryLoading(false);
+        return;
+      }
+    }
+
+    setSummaryLoading(true);
+    setSummaryStale(false);
+    void (async () => {
+      const result = await generateStudentSummary(studentId);
+      setSummaryLoading(false);
+      setSummaryResult(result);
+      if (result.summary) {
+        writeStoredSummary(studentId, { signature: summaryDataSignature, result });
+        const faculty = getCurrentFacultyUser();
+        if (faculty) {
+          logAuditAction({
+            faculty_id: faculty.id,
+            faculty_name: faculty.name,
+            tab: 'student_detail',
+            action: 'generate_student_summary',
+            details: 'Generated AI performance summary',
+            target_type: 'student',
+            target_id: studentId,
+          });
+        }
+      }
+    })();
+  };
+
+  const closeSummary = useCallback(() => setSummaryOpen(false), []);
+
+  const aiSummary = summaryResult?.summary ?? null;
+  const summaryGeneratedAt = summaryResult?.generated_at ?? null;
+  const summaryError =
+    summaryResult && !summaryResult.summary
+      ? (summaryResult.error ?? "Unable to generate summary")
+      : null;
+
+  const featureLabel = (feature: string) =>
+    feature.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+  const getScoreColor = scoreColor;
+
+  const needsImprovement = competencies.filter((c) => c.level === 'needs_improvement');
+
+  // The back row is static, so it renders for real; everything below mirrors
+  // the loaded layout so nothing shifts when the data lands.
+  const backRow = (
+    <div className="mb-4 flex items-center justify-between gap-4">
+      <button
+        onClick={() => router.push('/instructor/teams')}
+        className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+      >
+        <FontAwesomeIcon icon={faChevronLeft} className="w-5 h-5" />
+        Back to Students
+      </button>
+      <LiveClock variant="compact" />
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <div>
+        {backRow}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+          <div className="lg:col-span-2">
+            <SkeletonProfileHeader />
+          </div>
+          <SkeletonRiskPredictionCard />
+        </div>
+        <SkeletonTabTiles />
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-clip">
+          <div className="p-6">
+            <SkeletonTabContent />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!student) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96">
+        <p className="text-gray-500">Student not found</p>
+        <button 
+          onClick={() => router.push('/instructor/teams')}
+          className="mt-4 px-4 py-2 text-brand-600 font-medium"
+        >
+          Back to Students
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {backRow}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+        <div className="lg:col-span-2">
+          <Card padding="sm" className="flex h-full flex-col">
+            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex min-w-0 items-center gap-4">
+                <Avatar
+                  name={student.name}
+                  src={student.picture_url}
+                  userId={student.id}
+                  sex={student.sex}
+                  size="xl"
+                  tone="solid"
+                />
+                <div className="min-w-0">
+                  <h1 className="text-2xl font-bold text-gray-900">{student.name}</h1>
+                  <p className="text-gray-500 [overflow-wrap:anywhere]">{student.email}</p>
+                  <div className="flex items-center gap-2">
+                    {student.section ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-600/10 text-brand-600 border border-brand-600/20">
+                        Section {student.section}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
+                        No section
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {/* Under the name on a phone; stacked beside it from sm up, where side by
+                  side they would push past the card next to a long email. */}
+              <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col sm:items-stretch">
+                <button
+                  onClick={() => requestSummary()}
+                  className="flex shrink-0 items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-[0_2px_6px_rgba(27,107,123,0.2)] transition-all hover:bg-brand-700"
+                >
+                  <FontAwesomeIcon icon={faWandMagicSparkles} className="h-4 w-4" />
+                  AI Summary
+                </button>
+                <SendAppLinkButton student={student} />
+              </div>
+            </div>
+
+            <div className="grid flex-1 grid-cols-1 sm:grid-cols-2 gap-3">
+              <StatTile
+                icon={faChartLine}
+                iconBg="bg-brand-600/10"
+                iconColor="text-brand-600"
+                value={student.average_score != null ? `${student.average_score}%` : "—"}
+                label="Avg Score"
+              />
+              <StatTile
+                icon={faClipboardList}
+                iconBg="bg-purple-50"
+                iconColor="text-purple-600"
+                value={String(student.quiz_count ?? 0)}
+                label="Quizzes"
+              />
+              <StatTile
+                icon={faClock}
+                iconBg="bg-amber-50"
+                iconColor="text-amber-600"
+                value={
+                  student.last_activity
+                    ? new Date(student.last_activity).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                      })
+                    : "Never"
+                }
+                label="Last Active"
+              />
+              <StatTile
+                icon={
+                  !riskPrediction
+                    ? faShieldHalved
+                    : riskPrediction.risk === "at_risk"
+                      ? faTriangleExclamation
+                      : faShieldHalved
+                }
+                iconBg={
+                  !riskPrediction
+                    ? "bg-gray-100"
+                    : riskPrediction.risk === "at_risk"
+                      ? "bg-red-50"
+                      : "bg-emerald-50"
+                }
+                iconColor={
+                  !riskPrediction
+                    ? "text-gray-500"
+                    : riskPrediction.risk === "at_risk"
+                      ? "text-red-600"
+                      : "text-emerald-600"
+                }
+                value={riskPrediction ? (riskPrediction.risk === "at_risk" ? "Low Performing" : "Safe") : "Not scored yet"}
+                valueColor={
+                  !riskPrediction
+                    ? "text-gray-500"
+                    : riskPrediction.risk === "at_risk"
+                      ? "text-red-600"
+                      : "text-emerald-600"
+                }
+                label="Risk Status"
+              />
+            </div>
+          </Card>
+        </div>
+
+        <Card padding="sm" className="h-full">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <FontAwesomeIcon icon={faBolt} className="w-5 h-5 text-purple-600" />
+            </div>
+            <h3 className="font-semibold text-gray-900">Low Performance Prediction</h3>
+          </div>
+
+          {!riskPrediction ? (
+            <p className="text-sm text-gray-500 py-4">
+              Not scored yet. A student is scored once they have started or completed work; the ML
+              service then scores the cohort nightly (or run it from Admin &gt; Analytics).
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-500">Classification</span>
+                <span className={`font-medium ${riskPrediction.risk === 'at_risk' ? 'text-red-600' : 'text-emerald-600'}`}>
+                  {riskPrediction.risk === 'at_risk' ? 'AT RISK' : 'SAFE'}
+                </span>
+              </div>
+              {riskPrediction.probability != null && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm text-gray-500">Risk Probability</span>
+                    <span className="font-medium text-gray-900">
+                      {Math.round(riskPrediction.probability * 100)}%
+                    </span>
+                  </div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${riskPrediction.risk === 'at_risk' ? 'bg-red-600' : 'bg-emerald-600'}`}
+                      style={{ width: `${Math.round(riskPrediction.probability * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+              {riskPrediction.explanations.length > 0 && (
+                <div className="border-t border-hairline pt-3">
+                  <p className="text-sm text-gray-500 mb-2">Top Contributing Factors</p>
+                  <div className="space-y-2">
+                    {riskPrediction.explanations.map((exp) => (
+                      <div key={exp.feature} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${exp.direction === 'increases_risk' ? 'bg-red-600' : 'bg-emerald-600'}`} />
+                          <span className="text-gray-600">{featureLabel(exp.feature)}</span>
+                        </div>
+                        <span className="text-gray-500">
+                          {exp.value} <span className="text-gray-400">(avg {exp.cohort_mean})</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {riskPrediction.features.evidence_weight != null && riskPrediction.features.evidence_weight < 1 && (
+                <p className="text-xs text-gray-500">
+                  {riskPrediction.features.attempts_count
+                    ? `Only ${riskPrediction.features.attempts_count} graded ${riskPrediction.features.attempts_count === 1 ? 'quiz' : 'quizzes'} so far, so this rating leans on missed deadlines until there are 3.`
+                    : 'No graded quizzes yet, so this rating is based on missed deadlines rather than scores.'}
+                </p>
+              )}
+              <p className="text-xs text-gray-400 border-t border-hairline pt-3">
+                {riskPrediction.ml_models
+                  ? `${riskPrediction.ml_models.kind.replace(/_/g, ' ')} v${riskPrediction.ml_models.version}${riskPrediction.ml_models.is_baseline ? ' (pre-trained baseline)' : ''}`
+                  : 'model unknown'}
+                {' · '}
+                {new Date(riskPrediction.predicted_at).toLocaleString()}
+              </p>
+            </div>
+          )}
+        </Card>
+      </div>
+
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+          {([
+            { key: 'performance', label: 'Performance', hint: 'Quiz results', count: quizCount, unit: quizCount === 1 ? 'quiz' : 'quizzes', icon: faChartLine },
+            { key: 'scenarios', label: 'Patient Cases', hint: 'Assigned patient cases', count: assignments.length, unit: 'assigned', icon: faStethoscope },
+            { key: 'competencies', label: 'Skill Areas', hint: 'Skill mastery', count: competencies.length, unit: 'areas', icon: faListCheck },
+            { key: 'reflections', label: 'Reflections', hint: 'Reflections & goals', count: reflections?.length ?? 0, unit: 'entries', icon: faBullseye },
+            {
+              key: 'requirements',
+              label: 'Requirements',
+              hint: 'This term, your courses',
+              count: requirementCount.total > 0 ? `${requirementCount.done}/${requirementCount.total}` : 0,
+              unit: 'met',
+              icon: faBookMedical,
+            },
+            {
+              key: 'attendance',
+              label: 'Attendance',
+              hint: 'Patient cases, return demos, quizzes, case presentations',
+              count: attendanceRate === null ? '—' : `${attendanceRate}%`,
+              unit: 'attended',
+              icon: faCalendarCheck,
+            },
+          ] as const).map((tab) => {
+            const active = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                aria-pressed={active}
+                className={`group relative flex items-center gap-4 overflow-hidden rounded-2xl border p-4 text-left transition-all duration-200 ${
+                  active
+                    ? 'border-[#1b6b7b] bg-gradient-to-br from-[#1b6b7b] to-[#124a52] text-white shadow-[0_8px_20px_-6px_rgba(27,107,123,0.5)]'
+                    : 'border-hairline bg-surface text-gray-900 hover:-translate-y-0.5 hover:border-brand-600/40 hover:shadow-tile-hover'
+                }`}
+              >
+                <span
+                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors ${
+                    active ? 'bg-white/20 text-white' : 'bg-brand-600/10 text-brand-600 group-hover:bg-brand-600/15'
+                  }`}
+                >
+                  <FontAwesomeIcon icon={tab.icon} className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-base font-bold leading-tight">{tab.label}</span>
+                  <span className={`block text-xs ${active ? 'text-white/70' : 'text-gray-500'}`}>{tab.hint}</span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className="block text-2xl font-bold leading-none tabular-nums">{tab.count}</span>
+                  <span className={`block text-[11px] ${active ? 'text-white/70' : 'text-gray-400'}`}>{tab.unit}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-clip">
+        <div className="p-6">
+          {activeTab === 'performance' && <QuizHistory records={performanceHistory} />}
+
+          {activeTab === 'scenarios' && (
+            assignments.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">No patient cases assigned to this student yet</p>
+            ) : (
+              // The same checklist as Review Submissions, for this student's scenarios only.
+              <div>
+                <AssignmentFilterTabs
+                  assignments={assignments}
+                  filter={activeFilter}
+                  onFilterChange={changeScenarioFilter}
+                />
+                {visibleAssignments.length === 0 ? (
+                  <EmptyPanel icon={faClipboardList} title="All clear" body="Nothing in this view right now." />
+                ) : (
+                  // Each scenario folds to a card that opens to its checklist, one
+                  // open at a time.
+                  <div className="space-y-3">
+                    {visibleAssignments.map((a) =>
+                      a.id === selectedAssignment?.id ? (
+                        <AssignmentGrader
+                          key={a.id}
+                          assignment={a}
+                          header="scenario"
+                          onCollapse={() => openAssignment(null)}
+                          onAssignmentChange={(patch) => {
+                            updateAssignment(a.id, patch);
+                            // Fully graded: follow it to Completed, still open, instead
+                            // of it vanishing from the Assigned view.
+                            if (patch.status === "completed" && activeFilter === "assigned") {
+                              setScenarioFilter("completed");
+                              setOpenedId(a.id);
+                            }
+                          }}
+                          onDirtyChange={setGradingDirty}
+                        />
+                      ) : (
+                        <ScenarioSummaryCard key={a.id} assignment={a} onExpand={() => openAssignment(a.id)} />
+                      ),
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          )}
+
+          {activeTab === 'reflections' && <ReflectionsTab reflections={reflections} enabled={reflectionsEnabled} />}
+
+          {activeTab === 'requirements' && student && <RequirementsTab studentId={studentId} studentName={student.name} />}
+
+          {activeTab === 'attendance' && student && <AttendanceTab studentId={studentId} studentName={student.name} />}
+
+          {activeTab === 'competencies' && (
+            <div className="space-y-6">
+              {competencies.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">
+                  No skill area data yet. Scores appear automatically once this student submits an
+                  assessment whose criteria are mapped to skill areas — or record one by hand
+                  below.
+                </p>
+              ) : (
+                <>
+                  {needsImprovement.length > 0 && (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                      <p className="text-sm font-semibold text-rose-800">
+                        Needs improvement ({needsImprovement.length})
+                      </p>
+                      <p className="mt-1 text-sm text-rose-700">
+                        {needsImprovement.map((c) => c.name).join(" · ")}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {competencies.map((c) => (
+                      <div key={c.competency_id} className="p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-start justify-between mb-2 gap-2">
+                          <span className="font-medium text-gray-900">{c.name}</span>
+                          <span className={`font-bold shrink-0 ${getScoreColor(c.score)}`}>
+                            {Math.round(c.score)}%
+                          </span>
+                        </div>
+                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${COMPETENCY_LEVEL_BAR[c.level]}`}
+                            style={{ width: `${Math.min(100, Math.max(0, c.score))}%` }}
+                          />
+                        </div>
+                        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${COMPETENCY_LEVEL_TONE[c.level]}`}
+                          >
+                            {COMPETENCY_LEVEL_LABEL[c.level]}
+                          </span>
+                          {/* Where the number came from — faculty judgement or
+                              the student's own quiz performance. */}
+                          <span className="inline-flex items-center gap-1 text-[11px] text-gray-500">
+                            <FontAwesomeIcon
+                              icon={
+                                c.source === "faculty_validation" ? faCircleCheck : faClipboardCheck
+                              }
+                              className="w-3 h-3"
+                            />
+                            {c.source === "faculty_validation"
+                              ? "Instructor validated"
+                              : `From assessments${c.attempts > 0 ? ` (${c.attempts})` : ""}`}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <SkillAreaTrend
+                records={scoreHistory.map((r) => ({
+                  name: r.competency_areas?.name ?? "Unknown skill area",
+                  score: r.score,
+                  created_at: r.created_at,
+                }))}
+              />
+
+              {scoreHistory.length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-3">Validation history</h3>
+                  <div className="space-y-2">
+                    {scoreHistory.slice(0, 10).map((record) => (
+                      <div
+                        key={record.id}
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-xl"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-gray-800">
+                            {record.competency_areas?.name ?? "Unknown skill area"}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {new Date(record.created_at).toLocaleString()}
+                            {record.remarks ? ` · ${record.remarks}` : ""}
+                          </p>
+                        </div>
+                        <span className={`font-bold ${getScoreColor(record.score)}`}>
+                          {record.score}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {summaryOpen && (
+        <StudentSummaryModal
+          studentName={student.name}
+          summary={aiSummary}
+          generatedAt={summaryGeneratedAt}
+          loading={summaryLoading}
+          error={summaryError}
+          stale={summaryStale}
+          onRetry={() => requestSummary({ force: true })}
+          onClose={closeSummary}
+        />
+      )}
+    </div>
+  );
+}

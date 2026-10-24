@@ -4,9 +4,9 @@ import { accounts } from '../env.mjs';
 export type Role = 'super_admin' | 'admin' | 'faculty' | 'student';
 
 export const HOME: Record<Role, string> = {
-  super_admin: '/super-admin',
-  admin: '/admin',
-  faculty: '/faculty',
+  super_admin: '/admin',
+  admin: '/dean',
+  faculty: '/instructor',
   student: '/dashboard',
 };
 

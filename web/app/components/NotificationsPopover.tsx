@@ -65,7 +65,7 @@ const PANEL_HEIGHT = 430;
 export default function NotificationsPopover({
   variant,
   onOpenChange,
-  allHref = "/faculty/notifications",
+  allHref = "/instructor/notifications",
 }: {
   variant: Variant;
   onOpenChange?: (open: boolean) => void;

@@ -60,7 +60,7 @@ export default function InstructorMeScreen() {
       detail: "Grade Patient Cases and edit checklists",
       icon: "open-outline" as const,
       accent: Accent.blue,
-      onPress: () => void Linking.openURL(`${API_URL}/faculty/courses`),
+      onPress: () => void Linking.openURL(`${API_URL}/instructor/courses`),
     },
   ];
 

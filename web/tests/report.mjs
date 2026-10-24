@@ -1,5 +1,5 @@
 /**
- * Sends a Playwright or Postman run to /super-admin/tests while it runs, so
+ * Sends a Playwright or Postman run to /admin/tests while it runs, so
  * the page shows each test as it finishes, next to the health checks and
  * benchmarks.
  *
@@ -65,7 +65,7 @@ export async function startLiveRun(kind, meta) {
       return noop;
     }
     id = json.run.id;
-    console.log(`[report] Live at ${target}/super-admin/tests`);
+    console.log(`[report] Live at ${target}/admin/tests`);
   } catch (err) {
     console.warn(`[report] Could not send results: ${err.message}`);
     return noop;
@@ -114,7 +114,7 @@ export async function startLiveRun(kind, meta) {
       timer = null;
       pending = null;
       await send(results, interrupted ? 'interrupted' : 'done', duration_ms);
-      if (!failed) console.log(`[report] Saved to ${target}/super-admin/tests`);
+      if (!failed) console.log(`[report] Saved to ${target}/admin/tests`);
     },
   };
 }

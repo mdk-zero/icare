@@ -2810,7 +2810,7 @@ export function toFacultyNotification(n: ServerNotification): FacultyNotificatio
     grade_edit_request: toGradeEditRequest(n.data),
     href:
       n.data?.kind === 'support_request' && typeof n.data.request_id === 'string'
-        ? `/super-admin/support?request=${encodeURIComponent(n.data.request_id)}`
+        ? `/admin/support?request=${encodeURIComponent(n.data.request_id)}`
         : undefined,
   };
 }

@@ -24,7 +24,7 @@ import {
   type RequirementRow,
   type RequirementScoreRow,
 } from '../app/lib/course-progress';
-import { COURSE_TABS, parseCourseTab } from '../app/faculty/courses/course-tabs';
+import { COURSE_TABS, parseCourseTab } from '../app/instructor/courses/course-tabs';
 
 let failures = 0;
 function check(label: string, ok: boolean, detail = '') {

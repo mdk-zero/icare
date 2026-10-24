@@ -1,0 +1,1089 @@
+"use client";
+
+import { useCallback, useMemo, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import Link from "next/link";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import {
+  faChartBar,
+  faUsers,
+  faDoorOpen,
+  faExclamationTriangle,
+  faBuilding,
+  faTrophy,
+  faLayerGroup,
+  faUserCheck,
+  faClipboardCheck,
+  faUserGraduate,
+} from "@fortawesome/free-solid-svg-icons";
+import {
+  apiFetch,
+  fetchAnalyticsSummary,
+  fetchFacultySections,
+  fetchRooms,
+} from "../../lib/api";
+import type { Section } from "../../lib/api";
+import { usePageData } from "../../lib/use-page-data";
+import PageHeader from "../../components/PageHeader";
+import StatTile from "../../components/StatTile";
+import { PodiumLeaderboard } from "../../instructor/analytics/Leaderboard";
+import AnalyticsFilterBar, {
+  formatRangeLabel,
+  rangeForPreset,
+  type PresetId,
+} from "../../components/AnalyticsFilterBar";
+
+/** How many of the busiest rooms the bed board shows; the Rooms page has the rest. */
+const TOP_ROOMS = 8;
+/** Podium (three) plus the two runners-up beneath it. */
+const TOP_STUDENTS = 5;
+
+// Stable empty fallbacks, so nothing downstream sees a new value each render.
+const NO_SECTIONS: Section[] = [];
+
+/** The frame every chart card on the page shares. */
+function Panel({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return (
+    <div
+      className={`relative overflow-hidden rounded-2xl border border-hairline bg-surface p-6 shadow-tile ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Says which of the page's controls a panel answers to: a green "Live" for
+ * figures read straight from the database, or the applied date range for the
+ * ones that follow the filters above. The difference is easy to miss otherwise. */
+function ScopeTag({ live, label, dark }: { live?: boolean; label?: string; dark?: boolean }) {
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+        dark ? "bg-white/10 text-white/80" : "bg-subtle text-gray-600"
+      }`}
+    >
+      {live && (
+        <span className="relative flex h-1.5 w-1.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 motion-reduce:animate-none" />
+          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+        </span>
+      )}
+      {live ? "Live" : label}
+    </span>
+  );
+}
+
+/** Panel title with a small brand-coloured icon, the subtitle beneath, and the
+ * panel's scope tag (and anything else) at the right, over a hairline. */
+function CardHeading({
+  icon,
+  title,
+  subtitle,
+  tag,
+  aside,
+  dark = false,
+}: {
+  icon: IconDefinition;
+  title: string;
+  subtitle?: string;
+  tag?: ReactNode;
+  aside?: ReactNode;
+  /** For a panel on the dark "monitor" surface. */
+  dark?: boolean;
+}) {
+  return (
+    <div
+      className={`relative mb-5 flex items-start justify-between gap-4 border-b pb-4 ${
+        dark ? "border-white/10" : "border-hairline"
+      }`}
+    >
+      <div className="min-w-0">
+        <h3
+          className={`flex items-center gap-2 font-display text-lg font-semibold ${
+            dark ? "text-white" : "text-gray-900"
+          }`}
+        >
+          <FontAwesomeIcon
+            icon={icon}
+            className={`h-4 w-4 shrink-0 ${dark ? "text-[#3fd0c9]" : "text-brand-600"}`}
+          />
+          <span className="truncate">{title}</span>
+        </h3>
+        {subtitle && (
+          <p className={`mt-0.5 text-sm ${dark ? "text-white/60" : "text-gray-500"}`}>{subtitle}</p>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-4">
+        {aside}
+        {tag}
+      </div>
+    </div>
+  );
+}
+
+/** The Dean is the one reading this page, not one of the users it counts. */
+const ROLE_SLICES = [
+  { key: "student", label: "Students", color: "#2a8a98" },
+  { key: "faculty", label: "Instructors", color: "#f59e0b" },
+] as const;
+
+/** Large donut of who the users are, with each role's share, name and count in
+ * a row underneath. The card is stretched to match its neighbour, so the ring
+ * takes the free height instead of leaving a gap. */
+function RoleDonut({ counts }: { counts: Record<"student" | "faculty", number> }) {
+  const total = counts.student + counts.faculty;
+  const r = 45;
+  const c = 2 * Math.PI * r;
+  const gap = 2.5;
+  let offset = 0;
+  return (
+    <div className="flex flex-1 flex-col justify-between gap-6">
+      <div className="flex flex-1 items-center justify-center">
+        <div className="relative aspect-square w-full max-w-[15rem]">
+          <svg
+            viewBox="0 0 120 120"
+            className="h-full w-full -rotate-90"
+            role="img"
+            aria-label="Users by role"
+          >
+            <circle
+              cx="60"
+              cy="60"
+              r={r}
+              fill="none"
+              className="stroke-gray-200"
+              strokeWidth="18"
+            />
+            {total > 0 &&
+              ROLE_SLICES.map((slice) => {
+                const len = (counts[slice.key] / total) * c;
+                const el =
+                  len > 0 ? (
+                    <circle
+                      key={slice.key}
+                      cx="60"
+                      cy="60"
+                      r={r}
+                      fill="none"
+                      stroke={slice.color}
+                      strokeWidth="18"
+                      strokeDasharray={`${Math.max(len - gap, 0.1)} ${c}`}
+                      strokeDashoffset={-offset}
+                    />
+                  ) : null;
+                offset += len;
+                return el;
+              })}
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <p className="font-display text-5xl font-bold text-gray-900">{total}</p>
+            <p className="text-sm text-gray-500">Users</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 text-center">
+        {ROLE_SLICES.map((slice) => (
+          <div key={slice.key}>
+            <p className="font-display text-3xl font-bold tabular-nums text-gray-900">
+              {total > 0 ? Math.round((100 * counts[slice.key]) / total) : 0}
+              <span className="text-base font-semibold text-gray-400">%</span>
+            </p>
+            <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-gray-500">
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: slice.color }}
+              />
+              {slice.label} · {counts[slice.key]}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** One figure with a tinted icon disc — the strip along the bottom of a card. */
+function MiniStat({
+  icon,
+  label,
+  value,
+  chip,
+}: {
+  icon: IconDefinition;
+  label: string;
+  value: ReactNode;
+  chip: string;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${chip}`}>
+        <FontAwesomeIcon icon={icon} className="h-4 w-4" />
+      </span>
+      <div className="min-w-0">
+        <p className="truncate text-xs text-gray-500">{label}</p>
+        <p className="font-display text-lg font-bold tabular-nums text-gray-900">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+/** One bed seen from above: a frame with a pillow at the head. Occupied beds
+ * are solid, free ones a dashed outline, and beds in a room that is closed
+ * (inactive or under maintenance) are hatched — out of service either way. */
+function BedGlyph({ state }: { state: "occupied" | "free" | "closed" }) {
+  return (
+    <svg viewBox="0 0 22 14" className="h-3.5 w-[22px] shrink-0" aria-hidden>
+      {state === "occupied" ? (
+        <>
+          <rect x="0.5" y="0.5" width="21" height="13" rx="3" className="fill-brand-600" />
+          <rect x="2.5" y="3" width="4.5" height="8" rx="1.5" className="fill-white/70" />
+        </>
+      ) : state === "free" ? (
+        <rect
+          x="0.75"
+          y="0.75"
+          width="20.5"
+          height="12.5"
+          rx="3"
+          fill="none"
+          strokeWidth="1.5"
+          strokeDasharray="3 2"
+          className="stroke-gray-300"
+        />
+      ) : (
+        <>
+          <rect x="0.5" y="0.5" width="21" height="13" rx="3" className="fill-gray-100 stroke-gray-300" />
+          <path d="M4 13 L13 1 M10 13 L19 1" strokeWidth="1.25" className="stroke-gray-300" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+/** A room drawn as more beds than this falls back to a fill bar, so a large
+ * open ward doesn't turn its tile into a wall of glyphs. */
+const MAX_BED_GLYPHS = 16;
+
+/** One room on the bed board: its number and name, a glyph per bed, and a
+ * plain count of who is in them. Beds are whole things, so they are counted
+ * and drawn, not swept by a needle. */
+function RoomBedCard({
+  name,
+  roomNumber,
+  status,
+  occupied,
+  capacity,
+}: {
+  name: string;
+  roomNumber: string;
+  status: string;
+  occupied: number;
+  capacity: number;
+}) {
+  const tone = ROOM_STATUS_TONE[status] ?? ROOM_STATUS_TONE.inactive;
+  const closed = status !== "active";
+  const filled = Math.min(occupied, capacity);
+  const free = Math.max(capacity - occupied, 0);
+  const over = Math.max(occupied - capacity, 0);
+  const pct = capacity > 0 ? Math.round((100 * occupied) / capacity) : 0;
+  const flag = closed
+    ? { text: tone.label, className: tone.badge }
+    : over > 0
+      ? { text: `${over} over`, className: "bg-rose-100 text-rose-600" }
+      : capacity > 0 && free === 0
+        ? { text: "Full", className: "bg-amber-100 text-amber-700" }
+        : occupied === 0
+          ? { text: "Empty", className: "bg-gray-100 text-gray-500" }
+          : null;
+
+  return (
+    <div
+      className={`flex min-w-0 flex-col rounded-xl border border-hairline p-3.5 ${
+        closed ? "bg-subtle" : "bg-surface"
+      }`}
+    >
+      <div className="flex min-h-5 items-center justify-between gap-2">
+        <p className="truncate font-mono text-[11px] font-semibold tracking-wider text-gray-400">
+          RM {roomNumber}
+        </p>
+        {flag && (
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${flag.className}`}>
+            {flag.text}
+          </span>
+        )}
+      </div>
+      <p className="truncate text-sm font-semibold text-gray-900" title={name}>
+        {name}
+      </p>
+
+      <div
+        className="my-3 flex min-h-[14px] flex-wrap gap-1"
+        role="img"
+        aria-label={`${name}: ${occupied} of ${capacity} beds occupied${closed ? `, room ${tone.label.toLowerCase()}` : ""}`}
+      >
+        {capacity === 0 ? (
+          <span className="text-xs text-gray-400">No beds set</span>
+        ) : capacity > MAX_BED_GLYPHS ? (
+          <div className="h-3.5 w-full overflow-hidden rounded-[4px] bg-gray-100">
+            <div
+              className={`h-full rounded-[4px] ${closed ? "bg-gray-300" : "bg-brand-600"}`}
+              style={{ width: `${Math.min(pct, 100)}%`, transition: "width 600ms ease-out" }}
+            />
+          </div>
+        ) : (
+          Array.from({ length: capacity }).map((_, i) => (
+            <BedGlyph key={i} state={closed ? "closed" : i < filled ? "occupied" : "free"} />
+          ))
+        )}
+      </div>
+
+      <div className="mt-auto flex items-baseline justify-between gap-2 border-t border-hairline pt-2">
+        <p className="text-xs tabular-nums text-gray-500">
+          <span className="font-semibold text-gray-900">{occupied}</span>/{capacity} beds
+          {!closed && free > 0 && <span className="hidden text-gray-400 sm:inline"> · {free} free</span>}
+        </p>
+        <p className="font-display text-sm font-bold tabular-nums text-gray-700">{pct}%</p>
+      </div>
+    </div>
+  );
+}
+
+/** Every bed in the program on one strip: occupied, free, and out of service
+ * (beds in rooms that are closed), each segment sized by its count. */
+function BedStrip({ occupied, free, closed }: { occupied: number; free: number; closed: number }) {
+  const total = occupied + free + closed;
+  if (total === 0) return null;
+  const parts = [
+    { key: "occupied", label: "Occupied", n: occupied, bar: "bg-brand-600", dot: "bg-brand-600" },
+    { key: "free", label: "Free", n: free, bar: "bg-brand-600/20", dot: "bg-brand-600/40" },
+    {
+      key: "closed",
+      label: "Out of service",
+      n: closed,
+      bar: "bg-[repeating-linear-gradient(135deg,var(--color-gray-200)_0_4px,var(--color-gray-100)_4px_8px)]",
+      dot: "bg-gray-300",
+    },
+  ].filter((p) => p.n > 0);
+  return (
+    <div className="mb-5">
+      <div
+        className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full"
+        role="img"
+        aria-label={`${occupied} beds occupied, ${free} free, ${closed} out of service`}
+      >
+        {parts.map((p) => (
+          <div
+            key={p.key}
+            className={`h-full first:rounded-l-full last:rounded-r-full ${p.bar}`}
+            style={{ width: `${(100 * p.n) / total}%`, transition: "width 600ms ease-out" }}
+          />
+        ))}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+        {parts.map((p) => (
+          <span key={p.key} className="flex items-center gap-1.5 text-xs text-gray-500">
+            <span className={`h-2 w-2 rounded-full ${p.dot}`} />
+            {p.label}
+            <span className="font-semibold tabular-nums text-gray-800">{p.n}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const ROOM_STATUS_TONE: Record<string, { badge: string; fill: string; label: string }> = {
+  active: {
+    badge: "bg-emerald-100 text-emerald-600",
+    fill: "bg-emerald-500/[0.08]",
+    label: "Active",
+  },
+  inactive: { badge: "bg-gray-100 text-gray-500", fill: "bg-gray-400/[0.08]", label: "Inactive" },
+  maintenance: {
+    badge: "bg-amber-100 text-amber-600",
+    fill: "bg-amber-500/[0.08]",
+    label: "Maintenance",
+  },
+};
+
+/** Smallest round step (1/2/5/10 × 10ⁿ) at or above `rough`, so gridlines land
+ * on whole numbers. */
+function niceStep(rough: number): number {
+  if (rough <= 1) return 1;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rough)));
+  for (const m of [1, 2, 5, 10]) if (m * magnitude >= rough) return m * magnitude;
+  return 10 * magnitude;
+}
+
+function shortLabel(name: string, max = 11): string {
+  return name.length > max ? `${name.slice(0, max - 1)}…` : name;
+}
+
+/** One column per section: the light bar is everyone enrolled, the dark bar in
+ * front of it is who has been active. Hover (or tab to) a column for the exact
+ * figures — the plot itself carries no per-bar numbers. */
+function SectionColumns({
+  data,
+}: {
+  data: { id: string; name: string; students: number; active_students: number }[];
+}) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const W = 640;
+  const H = 170;
+  const pad = { left: 34, right: 8, top: 22, bottom: 32 };
+  const plotW = W - pad.left - pad.right;
+  const plotH = H - pad.top - pad.bottom;
+  const rawMax = Math.max(...data.map((d) => d.students), 1);
+  const step = niceStep(rawMax / 4);
+  const max = Math.ceil(rawMax / step) * step;
+  const ticks: number[] = [];
+  for (let t = 0; t <= max; t += step) ticks.push(t);
+  const band = plotW / data.length;
+  const barW = Math.min(band * 0.5, 48);
+  const y = (v: number) => pad.top + plotH - (v / max) * plotH;
+  const roundedTop = (x: number, top: number, w: number, base: number) => {
+    const h = base - top;
+    const r = Math.min(5, h / 2, w / 2);
+    return `M${x},${base} V${top + r} Q${x},${top} ${x + r},${top} H${x + w - r} Q${x + w},${top} ${x + w},${top + r} V${base} Z`;
+  };
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center gap-4 text-xs text-gray-500">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-brand-200" /> Enrolled
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-brand-600" /> Active
+        </span>
+      </div>
+      <div className="relative">
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          className="h-auto w-full"
+          role="img"
+          aria-label="Active students per section"
+        >
+          {ticks.map((t) => (
+            <g key={t}>
+              <line
+                x1={pad.left}
+                x2={W - pad.right}
+                y1={y(t)}
+                y2={y(t)}
+                className="stroke-gray-200"
+                strokeWidth="1"
+                strokeDasharray={t === 0 ? undefined : "3 4"}
+              />
+              <text
+                x={pad.left - 6}
+                y={y(t) + 3.5}
+                textAnchor="end"
+                className="fill-gray-400"
+                fontSize="10"
+              >
+                {t}
+              </text>
+            </g>
+          ))}
+          {data.map((d, i) => {
+            const x = pad.left + band * i + (band - barW) / 2;
+            const base = pad.top + plotH;
+            const dim = hovered !== null && hovered !== i;
+            return (
+              <g key={d.id} opacity={dim ? 0.45 : 1} className="transition-opacity">
+                {d.students > 0 && (
+                  <path d={roundedTop(x, y(d.students), barW, base)} className="fill-brand-200" />
+                )}
+                {d.active_students > 0 && (
+                  <path
+                    d={roundedTop(x, y(d.active_students), barW, base)}
+                    className="fill-brand-600"
+                  />
+                )}
+                <text
+                  x={x + barW / 2}
+                  y={y(Math.max(d.active_students, d.students)) - 6}
+                  textAnchor="middle"
+                  className="fill-gray-800"
+                  fontSize="11"
+                  fontWeight="600"
+                >
+                  {d.active_students}
+                </text>
+                <text
+                  x={x + barW / 2}
+                  y={H - 10}
+                  textAnchor="middle"
+                  className="fill-gray-500"
+                  fontSize="10"
+                >
+                  {shortLabel(d.name)}
+                </text>
+                <rect
+                  x={pad.left + band * i}
+                  y={pad.top}
+                  width={band}
+                  height={plotH + pad.bottom}
+                  fill="transparent"
+                  tabIndex={0}
+                  aria-label={`${d.name}: ${d.active_students} of ${d.students} students active`}
+                  onMouseEnter={() => setHovered(i)}
+                  onMouseLeave={() => setHovered(null)}
+                  onFocus={() => setHovered(i)}
+                  onBlur={() => setHovered(null)}
+                />
+              </g>
+            );
+          })}
+        </svg>
+        {hovered !== null && (
+          <div
+            className="pointer-events-none absolute -translate-x-1/2 rounded-lg border border-hairline bg-surface px-3 py-2 text-xs shadow-overlay"
+            style={{
+              left: `${((pad.left + band * (hovered + 0.5)) / W) * 100}%`,
+              top: `${(Math.max(y(data[hovered].students) - 56, 0) / H) * 100}%`,
+            }}
+          >
+            <p className="font-semibold text-gray-900">{data[hovered].name}</p>
+            <p className="text-gray-600">
+              {data[hovered].active_students}/{data[hovered].students} active ·{" "}
+              {data[hovered].students > 0
+                ? Math.round((100 * data[hovered].active_students) / data[hovered].students)
+                : 0}
+              %
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** A grey placeholder block. The pulse comes from the wrapper around the page. */
+function Bone({ className = "", style }: { className?: string; style?: CSSProperties }) {
+  return <div className={`rounded bg-gray-100 ${className}`} style={style} />;
+}
+
+/** Mirrors CardHeading: icon and title, the subtitle, and the scope tag, over a hairline. */
+function SkeletonHeading({ subtitle = "w-56" }: { subtitle?: string }) {
+  return (
+    <div className="mb-5 flex items-start justify-between gap-4 border-b border-hairline pb-4">
+      <div className="min-w-0">
+        <div className="flex h-7 items-center gap-2">
+          <Bone className="h-4 w-4" />
+          <Bone className="h-5 w-40" />
+        </div>
+        <div className="mt-0.5 flex h-5 items-center">
+          <Bone className={`h-3.5 ${subtitle}`} />
+        </div>
+      </div>
+      <Bone className="h-6 w-24 shrink-0 rounded-full" />
+    </div>
+  );
+}
+
+/** Mirrors StatTile: label beside a round icon, a display-size value, a caption. */
+function SkeletonTile() {
+  return (
+    <div className="flex flex-col rounded-2xl border border-hairline bg-surface p-5 shadow-tile">
+      <div className="flex items-start justify-between gap-2">
+        <Bone className="mt-0.5 h-3 w-24" />
+        <Bone className="h-11 w-11 shrink-0 rounded-full" />
+      </div>
+      <Bone className="mt-3.5 h-11 w-20" />
+      <div className="mt-3 flex h-4 items-center">
+        <Bone className="h-3 w-40" />
+      </div>
+    </div>
+  );
+}
+
+/** Mirrors a leaderboard row: a rank badge, two lines of text, a trailing figure. */
+function SkeletonBarRow() {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-hairline bg-surface p-3">
+      <Bone className="h-8 w-8 shrink-0 rounded-full" />
+      <div className="flex h-9 min-w-0 flex-1 flex-col justify-center gap-1.5">
+        <Bone className="h-3.5 w-1/2" />
+        <Bone className="h-3 w-2/3" />
+      </div>
+      <Bone className="h-4 w-10 shrink-0" />
+    </div>
+  );
+}
+
+/** One podium place. The middle one is the winner's, so it stands taller. */
+function SkeletonPodiumCard({ first = false }: { first?: boolean }) {
+  return (
+    <div
+      className={`flex flex-col items-center rounded-2xl border border-hairline px-3 pb-4 ${
+        first ? "pt-6 sm:pb-6" : "pt-4"
+      }`}
+    >
+      <Bone className={`rounded-full ${first ? "h-16 w-16" : "h-12 w-12"}`} />
+      <Bone className="mt-3 h-3.5 w-4/5" />
+      <Bone className="mt-1.5 h-3 w-1/2" />
+      <Bone className={`mt-3 ${first ? "h-8 w-16" : "h-7 w-14"}`} />
+      <Bone className="mt-1.5 h-2.5 w-14" />
+    </div>
+  );
+}
+
+/** Mirrors RoomBedCard: number and name, a row of beds, then the count. */
+function SkeletonRoomCard() {
+  return (
+    <div className="rounded-xl border border-hairline p-3.5">
+      <Bone className="h-2.5 w-12" />
+      <Bone className="mt-1.5 h-4 w-3/4" />
+      <div className="my-3 flex gap-1.5">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Bone key={i} className="h-3.5 w-[22px] rounded-[3px]" />
+        ))}
+      </div>
+      <Bone className="h-3 w-1/2" />
+    </div>
+  );
+}
+
+/** Mirrors MiniStat: a tinted disc beside a label and a figure. */
+function SkeletonMiniStat() {
+  return (
+    <div className="flex items-center gap-3">
+      <Bone className="h-10 w-10 shrink-0 rounded-full" />
+      <div className="space-y-2">
+        <Bone className="h-3 w-16" />
+        <Bone className="h-4 w-10" />
+      </div>
+    </div>
+  );
+}
+
+// Fixed, so the placeholder columns don't reshuffle between renders.
+const SKELETON_COLUMNS = [55, 80, 40, 65, 90, 50];
+
+/**
+ * The dashboard's shape with nothing in it, shown until the first load lands.
+ * Each block below stands where a panel in `AdminAnalyticsClient` sits, at the
+ * same grid and spacing, so the page doesn't jump when the figures arrive — if
+ * that layout changes, change this with it.
+ */
+function AnalyticsSkeleton() {
+  return (
+    <div className="animate-pulse" role="status" aria-busy="true">
+      <span className="sr-only">Loading analytics…</span>
+
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <SkeletonTile key={i} />
+        ))}
+      </div>
+
+      <div className="mb-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <Panel>
+          <SkeletonHeading subtitle="w-48" />
+          <div className="grid grid-cols-3 items-end gap-3 sm:gap-6">
+            <SkeletonPodiumCard />
+            <SkeletonPodiumCard first />
+            <SkeletonPodiumCard />
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-2">
+            <SkeletonBarRow />
+            <SkeletonBarRow />
+          </div>
+        </Panel>
+
+      <Panel>
+        <SkeletonHeading subtitle="w-40" />
+        <Bone className="mb-2 h-3 w-full rounded-full" />
+        <Bone className="mb-5 h-3 w-56" />
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 xl:grid-cols-2 2xl:grid-cols-4">
+          {Array.from({ length: TOP_ROOMS }).map((_, i) => (
+            <SkeletonRoomCard key={i} />
+          ))}
+        </div>
+      </Panel>
+      </div>
+
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <Panel className="lg:col-span-2">
+          <SkeletonHeading subtitle="w-72" />
+          <div className="mb-3 flex items-center gap-4">
+            <Bone className="h-3 w-16" />
+            <Bone className="h-3 w-14" />
+          </div>
+          <div className="flex aspect-[640/170] w-full items-end gap-4 rounded-lg bg-gray-50 px-6 pt-4">
+            {SKELETON_COLUMNS.map((height, i) => (
+              <Bone
+                key={i}
+                className="flex-1 rounded-b-none rounded-t-md"
+                style={{ height: `${height}%` }}
+              />
+            ))}
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-4 border-t border-hairline pt-5 sm:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <SkeletonMiniStat key={i} />
+            ))}
+          </div>
+        </Panel>
+
+        <Panel className="flex flex-col">
+          <SkeletonHeading subtitle="w-36" />
+          <div className="flex flex-1 flex-col justify-between gap-6">
+            <div className="flex flex-1 items-center justify-center">
+              <div className="aspect-square w-full max-w-[15rem] rounded-full border-[2rem] border-gray-100" />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="flex flex-col items-center gap-2">
+                  <Bone className="h-8 w-12" />
+                  <Bone className="h-3 w-20" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+export default function AdminAnalyticsClient() {
+
+  // Filters — the same section + range controls the faculty dashboard has.
+  const [sectionIds, setSectionIds] = useState<string[]>([]);
+  const [preset, setPreset] = useState<PresetId>("3m");
+  // Lazily initialised so `new Date()` never runs during a server render.
+  const [range, setRange] = useState(() => rangeForPreset("3m"));
+  // What the custom date inputs show, kept apart from the applied `range` so a
+  // half-typed or inverted range doesn't fire a request.
+  const [draft, setDraft] = useState(() => rangeForPreset("3m"));
+
+  const { from, to } = range;
+  const sectionKey = [...sectionIds].sort().join(",");
+
+  const { data: sectionsData } = usePageData("faculty:sections", fetchFacultySections);
+  const allSections = sectionsData ?? NO_SECTIONS;
+
+  const applyPreset = useCallback((id: PresetId) => {
+    setPreset(id);
+    if (id === "custom") return;
+    const next = rangeForPreset(id);
+    setRange(next);
+    setDraft(next);
+  }, []);
+
+  const setCustom = (edge: "from" | "to", value: string) => {
+    const next = { ...draft, [edge]: value };
+    setDraft(next);
+    // Only a complete, ordered range becomes a query.
+    if (next.from && next.to && next.from <= next.to) setRange(next);
+  };
+
+  // Follows the filters: one cache entry per combination.
+  const {
+    data: analytics,
+    loading,
+    revalidating,
+  } = usePageData(
+    `admin:analytics:${sectionKey}:${from}:${to}`,
+    () => fetchAnalyticsSummary({ sectionIds, from, to }),
+    { keepPreviousData: true },
+  );
+
+  // Live figures that don't depend on the filters, so they aren't re-read on
+  // every filter change.
+  const {
+    data: live,
+    loading: liveLoading,
+  } = usePageData("admin:analytics:live", async () => {
+    const [usersRes, rooms] = await Promise.all([
+      apiFetch("/api/admin/users", { credentials: "include" }),
+      fetchRooms(),
+    ]);
+    const users = usersRes.ok
+      ? (((await usersRes.json()) as { users?: { role: string }[] }).users ?? [])
+      : [];
+    const roleCounts = { student: 0, faculty: 0, admin: 0 };
+    for (const u of users) {
+      if (u.role === "student" || u.role === "faculty" || u.role === "admin")
+        roleCounts[u.role] += 1;
+    }
+
+    return { roleCounts, rooms };
+  });
+
+  const summary = analytics?.summary ?? null;
+  const roleCounts = live?.roleCounts ?? { student: 0, faculty: 0, admin: 0 };
+  const allRooms = live?.rooms;
+
+  const sectionCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const s of summary?.sections ?? []) counts[s.id] = s.students;
+    return counts;
+  }, [summary]);
+
+  const atRisk = summary?.risk_distribution?.at_risk ?? 0;
+  const totalStudents = summary?.cohort.total_students ?? 0;
+  const activeStudents = summary?.cohort.active_students_30d ?? 0;
+  const activeRate = totalStudents
+    ? Math.min(100, Math.round((activeStudents / totalStudents) * 100))
+    : 0;
+
+  const atRiskRate = totalStudents ? Math.min(100, Math.round((100 * atRisk) / totalStudents)) : 0;
+
+  const roomList = useMemo(() => allRooms ?? [], [allRooms]);
+  const activeRooms = roomList.filter((r) => r.status === "active").length;
+
+  // Occupancy reads from the rooms themselves — patients actually admitted to
+  // a bed — rather than the warehouse's room_assignments count, which tracks
+  // students rostered for clinical duty and is usually empty even when every
+  // room is full of patients. Busiest five only; the rest is what the Rooms
+  // page is for.
+  const totalBeds = roomList.reduce((n, r) => n + r.capacity, 0);
+  const occupiedBeds = roomList.reduce((n, r) => n + r.patients_assigned, 0);
+  const overallOccupancy = totalBeds > 0 ? Math.round((100 * occupiedBeds) / totalBeds) : 0;
+  // Beds in a closed room can't take a patient, so the strip sets them apart
+  // from the free ones rather than counting them as spare capacity.
+  const closedBeds = roomList
+    .filter((r) => r.status !== "active")
+    .reduce((n, r) => n + Math.max(r.capacity - r.patients_assigned, 0), 0);
+  const freeBeds = Math.max(totalBeds - occupiedBeds - closedBeds, 0);
+  const rooms = roomList
+    .map((r) => ({
+      ...r,
+      utilization_pct: r.capacity > 0 ? Math.round((100 * r.patients_assigned) / r.capacity) : 0,
+    }))
+    .sort((a, b) => b.utilization_pct - a.utilization_pct)
+    .slice(0, TOP_ROOMS);
+
+  const sectionEngagement = (summary?.sections ?? [])
+    .filter((s) => s.students > 0)
+    .map((s) => ({ ...s, active_students: s.active_students ?? 0 }));
+  const topStudents = (summary?.top_students ?? []).slice(0, TOP_STUDENTS);
+  // The full ranking opens on its own page with the same scope.
+  const leaderboardHref = `/dean/analytics/leaderboard?${new URLSearchParams({
+    ...(sectionIds.length > 0 ? { sections: sectionIds.join(",") } : {}),
+    from,
+    to,
+  })}`;
+
+  // The live figures gate it too: without them the tiles would read zero and
+  // the rooms panel "No rooms configured" until they landed.
+  const firstLoad = (loading && !summary) || liveLoading;
+  const rangeTag = <ScopeTag label={formatRangeLabel(from, to)} />;
+  const liveTag = <ScopeTag live />;
+
+  return (
+    <div>
+      <PageHeader
+        badge={{
+          icon: <FontAwesomeIcon icon={faChartBar} className="w-3.5 h-3.5" />,
+          label: "System Analytics",
+        }}
+        title="Analytics Dashboard"
+        subtitle="Cohort analytics from the iCARE++ star-schema warehouse"
+      />
+
+      <AnalyticsFilterBar
+        sections={allSections}
+        sectionIds={sectionIds}
+        onSectionsChange={setSectionIds}
+        sectionCounts={sectionCounts}
+        preset={preset}
+        onPresetChange={applyPreset}
+        draft={draft}
+        onDraftChange={setCustom}
+        range={range}
+        refreshing={revalidating}
+      />
+
+      {firstLoad ? (
+        <AnalyticsSkeleton />
+      ) : (
+        <>
+          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <StatTile
+              icon={faUserCheck}
+              value={activeStudents}
+              label="Active Students"
+              caption={`${activeRate}% of ${totalStudents} students · last 30 days`}
+              iconBg="bg-emerald-50"
+              iconColor="text-emerald-600"
+            />
+            <StatTile
+              icon={faExclamationTriangle}
+              value={atRisk}
+              label="Low Performing Students"
+              caption={
+                totalStudents
+                  ? `${atRiskRate}% of ${totalStudents} students`
+                  : "No students in range"
+              }
+              iconBg="bg-rose-50"
+              iconColor="text-rose-600"
+            />
+            <StatTile
+              icon={faDoorOpen}
+              value={activeRooms}
+              label="Active Rooms"
+              caption={`${occupiedBeds}/${totalBeds} beds occupied`}
+            />
+          </div>
+
+          {/* Top students beside the room bed board; stacked below xl */}
+          <div className="mb-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
+            {/* Top students: podium for the first three, rows for the rest. A
+                column so the leaderboard link stays at the bottom when the room
+                board beside it is taller. */}
+            <Panel className="flex flex-col">
+              <CardHeading
+                icon={faTrophy}
+                title="Top Students"
+                subtitle="Highest average submitted score"
+                tag={rangeTag}
+              />
+              <div className="flex-1">
+                <PodiumLeaderboard students={topStudents} />
+              </div>
+              {topStudents.length > 0 && (
+                <div className="mt-4 flex justify-end border-t border-hairline pt-3">
+                  <Link
+                    href={leaderboardHref}
+                    className="text-sm font-medium text-brand-600 transition-colors hover:text-brand-700"
+                  >
+                    View full leaderboard →
+                  </Link>
+                </div>
+              )}
+            </Panel>
+
+          {/* Room Utilization: a bed board of the busiest rooms */}
+          <Panel>
+            <CardHeading
+              icon={faBuilding}
+              title="Room Utilization"
+              subtitle={
+                roomList.length > TOP_ROOMS
+                  ? `Busiest ${TOP_ROOMS} of ${roomList.length} rooms, bed by bed`
+                  : "Every room, bed by bed"
+              }
+              tag={liveTag}
+              aside={
+                roomList.length > 0 ? (
+                  <div className="hidden text-right sm:block">
+                    <p className="font-display text-xl font-bold tabular-nums text-gray-900">
+                      {overallOccupancy}%
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {occupiedBeds}/{totalBeds} beds overall
+                    </p>
+                  </div>
+                ) : undefined
+              }
+            />
+            {roomList.length === 0 ? (
+              <p className="py-8 text-center text-sm text-gray-400">No rooms configured.</p>
+            ) : (
+              <>
+                <BedStrip occupied={occupiedBeds} free={freeBeds} closed={closedBeds} />
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 xl:grid-cols-2 2xl:grid-cols-4">
+                  {rooms.map((room) => (
+                    <RoomBedCard
+                      key={room.id}
+                      name={room.name}
+                      roomNumber={room.room_number}
+                      status={room.status}
+                      occupied={room.patients_assigned}
+                      capacity={room.capacity}
+                    />
+                  ))}
+                </div>
+                {roomList.length > TOP_ROOMS && (
+                  <Link
+                    href="/dean/rooms"
+                    className="mt-3 inline-block text-xs font-medium text-brand-600 hover:text-brand-700"
+                  >
+                    See all {roomList.length} rooms →
+                  </Link>
+                )}
+              </>
+            )}
+          </Panel>
+          </div>
+
+          {/* Section engagement + users by role */}
+          <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <Panel className="lg:col-span-2">
+              <svg
+                viewBox="0 0 220 44"
+                className="pointer-events-none absolute right-40 top-5 hidden h-10 w-56 opacity-50 md:block"
+                aria-hidden
+              >
+                <path
+                  d="M0 24 H52 L60 24 L66 6 L74 40 L82 24 H120 L128 24 L134 14 L140 24 H220"
+                  fill="none"
+                  stroke="#2a8a98"
+                  strokeWidth="1.5"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <CardHeading
+                icon={faLayerGroup}
+                title="Section Engagement"
+                subtitle="Active students against enrollment, per section"
+                tag={rangeTag}
+              />
+              {sectionEngagement.length === 0 ? (
+                <p className="py-8 text-center text-sm text-gray-400">
+                  No sections with students in this scope.
+                </p>
+              ) : (
+                <SectionColumns data={sectionEngagement} />
+              )}
+              <div className="mt-5 grid grid-cols-2 gap-4 border-t border-hairline pt-5 sm:grid-cols-4">
+                <MiniStat
+                  icon={faUserGraduate}
+                  label="Students"
+                  value={totalStudents}
+                  chip="bg-blue-50 text-blue-600"
+                />
+                <MiniStat
+                  icon={faUserCheck}
+                  label="Active (30d)"
+                  value={activeStudents}
+                  chip="bg-emerald-50 text-emerald-600"
+                />
+                <MiniStat
+                  icon={faClipboardCheck}
+                  label="Attempts"
+                  value={summary?.cohort.submitted_attempts ?? 0}
+                  chip="bg-amber-50 text-amber-600"
+                />
+                <MiniStat
+                  icon={faLayerGroup}
+                  label="Sections"
+                  value={sectionEngagement.length}
+                  chip="bg-purple-50 text-purple-600"
+                />
+              </div>
+            </Panel>
+
+            <Panel className="flex flex-col">
+              <CardHeading
+                icon={faUsers}
+                title="Users by Role"
+                subtitle="Students and instructors with an account"
+                tag={liveTag}
+              />
+              <RoleDonut counts={roleCounts} />
+            </Panel>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

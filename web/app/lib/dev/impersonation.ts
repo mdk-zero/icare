@@ -40,9 +40,9 @@ export function decodeFlag(raw: string | undefined): ImpersonationFlag | null {
 }
 
 export function homeForRole(role: string): string {
-  if (role === 'faculty') return '/faculty';
-  if (role === 'admin') return '/admin';
-  if (role === 'super_admin') return '/super-admin';
+  if (role === 'faculty') return '/instructor';
+  if (role === 'admin') return '/dean';
+  if (role === 'super_admin') return '/admin';
   // Students have no web portal (they use the mobile app).
   return '/login';
 }

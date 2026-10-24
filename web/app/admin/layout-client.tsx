@@ -3,53 +3,45 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  faBedPulse,
-  faBookMedical,
-  faChartBar,
   faClockRotateLeft,
-  faFileLines,
+  faFlaskVial,
+  faGaugeHigh,
+  faGear,
   faHouse,
   faLifeRing,
-  faUserTie,
   faUsers,
 } from "@fortawesome/free-solid-svg-icons";
 import Shell, { NavItem } from "../components/Shell";
-import { refreshCurrentUser } from "../lib/api";
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  role: "student" | "faculty" | "admin" | "super_admin";
-}
-
-function getCurrentUser(): User | null {
-  if (typeof window === "undefined") return null;
-  const userStr = localStorage.getItem("icare_user");
-  return userStr ? JSON.parse(userStr) : null;
-}
+import { getCurrentUser, refreshCurrentUser } from "../lib/api";
 
 const navItems: NavItem[] = [
-  { id: "overview", label: "Overview", href: "/admin", icon: faHouse, section: "General" },
-  { id: "students", label: "Students", href: "/admin/student-management", icon: faUsers, section: "Management" },
-  { id: "faculty", label: "Instructors", href: "/admin/faculty", icon: faUserTie, section: "Management" },
-  { id: "courses", label: "Courses", href: "/admin/courses", icon: faBookMedical, section: "Management" },
-  // Patients and Rooms folded into one page, as on the faculty side. The
-  // patient chart keeps its /admin/patients/[id] route, so it counts here too.
-  { id: "wards", label: "Wards", href: "/admin/wards", icon: faBedPulse, section: "Management" },
-  { id: "analytics", label: "Analytics", href: "/admin/analytics", icon: faChartBar, section: "Data" },
-  { id: "reports", label: "Reports", href: "/admin/reports", icon: faFileLines, section: "Data" },
-  { id: "audit", label: "Activity Log", href: "/admin/audit", icon: faClockRotateLeft, section: "Administration" },
-  { id: "help", label: "Help & Support", href: "/admin/help", icon: faLifeRing, section: "Support" },
+  { id: "dashboard", label: "Dashboard", href: "/admin", icon: faHouse, section: "General" },
+  { id: "users", label: "Users", href: "/admin/users", icon: faUsers, section: "Accounts" },
+  { id: "audit", label: "Activity Log", href: "/admin/audit", icon: faClockRotateLeft, section: "System" },
+  { id: "performance", label: "System Performance", href: "/admin/performance", icon: faGaugeHigh, section: "System" },
+  { id: "tests", label: "System Tests", href: "/admin/tests", icon: faFlaskVial, section: "System" },
+  { id: "settings", label: "Settings", href: "/admin/settings", icon: faGear, section: "Account" },
+  { id: "support", label: "Support Requests", href: "/admin/support", icon: faLifeRing, section: "Support" },
 ];
 
 function isActive(item: NavItem, pathname: string) {
   if (item.href === "/admin") return pathname === "/admin";
-  if (item.id === "wards" && pathname.startsWith("/admin/patients")) return true;
   return pathname.startsWith(item.href);
 }
 
-export default function ClientAdminLayout({
+function homeFor(role: string): string {
+  if (role === "faculty") return "/instructor";
+  if (role === "admin") return "/dean";
+  return "/login";
+}
+
+/**
+ * Same gate as the admin layout: an empty localStorage mirror asks the server
+ * before concluding nobody is signed in. Every /api/super-admin/* route
+ * re-checks the live role, so this only keeps others from a console they
+ * cannot act in.
+ */
+export default function ClientSuperAdminLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -58,34 +50,13 @@ export default function ClientAdminLayout({
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
 
-  /**
-   * localStorage is only a mirror of the session cookie, and the two can
-   * disagree — clearing site data drops the mirror while the cookie survives.
-   * The proxy then lets the request through on the cookie while this sees
-   * nobody, and redirecting to /login on the mirror alone bounces off the
-   * proxy straight back here: a loop that renders nothing at all. So an empty
-   * mirror asks the server before concluding anyone is signed out, and
-   * refreshCurrentUser() repopulates it.
-   */
   useEffect(() => {
     let cancelled = false;
     async function gate() {
       const user = getCurrentUser() ?? (await refreshCurrentUser());
       if (cancelled) return;
       if (!user) router.replace("/login");
-      // Every /api/admin/* route requires role === 'admin', so anything less
-      // gets a console it cannot act in: the forms render, then each submit
-      // comes back "Forbidden". Bouncing non-admins here is what the server
-      // component at app/admin/page.tsx already does; the two gates only
-      // disagreed because this one screened for students alone.
-      else if (user.role !== "admin")
-        router.replace(
-          user.role === "faculty"
-            ? "/faculty"
-            : user.role === "super_admin"
-              ? "/super-admin"
-              : "/login",
-        );
+      else if (user.role !== "super_admin") router.replace(homeFor(user.role));
       else setReady(true);
     }
     void gate();
@@ -97,11 +68,7 @@ export default function ClientAdminLayout({
   if (!ready) return null;
 
   return (
-    <Shell
-      role="admin"
-      navItems={navItems}
-      isActive={(item) => isActive(item, pathname)}
-    >
+    <Shell role="super_admin" navItems={navItems} isActive={(item) => isActive(item, pathname)}>
       {children}
     </Shell>
   );

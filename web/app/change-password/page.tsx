@@ -9,9 +9,9 @@ import { EcgLoader } from "../components/EcgLoader";
 
 /** Students never get here: the login page signs them out first. */
 function portalFor(role: User["role"] | undefined): string {
-  if (role === "admin") return "/admin";
-  if (role === "super_admin") return "/super-admin";
-  return "/faculty";
+  if (role === "admin") return "/dean";
+  if (role === "super_admin") return "/admin";
+  return "/instructor";
 }
 
 function useAuthUser(): User | null {

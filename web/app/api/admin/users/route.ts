@@ -13,7 +13,7 @@ const VALID_ROLES = ['student', 'faculty', 'admin'] as const;
 
 /**
  * What an admin may create. Admin and super admin accounts are the super
- * admin's to make (migration 054), from /super-admin/users.
+ * admin's to make (migration 054), from /admin/users.
  */
 const ASSIGNABLE_ROLES = ['student', 'faculty'] as const;
 

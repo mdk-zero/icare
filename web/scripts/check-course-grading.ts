@@ -36,7 +36,7 @@ import {
   type GradingSplit,
 } from '../app/lib/course-grading';
 import { seed } from '../app/lib/demo/fixtures';
-import { afterItemSaved, followServer, saveBase, savedDraft, startDraft } from '../app/faculty/courses/grading-draft';
+import { afterItemSaved, followServer, saveBase, savedDraft, startDraft } from '../app/instructor/courses/grading-draft';
 import {
   MigrationNeeded,
   REQUIREMENT_COLUMNS,

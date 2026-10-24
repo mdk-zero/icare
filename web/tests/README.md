@@ -38,7 +38,7 @@ git (it is gitignored).
 ```bash
 npm run test:e2e          # Playwright; HTML report in playwright-report/
 npm run test:api          # Postman collection through Newman
-npm run test:e2e:report   # same, and send the results to /super-admin/tests
+npm run test:e2e:report   # same, and send the results to /admin/tests
 npm run test:api:report
 ```
 

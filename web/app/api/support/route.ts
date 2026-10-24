@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
       userAgent: request.headers.get('user-agent')?.slice(0, 300) ?? null,
       attachments: files,
       inboxUrl: requestId
-        ? `${request.nextUrl.origin}/super-admin/support?request=${encodeURIComponent(requestId)}`
+        ? `${request.nextUrl.origin}/admin/support?request=${encodeURIComponent(requestId)}`
         : null,
     });
   } catch (err) {

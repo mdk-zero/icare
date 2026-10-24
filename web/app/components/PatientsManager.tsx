@@ -382,7 +382,7 @@ interface PatientsManagerProps {
   /** Renders the ward floor plan (admin-arranged) above the census. */
   showFloorPlan?: boolean;
   /**
-   * Portal root for a patient's chart ("/faculty/patients"), appended with the
+   * Portal root for a patient's chart ("/instructor/patients"), appended with the
    * patient id. Each portal passes its own: the shells bounce the other role.
    */
   chartBase?: string;

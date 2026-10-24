@@ -26,7 +26,7 @@ import { loadActivityItems } from '../app/lib/courses';
 import { seed } from '../app/lib/demo/fixtures';
 import { studentTaskSteps } from '../app/lib/scenario-tasks';
 import { returnDemosReady } from '../app/lib/return-demos-server';
-import { editedSkills } from '../app/faculty/return-demos/edit-skills';
+import { editedSkills } from '../app/instructor/return-demos/edit-skills';
 import { join } from 'node:path';
 
 let failures = 0;

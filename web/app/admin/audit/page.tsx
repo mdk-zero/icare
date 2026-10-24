@@ -5,6 +5,6 @@ export const metadata: Metadata = {
   title: "Activity Log | iCARE++",
 };
 
-export default function AdminAuditPage() {
-  return <AuditTrail scope="own" />;
+export default function SuperAdminAuditPage() {
+  return <AuditTrail scope="system" />;
 }

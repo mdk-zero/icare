@@ -1,0 +1,441 @@
+"use client";
+
+import { apiFetch } from "@/app/lib/api";
+import { usePageData } from "@/app/lib/use-page-data";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faArrowLeft, faTrash, faUsers } from "@fortawesome/free-solid-svg-icons";
+import PageHeader from "../../../components/PageHeader";
+import Avatar from "../../../components/Avatar";
+
+interface Section {
+  id: string;
+  name: string;
+}
+
+interface Faculty {
+  id: string;
+  name: string;
+  email: string;
+  picture_url: string | null;
+  sex: "male" | "female" | null;
+  sections: Section[];
+  student_count: number;
+}
+
+// Stable empty fallbacks, so nothing downstream sees a new array each render.
+const NO_FACULTY: Faculty[] = [];
+const NO_SECTIONS: Section[] = [];
+
+export default function AssignSectionsClient() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const [newSectionName, setNewSectionName] = useState("");
+  const [selectedFaculty, setSelectedFaculty] = useState<Faculty | null>(null);
+  const [selectedSections, setSelectedSections] = useState<string[]>([]);
+  const [hasChanges, setHasChanges] = useState(false);
+
+  const flash = (text: string) => {
+    setMessage(text);
+    setTimeout(() => setMessage(null), 4000);
+  };
+
+  const { data, loading, setData } = usePageData("admin:faculty-assignment", async () => {
+    const [facultyRes, sectionsRes] = await Promise.all([
+      apiFetch("/api/admin/faculty", { credentials: "include" }),
+      apiFetch("/api/sections", { credentials: "include" }),
+    ]);
+    const faculty = facultyRes.ok
+      ? ((await facultyRes.json()) as { faculty?: Faculty[] }).faculty ?? NO_FACULTY
+      : NO_FACULTY;
+    const sections = sectionsRes.ok
+      ? ((await sectionsRes.json()) as { sections?: Section[] }).sections ?? NO_SECTIONS
+      : NO_SECTIONS;
+    return { faculty, sections };
+  });
+
+  const faculty = data?.faculty ?? NO_FACULTY;
+  const sections = data?.sections ?? NO_SECTIONS;
+
+  // Every edit below patches the loaded pair in place rather than refetching it.
+  const setFaculty = (update: (previous: Faculty[]) => Faculty[]) =>
+    setData((previous) => ({
+      faculty: update(previous?.faculty ?? NO_FACULTY),
+      sections: previous?.sections ?? NO_SECTIONS,
+    }));
+  const setSections = (update: (previous: Section[]) => Section[]) =>
+    setData((previous) => ({
+      faculty: previous?.faculty ?? NO_FACULTY,
+      sections: update(previous?.sections ?? NO_SECTIONS),
+    }));
+
+  // The page opens on someone, so the first arrival picks the first member.
+  useEffect(() => {
+    if (selectedFaculty || faculty.length === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedFaculty(faculty[0]);
+    setSelectedSections(faculty[0].sections.map((s) => s.id));
+  }, [faculty, selectedFaculty]);
+
+  const handleFacultySelect = (member: Faculty) => {
+    if (hasChanges && !window.confirm("Discard unsaved section changes?")) return;
+    setSelectedFaculty(member);
+    setSelectedSections(member.sections.map((s) => s.id));
+    setHasChanges(false);
+  };
+
+  const toggleSection = (sectionId: string) => {
+    setSelectedSections((prev) =>
+      prev.includes(sectionId) ? prev.filter((id) => id !== sectionId) : [...prev, sectionId],
+    );
+    setHasChanges(true);
+  };
+
+  const facultyForSection = (sectionId: string): Faculty[] =>
+    faculty.filter((f) => f.sections.some((s) => s.id === sectionId));
+
+  const handleCreateSection = async () => {
+    const name = newSectionName.trim();
+    if (!name) return;
+    setBusy(true);
+    const res = await apiFetch("/api/admin/sections", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ name }),
+    });
+    setBusy(false);
+    const json = (await res.json()) as { section?: Section; error?: string };
+    if (!res.ok || !json.section) {
+      flash(json.error ?? "Failed to create section");
+      return;
+    }
+    setSections((prev) =>
+      [...prev, json.section!].sort((a, b) => a.name.localeCompare(b.name)),
+    );
+    setNewSectionName("");
+    flash(`Section "${json.section.name}" created`);
+  };
+
+  const handleDeleteSection = async (section: Section) => {
+    const handlers = facultyForSection(section.id);
+    const warning =
+      `Delete section "${section.name}"? Its students become unassigned` +
+      (handlers.length > 0
+        ? ` and it is removed from ${handlers.length} instructor${handlers.length === 1 ? "" : "s"}.`
+        : ".");
+    if (!window.confirm(warning)) return;
+    setBusy(true);
+    const res = await apiFetch(`/api/admin/sections/${section.id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    setBusy(false);
+    if (!res.ok) {
+      const json = (await res.json()) as { error?: string };
+      flash(json.error ?? "Failed to delete section");
+      return;
+    }
+    setSections((prev) => prev.filter((s) => s.id !== section.id));
+    setFaculty((prev) =>
+      prev.map((f) => ({ ...f, sections: f.sections.filter((s) => s.id !== section.id) })),
+    );
+    setSelectedSections((prev) => prev.filter((id) => id !== section.id));
+    flash(`Section "${section.name}" deleted`);
+  };
+
+  const handleSave = async () => {
+    if (!selectedFaculty) return;
+    setBusy(true);
+    const res = await apiFetch(`/api/admin/faculty/${selectedFaculty.id}/sections`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ section_ids: selectedSections }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      const json = (await res.json()) as { error?: string };
+      flash(json.error ?? "Failed to save sections");
+      return;
+    }
+    const updatedSections = sections.filter((s) => selectedSections.includes(s.id));
+    setFaculty((prev) =>
+      prev.map((f) => (f.id === selectedFaculty.id ? { ...f, sections: updatedSections } : f)),
+    );
+    setHasChanges(false);
+    flash(`Sections saved for ${selectedFaculty.name}`);
+  };
+
+  const handleBack = () => {
+    if (hasChanges && !window.confirm("Discard unsaved section changes?")) return;
+    router.push("/dean/instructors");
+  };
+
+  return (
+    <div>
+      <PageHeader
+        badge={{
+          icon: <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />,
+          label: "Instructor Management",
+        }}
+        title="Sections"
+        subtitle="Manage sections and assign them to instructors"
+      />
+
+      <div className="mb-4">
+        <button
+          onClick={handleBack}
+          className="inline-flex items-center gap-2 px-3 py-2 bg-surface border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all"
+        >
+          <FontAwesomeIcon icon={faArrowLeft} className="w-3.5 h-3.5" />
+          Back to instructors
+        </button>
+      </div>
+
+      {message && (
+        <div className="mb-4 bg-brand-600/10 border border-brand-600/30 text-[#155663] px-4 py-3 rounded-xl text-sm">
+          {message}
+        </div>
+      )}
+
+      {loading ? (
+        <AssignmentSkeleton />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1 space-y-6">
+            <div className="bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Sections</h2>
+              <div className="flex gap-2 mb-4">
+                <input
+                  type="text"
+                  value={newSectionName}
+                  onChange={(e) => setNewSectionName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleCreateSection();
+                  }}
+                  maxLength={50}
+                  placeholder="New section name (e.g. A)"
+                  className="flex-1 min-w-0 px-4 py-2.5 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-brand-600"
+                />
+                <button
+                  onClick={handleCreateSection}
+                  disabled={busy || !newSectionName.trim()}
+                  className="px-4 py-2.5 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 transition-all disabled:opacity-50 shrink-0"
+                >
+                  Add
+                </button>
+              </div>
+              <div className="space-y-2">
+                {sections.length === 0 ? (
+                  <p className="text-gray-400 text-sm text-center py-6">
+                    No sections yet — add one above
+                  </p>
+                ) : (
+                  sections.map((section) => {
+                    const handlers = facultyForSection(section.id);
+                    return (
+                      <div
+                        key={section.id}
+                        className="flex items-center gap-3 p-3 rounded-xl border border-gray-200"
+                      >
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-600/10 text-brand-600 border border-brand-600/20 shrink-0">
+                          {section.name}
+                        </span>
+                        <p className="flex-1 text-sm text-gray-500 truncate">
+                          {handlers.length === 0
+                            ? "No instructor assigned"
+                            : handlers.map((f) => f.name).join(", ")}
+                        </p>
+                        <button
+                          onClick={() => handleDeleteSection(section)}
+                          disabled={busy}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50 shrink-0"
+                          aria-label={`Delete section ${section.name}`}
+                        >
+                          <FontAwesomeIcon icon={faTrash} className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Instructors</h2>
+              {faculty.length === 0 ? (
+                <p className="text-gray-400 text-sm text-center py-6">
+                  No instructor accounts yet — create one from Instructor Management first
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {faculty.map((member) => (
+                    <button
+                      key={member.id}
+                      onClick={() => handleFacultySelect(member)}
+                      className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all ${
+                        selectedFaculty?.id === member.id
+                          ? "bg-brand-600 text-white"
+                          : "hover:bg-gray-50 text-gray-800"
+                      }`}
+                    >
+                      <Avatar
+                        name={member.name}
+                        src={member.picture_url}
+                        userId={member.id}
+                        sex={member.sex}
+                        size="md"
+                        tone={selectedFaculty?.id === member.id ? "solid" : "brand"}
+                        className={selectedFaculty?.id === member.id ? "ring-2 ring-white/40" : ""}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">{member.name}</p>
+                        <p className={`text-sm truncate ${selectedFaculty?.id === member.id ? "text-white/70" : "text-gray-500"}`}>
+                          {member.sections.length === 0
+                            ? "No sections"
+                            : member.sections.map((s) => s.name).join(", ")}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="lg:col-span-2">
+            <div className="bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    {selectedFaculty
+                      ? `${selectedFaculty.name}'s Sections`
+                      : "Select an instructor"}
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    {selectedSections.length} of {sections.length} section
+                    {sections.length !== 1 ? "s" : ""} selected
+                  </p>
+                </div>
+                <button
+                  onClick={handleSave}
+                  disabled={busy || !hasChanges || !selectedFaculty}
+                  className="px-5 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-all disabled:opacity-50 shadow-[0_2px_6px_rgba(27,107,123,0.2)]"
+                >
+                  {busy ? "Saving…" : "Save Sections"}
+                </button>
+              </div>
+
+              <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+                {sections.length === 0 ? (
+                  <p className="text-gray-400 text-sm text-center py-8">
+                    No sections yet — create one from the panel on the left
+                  </p>
+                ) : (
+                  sections.map((section) => {
+                    const others = facultyForSection(section.id).filter(
+                      (f) => f.id !== selectedFaculty?.id,
+                    );
+                    return (
+                      <label
+                        key={section.id}
+                        className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                          selectedSections.includes(section.id)
+                            ? "border-brand-600 bg-brand-600/5"
+                            : "border-gray-200 hover:border-gray-300"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedSections.includes(section.id)}
+                          onChange={() => toggleSection(section.id)}
+                          disabled={!selectedFaculty}
+                          className="w-4 h-4 text-brand-600 rounded focus:ring-brand-600"
+                        />
+                        <p className="flex-1 min-w-0 font-medium text-gray-800 truncate">
+                          Section {section.name}
+                        </p>
+                        {others.length > 0 && (
+                          <span className="text-xs text-gray-400 shrink-0">
+                            Also with {others.map((f) => f.name).join(", ")}
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const PANEL =
+  "bg-surface rounded-xl p-4 border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)]";
+
+/** Mirrors the loaded layout: Sections and Instructors on the left, the section picker on the right. */
+function AssignmentSkeleton() {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-pulse" role="status" aria-busy="true">
+      <span className="sr-only">Loading sections and instructors…</span>
+      <div className="lg:col-span-1 space-y-6">
+        <div className={PANEL}>
+          <div className="mb-4 h-5 w-24 rounded bg-gray-100" />
+          <div className="mb-4 flex gap-2">
+            <div className="h-11 flex-1 rounded-xl bg-gray-100" />
+            <div className="h-11 w-16 rounded-xl bg-gray-100" />
+          </div>
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl border border-gray-200 p-3">
+                <div className="h-5 w-10 rounded-full bg-gray-100" />
+                <div className="h-3.5 flex-1 rounded bg-gray-100" />
+                <div className="h-7 w-7 rounded-lg bg-gray-100" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className={PANEL}>
+          <div className="mb-4 h-5 w-28 rounded bg-gray-100" />
+          <div className="space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 p-3">
+                <div className="h-10 w-10 shrink-0 rounded-full bg-gray-100" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-4 w-32 rounded bg-gray-100" />
+                  <div className="h-3.5 w-20 rounded bg-gray-100" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="lg:col-span-2">
+        <div className={PANEL}>
+          <div className="mb-4 flex items-center justify-between">
+            <div className="space-y-2">
+              <div className="h-5 w-48 rounded bg-gray-100" />
+              <div className="h-3.5 w-36 rounded bg-gray-100" />
+            </div>
+            <div className="h-10 w-32 rounded-lg bg-gray-100" />
+          </div>
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl border border-gray-200 p-3">
+                <div className="h-4 w-4 rounded bg-gray-100" />
+                <div className="h-4 w-28 rounded bg-gray-100" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

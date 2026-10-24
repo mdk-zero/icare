@@ -1,7 +1,7 @@
 /**
  * Runs the Postman collection with Newman against TEST_BASE_URL, using the
  * accounts from web/.env.test, and (with TEST_REPORT=1) streams the results to
- * /super-admin/tests as each request finishes. Exits non-zero when any request fails, for CI.
+ * /admin/tests as each request finishes. Exits non-zero when any request fails, for CI.
  *
  *   npm run test:api
  */

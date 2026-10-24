@@ -20,7 +20,7 @@ import {
   taskLevelForCredit,
   type ChecklistRating,
 } from '../app/lib/task-ratings';
-import { outOfGrade, taskLevel, taskPoints, withRating, withStepChanges } from '../app/faculty/scenarios/review/grading';
+import { outOfGrade, taskLevel, taskPoints, withRating, withStepChanges } from '../app/instructor/scenarios/review/grading';
 import type { GradingTask } from '../app/lib/api';
 
 let failures = 0;

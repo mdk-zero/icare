@@ -21,19 +21,52 @@ import { DEMO_COOKIE, isDemoRole } from '@/app/lib/demo/session';
  * call readSession() themselves, and that is what actually protects data.
  */
 const PROTECTED_PREFIXES = [
-  '/super-admin',
   '/admin',
-  '/faculty',
+  '/dean',
+  '/instructor',
   '/change-password',
 ];
+
+/**
+ * Where the portals lived until 2026-10-24, before their folders took the
+ * roles' on-screen names: the Instructor's at /faculty, the Admin's at
+ * /super-admin and the Dean's at /admin. Bookmarks, emailed links and
+ * installed mobile builds still open the old addresses, so they're sent on
+ * rather than left to 404.
+ */
+const RENAMED_PORTALS: ReadonlyArray<readonly [string, string]> = [
+  ['/faculty', '/instructor'],
+  ['/super-admin', '/admin'],
+];
+
+function underPrefix(pathname: string, prefix: string): boolean {
+  return pathname === prefix || pathname.startsWith(`${prefix}/`);
+}
+
+function renamedPortalPath(pathname: string): string | null {
+  for (const [from, to] of RENAMED_PORTALS) {
+    if (underPrefix(pathname, from)) return to + pathname.slice(from.length);
+  }
+  return null;
+}
+
+/**
+ * /admin is the Admin's portal now, so an old Dean link there can only be
+ * told apart by who opens it: a Dean is taken to the same page under /dean.
+ */
+function deanPathFor(pathname: string): string {
+  const rest = pathname.slice('/admin'.length);
+  if (underPrefix(rest, '/faculty')) return `/dean/instructors${rest.slice('/faculty'.length)}`;
+  return `/dean${rest}`;
+}
 
 /** Signed-in users have no reason to see these, and bounce to their portal. */
 const AUTH_PAGES = ['/login', '/signup'];
 
 function homeFor(role: string): string {
-  if (role === 'faculty') return '/faculty';
-  if (role === 'admin') return '/admin';
-  if (role === 'super_admin') return '/super-admin';
+  if (role === 'faculty') return '/instructor';
+  if (role === 'admin') return '/dean';
+  if (role === 'super_admin') return '/admin';
   // Students use the mobile app; the web has no student portal. The login
   // page signs them out and says so.
   return STUDENT_LANDING;
@@ -48,7 +81,7 @@ const STUDENT_LANDING = '/login?reason=student';
  */
 function wrongPortal(role: string, pathname: string): boolean {
   if (role === 'student') return true;
-  const inSuperAdmin = pathname === '/super-admin' || pathname.startsWith('/super-admin/');
+  const inSuperAdmin = pathname === '/admin' || pathname.startsWith('/admin/');
   if (role === 'super_admin') return !inSuperAdmin && pathname !== '/change-password';
   return inSuperAdmin;
 }
@@ -72,6 +105,9 @@ export async function proxy(request: NextRequest) {
     }
     return NextResponse.next();
   }
+
+  const renamed = renamedPortalPath(pathname);
+  if (renamed) return NextResponse.redirect(new URL(`${renamed}${search}`, request.url));
 
   const isProtected = PROTECTED_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
@@ -131,6 +167,10 @@ export async function proxy(request: NextRequest) {
     }
     response.cookies.delete(SESSION_COOKIE);
     return ended === 'closed' ? endTabSession(response) : response;
+  }
+
+  if (session?.role === 'admin' && underPrefix(pathname, '/admin')) {
+    return NextResponse.redirect(new URL(`${deanPathFor(pathname)}${search}`, request.url));
   }
 
   if (isProtected && session && wrongPortal(session.role, pathname)) {

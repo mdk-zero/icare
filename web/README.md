@@ -72,8 +72,9 @@ icare-web/
 
 | Role | Portal | Access |
 |------|--------|--------|
-| **Super Admin (Dean)** | `/admin` | Full system, analytics, user management |
-| **Faculty** | `/admin/faculty` | Student monitoring, grading, room oversight |
+| **Admin** (`super_admin`) | `/admin` | Accounts, system health, support requests |
+| **Dean** (`admin`) | `/dean` | Full system, analytics, instructors and sections |
+| **Instructor** (`faculty`) | `/instructor` | Student monitoring, grading, room oversight |
 | **Student** | `/dashboard` | Clinical tasks, quizzes, patient monitoring |
 
 ## Key Features

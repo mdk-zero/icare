@@ -59,24 +59,24 @@ const config = {
     logoIsWordmark: true,
     portalLabel: "Instructor Portal",
     mobileRoleLabel: "Instructor",
-    profileHref: "/faculty/settings",
-    homeHref: "/faculty",
+    profileHref: "/instructor/settings",
+    homeHref: "/instructor",
   },
   admin: {
     logo: "/logo-white-no-bg.png",
     logoIsWordmark: true,
     portalLabel: "Dean Portal",
     mobileRoleLabel: "Dean",
-    profileHref: "/admin/settings",
-    homeHref: "/admin",
+    profileHref: "/dean/settings",
+    homeHref: "/dean",
   },
   super_admin: {
     logo: "/logo-white-no-bg.png",
     logoIsWordmark: true,
     portalLabel: "System Administration",
     mobileRoleLabel: "Admin",
-    profileHref: "/super-admin/settings",
-    homeHref: "/super-admin",
+    profileHref: "/admin/settings",
+    homeHref: "/admin",
   },
 };
 
@@ -229,10 +229,10 @@ export default function Shell({ role, navItems, isActive, children }: ShellProps
   const hasBell = role === "faculty" || role === "admin" || role === "super_admin";
   const notificationsHref =
     role === "super_admin"
-      ? "/super-admin/notifications"
+      ? "/admin/notifications"
       : role === "admin"
-        ? "/admin/notifications"
-        : "/faculty/notifications";
+        ? "/dean/notifications"
+        : "/instructor/notifications";
 
   const { logo, logoIsWordmark, profileHref, homeHref } = config[role];
   // A Program Chair works in the Dean portal under their own title (080).

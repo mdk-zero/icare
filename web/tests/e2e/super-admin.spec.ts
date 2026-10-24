@@ -44,7 +44,7 @@ test.describe('Admin portal', () => {
 
   test('users list includes this account and filters by search', async ({ page }) => {
     const email = accounts.super_admin!.email;
-    await page.goto('/super-admin/users');
+    await page.goto('/admin/users');
     const me = page.getByRole('row').filter({ hasText: email });
     await expect(me).toBeVisible();
     await expect(me.getByText('(you)')).toBeVisible();
@@ -58,7 +58,7 @@ test.describe('Admin portal', () => {
   });
 
   test('new-account form opens and cancels without saving', async ({ page }) => {
-    await page.goto('/super-admin/users');
+    await page.goto('/admin/users');
     await page.getByRole('button', { name: 'Create a new account' }).click();
     const dialog = page.getByRole('dialog', { name: 'New account' });
     await expect(dialog).toBeVisible();
@@ -68,7 +68,7 @@ test.describe('Admin portal', () => {
   });
 
   test('performance page switches time ranges', async ({ page }) => {
-    await page.goto('/super-admin/performance');
+    await page.goto('/admin/performance');
     const range = page.getByRole('radiogroup', { name: 'Time range' });
     await range.getByRole('radio', { name: '7 days' }).click();
     await expect(range.getByRole('radio', { name: '7 days' })).toHaveAttribute('aria-checked', 'true');
@@ -76,7 +76,7 @@ test.describe('Admin portal', () => {
   });
 
   test('system tests lists every kind of test', async ({ page }) => {
-    await page.goto('/super-admin/tests');
+    await page.goto('/admin/tests');
     for (const heading of [
       'System health checks',
       'Frontend tests (Playwright)',
@@ -91,7 +91,7 @@ test.describe('Admin portal', () => {
 
   // Saves one health-check run. The AI checks only look models up, so no quota is spent.
   test('health checks cover each AI provider in fallback order', async ({ page }) => {
-    await page.goto('/super-admin/tests');
+    await page.goto('/admin/tests');
     const section = page.locator('section').filter({ has: page.getByRole('heading', { name: 'System health checks' }) });
     await section.getByRole('button', { name: 'Check System Health Status' }).click();
     await expect(section.getByRole('button', { name: 'Check System Health Status' })).toBeEnabled({ timeout: 30_000 });
@@ -102,10 +102,15 @@ test.describe('Admin portal', () => {
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
   });
 
+  test('old /super-admin addresses still open', async ({ page }) => {
+    await page.goto('/super-admin/users');
+    await expect(page).toHaveURL(/\/admin\/users(\?|$)/);
+  });
+
   test('teaching portals send the admin back', async ({ page }) => {
-    for (const path of ['/admin', '/faculty']) {
+    for (const path of ['/dean', '/instructor']) {
       await page.goto(path);
-      await expect(page).toHaveURL(/\/super-admin(\?|$)/);
+      await expect(page).toHaveURL(/\/admin(\?|$)/);
     }
   });
 });

@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "b0bf0a59-7ad7-5273-aae6-894bbedbef8b",
     "name": "iCARE++ API tests",
-    "description": "Automated API tests for the iCARE++ web backend (web/app/api). Every request carries assertions; none creates, edits or deletes data.\n\nRun from the CLI with `npm run test:api` (Newman), which fills the variables from web/.env.test and can send the results to /super-admin/tests. To run in the Postman app, import this file plus icare-api.postman_environment.json and fill in the account variables. A role folder skips itself when that role's email is blank.",
+    "description": "Automated API tests for the iCARE++ web backend (web/app/api). Every request carries assertions; none creates, edits or deletes data.\n\nRun from the CLI with `npm run test:api` (Newman), which fills the variables from web/.env.test and can send the results to /admin/tests. To run in the Postman app, import this file plus icare-api.postman_environment.json and fill in the account variables. A role folder skips itself when that role's email is blank.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {

@@ -19,7 +19,7 @@ export function useOpenAccessRequest() {
     const query = new URLSearchParams({ request: request.id, name: request.name, email: request.email });
     if (request.sex) query.set("sex", request.sex);
     if (request.google_linked) query.set("google", "1");
-    router.push(`/super-admin/users?${query}`);
+    router.push(`/admin/users?${query}`);
   };
 }
 

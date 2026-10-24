@@ -80,7 +80,7 @@ export default function LoginPage() {
         return;
       }
       router.push(
-        user.role === "faculty" ? "/faculty" : user.role === "super_admin" ? "/super-admin" : "/admin",
+        user.role === "faculty" ? "/instructor" : user.role === "super_admin" ? "/admin" : "/dean",
       );
     },
     [router],

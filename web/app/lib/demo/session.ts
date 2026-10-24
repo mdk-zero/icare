@@ -55,7 +55,7 @@ export function isDemo(): boolean {
 }
 
 export function demoHome(role: DemoRole): string {
-  return role === "faculty" ? "/faculty" : role === "super_admin" ? "/super-admin" : "/admin";
+  return role === "faculty" ? "/instructor" : role === "super_admin" ? "/admin" : "/dean";
 }
 
 /** Called right before a full navigation into the role's portal. */

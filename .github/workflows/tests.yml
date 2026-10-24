@@ -10,7 +10,7 @@ on:
         description: "Deployment to test (e.g. https://i-care.dev)"
         required: true
       report:
-        description: "Send results to /super-admin/tests"
+        description: "Send results to /admin/tests"
         type: boolean
         default: true
 

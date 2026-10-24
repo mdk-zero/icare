@@ -49,16 +49,16 @@ route("GET", "/api/admin/overview", (ctx) => {
 
   const attention: { key: string; message: string; detail: string; href: string; action: string }[] = [];
   if (unassigned > 0) {
-    attention.push({ key: "unassigned", message: `${plural(unassigned, "student")} not assigned to a section`, detail: "No instructor can see them until they're placed in a section.", href: "/admin/student-management", action: "Assign" });
+    attention.push({ key: "unassigned", message: `${plural(unassigned, "student")} not assigned to a section`, detail: "No instructor can see them until they're placed in a section.", href: "/dean/student-management", action: "Assign" });
   }
   if (ungrouped > 0) {
-    attention.push({ key: "ungrouped", message: `${plural(ungrouped, "student")} not in a group`, detail: "Instructors only see the students in the groups they supervise.", href: "/admin/student-management", action: "Group them" });
+    attention.push({ key: "ungrouped", message: `${plural(ungrouped, "student")} not in a group`, detail: "Instructors only see the students in the groups they supervise.", href: "/dean/student-management", action: "Group them" });
   }
   if (uncovered.length > 0) {
-    attention.push({ key: "uncovered", message: `${plural(uncovered.length, "section")} without an instructor`, detail: `${uncovered.map((s) => s.name).join(", ")} — their students have no one reviewing them.`, href: "/admin/faculty/assignment", action: "Assign instructor" });
+    attention.push({ key: "uncovered", message: `${plural(uncovered.length, "section")} without an instructor`, detail: `${uncovered.map((s) => s.name).join(", ")} — their students have no one reviewing them.`, href: "/dean/instructors/assignment", action: "Assign instructor" });
   }
   if (idle > 0) {
-    attention.push({ key: "idle-faculty", message: `${plural(idle, "instructor account")} with no sections`, detail: "They can sign in but have no students to see.", href: "/admin/faculty/assignment", action: "Assign" });
+    attention.push({ key: "idle-faculty", message: `${plural(idle, "instructor account")} with no sections`, detail: "They can sign in but have no students to see.", href: "/dean/instructors/assignment", action: "Assign" });
   }
 
   return {
