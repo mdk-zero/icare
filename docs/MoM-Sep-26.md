@@ -10,4 +10,3 @@ Denver Cabadin
 - Each group handled by the instructor perform the same cases but are individually demonstrated by the students for evaluating their skills and knowledge.
 - Each case is linked to multiple skills checklists depending on what specific scenario that the instructor made for the students to demonstrate their skills and knowledge.
 - There are cases when 2 instructors handle groups from the same section and lecture them all at once if there were no rooms available.
--
