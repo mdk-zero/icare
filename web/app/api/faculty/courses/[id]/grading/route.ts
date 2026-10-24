@@ -29,9 +29,9 @@ interface RouteParams {
 /**
  * PUT { parts, base }: replace the course's grading split in one write.
  * `base` is gradingSignature() of the split the instructor started editing
- * from, less items since removed or turned into attendance (baseMatches); if
- * the split has changed otherwise (an item filed from the checklist, another
- * tab), the save is refused rather than undoing that change.
+ * from, less items since removed (baseMatches); if the split has changed
+ * otherwise (an item filed from the checklist, another tab), the save is
+ * refused rather than undoing that change.
  * `{ parts: [] }` clears the split.
  */
 export async function PUT(request: NextRequest, { params }: RouteParams) {

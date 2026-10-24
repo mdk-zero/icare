@@ -40,7 +40,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (teamIds.length === 0 && studentIds.length === 0) {
     return NextResponse.json({ error: 'Choose at least one group or student' }, { status: 400 });
   }
-  // Every activity has a deadline: it is what attendance is measured against.
+  // Every activity has a deadline: it is what late and overdue work is measured against.
   const deadline = parseDeadline(body.deadline);
   if (!deadline.ok) return NextResponse.json({ error: deadline.error }, { status: 400 });
 

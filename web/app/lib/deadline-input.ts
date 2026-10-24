@@ -2,7 +2,7 @@ import type { Parsed } from './course-progress';
 
 /**
  * A deadline as typed into a form, read in the instructor's own time zone.
- * Deadlines decide attendance, so a bare date ("2026-10-10") means the end
+ * Deadlines decide what is late, so a bare date ("2026-10-10") means the end
  * of that day, not midnight UTC, and a date and time means that local time.
  * Converted in the browser, where the time zone is the instructor's: the
  * server runs in UTC.

@@ -415,7 +415,7 @@ export default function FacultyScenariosClient() {
     const assignments = await assignScenarioToStudents(
       selectedScenario.id,
       studentIds,
-      // The end of the picked day: deadlines decide attendance.
+      // The end of the picked day: deadlines decide what is late.
       deadline,
       // An assigned patient case is always required.
       true,

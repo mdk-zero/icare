@@ -40,8 +40,8 @@ export function savedDraft(state: GradingDraft, saved: GradingSplit | null): Gra
 
 /**
  * What a save expects the server to hold: the split the edits started from,
- * less the items removed from the checklist or turned into attendance since,
- * which the item routes took out of the stored split too. A change made
+ * less the items removed from the checklist since, which the item routes
+ * took out of the stored split too. A change made
  * anywhere else still makes them differ, so that save is refused.
  */
 export function saveBase(state: GradingDraft, requirements: readonly RequirementRow[]): string {

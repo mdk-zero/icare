@@ -111,10 +111,9 @@ export type RequirementKind = 'activity' | 'count' | 'skill' | 'manual';
 /**
  * scenario = Patient Case, assessment = Quiz, return_demo = Return
  * Demonstration (a scenario of kind 'return_demo', 072: only ever an
- * automatic item, scored like a Patient Case); shift (Attendance:
- * activities attended) only for count items.
+ * automatic item, scored like a Patient Case).
  */
-export type ActivityType = 'scenario' | 'assessment' | 'case_presentation' | 'return_demo' | 'shift';
+export type ActivityType = 'scenario' | 'assessment' | 'case_presentation' | 'return_demo';
 /** A manual item scored by hand: hands-on lab work, or a written (paper) exam (067). */
 export type ManualType = 'lab' | 'exam';
 
@@ -289,7 +288,7 @@ export function parseRequirement(body: Record<string, unknown>): Parsed<Requirem
   }
 
   // count
-  if (type !== 'scenario' && type !== 'assessment' && type !== 'case_presentation' && type !== 'shift') {
+  if (type !== 'scenario' && type !== 'assessment' && type !== 'case_presentation') {
     return { ok: false, error: 'Choose what to count' };
   }
   const target = typeof body.target_count === 'number' ? body.target_count : Number(body.target_count);
@@ -302,7 +301,7 @@ export function parseRequirement(body: Record<string, unknown>): Parsed<Requirem
       ...base,
       activity_type: type,
       target_count: target,
-      min_score: type === 'shift' ? null : score.value,
+      min_score: score.value,
       skills_only: (type === 'scenario' || type === 'assessment') && body.skills_only === true,
     },
   };
@@ -328,7 +327,6 @@ const COUNT_NOUN: Record<ActivityType, [string, string]> = {
   assessment: ['Quiz', 'Quizzes'],
   case_presentation: ['Case Presentation', 'Case Presentations'],
   return_demo: ['Return Demonstration', 'Return Demonstrations'],
-  shift: ['activity', 'activities'],
 };
 
 function scoreSuffix(min: number | null): string {
@@ -369,8 +367,7 @@ export function requirementLabel(req: RequirementRow, names: RequirementNames): 
       const type = req.activity_type ?? 'scenario';
       const n = req.target_count ?? 1;
       const noun = COUNT_NOUN[type][n === 1 ? 0 : 1];
-      const verb =
-        type === 'shift' ? 'attended' : type === 'assessment' ? (req.min_score === null ? 'completed' : 'passed') : 'graded';
+      const verb = type === 'assessment' ? (req.min_score === null ? 'completed' : 'passed') : 'graded';
       const min = type === 'assessment' && req.min_score !== null ? ` at ${Number(req.min_score)}%+` : scoreSuffix(type === 'assessment' ? null : req.min_score);
       return `${n} ${noun} ${verb}${min}${req.skills_only ? ' (course skills only)' : ''}`;
     }
@@ -386,8 +383,8 @@ export type RequirementTopicKey = ActivityType | 'skill' | 'manual' | 'exam';
 /** What decides an item's topic. manual_type is optional: without it a manual item is a Lab Activity. */
 export type TopicFields = Pick<RequirementRow, 'kind' | 'activity_type'> & Partial<Pick<RequirementRow, 'manual_type'>>;
 
-/** The order the checklist is shown in: graded app work, written exams, skills, hands-on lab work, attendance. */
-export const TOPIC_ORDER: readonly RequirementTopicKey[] = ['scenario', 'assessment', 'exam', 'case_presentation', 'return_demo', 'skill', 'manual', 'shift'];
+/** The order the checklist is shown in: graded app work, written exams, skills, hands-on lab work. */
+export const TOPIC_ORDER: readonly RequirementTopicKey[] = ['scenario', 'assessment', 'exam', 'case_presentation', 'return_demo', 'skill', 'manual'];
 
 const TOPIC: Record<RequirementTopicKey, string> = {
   scenario: 'Patient Case',
@@ -398,7 +395,6 @@ const TOPIC: Record<RequirementTopicKey, string> = {
   // Pre-070 checklist items naming one skill; "Return Demonstration" is the activity now (072).
   skill: 'Skill',
   manual: 'Lab Activity',
-  shift: 'Attendance',
 };
 
 export function topicKey(req: TopicFields): RequirementTopicKey {
@@ -483,15 +479,6 @@ export interface GradedPresentationFact {
   graded_at: string;
 }
 
-/**
- * An activity (Patient Case, Return Demonstration, Quiz, Case Presentation) the student did by its
- * deadline or late (lib/attendance.ts). It falls in the term by its deadline.
- */
-export interface AttendedActivityFact {
-  student_id: string;
-  deadline: string;
-}
-
 /** The graded work the checklist is judged on. Rows outside the term are ignored. */
 export interface ProgressFacts {
   cases: GradedCaseFact[];
@@ -499,14 +486,12 @@ export interface ProgressFacts {
   /** Each Quiz's skills, from its criteria and questions. */
   quizSkills: Record<string, string[]>;
   presentations: GradedPresentationFact[];
-  /** Activities attended, for Attendance items. */
-  attended: AttendedActivityFact[];
   checks: RequirementCheckRow[];
   /** Scores the instructor entered (066). Not bound to the term: the item is. */
   scores: RequirementScoreRow[];
 }
 
-export const NO_FACTS: ProgressFacts = { cases: [], attempts: [], quizSkills: {}, presentations: [], attended: [], checks: [], scores: [] };
+export const NO_FACTS: ProgressFacts = { cases: [], attempts: [], quizSkills: {}, presentations: [], checks: [], scores: [] };
 
 export interface ItemProgress {
   done: boolean;
@@ -522,7 +507,7 @@ export interface ItemProgress {
   /**
    * Count items over scored work: the mean of every score of that kind in the
    * term, met or not (each Quiz at its best attempt), entered scores
-   * included. Null for attendance.
+   * included.
    */
   avg_score: number | null;
   /** Skill items: the band of the best evidence ("Satisfactory"), or null with none. */
@@ -531,19 +516,10 @@ export interface ItemProgress {
   has_grade: boolean;
   /** Scores you entered for this student, oldest first. */
   entries: ScoreEntry[];
-  /** A tick or mark-done without a score: attendance marks, and ticks from before 066. */
+  /** A tick or mark-done without a score: from the mobile app, or from before 066. */
   marked: boolean;
   /** The note on that tick or mark. */
   note: string | null;
-}
-
-/**
- * How an instructor fills an item in by hand. score: they enter the score
- * the student earned. mark: attendance has no score, so they mark it done
- * with a note.
- */
-export function entryMode(req: Pick<RequirementRow, 'kind' | 'activity_type'>): 'score' | 'mark' {
-  return req.kind === 'count' && req.activity_type === 'shift' ? 'mark' : 'score';
 }
 
 /**
@@ -553,7 +529,6 @@ export function entryMode(req: Pick<RequirementRow, 'kind' | 'activity_type'>): 
  * it is met.
  */
 export function scoreBlock(req: RequirementRow, item: ItemProgress | undefined): string | null {
-  if (entryMode(req) !== 'score') return 'Attendance has no score: mark it done instead';
   if (isRemovedActivity(req)) return 'The linked activity was deleted';
   if (req.kind === 'manual') return null;
   if (req.kind === 'count') return item?.done ? 'Already met: no more scores are needed' : null;
@@ -592,7 +567,7 @@ const mean = (scores: (number | null)[]) => {
  * stored: this runs on every read, so a grade given a minute ago shows
  * straight away. An entered score counts like a grade (a count's extra
  * piece of work, a Lab Activity's result); a tick or mark without a score
- * (attendance, and ticks from before 066) meets the item outright.
+ * (from the mobile app, or from before 066) meets the item outright.
  */
 export function evaluate(
   requirements: readonly RequirementRow[],
@@ -605,7 +580,6 @@ export function evaluate(
   const cases = inside(facts.cases, (c) => c.completed_at);
   const attempts = inside(facts.attempts, (a) => a.submitted_at);
   const presentations = inside(facts.presentations, (p) => p.graded_at);
-  const attended = inside(facts.attended, (a) => a.deadline);
   const courseSkills = new Set(courseSkillIds);
   const check = new Map(facts.checks.map((c) => [`${c.requirement_id}:${c.student_id}`, c]));
   const entered = new Map<string, ScoreEntry[]>();
@@ -620,7 +594,6 @@ export function evaluate(
       cases: cases.filter((c) => c.student_id === studentId),
       attempts: attempts.filter((a) => a.student_id === studentId),
       presentations: presentations.filter((p) => p.student_id === studentId),
-      attended: attended.filter((a) => a.student_id === studentId),
     };
     const row: Record<string, ItemProgress> = {};
     for (const req of requirements) {
@@ -647,7 +620,7 @@ type Evidence = { at: string; score: number | null };
 
 function judge(
   req: RequirementRow,
-  own: { cases: GradedCaseFact[]; attempts: QuizAttemptFact[]; presentations: GradedPresentationFact[]; attended: AttendedActivityFact[] },
+  own: { cases: GradedCaseFact[]; attempts: QuizAttemptFact[]; presentations: GradedPresentationFact[] },
   quizSkills: Record<string, string[]>,
   courseSkills: Set<string>,
   entries: ScoreEntry[],
@@ -726,18 +699,13 @@ function judge(
           dates = own.presentations.filter((p) => meets(p.score, min)).map((p) => p.graded_at);
           scores = own.presentations.map((p) => p.score);
           break;
-        case 'shift':
-          // Attendance: activities done by their deadline, or late.
-          dates = own.attended.map((a) => a.deadline);
-          break;
         default:
           dates = [];
       }
       const hasGrade = dates.length > 0 || scores.length > 0;
-      // Each entered score is one more piece of work (attendance takes none).
-      const extra = req.activity_type === 'shift' ? [] : entries;
       const graded = [...dates].sort();
-      const all = [...graded, ...extra.filter((e) => meets(e.score, min)).map((e) => e.entered_at)].sort();
+      // Each entered score is one more piece of work.
+      const all = [...graded, ...entries.filter((e) => meets(e.score, min)).map((e) => e.entered_at)].sort();
       const done = all.length >= target;
       const byGrades = graded.length >= target;
       return {
@@ -747,7 +715,7 @@ function judge(
         target,
         done_at: byGrades ? graded[target - 1] : done ? all[target - 1] : null,
         best_score: null,
-        avg_score: mean([...scores, ...extra.map((e) => e.score)]),
+        avg_score: mean([...scores, ...entries.map((e) => e.score)]),
         level: null,
         has_grade: hasGrade,
       };

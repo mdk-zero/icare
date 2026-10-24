@@ -18,7 +18,6 @@ export default function ChecklistSection({
   empty,
   onNew,
   actionsFor,
-  noteFor,
 }: {
   title: string;
   items: CourseRequirement[];
@@ -29,7 +28,6 @@ export default function ChecklistSection({
   empty?: ReactNode;
   onNew: () => void;
   actionsFor: (requirement: CourseRequirement) => MenuAction[];
-  noteFor?: (requirement: CourseRequirement) => string | undefined;
 }) {
   return (
     <section className="rounded-xl border border-hairline bg-surface">
@@ -41,7 +39,6 @@ export default function ChecklistSection({
               key={r.id}
               requirement={r}
               name={names.get(r.id) ?? ""}
-              note={noteFor?.(r)}
               actions={locked ? null : actionsFor(r)}
             />
           ))}

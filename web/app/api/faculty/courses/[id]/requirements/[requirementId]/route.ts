@@ -28,8 +28,7 @@ interface RouteParams {
 
 /**
  * PATCH: replace an item's fields (its place in the checklist stays). A
- * `grade_leaf_id` moves it in the grading split (null: not counted); an item
- * that becomes an attendance count is taken out of the split either way.
+ * `grade_leaf_id` moves it in the grading split (null: not counted).
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const { session, response } = await requireRole('faculty');

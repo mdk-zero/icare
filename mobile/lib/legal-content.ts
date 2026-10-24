@@ -206,7 +206,7 @@ export const PRIVACY: LegalDoc = {
             { lead: 'Profile photo', text: 'only if you choose one.' },
             {
               lead: 'Your coursework',
-              text: 'Patient Case work and the tasks you complete, quiz answers and scores, Case Presentations and hospital case write-ups, reflections, attendance at clinical duty, and the grades and feedback your clinical instructors give.',
+              text: 'Patient Case work and the tasks you complete, quiz answers and scores, Case Presentations and hospital case write-ups, reflections, and the grades and feedback your clinical instructors give.',
             },
             { lead: 'Quiz timing', text: 'when each quiz attempt was started and submitted.' },
             { lead: 'Requests', text: 'assistance requests you send to your clinical instructor.' },

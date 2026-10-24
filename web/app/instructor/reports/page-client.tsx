@@ -3,7 +3,6 @@
 import { useMemo } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faCalendarCheck,
   faFileLines,
   faFileMedical,
   faFilePrescription,
@@ -230,12 +229,6 @@ export default function FacultyReportsClient() {
     });
   }, [sections.data, studentTargets]);
 
-  // Attendance is per section too, but its rows say nothing about risk.
-  const attendanceTargets = useMemo<Target[] | undefined>(
-    () => sectionTargets?.map(({ id, label, sub }) => ({ id, label, sub })),
-    [sectionTargets],
-  );
-
   const scenarioTargets = useMemo<DatedTarget[] | undefined>(
     () =>
       scenarios.data?.map((s) => ({
@@ -270,8 +263,8 @@ export default function FacultyReportsClient() {
       type: "student",
       label: "Student",
       icon: faUser,
-      blurb: "Everything one student has been graded on: scenarios, case presentations, quizzes and attendance.",
-      contents: ["Averages and attendance", "Patient case grades", "Case presentations", "Quizzes", "Skill areas"],
+      blurb: "Everything one student has been graded on: scenarios, case presentations and quizzes.",
+      contents: ["Averages", "Patient case grades", "Case presentations", "Quizzes", "Skill areas"],
       noun: "students",
       list: {
         items: studentTargets,
@@ -304,20 +297,6 @@ export default function FacultyReportsClient() {
           { id: "risk", label: "Most low performers", compare: (a, b) => b.atRisk - a.atRisk || byName(a, b) },
           { id: "name", label: "A–Z", compare: byName },
         ],
-      },
-    }),
-    defineReportType<Target>({
-      type: "attendance",
-      label: "Attendance",
-      icon: faCalendarCheck,
-      blurb: "Activity attendance for a section, by student and by activity.",
-      contents: ["Present / late / absent tally", "By student with rate", "By activity"],
-      noun: "sections",
-      list: {
-        items: attendanceTargets,
-        loading: sections.loading,
-        failed: Boolean(sections.error),
-        sorts: [{ id: "name", label: "A–Z", compare: byName }],
       },
     }),
     defineReportType<DatedTarget>({

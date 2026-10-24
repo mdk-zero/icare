@@ -283,7 +283,7 @@ const ROUTES = [
   ["PUT", "/api/faculty/scenarios/assignments/[id]/tasks", 120],
   ["GET", "/api/student/scenarios", 150],
   ["POST", "/api/student/attempts/[id]/submit", 180],
-  ["GET", "/api/faculty/students/[id]/attendance", 95],
+  ["GET", "/api/faculty/students/[id]/requirements", 95],
 ] as const;
 
 /** Deterministic noise from a number, so the chart doesn't jitter on refresh. */

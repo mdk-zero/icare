@@ -19,7 +19,6 @@ import { fetchStepRatings, fetchTaskCompletions, fetchTaskSteps, stepGradesByTas
 import { taskCredit } from './task-ratings';
 import { isMissingSkillColumn, skillIdFromTitle } from './taylor-skills';
 import { isMissingCaseTables } from './cases';
-import { loadActivityAttendance } from './activity-attendance';
 import {
   labelRequirements,
   loadCourseSkillIds,
@@ -67,24 +66,22 @@ export async function loadProgressFacts(
   const wantsAttempts = skillItems || has((r) => (r.kind === 'activity' || r.kind === 'count') && r.activity_type === 'assessment');
   const wantsQuizSkills = skillItems || has((r) => r.kind === 'count' && r.activity_type === 'assessment' && r.skills_only);
   const wantsPresentations = has((r) => (r.kind === 'activity' || r.kind === 'count') && r.activity_type === 'case_presentation');
-  const wantsAttendance = has((r) => r.kind === 'count' && r.activity_type === 'shift');
 
   if (studentIds.length === 0 || requirements.length === 0) {
-    return { cases: [], attempts: [], quizSkills: {}, presentations: [], attended: [], checks: [], scores: [] };
+    return { cases: [], attempts: [], quizSkills: {}, presentations: [], checks: [], scores: [] };
   }
   const { from, to } = termBounds(term);
 
   const requirementIds = requirements.map((r) => r.id);
-  const [cases, attempts, presentations, attended, checks, scores] = await Promise.all([
+  const [cases, attempts, presentations, checks, scores] = await Promise.all([
     wantsCases ? loadCases(supabase, studentIds, from, to, wantsCaseSkills, skillItems) : Promise.resolve([]),
     wantsAttempts ? loadAttempts(supabase, studentIds, from, to, skillItems) : Promise.resolve([]),
     wantsPresentations ? loadPresentations(supabase, studentIds, from, to) : Promise.resolve([]),
-    wantsAttendance ? loadAttended(supabase, studentIds, from, to) : Promise.resolve([]),
     loadChecks(supabase, requirementIds, studentIds),
     loadScores(supabase, requirementIds, studentIds),
   ]);
   const quizSkills = wantsQuizSkills ? await loadQuizSkills(supabase, [...new Set(attempts.map((a) => a.assessment_id))]) : {};
-  return { cases, attempts, quizSkills, presentations, attended, checks, scores };
+  return { cases, attempts, quizSkills, presentations, checks, scores };
 }
 
 async function loadCases(
@@ -278,14 +275,6 @@ async function loadPresentations(supabase: Supabase, studentIds: string[], from:
       score: num(p.score),
     }));
   });
-}
-
-/** Activities due inside the term that the students did on time or late (lib/attendance.ts). */
-async function loadAttended(supabase: Supabase, studentIds: string[], from: string, to: string) {
-  const { rows } = await loadActivityAttendance(supabase, studentIds, { from, to });
-  return rows
-    .filter((r) => r.status === 'present' || r.status === 'late')
-    .map((r) => ({ student_id: r.student_id, deadline: r.deadline as string }));
 }
 
 async function loadChecks(supabase: Supabase, requirementIds: string[], studentIds: string[]): Promise<RequirementCheckRow[]> {

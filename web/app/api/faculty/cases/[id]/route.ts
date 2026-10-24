@@ -157,7 +157,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       update.instructions = typeof instructions === 'string' ? instructions.trim().slice(0, 4000) : '';
     }
     if (deadline !== undefined) {
-      // It can move, but not go: attendance is measured against it.
+      // It can move, but not go: late and overdue work is measured against it.
       const deadlineCheck = parseDeadline(deadline);
       if (!deadlineCheck.ok) return NextResponse.json({ error: deadlineCheck.error }, { status: 400 });
       update.deadline = deadlineCheck.value;

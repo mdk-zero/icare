@@ -10,7 +10,6 @@ import { getFacultySectionIds, isStudentInFacultySections } from '@/app/lib/rost
 import {
   REPORT_NEEDS_TARGET,
   buildAssessmentReport,
-  buildAttendanceReport,
   buildCaseReport,
   buildDischargeReport,
   buildRosterReport,
@@ -104,9 +103,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       case 'discharge':
         result = await buildDischargeReport(supabase, meta, id);
         break;
-      case 'attendance':
-        result = await buildAttendanceReport(supabase, meta, id, scope);
-        break;
       case 'case':
         result = await buildCaseReport(supabase, meta, id, scope);
         break;
@@ -158,7 +154,7 @@ async function outsideDean(
     const { data } = await supabase.from('discharge_summaries').select('patient_id').eq('id', id).maybeSingle();
     return !data || !(await ownsRow(supabase, 'patients', data.patient_id as string, deanId));
   }
-  if ((type === 'section' || type === 'attendance') && session.role === 'admin') {
+  if (type === 'section' && session.role === 'admin') {
     const sections = await getScopedSectionIds(supabase, session);
     return sections !== null && !sections.includes(id);
   }
@@ -172,7 +168,7 @@ async function outOfScope(
   id: string,
 ): Promise<boolean> {
   if (type === 'student') return !(await isStudentInFacultySections(supabase, facultyId, id));
-  if (type === 'section' || type === 'attendance') {
+  if (type === 'section') {
     return !(await getFacultySectionIds(supabase, facultyId)).includes(id);
   }
   return false;

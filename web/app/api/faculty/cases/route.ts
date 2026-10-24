@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `Title must be at most ${MAX_TITLE} characters` }, { status: 400 });
   }
   const instructionsValue = typeof instructions === 'string' ? instructions.trim().slice(0, MAX_INSTRUCTIONS) : '';
-  // Every activity has a deadline: it is what attendance is measured against.
+  // Every activity has a deadline: it is what late and overdue work is measured against.
   const deadlineCheck = parseDeadline(deadline);
   if (!deadlineCheck.ok) return NextResponse.json({ error: deadlineCheck.error }, { status: 400 });
   // Given to groups (075), to whole sections where the instructor has no

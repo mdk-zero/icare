@@ -73,7 +73,6 @@ const COURSES: CourseSeed[] = [
       { kind: 'skill', skill_id: '1-4', min_score: 50 },
       { kind: 'skill', skill_id: '1-6', min_score: 50 },
       { kind: 'skill', skill_id: '1-7', min_score: 50 },
-      { kind: 'count', activity_type: 'shift', target_count: 15 },
       {
         kind: 'manual',
         title: 'Head-to-toe assessment return demonstration, signed by the clinical instructor',

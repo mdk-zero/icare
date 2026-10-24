@@ -12,7 +12,6 @@ import {
 import {
   MAX_SCORE_NOTE,
   canEnterScore,
-  entryMode,
   parseScore,
   requirementDetail,
   scoreBlock,
@@ -46,13 +45,11 @@ function scorePhrase(requirement: CourseRequirement, item: ItemProgress): string
 /** What a cell says when hovered or read aloud. */
 export function statusText(requirement: CourseRequirement, item: ItemProgress | undefined): string {
   if (!item) return "Not started";
-  const attendance = entryMode(requirement) === "mark";
   const parts: string[] = [];
   if (item.done) parts.push(`Met on ${when(item.done_at)}`);
   else if (requirement.kind === "count") parts.push(`${item.current} of ${item.target} so far`);
   else if (item.best_score !== null) parts.push(`Best so far: ${Math.round(item.best_score)}%${item.level ? ` (${item.level})` : ""}, below the minimum`);
   else parts.push(requirement.kind === "manual" ? "No score yet" : "Not met yet");
-  if (item.done && attendance) parts.push(`${item.current} attended`);
   if (item.done || requirement.kind === "count") {
     const score = scorePhrase(requirement, item);
     if (score) parts.push(score);
@@ -67,13 +64,13 @@ const PILL = "inline-flex h-7 min-w-7 items-center justify-center gap-1 whitespa
 
 /**
  * One student's standing on one item: their score (green once met by graded
- * work, violet when met by a score or mark of yours, amber below it), an attendance
- * count, or an empty ring.
+ * work, violet when met by a score or mark of yours, amber below it), how many
+ * of a count are done, or an empty ring.
  */
 export function ItemStatus({ requirement, item }: { requirement: CourseRequirement; item: ItemProgress | undefined }) {
   const score = itemScore(item);
   const scoreText = score === null ? null : `${Math.round(score)}%`;
-  // Only items with no score (attendance) show a count.
+  // A count with no score to show says how many are done.
   const count = requirement.kind === "count" && item ? `${item.current}/${item.target}` : null;
 
   if (item?.done && item.source === "instructor") {
@@ -106,18 +103,16 @@ export function ItemStatus({ requirement, item }: { requirement: CourseRequireme
 
 /**
  * Whether clicking does anything: entering a score where the student has no
- * grade, marking attendance done, or removing a score or mark of yours.
+ * grade, or removing a score or mark of yours.
  * Graded work can't be changed here.
  */
 export function canAct(requirement: CourseRequirement, item: ItemProgress | undefined): boolean {
   if (entriesOf(item).length > 0 || item?.marked) return true;
-  if (entryMode(requirement) === "mark") return !item?.done;
   return canEnterScore(requirement, item);
 }
 
 /** The button's words on the student page. */
 export function actionLabel(requirement: CourseRequirement, item: ItemProgress | undefined): string {
-  if (entryMode(requirement) === "mark") return item?.marked ? "Remove mark" : "Mark done";
   const entries = entriesOf(item);
   if (canEnterScore(requirement, item)) {
     if (requirement.kind === "count") return "Add score";
@@ -138,13 +133,12 @@ type Pending = {
 type Change =
   | { type: "score"; score: number; note: string }
   | { type: "remove-score"; id: string }
-  | { type: "mark"; note: string }
   | { type: "remove-mark" };
 
 /**
  * Filling items in from the progress views. Clicking a cell opens a dialog:
- * enter the score the student earned on work the app has no grade for, mark
- * attendance done with a note, or remove a score or mark of yours.
+ * enter the score the student earned on work the app has no grade for, or
+ * remove a score or mark of yours.
  */
 export function useEntryDialog(onSaved: (studentId: string, requirementId: string, item: ItemProgress) => void): {
   act: (
@@ -168,19 +162,15 @@ export function useEntryDialog(onSaved: (studentId: string, requirementId: strin
         ? await addRequirementScore(offeringId, requirement.id, { student_id: student.id, score: change.score, note: change.note })
         : change.type === "remove-score"
           ? await removeRequirementScore(offeringId, requirement.id, change.id)
-          : await setRequirementCheck(offeringId, requirement.id, {
-              student_id: student.id,
-              checked: change.type === "mark",
-              note: change.type === "mark" ? change.note : undefined,
-            });
+          : await setRequirementCheck(offeringId, requirement.id, { student_id: student.id, checked: false });
     setBusy(null);
     if (result.error !== undefined) {
       toast(result.error, "error");
       return;
     }
     onSaved(student.id, requirement.id, result.data.progress);
-    if (change.type === "score" || change.type === "mark") {
-      toast(change.type === "score" ? "Score saved" : "Marked done");
+    if (change.type === "score") {
+      toast("Score saved");
       setPending(null);
     } else {
       // Stay open on what is left, so several scores can be removed in a row.
@@ -237,29 +227,16 @@ function EntryDialog({
   saving: boolean;
 }) {
   const { requirement, item } = pending;
-  const mode = entryMode(requirement);
   const entries = entriesOf(item);
   const single = requirement.kind !== "count";
-  const canScore = mode === "score" && canEnterScore(requirement, item);
-  const canMark = mode === "mark" && !item?.done;
+  const canScore = canEnterScore(requirement, item);
   // A single item's score is edited in place.
   const [score, setScore] = useState(single && entries[0] ? String(entries[0].score) : "");
   const [note, setNote] = useState(single && entries[0] ? entries[0].note : "");
   const parsed = parseScore(score.trim() === "" ? NaN : Number(score));
-  const blocked = mode === "score" && !canScore ? scoreBlock(requirement, item) : null;
+  const blocked = canScore ? null : scoreBlock(requirement, item);
 
-  const title =
-    mode === "mark"
-      ? canMark
-        ? "Mark as done"
-        : "Your mark"
-      : !canScore
-        ? "Your scores"
-        : !single
-          ? "Add a score"
-          : entries.length > 0
-            ? "Edit score"
-            : "Enter a score";
+  const title = !canScore ? "Your scores" : !single ? "Add a score" : entries.length > 0 ? "Edit score" : "Enter a score";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={saving ? undefined : onClose}>
@@ -292,7 +269,6 @@ function EntryDialog({
           onSubmit={(e) => {
             e.preventDefault();
             if (canScore && parsed !== null) onChange({ type: "score", score: parsed, note: note.trim() });
-            else if (canMark && note.trim()) onChange({ type: "mark", note: note.trim() });
           }}
         >
           <div className="text-sm">
@@ -388,31 +364,6 @@ function EntryDialog({
             </>
           )}
 
-          {canMark && (
-            <>
-              <p className="text-sm text-gray-600">
-                Attendance is counted from activities done by their deadline. Mark it done when the student met it some
-                other way, such as a make-up activity.
-              </p>
-              <div>
-                <label htmlFor="entry-note" className="mb-1.5 block text-sm font-semibold text-gray-700">
-                  Why it is done <span className="text-rose-500">*</span>
-                </label>
-                <textarea
-                  id="entry-note"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  maxLength={MAX_SCORE_NOTE}
-                  rows={3}
-                  autoFocus
-                  disabled={saving}
-                  placeholder="Made up the missed duty on Sept 20."
-                  className={`${inputClass} resize-y`}
-                />
-              </div>
-            </>
-          )}
-
           {blocked && <p className="text-sm text-gray-500">{blocked}.</p>}
 
           <div className="flex items-center justify-end gap-3 pt-1">
@@ -422,16 +373,16 @@ function EntryDialog({
               disabled={saving}
               className="rounded-lg border border-gray-200 bg-surface px-5 py-2.5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50 disabled:opacity-50"
             >
-              {canScore || canMark ? "Cancel" : "Close"}
+              {canScore ? "Cancel" : "Close"}
             </button>
-            {(canScore || canMark) && (
+            {canScore && (
               <button
                 type="submit"
-                disabled={saving || (canScore ? parsed === null : !note.trim())}
+                disabled={saving || parsed === null}
                 className="flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-brand-700 disabled:opacity-60"
               >
                 {saving && <EcgLoader />}
-                {canScore ? "Save score" : "Mark done"}
+                Save score
               </button>
             )}
           </div>

@@ -19,7 +19,7 @@ export const SCENARIO_KIND_NOUN: Record<ScenarioKind, string> = {
   return_demo: 'Return Demonstration',
 };
 
-/** Where space is short: attendance rows, the mobile Home, the Overview. */
+/** Where space is short: the mobile Home, the Overview. */
 export const SCENARIO_KIND_SHORT: Record<ScenarioKind, string> = {
   patient_case: 'Patient Case',
   return_demo: 'Return Demo',

@@ -16,8 +16,6 @@ import {
   scenarioStatus,
   studentWork,
 } from './data';
-import { activityLabel, byActivity, tallyAttendance } from '../attendance';
-import { loadActivityAttendance } from '../activity-attendance';
 import { ofKind, scenarioKinds } from '../scenario-kind';
 import { isActiveSkillArea } from '@/scripts/taylors-chapters';
 import { CASE_CRITERIA, isLateSubmission, type CaseObservations } from '../case-rubric';
@@ -26,7 +24,7 @@ import { ratingLabel, scoreDescriptor, type TaskRating } from '../task-ratings';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
-export const REPORT_TYPES = ['student', 'section', 'scenario', 'assessment', 'roster', 'discharge', 'attendance', 'case'] as const;
+export const REPORT_TYPES = ['student', 'section', 'scenario', 'assessment', 'roster', 'discharge', 'case'] as const;
 export type ReportType = (typeof REPORT_TYPES)[number];
 
 export function isReportType(value: unknown): value is ReportType {
@@ -43,8 +41,6 @@ export const REPORT_NEEDS_TARGET: Record<ReportType, boolean> = {
   // Targets one stored summary, not a patient: a re-admitted patient has more
   // than one, and each closes a different stay.
   discharge: true,
-  // Attendance is reported per section.
-  attendance: true,
   // One graded hospital case presentation (a case_submissions id).
   case: true,
 };
@@ -82,7 +78,7 @@ export async function buildStudentReport(
     .maybeSingle();
   if (!student) return { error: 'Student not found', status: 404 };
 
-  const [groups, { data: scenarios }, cases, { data: attempts }, { data: scores }, activityAttendance] = await Promise.all([
+  const [groups, { data: scenarios }, cases, { data: attempts }, { data: scores }] = await Promise.all([
     groupNames(supabase, [studentId]),
     supabase
       .from('scenario_assignments')
@@ -105,7 +101,6 @@ export async function buildStudentReport(
       .select('score, created_at, competency_areas(name)')
       .eq('student_id', studentId)
       .order('created_at', { ascending: false }),
-    loadActivityAttendance(supabase, [studentId]),
   ]);
   if (cases.error) console.error('Report: failed to read case submissions', cases.error);
 
@@ -163,9 +158,6 @@ export async function buildStudentReport(
   }
   const areas = [...byArea.entries()].sort(([a], [b]) => a.localeCompare(b));
 
-  // From each activity's deadline: on time, late, missed or excused.
-  const attendance = tallyAttendance(activityAttendance.rows.map((r) => r.status));
-
   const section = (student as unknown as { sections: { name: string } | null }).sections?.name ?? 'Unassigned';
 
   const pdf = (
@@ -186,7 +178,6 @@ export async function buildStudentReport(
           gradeTile('Patient case average', avg(scenarioScores)),
           gradeTile('Case presentation average', avg(caseScores)),
           { label: 'Quiz average', value: pct(avg(quizScores)) },
-          { label: 'Attendance', value: pct(attendance.rate) },
         ]}
       />
 
@@ -228,19 +219,9 @@ export async function buildStudentReport(
         emptyText="No skill area ratings recorded yet."
       />
 
-      <Text style={styles.sectionTitle}>Attendance</Text>
-      <StatGrid
-        items={[
-          { label: 'Present', value: attendance.present },
-          { label: 'Late', value: attendance.late },
-          { label: 'Absent', value: attendance.absent },
-          { label: 'Excused', value: attendance.excused },
-        ]}
-      />
       <Text style={note}>
         Grades use the verbal scale instructors grade on: Excellent, Satisfactory or Needs Practice. Skill
-        Assessments pass at {PASSING_SCORE}%. Attendance counts late as attended and leaves excused and upcoming
-        activities out.
+        Assessments pass at {PASSING_SCORE}%.
       </Text>
     </ReportShell>
   );
@@ -802,117 +783,6 @@ export async function buildDischargeReport(
   );
 
   return { subject: name, pdf };
-}
-
-/**
- * Attendance for one section: a per-student rate plus the activity-by-
- * activity counts behind it, from each Patient Case, Return Demonstration, Quiz and Case Presentation's
- * deadline.
- *
- * Rates come from `tallyAttendance`, the same function the student's
- * Attendance tab uses, so a printed report and the page it was printed from
- * can never disagree about what counts as attended.
- */
-export async function buildAttendanceReport(
-  supabase: Supabase,
-  meta: ReportMeta,
-  sectionId: string,
-  scope: StudentScope = null,
-): Promise<BuildResult> {
-  const { data: section } = await supabase
-    .from('sections')
-    .select('id, name')
-    .eq('id', sectionId)
-    .maybeSingle();
-  if (!section) return { error: 'Section not found', status: 404 };
-
-  const { data: students } = await supabase
-    .from('users')
-    .select('id, name')
-    .eq('role', 'student')
-    .eq('section_id', sectionId)
-    .order('name');
-
-  const studentList = ((students ?? []) as { id: string; name: string }[]).filter(
-    (s) => !scope || scope.includes(s.id),
-  );
-
-  const { rows } = await loadActivityAttendance(
-    supabase,
-    studentList.map((s) => s.id),
-  );
-
-  const perStudent = studentList.map((student) => ({
-    student,
-    tally: tallyAttendance(rows.filter((r) => r.student_id === student.id).map((r) => r.status)),
-  }));
-  const sectionTally = tallyAttendance(rows.map((r) => r.status));
-  const upcoming = rows.filter((r) => r.status === 'upcoming').length;
-  const activities = byActivity(rows);
-
-  const summaryRows = perStudent.map(({ student, tally }) => [
-    student.name,
-    tally.present,
-    tally.late,
-    tally.absent,
-    tally.excused,
-    tally.rate === null ? '—' : `${tally.rate}%`,
-  ]);
-
-  const pdf = (
-    <ReportShell
-      title={`Attendance — ${section.name}`}
-      heading="Attendance Report"
-      meta={meta}
-      metaRows={[
-        { label: 'Section', value: section.name },
-        { label: 'Students', value: String(studentList.length) },
-        { label: 'Activities', value: String(activities.length) },
-        {
-          label: 'Section attendance',
-          value: sectionTally.rate === null ? 'Nothing past its deadline yet' : `${sectionTally.rate}%`,
-        },
-      ]}
-    >
-      <Text style={styles.sectionTitle}>Summary</Text>
-      <StatGrid
-        items={[
-          { label: 'Present', value: sectionTally.present },
-          { label: 'Late', value: sectionTally.late },
-          { label: 'Absent', value: sectionTally.absent },
-          { label: 'Excused', value: sectionTally.excused },
-          { label: 'Upcoming', value: upcoming },
-        ]}
-      />
-
-      <Text style={styles.sectionTitle}>Attendance by student</Text>
-      <Table
-        head={['Student', 'Present', 'Late', 'Absent', 'Excused', 'Rate']}
-        rows={summaryRows}
-        emptyText="No students are enrolled in this section."
-      />
-
-      <Text style={styles.sectionTitle}>By activity</Text>
-      <Table
-        head={['Activity', 'Due', 'Present', 'Late', 'Absent', 'Excused']}
-        widths={[3, 1.6, 1, 1, 1, 1]}
-        rows={activities.map((a) => [
-          activityLabel(a.kind, a.title, a.scenario_kind),
-          date(a.deadline),
-          a.tally.present,
-          a.tally.late,
-          a.tally.absent,
-          a.tally.excused,
-        ])}
-        emptyText="No activities with a deadline yet."
-      />
-      <Text style={{ fontSize: 8, color: '#6b7280', marginTop: 6 }}>
-        Rate counts present and late as attended. Excused and upcoming activities are left out of the rate.
-      </Text>
-    </ReportShell>
-  );
-
-  return { subject: section.name, pdf };
 }
 
 // ---------------------------------------------------------------------------

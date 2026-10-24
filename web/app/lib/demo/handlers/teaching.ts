@@ -185,7 +185,7 @@ route("PATCH", "/api/faculty/cases/:id", (ctx) => {
   if (typeof body?.title === "string" && body.title.trim()) p.title = body.title.trim();
   if (typeof body?.instructions === "string") p.instructions = body.instructions;
   if (body && "deadline" in body) {
-    // It can move, but not go: attendance is measured against it.
+    // It can move, but not go: late and overdue work is measured against it.
     const deadlineCheck = parseDeadline(body.deadline);
     if (!deadlineCheck.ok) return json({ error: deadlineCheck.error }, 400);
     p.deadline = deadlineCheck.value;

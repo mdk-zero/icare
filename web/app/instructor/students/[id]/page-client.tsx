@@ -20,7 +20,6 @@ import {
   faBookMedical,
   faXmark,
   faArrowsRotate,
-  faCalendarCheck,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   resolveCompetencies,
@@ -56,7 +55,6 @@ import LiveClock from "../../../components/LiveClock";
 import AiThinking from "../../../components/AiThinking";
 import ReflectionsTab from "./reflections-tab";
 import RequirementsTab, { requirementsTally, useStudentRequirements } from "./requirements-tab";
-import AttendanceTab, { useStudentAttendance } from "./attendance-tab";
 import { fetchStudentReflections, type FacultyReflection } from "../../../lib/api";
 import SkillAreaTrend from "./skill-area-trend";
 import { SendAppLinkButton } from "../../../components/AppLink";
@@ -369,7 +367,6 @@ export default function StudentDetailClient() {
   const student = data?.student ?? null;
   const requirements = useStudentRequirements(studentId);
   const requirementCount = requirementsTally(requirements.data?.data);
-  const attendanceRate = useStudentAttendance(studentId).data?.data?.tally.rate ?? null;
   const performanceHistory = data?.performanceHistory ?? NO_PERFORMANCE_HISTORY;
   // Retakes of a quiz count once, as the Performance tab lists them.
   const quizCount = useMemo(() => groupAttempts(performanceHistory).length, [performanceHistory]);
@@ -734,7 +731,7 @@ export default function StudentDetailClient() {
         </Card>
       </div>
 
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
           {([
             { key: 'performance', label: 'Performance', hint: 'Quiz results', count: quizCount, unit: quizCount === 1 ? 'quiz' : 'quizzes', icon: faChartLine },
             { key: 'scenarios', label: 'Patient Cases', hint: 'Assigned patient cases', count: assignments.length, unit: 'assigned', icon: faStethoscope },
@@ -747,14 +744,6 @@ export default function StudentDetailClient() {
               count: requirementCount.total > 0 ? `${requirementCount.done}/${requirementCount.total}` : 0,
               unit: 'met',
               icon: faBookMedical,
-            },
-            {
-              key: 'attendance',
-              label: 'Attendance',
-              hint: 'Patient cases, return demos, quizzes, case presentations',
-              count: attendanceRate === null ? '—' : `${attendanceRate}%`,
-              unit: 'attended',
-              icon: faCalendarCheck,
             },
           ] as const).map((tab) => {
             const active = activeTab === tab.key;
@@ -841,8 +830,6 @@ export default function StudentDetailClient() {
           {activeTab === 'reflections' && <ReflectionsTab reflections={reflections} enabled={reflectionsEnabled} />}
 
           {activeTab === 'requirements' && student && <RequirementsTab studentId={studentId} studentName={student.name} />}
-
-          {activeTab === 'attendance' && student && <AttendanceTab studentId={studentId} studentName={student.name} />}
 
           {activeTab === 'competencies' && (
             <div className="space-y-6">

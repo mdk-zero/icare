@@ -18,7 +18,7 @@
  * straight away.
  */
 
-import { entryMode, type ItemProgress, type Parsed, type RequirementRow } from './course-progress';
+import type { ItemProgress, Parsed, RequirementRow } from './course-progress';
 
 export interface GradeComponent {
   id: string;
@@ -106,14 +106,9 @@ export const GRADING_NEEDS_MIGRATION = 'The grading split needs database migrati
 export const EXAMS_NEED_MIGRATION = 'Written Exams need database migration 067 (course grading) applied first.';
 export const GRADING_CHANGED = 'The grading split changed since you opened it. Reload to see the latest.';
 
-/** Attendance (activities attended) has no score, so it can't count toward a grade. */
-export function isGradeable(req: Pick<RequirementRow, 'kind' | 'activity_type'>): boolean {
-  return entryMode(req) === 'score';
-}
-
 /** The score an item adds to its component: a count's average, otherwise the best score. */
 export function itemScore(req: RequirementRow, item: ItemProgress | undefined): number | null {
-  if (!item || !isGradeable(req)) return null;
+  if (!item) return null;
   return req.kind === 'count' ? item.avg_score : item.best_score;
 }
 
@@ -297,9 +292,6 @@ export function parseGrading(body: unknown, requirements: readonly RequirementRo
   const byId = new Map(requirements.map((r) => [r.id, r]));
   const filed = leavesOf(split).flatMap((l) => l.items);
   if (filed.some((id) => !byId.has(id))) return { ok: false, error: "An item isn't on this checklist" };
-  if (filed.some((id) => !isGradeable(byId.get(id)!))) {
-    return { ok: false, error: "Attendance has no score, so it can't count toward the grade" };
-  }
   return { ok: true, value: split };
 }
 
@@ -481,21 +473,21 @@ function keepItems(split: GradingSplit, keep: (id: string) => boolean): GradingS
 }
 
 /**
- * The split with every item unfiled that is no longer on the checklist or can
- * no longer be graded (turned into attendance): what the item routes do to the
- * stored split when an item is removed or changed. Order and the rest stay.
+ * The split with every item unfiled that is no longer on the checklist: what
+ * the item routes do to the stored split when an item is removed. Order and
+ * the rest stay.
  */
 export function settle(split: GradingSplit | null, requirements: readonly RequirementRow[]): GradingSplit | null {
   if (!split) return null;
-  const counts = new Set(requirements.filter(isGradeable).map((r) => r.id));
-  return keepItems(split, (id) => counts.has(id));
+  const onChecklist = new Set(requirements.map((r) => r.id));
+  return keepItems(split, (id) => onChecklist.has(id));
 }
 
 /**
  * Whether a save's `base` still describes the stored split. It may match the
- * split as stored, or the split with removed and attendance items taken out
- * (what the Grading tab sends, see saveBase): an id left behind by a removed
- * item must never make the split impossible to save or clear.
+ * split as stored, or the split with removed items taken out (what the
+ * Grading tab sends, see saveBase): an id left behind by a removed item must
+ * never make the split impossible to save or clear.
  */
 export function baseMatches(base: unknown, stored: GradingSplit | null, requirements: readonly RequirementRow[]): boolean {
   if (typeof base !== 'string') return false;
@@ -522,12 +514,10 @@ export function fileItem(split: GradingSplit, requirementId: string, leafId: str
 }
 
 /**
- * Where an item goes after it is saved: attendance is always taken out, an
- * undefined leaf leaves it where it was, and otherwise it moves to leafId
- * (null: not counted).
+ * Where an item goes after it is saved: an undefined leaf leaves it where it
+ * was, and otherwise it moves to leafId (null: not counted).
  */
 export function refile(split: GradingSplit, req: RequirementRow, leafId: string | null | undefined): GradingSplit {
-  if (!isGradeable(req)) return fileItem(split, req.id, null);
   if (leafId === undefined) return split;
   return fileItem(split, req.id, leafId);
 }

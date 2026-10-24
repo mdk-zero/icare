@@ -6,7 +6,6 @@ import { seedWard } from "./ward";
 import { seedTeaching } from "./teaching";
 import { seedSystem } from "./system";
 import { seedCourses } from "./courses";
-import { seedExcuses, type DemoExcuse } from "./attendance";
 import { seedReturnDemos } from "./return-demos";
 import { seedSupportRequests } from "./support";
 
@@ -34,6 +33,5 @@ export function seed() {
       ...seedSupportRequests(people.users),
     ] as DemoNotification[],
     audit: seedAudit() as DemoAudit[],
-    excuses: seedExcuses(people.users, people.teams, school.assignments, school.completions) as DemoExcuse[],
   };
 }

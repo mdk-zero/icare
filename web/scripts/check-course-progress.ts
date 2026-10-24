@@ -61,7 +61,6 @@ const facts = (over: Partial<ProgressFacts>): ProgressFacts => ({
   attempts: [],
   quizSkills: {},
   presentations: [],
-  attended: [],
   checks: [],
   scores: [],
   ...over,
@@ -123,23 +122,6 @@ const failedQuiz = facts({
   ],
 });
 eq('the average takes each Quiz at its best attempt, failed ones too', one(twoQuizzes, failedQuiz).avg_score, 60);
-const shifts = req({ kind: 'count', activity_type: 'shift', target_count: 2 });
-const attended = one(shifts, facts({ attended: [{ student_id: S, deadline: '2026-09-01T00:00:00Z' }, { student_id: S, deadline: '2027-01-05T00:00:00Z' }] }));
-eq('activities attended inside the term', attended.current, 1);
-eq('attendance has no score to average', attended.avg_score, null);
-
-console.log('attendance counts activities inside the term');
-const firstSem = { starts_on: '2026-06-22', ends_on: '2026-10-24' };
-const attendance = (rows: ProgressFacts['attended']) => evaluate([shifts], [], firstSem, [S], facts({ attended: rows }))[S][shifts.id];
-const twoInside = attendance([
-  { student_id: S, deadline: '2026-07-01T09:00:00Z' },
-  { student_id: S, deadline: '2026-08-01T09:00:00Z' },
-  { student_id: S, deadline: '2026-11-05T09:00:00Z' },
-]);
-eq('two of three are due inside the term', [twoInside.current, twoInside.done], [2, true]);
-eq('one due after the term counts for nothing', attendance([{ student_id: S, deadline: '2026-11-05T09:00:00Z' }]).current, 0);
-eq("another student's attendance isn't counted", attendance([{ student_id: 'someone-else', deadline: '2026-07-01T09:00:00Z' }]).current, 0);
-
 console.log('skill');
 const skill = req({ kind: 'skill', skill_id: '1-7', min_score: 50 });
 const needsPractice = facts({
@@ -205,9 +187,6 @@ eq('each entered score is one more piece of work; below the minimum it joins onl
 const filled = one(threeQuizzes, facts({ ...oneGraded, scores: [entry(threeQuizzes, 90), entry(threeQuizzes, 70), entry(threeQuizzes, 85, '2026-09-25T00:00:00Z')] }));
 eq('entered scores can complete a count, which is then yours', [filled.done, filled.source, filled.done_at], [true, 'instructor', '2026-09-25T00:00:00Z']);
 eq('a met count takes no more scores', scoreBlock(threeQuizzes, filled) !== null, true);
-const attendanceEntries = one(shifts, facts({ scores: [entry(shifts, 90)] }));
-eq('attendance ignores entered scores', [attendanceEntries.current, attendanceEntries.avg_score], [0, null]);
-eq('attendance takes a mark, not a score', scoreBlock(shifts, attendanceEntries) !== null, true);
 const skillEntry = req({ kind: 'skill', skill_id: '5-1', min_score: 50 });
 const skillScored = one(skillEntry, facts({ scores: [entry(skillEntry, 70)] }));
 eq('an entered score is skill evidence', [skillScored.done, skillScored.source, skillScored.level !== null], [true, 'instructor', true]);
@@ -221,16 +200,13 @@ eq('counts the met items', summarize(evaluate(all, [], term, [S], caseFacts)[S],
 console.log('parseRequirement');
 eq('manual needs a title', parseRequirement({ kind: 'manual', title: ' ' }).ok, false);
 eq('count needs a whole number', parseRequirement({ kind: 'count', activity_type: 'scenario', target_count: 2.5 }).ok, false);
-const shiftParsed = parseRequirement({ kind: 'count', activity_type: 'shift', target_count: 4, min_score: 80, skills_only: true });
-eq('shift counts drop the score and skills_only', shiftParsed.ok && [shiftParsed.value.min_score, shiftParsed.value.skills_only], [null, false]);
+eq('attendance counts are gone', parseRequirement({ kind: 'count', activity_type: 'shift', target_count: 4 }).ok, false);
 const activityParsed = parseRequirement({ kind: 'activity', activity_type: 'assessment', assessment_id: 'q1', scenario_id: 'stray' });
 eq('activity keeps only its own link', activityParsed.ok && [activityParsed.value.assessment_id, activityParsed.value.scenario_id], ['q1', null]);
 
 console.log('requirementLabel');
 const names = { scenarios: { sc1: 'Asthma' }, quizzes: { q1: 'Vital Signs' }, presentations: {}, skills: { '1-7': 'Assessing Blood Pressure' } };
 eq('count of quizzes with a pass mark', requirementLabel(req({ kind: 'count', activity_type: 'assessment', target_count: 3, min_score: 75 }), names), '3 Quizzes passed at 75%+');
-eq('one activity', requirementLabel(req({ kind: 'count', activity_type: 'shift', target_count: 1 }), names), '1 activity attended');
-eq('fifteen activities', requirementLabel(req({ kind: 'count', activity_type: 'shift', target_count: 15 }), names), '15 activities attended');
 eq('activity with a minimum', requirementLabel(caseMin, names), 'Patient Case: Asthma · 75%+');
 eq('skill with a level', requirementLabel(skill, names), 'Skill 1-7 · Assessing Blood Pressure (satisfactory or better)');
 eq('removed activity', requirementLabel(removed, names), 'Removed Patient Case');
@@ -245,11 +221,10 @@ eq(
     req({ kind: 'skill', skill_id: '1-4' }),
     req({ kind: 'count', activity_type: 'scenario', target_count: 2 }),
     req({ kind: 'activity', activity_type: 'case_presentation', presentation_id: 'p1' }),
-    req({ kind: 'count', activity_type: 'shift', target_count: 4 }),
     req({ kind: 'manual', title: 'Return demonstration' }),
   ]),
   // Hand-made skill items are "Skill" since 072 made Return Demonstration its own activity.
-  ['Quiz #1', 'Skill #1', 'Quiz #2', 'Skill #2', 'Patient Case #1', 'Case Presentation #1', 'Attendance #1', 'Lab Activity #1'],
+  ['Quiz #1', 'Skill #1', 'Quiz #2', 'Skill #2', 'Patient Case #1', 'Case Presentation #1', 'Lab Activity #1'],
 );
 
 console.log('inTopicOrder');
@@ -257,14 +232,13 @@ const mixed = [
   req({ kind: 'manual', title: 'Return demo' }),
   req({ kind: 'count', activity_type: 'assessment', target_count: 2 }),
   req({ kind: 'skill', skill_id: '1-1' }),
-  req({ kind: 'count', activity_type: 'shift', target_count: 4 }),
   req({ kind: 'activity', activity_type: 'scenario', scenario_id: 'sc1' }),
   req({ kind: 'activity', activity_type: 'assessment', assessment_id: 'q1' }),
 ];
 eq(
   'sections in a fixed order, each in checklist order',
   requirementNames(inTopicOrder(mixed)),
-  ['Patient Case #1', 'Quiz #1', 'Quiz #2', 'Skill #1', 'Lab Activity #1', 'Attendance #1'],
+  ['Patient Case #1', 'Quiz #1', 'Quiz #2', 'Skill #1', 'Lab Activity #1'],
 );
 
 console.log('Written Exams');
@@ -291,13 +265,12 @@ console.log("student's own view");
   const quizNever = req({ kind: 'activity', activity_type: 'assessment', assessment_id: 'q1' });
   const quizLow = req({ kind: 'activity', activity_type: 'assessment', assessment_id: 'q2', min_score: 75 });
   const cases3 = req({ kind: 'count', activity_type: 'scenario', target_count: 3 });
-  const attend = req({ kind: 'count', activity_type: 'shift', target_count: 2 });
   const skillNp = req({ kind: 'skill', skill_id: '1-7', min_score: 50 });
   const skillNone = req({ kind: 'skill', skill_id: '2-1', min_score: null });
   const lab = req({ kind: 'manual', title: 'Bed bath check-off' });
   const exam = req({ kind: 'manual', title: 'Midterm', manual_type: 'exam' });
   // Checklist (position) order, topics mixed: the view groups them.
-  const checklist = [lab, pc1, attend, gone, quizLow, pc3, exam, cases3, skillNp, quizNever, skillNone];
+  const checklist = [lab, pc1, gone, quizLow, pc3, exam, cases3, skillNp, quizNever, skillNone];
   const labelled = checklist.map((r) => ({ ...r, label: `label of ${r.id}` }));
   const row = evaluate(
     checklist,
@@ -309,14 +282,13 @@ console.log("student's own view");
         { student_id: S, scenario_id: 'sc1', score: 90, completed_at: '2026-09-01T00:00:00Z', skills: [{ skill_id: '1-7', credit: 1 / 3 }] },
       ],
       attempts: [{ student_id: S, assessment_id: 'q2', score: 60, submitted_at: '2026-09-02T00:00:00Z', skill_scores: {} }],
-      attended: [{ student_id: S, deadline: '2026-09-03T00:00:00Z' }],
       checks: [{ requirement_id: exam.id, student_id: S, checked_by: 'f', checked_at: '2026-09-09T00:00:00Z', note: 'private note' }],
     }),
   )[S];
   const view = studentChecklist(labelled, row);
   const byId = Object.fromEntries(view.map((v) => [v.id, v]));
 
-  eq('topic order, removed activities dropped', view.map((v) => v.id), [pc1.id, pc3.id, cases3.id, quizLow.id, quizNever.id, exam.id, skillNp.id, skillNone.id, lab.id, attend.id]);
+  eq('topic order, removed activities dropped', view.map((v) => v.id), [pc1.id, pc3.id, cases3.id, quizLow.id, quizNever.id, exam.id, skillNp.id, skillNone.id, lab.id]);
   eq('names keep the instructor numbering past a removed item', [byId[pc1.id].name, byId[pc3.id].name], ['Patient Case #1', 'Patient Case #3']);
   eq('detail is the instructor title and label', byId[pc1.id].detail, `Admission case — label of ${pc1.id}`);
   eq('a met item has no status', [byId[pc1.id].done, byId[pc1.id].status], [true, null]);
@@ -324,7 +296,6 @@ console.log("student's own view");
   eq('a Quiz never taken', byId[quizNever.id].status, 'Not taken yet');
   eq('a Quiz below its minimum', byId[quizLow.id].status, 'Best 60%, needs 75%');
   eq('a count so far', byId[cases3.id].status, '1 of 3 so far');
-  eq('attendance so far', byId[attend.id].status, '1 of 2 so far');
   eq('a skill below its band', byId[skillNp.id].status, 'Best so far: Needs Practice');
   eq('a skill with no evidence', byId[skillNone.id].status, 'No graded work yet');
   eq('a Lab Activity not scored', byId[lab.id].status, 'Not scored yet');

@@ -8,7 +8,6 @@ import { endDemo, isDemo } from './demo/session';
 import { holdTabPresence, releaseTabPresence } from './tab-presence';
 import type { ItemProgress, OfferingSummary, RequirementInput, RequirementRow, TermStatus } from './course-progress';
 import type { GradingSplit } from './course-grading';
-import type { ActivityKind, AttendanceRow, AttendanceTally } from './attendance';
 import type { ScenarioKind } from './scenario-kind';
 
 export interface User {
@@ -4668,22 +4667,3 @@ export const removeRequirementScore = (offeringId: string, requirementId: string
 
 export const fetchStudentRequirements = (studentId: string) =>
   courseRequest<StudentCourseRequirements>(`/api/faculty/students/${studentId}/requirements`);
-
-/** One student's attendance from activity deadlines (GET /api/faculty/students/:id/attendance). */
-export interface StudentAttendance {
-  rows: AttendanceRow[];
-  tally: AttendanceTally;
-  /** The instructor who supervises the student's group; the Dean only reads. */
-  can_excuse: boolean;
-  /** False before migration 068: attendance still shows, but nothing can be excused. */
-  excuses_ready: boolean;
-}
-
-export const fetchStudentAttendance = (studentId: string) =>
-  courseRequest<StudentAttendance>(`/api/faculty/students/${studentId}/attendance`);
-
-export const excuseAbsence = (studentId: string, input: { kind: ActivityKind; activity_id: string; reason: string }) =>
-  courseRequest<{ row: AttendanceRow }>(`/api/faculty/students/${studentId}/attendance/excuses`, { method: 'POST', body: input });
-
-export const undoExcuse = (studentId: string, input: { kind: ActivityKind; activity_id: string }) =>
-  courseRequest<{ row: AttendanceRow }>(`/api/faculty/students/${studentId}/attendance/excuses`, { method: 'DELETE', body: input });

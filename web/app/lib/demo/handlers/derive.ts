@@ -3,7 +3,6 @@ import type { DemoUser } from "../fixtures/people";
 import type { DemoAssignment } from "../fixtures/school";
 import { MAX_RATING_POINTS, NOT_APPLICABLE, type ChecklistRating, type TaskRating } from "@/app/lib/task-ratings";
 import { sectionName, teamLabel } from "./scope";
-import { attendanceRows, collectActivities, tallyAttendance, type AttendanceRow } from "@/app/lib/attendance";
 
 /**
  * Read-side helpers shared by the demo's handlers: the joins and roll-ups
@@ -11,55 +10,6 @@ import { attendanceRows, collectActivities, tallyAttendance, type AttendanceRow 
  */
 
 export const DAY_MS = 86_400_000;
-
-/**
- * Students' activities with their attendance from deadlines, as
- * loadActivityAttendance works it out over the real tables.
- */
-export function demoAttendanceRows(db: DemoDb, studentIds: readonly string[], now = Date.now()): AttendanceRow[] {
-  const ids = new Set(studentIds);
-  const scenarioTitle = new Map(db.scenarios.map((s) => [s.id, s.title]));
-  const scenarioKind = new Map(db.scenarios.map((s) => [s.id, s.kind ?? "patient_case"]));
-  const quizTitle = new Map(db.quizzes.map((q) => [q.id, q.title]));
-  const presentation = new Map(db.casePresentations.map((p) => [p.id, p]));
-  const scenarioAssignments = db.assignments.filter((a) => ids.has(a.student_id));
-  const assignmentIds = new Set(scenarioAssignments.map((a) => a.id));
-  const activities = collectActivities({
-    scenarioAssignments: scenarioAssignments.map((a) => ({
-      id: a.id,
-      student_id: a.student_id,
-      scenario_id: a.scenario_id,
-      title: scenarioTitle.get(a.scenario_id) ?? "Patient case",
-      kind: scenarioKind.get(a.scenario_id) ?? "patient_case",
-      deadline: a.deadline,
-    })),
-    completions: db.completions.filter((c) => assignmentIds.has(c.assignment_id)),
-    quizAssignments: db.quizAssignments
-      .filter((q) => ids.has(q.student_id))
-      .map((q) => ({
-        id: q.id,
-        student_id: q.student_id,
-        assessment_id: q.assessment_id,
-        title: quizTitle.get(q.assessment_id) ?? "Quiz",
-        deadline: q.deadline,
-        // Demo quizzes carry no deadline of their own.
-        default_deadline: null,
-      })),
-    attempts: db.attempts.filter((a) => ids.has(a.student_id)),
-    caseSubmissions: db.caseSubmissions
-      .filter((c) => ids.has(c.student_id))
-      .map((c) => ({
-        student_id: c.student_id,
-        presentation_id: c.presentation_id,
-        title: presentation.get(c.presentation_id)?.title ?? "Case presentation",
-        deadline: presentation.get(c.presentation_id)?.deadline ?? null,
-        submitted_at: c.submitted_at,
-      })),
-  });
-  // A store saved before excuses existed has none.
-  const excuses = (db.excuses ?? []).filter((e) => ids.has(e.student_id));
-  return attendanceRows(activities, excuses, now);
-}
 
 export function mean(values: number[]): number | null {
   if (values.length === 0) return null;
@@ -243,17 +193,14 @@ export function prediction(db: DemoDb, s: DemoUser) {
   const quiz = quizAverage(db, s.id) ?? 0;
   const cases = caseAverage(db, s.id) ?? 0;
   const overdue = db.assignments.filter((a) => a.student_id === s.id && a.status === "overdue").length;
-  // Activities done by their deadline (or late); nothing past one yet reads as full attendance.
-  const attendance = tallyAttendance(demoAttendanceRows(db, [s.id]).map((r) => r.status)).rate ?? 100;
   const daysInactive = Math.round((Date.now() - Date.parse(lastActivity(db, s.id) ?? new Date().toISOString())) / DAY_MS);
   const features = {
     avg_quiz_score: quiz,
     avg_scenario_score: cases,
     overdue_assignments: overdue,
-    attendance_rate: attendance,
     days_since_active: daysInactive,
   };
-  const cohort = { avg_quiz_score: 80, avg_scenario_score: 72, overdue_assignments: 0.2, attendance_rate: 92, days_since_active: 1 };
+  const cohort = { avg_quiz_score: 80, avg_scenario_score: 72, overdue_assignments: 0.2, days_since_active: 1 };
   const explanations = (Object.keys(features) as (keyof typeof features)[])
     .map((feature) => {
       const value = features[feature];

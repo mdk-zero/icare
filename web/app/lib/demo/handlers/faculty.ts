@@ -458,7 +458,6 @@ route("DELETE", "/api/faculty/students", (ctx) => {
   db.assignments = db.assignments.filter((a) => a.student_id !== student.id);
   db.quizAssignments = db.quizAssignments.filter((a) => a.student_id !== student.id);
   db.attempts = db.attempts.filter((a) => a.student_id !== student.id);
-  db.excuses = (db.excuses ?? []).filter((e) => e.student_id !== student.id);
   audit(db, ctx.viewer, "user.delete", "users", { message: `Deleted student ${student.name}` }, student.id);
   return { success: true };
 });
@@ -522,7 +521,7 @@ route("POST", "/api/faculty/students/:id/summary", async (ctx) => {
     summary: {
       overview: weak
         ? `${first} is behind the group: patient case grades average ${cases ?? "—"}% and quizzes ${quiz ?? "—"}%, with at least one case not handed in. The pattern is consistent rather than a single bad week, which is why the risk model flags ${first} as low performing.`
-        : `${first} is progressing well, averaging ${cases ?? "—"}% on graded patient cases and ${quiz ?? "—"}% on quizzes. Work is handed in on time and ward attendance is steady.`,
+        : `${first} is progressing well, averaging ${cases ?? "—"}% on graded patient cases and ${quiz ?? "—"}% on quizzes. Work is handed in on time.`,
       strengths: weak
         ? ["Attends most ward duties", "Vital sign technique is sound when supervised"]
         : ["Accurate, well-sequenced vital sign technique", "Consistent quiz performance across skill areas", "Hands in patient cases on time"],

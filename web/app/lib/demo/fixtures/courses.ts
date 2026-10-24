@@ -168,8 +168,6 @@ export function seedCourses(input: { users: DemoUser[]; casePresentations: DemoC
       { kind: "skill", skill_id: "1-4", min_score: 50 },
       { kind: "skill", skill_id: "1-6", min_score: 50 },
       { kind: "skill", skill_id: "1-7", min_score: 50 },
-      // Each group has had four ward duties so far.
-      { kind: "count", activity_type: "shift", target_count: 4 },
       { kind: "manual", title: "Head-to-toe assessment check-off, signed by the clinical instructor" },
       { kind: "manual", manual_type: "exam", title: "Midterm written exam" },
     ]),
@@ -261,8 +259,8 @@ export function seedCourses(input: { users: DemoUser[]; casePresentations: DemoC
   ];
 
   // Both running courses come graded Written Exams 30 / Laboratory & Skills 70,
-  // every item that takes a score filed; attendance never counts. Last
-  // semester's run was weighted its own way, and its grades are final.
+  // every item filed. Last semester's run was weighted its own way, and its
+  // grades are final.
   let splitN = 0;
   const sid = () => demoId(KIND.misc, 700 + ++splitN);
   const itemIds = (offeringId: string, match: (r: DemoRequirement) => boolean) =>

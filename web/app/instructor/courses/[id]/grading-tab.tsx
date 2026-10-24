@@ -25,7 +25,6 @@ import {
   GRADING_NEEDS_MIGRATION,
   settle,
   fileItem,
-  isGradeable,
   itemShares,
   leafOf,
   parseGrading,
@@ -236,7 +235,7 @@ export default function GradingTab({
   }
 
   const readOnly = locked || saving;
-  // Ids no longer on the checklist, or turned into attendance, are dropped, so a stale one can't block saving.
+  // Ids no longer on the checklist are dropped, so a stale one can't block saving.
   const parsed = parseGrading(settle(draft, requirements), requirements);
   const problem = parsed.ok ? null : parsed.error;
   const partsTotal = total(draft.parts);
@@ -256,8 +255,7 @@ export default function GradingTab({
       parts: [...draft.parts, { id: newId(), name: "", weight: Math.max(0, round(100 - partsTotal)), items: [], components: [] }],
     });
 
-  const unfiled = ordered.filter((r) => isGradeable(r) && leafOf(draft, r.id) === null);
-  const attendance = ordered.filter((r) => !isGradeable(r));
+  const unfiled = ordered.filter((r) => leafOf(draft, r.id) === null);
 
   const rowActions = (r: CourseRequirement): MenuAction[] => [
     { label: "Edit", icon: faPenToSquare, onClick: () => onEditItem(r) },
@@ -459,15 +457,14 @@ export default function GradingTab({
         </button>
       )}
 
-      {(unfiled.length > 0 || attendance.length > 0 || !locked) && (
+      {(unfiled.length > 0 || !locked) && (
         <ChecklistSection
           title="Not counted in the grade"
-          items={[...unfiled, ...attendance]}
+          items={unfiled}
           names={names}
           locked={locked}
           onNew={() => onNewItem(null)}
           actionsFor={plainActions}
-          noteFor={(r) => (isGradeable(r) ? undefined : "No score, so it can't count")}
         />
       )}
 

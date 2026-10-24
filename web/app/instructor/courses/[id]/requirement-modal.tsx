@@ -32,7 +32,7 @@ import {
   type RequirementKind,
   type RequirementTopicKey,
 } from "../../../lib/course-progress";
-import { gradingLeaves, isGradeable, leafOf, type GradingSplit } from "../../../lib/course-grading";
+import { gradingLeaves, leafOf, type GradingSplit } from "../../../lib/course-grading";
 import { PASSING_SCORE } from "../../../lib/reports/data";
 import { EcgLoader } from "../../../components/EcgLoader";
 import { loadingToast } from "../../../components/Toast";
@@ -40,7 +40,7 @@ import { loadingToast } from "../../../components/Toast";
 /** Manual items come as two cards, told apart by manualType. */
 const KINDS: { kind: RequirementKind; manualType?: ManualType; label: string; hint: string; icon: IconDefinition }[] = [
   { kind: "activity", label: "Specific activity", hint: "One Patient Case, Quiz or Case Presentation", icon: faClipboardCheck },
-  { kind: "count", label: "Count", hint: "A number of graded activities, or activities attended", icon: faHashtag },
+  { kind: "count", label: "Count", hint: "A number of graded activities", icon: faHashtag },
   {
     kind: "skill",
     label: "Skill",
@@ -57,7 +57,7 @@ const KINDS: { kind: RequirementKind; manualType?: ManualType; label: string; hi
   { kind: "manual", manualType: "exam", label: "Written Exam", hint: "A paper exam; you enter each score", icon: faFilePen },
 ];
 
-const ACTIVITY_TYPES: { type: Exclude<ActivityType, "shift">; label: string }[] = [
+const ACTIVITY_TYPES: { type: ActivityType; label: string }[] = [
   { type: "scenario", label: "Patient Case" },
   { type: "assessment", label: "Quiz" },
   { type: "case_presentation", label: "Case Presentation" },
@@ -67,7 +67,6 @@ const COUNT_TYPES: { type: ActivityType; label: string }[] = [
   { type: "scenario", label: "Patient Cases graded" },
   { type: "assessment", label: "Quizzes completed" },
   { type: "case_presentation", label: "Case Presentations graded" },
-  { type: "shift", label: "Activities attended" },
 ];
 
 const inputClass =
@@ -167,7 +166,6 @@ export default function RequirementModal({
     setKind(next);
     setError(null);
     if (next === "count" && activityType === "assessment" && minScore === "") setMinScore(String(PASSING_SCORE));
-    if (next === "activity" && activityType === "shift") pickType("scenario");
   };
 
   const link = {
@@ -176,7 +174,6 @@ export default function RequirementModal({
     case_presentation: "presentation_id",
     // Only ever an automatic item (072); never picked here.
     return_demo: "scenario_id",
-    shift: null,
   }[activityType];
   const body: Record<string, unknown> = {
     kind,
@@ -187,12 +184,11 @@ export default function RequirementModal({
     skills_only: skillsOnly,
     skill_id: skillId,
     manual_type: manualType,
-    ...(link ? { [link]: activityId } : {}),
+    [link]: activityId,
   };
   const parsed = parseRequirement(body);
   const leaves = gradingLeaves(grading);
-  // Attendance has no score, so it never counts toward the grade.
-  const showLeaf = leaves.length > 0 && isGradeable({ kind, activity_type: activityType });
+  const showLeaf = leaves.length > 0;
 
   const options =
     activityType === "scenario"
@@ -387,7 +383,7 @@ export default function RequirementModal({
                   </select>
                 </div>
               </div>
-              {activityType !== "shift" && <ScoreField value={minScore} onChange={setMinScore} disabled={saving} />}
+              <ScoreField value={minScore} onChange={setMinScore} disabled={saving} />
               {(activityType === "scenario" || activityType === "assessment") && (
                 <label className="flex cursor-pointer items-start gap-2.5 text-sm text-gray-700">
                   <input

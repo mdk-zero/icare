@@ -53,7 +53,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Choose at least one student' }, { status: 400 });
   }
 
-  // Every activity has a deadline: it is what attendance is measured against.
+  // Every activity has a deadline: it is what late and overdue work is measured against.
   const deadlineCheck = parseDeadline(deadline);
   if (!deadlineCheck.ok) return NextResponse.json({ error: deadlineCheck.error }, { status: 400 });
   const parsedDeadline = new Date(deadlineCheck.value as string);

@@ -29,7 +29,7 @@ const SUITES: [string, string][] = [
   ["faculty", "dashboard lists students needing attention"],
   ["faculty", "grades a patient case and saves the score"],
   ["faculty", "asks the dean before changing a saved grade"],
-  ["faculty", "excuses an absence"],
+  ["faculty", "enters a score on a course requirement"],
   ["faculty", "publishes a quiz once criteria total 100%"],
   ["admin", "assigns groups to an instructor"],
   ["admin", "renames a section and retargets quizzes"],
@@ -37,7 +37,7 @@ const SUITES: [string, string][] = [
   ["super-admin", "creates a dean account"],
   ["super-admin", "resets a password"],
   ["reports", "builds a student report PDF"],
-  ["reports", "builds a section attendance PDF"],
+  ["reports", "builds a section report PDF"],
 ];
 
 export function seedSystem() {
@@ -115,7 +115,7 @@ export function seedSystem() {
       name,
       status: failing && i === 6 ? "failed" : "passed",
       duration_ms: 800 + ((i * 613) % 4200),
-      error: failing && i === 6 ? "Timed out waiting for the attendance tab to render" : null,
+      error: failing && i === 6 ? "Timed out waiting for the score dialog to render" : null,
     }));
     runs.push({
       id: id(),

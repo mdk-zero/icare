@@ -1,8 +1,8 @@
 /**
  * Behavioural checks for the grading split (app/lib/course-grading.ts): the
- * rules a split must keep (weights adding up, items only on leaves, never
- * attendance), the weighted grade with per-level rescaling, and the helpers
- * the routes and the Grading tab use.
+ * rules a split must keep (weights adding up, items only on leaves), the
+ * weighted grade with per-level rescaling, and the helpers the routes and the
+ * Grading tab use.
  * There is no test runner in this repo.
  *
  *   npx tsx scripts/check-course-grading.ts
@@ -24,7 +24,6 @@ import {
   gradingLeaves,
   gradingSignature,
   gradingSummary,
-  isGradeable,
   leafOf,
   parseGradeLeaf,
   parseGrading,
@@ -93,9 +92,8 @@ const item = (over: Partial<ItemProgress> = {}): ItemProgress => ({
 const quizA = req({ kind: 'activity', activity_type: 'assessment', assessment_id: 'qa' });
 const quizB = req({ kind: 'activity', activity_type: 'assessment', assessment_id: 'qb' });
 const lab = req({ kind: 'manual', title: 'Return demo' });
-const shifts = req({ kind: 'count', activity_type: 'shift', target_count: 4 });
 const quizzes = req({ kind: 'count', activity_type: 'assessment', target_count: 3 });
-const reqs = [quizA, quizB, lab, shifts, quizzes];
+const reqs = [quizA, quizB, lab, quizzes];
 const split = (): GradingSplit => ({
   parts: [
     {
@@ -138,15 +136,6 @@ eq(
   'count with no work is unscored, not 0',
   computeGrades(withCount, reqs, { S: { [quizzes.id]: item({ avg_score: null }) } }).grades.S?.parts.L,
   null,
-);
-const withShift = split();
-withShift.parts[1].items = [lab.id, shifts.id];
-eq(
-  'filed shift count ignored',
-  computeGrades(withShift, reqs, {
-    S: { [lab.id]: item({ best_score: 85 }), [shifts.id]: item({ current: 1, target: 4 }) },
-  }).grades.S?.parts.L,
-  85,
 );
 const withStale = split();
 withStale.parts[1].items = [lab.id, 'gone'];
@@ -193,9 +182,6 @@ eq('filed twice', err(sDup), 'An item is filed twice');
 const sUnknown = split();
 sUnknown.parts[1].items = ['nope'];
 eq('unknown item', err(sUnknown), "An item isn't on this checklist");
-const sShift = split();
-sShift.parts[1].items = [shifts.id];
-eq('shift refused', err(sShift), "Attendance has no score, so it can't count toward the grade");
 const sBlank = split();
 sBlank.parts[0].name = '  ';
 eq('blank name', err(sBlank), 'Every part and component needs a name');
@@ -227,11 +213,6 @@ eq('leafOf', leafOf(split(), quizA.id), 'M');
 eq('leaf problem: split part', gradeLeafProblem(split(), 'W'), '"Written Exams" has components; pick one of them');
 eq('leaf problem: unknown', gradeLeafProblem(split(), 'zzz'), 'That grading component no longer exists. Reload and try again.');
 eq('refile moves', leafOf(refile(split(), quizA, 'F'), quizA.id), 'F');
-eq(
-  'refile unfiles attendance',
-  leafOf(refile({ ...split(), parts: [{ ...split().parts[0] }, { ...split().parts[1], items: [shifts.id] }] }, shifts, 'L'), shifts.id),
-  null,
-);
 eq('refile undefined leaves it', gradingSignature(refile(split(), quizA, undefined)), gradingSignature(split()));
 const added = addComponent(split(), 'L', { id: 'R', name: 'Return demos', weight: 70, items: [] });
 eq('first component takes the part items', [added.parts[1].items, added.parts[1].components[0].items], [[], [lab.id]]);
@@ -296,8 +277,8 @@ eq('…and keep their old base, so saving them is refused', kept.base, gradingSi
 
 console.log('item changes during unsaved edits');
 const sSettle = split();
-sSettle.parts[1].items = [lab.id, shifts.id, 'gone', quizzes.id];
-eq('settle drops removed and attendance ids, keeps order', settle(sSettle, reqs)?.parts[1].items, [lab.id, quizzes.id]);
+sSettle.parts[1].items = [lab.id, 'gone', quizzes.id];
+eq('settle drops removed ids, keeps order', settle(sSettle, reqs)?.parts[1].items, [lab.id, quizzes.id]);
 eq('settle keeps null', settle(null, reqs), null);
 eq('startDraft remembers where it began', startDraft(oldSplit).from, oldSplit);
 eq('a clean draft adopting the server moves from', followServer(clean, newSplit).from, newSplit);
@@ -310,10 +291,6 @@ eq("after a removal, a dirty draft saves against the server's new split", saveBa
 check('a dirty draft holding a removed item still parses', parseGrading(settle(dirty.draft, reqsAfter), reqsAfter).ok);
 const elsewhere: GradingSplit = { parts: [before.parts[0], { ...before.parts[1], name: 'Lab' }] };
 check('a change made elsewhere still differs', saveBase(dirty, reqs) !== gradingSignature(elsewhere));
-const toShift: RequirementRow = { ...quizB, kind: 'count', activity_type: 'shift', target_count: 4, assessment_id: null };
-const reqsShift = reqs.map((r) => (r.id === quizB.id ? toShift : r));
-eq('an item turned into attendance: the save base matches the server', saveBase(dirty, reqsShift), gradingSignature(refile(before, toShift, undefined)));
-eq('…and the dirty draft unfiles it', leafOf(afterItemSaved(dirty, toShift, 'F').draft, quizB.id), null);
 const fresh = req({ kind: 'manual', title: 'Final exam', manual_type: 'exam' });
 const withNew = { ...dirty, draft: addComponent(dirty.draft!, 'W', { id: 'X', name: 'Practical', weight: 0, items: [] }) };
 eq('a new item lands in an unsaved component', leafOf(afterItemSaved(withNew, fresh, 'X').draft, fresh.id), 'X');
@@ -339,7 +316,7 @@ for (const o of demoSplits) {
   const items = demo.requirements.filter((r) => r.offering_id === o.id);
   const parsedDemo = parseGrading(o.grading, items);
   check(`demo ${o.id} split is valid`, parsedDemo.ok, parsedDemo.ok ? '' : parsedDemo.error);
-  eq(`demo ${o.id} files every gradeable item`, items.filter((r) => isGradeable(r) && leafOf(o.grading ?? null, r.id) === null).length, 0);
+  eq(`demo ${o.id} files every item`, items.filter((r) => leafOf(o.grading ?? null, r.id) === null).length, 0);
   check(`demo ${o.id} has a Written Exam`, items.some((r) => r.manual_type === 'exam'));
 }
 const examIds = new Set(demo.requirements.filter((r) => r.manual_type === 'exam').map((r) => r.id));

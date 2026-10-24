@@ -5,8 +5,7 @@ import { ReportShell, StatGrid, Table, type ReportDocument, type ReportMeta } fr
 import { CASE_CRITERIA } from "../case-rubric";
 import { ratingLabel } from "../task-ratings";
 import type { DemoContext } from "./router";
-import { caseAverage, demoAttendanceRows, lastActivity, mean, quizAverage, submittedAttempts } from "./handlers/derive";
-import { activityLabel, byActivity, tallyAttendance } from "../attendance";
+import { caseAverage, lastActivity, mean, quizAverage, submittedAttempts } from "./handlers/derive";
 import { sectionName, teamLabel as teamLabelUi, userById, visibleSections, visibleStudents } from "./handlers/scope";
 import { DEMO_INSTITUTION } from "./fixtures/school";
 import { roleLabel } from "../role-labels";
@@ -63,7 +62,6 @@ function studentReport(ctx: Ctx, id: string): Built {
   const cases = work.filter((a) => !demos.has(a.scenario_id));
   const returnDemos = work.filter((a) => demos.has(a.scenario_id));
   const attempts = submittedAttempts(db, id);
-  const attendance = tallyAttendance(demoAttendanceRows(db, [id]).map((r) => r.status));
   return {
     subject: s.name,
     doc: (
@@ -76,7 +74,6 @@ function studentReport(ctx: Ctx, id: string): Built {
           { label: "Patient case average", value: pct(caseAverage(db, id)) },
           { label: "Quiz average", value: pct(quizAverage(db, id)) },
           { label: "Cases graded", value: cases.filter((a) => a.status === "completed").length },
-          { label: "Attendance", value: pct(attendance.rate) },
         ]} />
         <H>Patient cases</H>
         <Table head={["Case", "Status", "Score", "Deadline"]} widths={[4, 1.4, 1, 1.4]} rows={cases.map((a) => [
@@ -196,46 +193,6 @@ function rosterReport(ctx: Ctx): Built {
         ]} />
         <H>Every student</H>
         <Table head={["Student", "Section / group", "Cases", "Quizzes"]} widths={[3, 2.4, 1, 1]} rows={students.map((s) => [s.name, teamLabel(db, s.team_id) ?? "—", pct(caseAverage(db, s.id)), pct(quizAverage(db, s.id))])} />
-      </Shell>
-    ),
-  };
-}
-
-function attendanceReport(ctx: Ctx, id: string): Built {
-  const { db } = ctx;
-  const name = sectionName(db, id);
-  if (!name) return { error: "Not found", status: 404 };
-  const students = visibleStudents(db, ctx.role, ctx.viewer.id).filter((s) => s.section_id === id);
-  const rows = demoAttendanceRows(db, students.map((s) => s.id));
-  const tallyOf = (sid: string) => tallyAttendance(rows.filter((r) => r.student_id === sid).map((r) => r.status));
-  const section = tallyAttendance(rows.map((r) => r.status));
-  const activities = byActivity(rows);
-  return {
-    subject: name,
-    doc: (
-      <Shell ctx={ctx} title={`Attendance — ${name}`} heading="Attendance Report" rows={[
-        { label: "Section", value: name },
-        { label: "Students", value: String(students.length) },
-        { label: "Activities", value: String(activities.length) },
-        { label: "Section attendance", value: section.rate === null ? "Nothing past its deadline yet" : `${section.rate}%` },
-      ]}>
-        <StatGrid items={[
-          { label: "Present", value: section.present },
-          { label: "Late", value: section.late },
-          { label: "Absent", value: section.absent },
-          { label: "Excused", value: section.excused },
-          { label: "Upcoming", value: rows.filter((r) => r.status === "upcoming").length },
-        ]} />
-        <H>Attendance by student</H>
-        <Table head={["Student", "Present", "Late", "Absent", "Excused", "Rate"]} widths={[3, 1, 1, 1, 1, 1]} rows={students.map((s) => {
-          const t = tallyOf(s.id);
-          return [s.name, t.present, t.late, t.absent, t.excused, t.rate === null ? "—" : `${t.rate}%`];
-        })} />
-        <H>By activity</H>
-        <Table head={["Activity", "Due", "Present", "Late", "Absent", "Excused"]} widths={[3, 1.6, 1, 1, 1, 1]} rows={activities.map((a) => [
-          activityLabel(a.kind, a.title, a.scenario_kind), date(a.deadline), a.tally.present, a.tally.late, a.tally.absent, a.tally.excused,
-        ])} />
-        <Text style={note}>Rate counts present and late as attended. Excused and upcoming activities are left out of the rate.</Text>
       </Shell>
     ),
   };
@@ -393,7 +350,6 @@ const BUILDERS: Record<string, (ctx: Ctx, id: string) => Built> = {
   scenario: scenarioReport,
   assessment: assessmentReport,
   roster: (ctx) => rosterReport(ctx),
-  attendance: attendanceReport,
   case: caseReport,
   discharge: dischargeReport,
   faculty: facultyReport,
