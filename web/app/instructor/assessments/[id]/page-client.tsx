@@ -465,7 +465,9 @@ export default function AssessmentQuestionsClient({
     const form = questionBuilders[qId];
     if (!form) return false;
 
-    const filledOptions = form.options.filter((o) => o.trim().length > 0);
+    // True / False draws its own two choices, so the typed options (left over from multiple choice) don't count.
+    const filledOptions =
+      form.question_type === "true_false" ? ["True", "False"] : form.options.filter((o) => o.trim().length > 0);
     if (!form.content.trim() || filledOptions.length < 2) {
       toast("Question needs content and at least two options");
       return false;
