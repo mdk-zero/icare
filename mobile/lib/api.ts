@@ -306,7 +306,9 @@ export interface AttemptQuestion {
   id: string;
   position: number;
   content: string;
+  /** The choices; empty for identification, where the student types the answer. */
   options: string[];
+  question_type?: string;
 }
 
 export interface StartedAttempt {
@@ -341,12 +343,20 @@ export interface AttemptResult {
     correct_index: number;
     is_correct: boolean;
     explanation: string;
+    /** Identification only: what the student typed, and the answer it was checked against. */
+    answer_text?: string | null;
+    accepted_answer?: string | null;
   }[];
 }
 
 export async function submitAttempt(
   attemptId: string,
-  answers: { question_id: string; selected_index: number | null; time_spent_seconds?: number }[],
+  answers: {
+    question_id: string;
+    selected_index: number | null;
+    answer_text?: string | null;
+    time_spent_seconds?: number;
+  }[],
 ): Promise<AttemptResult> {
   return api<AttemptResult>(`/api/student/attempts/${attemptId}/submit`, {
     method: 'POST',

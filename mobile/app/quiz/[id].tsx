@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert, AppState } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert, AppState, TextInput } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { setStatusBarHidden } from 'expo-status-bar';
@@ -180,7 +180,8 @@ export default function QuizInterfaceScreen() {
   const [loadBlocked, setLoadBlocked] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   // question_id -> selected option index (null = unanswered)
-  const [answers, setAnswers] = useState<Record<string, number>>({});
+  /** A choice's index, or the typed answer for an identification question. */
+  const [answers, setAnswers] = useState<Record<string, number | string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<AttemptResult | null>(null);
   const [finishedAt, setFinishedAt] = useState<Date | null>(null);
@@ -252,7 +253,7 @@ export default function QuizInterfaceScreen() {
   const answeredCount = Object.keys(answers).length;
 
   const doSubmit = useCallback(
-    async (answersToSend: Record<string, number>) => {
+    async (answersToSend: Record<string, number | string>) => {
       // A ref, not just state: the app-switch handler can fire twice before a re-render.
       if (!started || submittingRef.current) return;
       submittingRef.current = true;
@@ -262,7 +263,8 @@ export default function QuizInterfaceScreen() {
           started.attempt.id,
           started.questions.map((q) => ({
             question_id: q.id,
-            selected_index: answersToSend[q.id] ?? null,
+            selected_index: typeof answersToSend[q.id] === 'number' ? (answersToSend[q.id] as number) : null,
+            answer_text: typeof answersToSend[q.id] === 'string' ? (answersToSend[q.id] as string) : null,
           })),
         );
         setResult(graded);
@@ -385,6 +387,25 @@ export default function QuizInterfaceScreen() {
       if (!prev.has(currentQuestion.id)) return prev;
       const next = new Set(prev);
       next.delete(currentQuestion.id);
+      return next;
+    });
+  };
+
+  /** The typed answer to an identification question; a blank one counts as unanswered. */
+  const handleType = (text: string) => {
+    if (!currentQuestion) return;
+    const qid = currentQuestion.id;
+    setAnswers((prev) => {
+      if (text.trim()) return { ...prev, [qid]: text };
+      if (!(qid in prev)) return prev;
+      const next = { ...prev };
+      delete next[qid];
+      return next;
+    });
+    setSkipped((prev) => {
+      if (!prev.has(qid)) return prev;
+      const next = new Set(prev);
+      next.delete(qid);
       return next;
     });
   };
@@ -591,7 +612,7 @@ export default function QuizInterfaceScreen() {
                 <Card key={q.id} style={styles.reviewCard}>
                   <View style={styles.reviewHeader}>
                     <Text style={styles.reviewNumber}>Q{idx + 1}</Text>
-                    {verdict.selected_index === null ? (
+                    {verdict.selected_index === null && !verdict.answer_text ? (
                       <Text style={[styles.skippedTag, { color: Accent.amber.fg, backgroundColor: Accent.amber.bg }]}>
                         Skipped
                       </Text>
@@ -600,6 +621,18 @@ export default function QuizInterfaceScreen() {
                     )}
                   </View>
                   <Text style={styles.reviewQuestion}>{q.content}</Text>
+                  {verdict.accepted_answer != null && (
+                    <>
+                      {verdict.answer_text ? (
+                        <View style={[styles.reviewOption, styles.reviewOptionWrong]}>
+                          <Text style={[styles.reviewOptionText, { color: Accent.red.fg }]}>✗ {verdict.answer_text}</Text>
+                        </View>
+                      ) : null}
+                      <View style={[styles.reviewOption, styles.reviewOptionCorrect]}>
+                        <Text style={[styles.reviewOptionText, { color: Accent.green.fg }]}>✓ {verdict.accepted_answer}</Text>
+                      </View>
+                    </>
+                  )}
                   {q.options.map((option, optIdx) => {
                     const isCorrect = optIdx === verdict.correct_index;
                     const isChosen = optIdx === verdict.selected_index;
@@ -640,7 +673,9 @@ export default function QuizInterfaceScreen() {
     );
   }
 
-  const selectedIndex = answers[currentQuestion.id] ?? null;
+  const currentAnswer = answers[currentQuestion.id];
+  const selectedIndex = typeof currentAnswer === 'number' ? currentAnswer : null;
+  const isIdentification = currentQuestion.question_type === 'short_answer';
 
   return (
     <ScrollView
@@ -679,7 +714,7 @@ export default function QuizInterfaceScreen() {
             iconAfter
             filled
             onPress={handleNext}
-            disabled={submitting || (selectedIndex === null && !isLastQuestion)}
+            disabled={submitting || (currentAnswer === undefined && !isLastQuestion)}
             Palette={Palette}
           />
         </View>
@@ -709,6 +744,22 @@ export default function QuizInterfaceScreen() {
         <Text style={styles.questionNumber}>Question {currentIndex + 1}</Text>
         <Text style={styles.questionText}>{currentQuestion.content}</Text>
       </Card>
+
+      {isIdentification && (
+        <View style={styles.options}>
+          <TextInput
+            key={currentQuestion.id}
+            value={typeof currentAnswer === 'string' ? currentAnswer : ''}
+            onChangeText={handleType}
+            placeholder="Type your answer"
+            placeholderTextColor={Palette.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            maxLength={200}
+            style={[styles.option, styles.answerInput, typeof currentAnswer === 'string' && styles.optionSelected]}
+          />
+        </View>
+      )}
 
       <View style={styles.options}>
         {currentQuestion.options.map((option, index) => {
@@ -778,6 +829,7 @@ function createStyles(
     borderColor: Palette.border,
   },
   optionSelected: { borderColor: Palette.primary, backgroundColor: Palette.primaryTint },
+  answerInput: { fontSize: 16, color: Palette.ink },
   optionText: { fontSize: 14, color: Palette.ink, flex: 1, lineHeight: 20 },
   answeredText: { fontSize: 12, color: Palette.textMuted, marginBottom: Spacing.xl },
   strictBar: {

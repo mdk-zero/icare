@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { SHORT_ANSWER } from './short-answer';
 
 /**
  * Picks the questions one attempt serves.
@@ -34,7 +35,9 @@ export interface SelectedQuestion {
   id: string;
   criteria_id: string | null;
   content: string;
+  /** The choices; empty for a short answer question, whose accepted answers stay on the server. */
   options: string[];
+  question_type: string;
   /** 0-based order within this attempt. */
   position: number;
 }
@@ -75,7 +78,15 @@ interface QuestionRow {
   position: number;
   content: string;
   options: unknown;
+  question_type: string | null;
   criteria_id: string | null;
+}
+
+/** What a student is shown of a question's options: none for short answer, which would give the answer away. */
+function servedChoices(q: { options: unknown; question_type: string | null }) {
+  const question_type = q.question_type || 'multiple_choice';
+  const options = question_type === SHORT_ANSWER || !Array.isArray(q.options) ? [] : (q.options as string[]);
+  return { options, question_type };
 }
 
 interface CriterionRow {
@@ -108,7 +119,7 @@ export async function loadServedQuestions(
 
   const { data: questions } = await supabase
     .from('questions')
-    .select('id, content, options')
+    .select('id, content, options, question_type')
     .in(
       'id',
       served.map((s) => s.question_id),
@@ -123,7 +134,7 @@ export async function loadServedQuestions(
         id: question.id,
         criteria_id: row.criteria_id,
         content: question.content,
-        options: Array.isArray(question.options) ? (question.options as string[]) : [],
+        ...servedChoices(question),
         position: index,
       } satisfies SelectedQuestion;
     })
@@ -245,7 +256,7 @@ export async function selectQuestionsForAttempt(
       .order('sort_order', { ascending: true }),
     supabase
       .from('questions')
-      .select('id, position, content, options, criteria_id')
+      .select('id, position, content, options, question_type, criteria_id')
       .eq('assessment_id', assessmentId)
       .order('position', { ascending: true }),
   ]);
@@ -375,7 +386,7 @@ export async function selectQuestionsForAttempt(
       id: q.id,
       criteria_id: q.criteria_id,
       content: q.content,
-      options: Array.isArray(q.options) ? (q.options as string[]) : [],
+      ...servedChoices(q),
       position: index,
     })),
     allocations: buckets.map((bucket, i) => ({
