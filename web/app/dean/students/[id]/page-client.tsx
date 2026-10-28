@@ -28,6 +28,7 @@ import StatTile from "../../../components/StatTile";
 import PageHeader from "../../../components/PageHeader";
 import { SendAppLinkButton } from "../../../components/AppLink";
 import { usePageData } from "../../../lib/use-page-data";
+import { studentsViewHref } from "../../../lib/students-view";
 import {
   SkeletonProfileHeader,
   SkeletonRiskPredictionCard,
@@ -171,7 +172,7 @@ export default function StudentDetailClient() {
       <div className="flex flex-col items-center justify-center h-96">
         <p className="text-gray-500">Student not found</p>
         <button
-          onClick={() => router.push("/dean/student-management")}
+          onClick={() => router.push(studentsViewHref("dean"))}
           className="mt-4 px-4 py-2 text-brand-600 font-medium"
         >
           Back to Students
@@ -193,7 +194,7 @@ export default function StudentDetailClient() {
 
       <div className="mb-4">
         <button
-          onClick={() => router.push("/dean/student-management")}
+          onClick={() => router.push(studentsViewHref("dean"))}
           className="inline-flex items-center gap-2 px-3 py-2 bg-surface border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all"
         >
           <FontAwesomeIcon icon={faArrowLeft} className="w-3.5 h-3.5" />

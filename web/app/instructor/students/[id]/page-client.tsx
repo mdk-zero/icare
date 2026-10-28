@@ -67,6 +67,7 @@ import {
   matchesFilter,
   type Filter,
 } from "../../scenarios/review/assignment-list";
+import { studentsViewHref } from '../../../lib/students-view';
 
 /** Shown in turn while the summary is written, following what it draws on. */
 const STUDENT_SUMMARY_PHRASES = [
@@ -501,7 +502,7 @@ export default function StudentDetailClient() {
   const backRow = (
     <div className="mb-4 flex items-center justify-between gap-4">
       <button
-        onClick={() => router.push('/instructor/teams')}
+        onClick={() => router.push(studentsViewHref('instructor'))}
         className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
       >
         <FontAwesomeIcon icon={faChevronLeft} className="w-5 h-5" />
@@ -536,7 +537,7 @@ export default function StudentDetailClient() {
       <div className="flex flex-col items-center justify-center h-96">
         <p className="text-gray-500">Student not found</p>
         <button 
-          onClick={() => router.push('/instructor/teams')}
+          onClick={() => router.push(studentsViewHref('instructor'))}
           className="mt-4 px-4 py-2 text-brand-600 font-medium"
         >
           Back to Students

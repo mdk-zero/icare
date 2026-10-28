@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPeopleGroup,
@@ -41,6 +41,13 @@ import RegisterStudentModal from "../../components/enroll/RegisterStudentModal";
 import BulkEnrollModal from "../../components/enroll/BulkEnrollModal";
 import { AppLinkCard } from "../../components/AppLink";
 import { isStudentDrag, leftTarget, readStudentDrag, startStudentDrag } from "../../dean/student-management/drag";
+import {
+  RosterModeToggle,
+  bucketByGroup,
+  GroupHeadingRow,
+  type GroupBucket,
+} from "../../dean/student-management/roster-view";
+import { rememberStudentsView, studentsHref } from "../../lib/students-view";
 
 /** Long enough to read a sentence with numbers in it. */
 const ML_TOAST_MS = 8000;
@@ -129,8 +136,17 @@ export default function TeamsClient() {
   const { data: overview, loading: loadingTeams, refresh: refreshTeams } = usePageData("faculty:teams", fetchFacultyTeams);
   const { data: roster, refresh: refreshRoster } = usePageData("faculty:students", () => fetchFacultyStudents());
 
-  const [courseId, setCourseId] = useState<string | null>(null);
-  const [sectionId, setSectionId] = useState<string | null>(null);
+  // The open course, section and mode live in the URL, so Back from a
+  // student's profile returns to the same roster.
+  const params = useSearchParams();
+  const courseId = params.get("course");
+  const sectionId = params.get("section");
+  const editing = params.get("view") === "groups";
+  const showRoster = (view: { course: string | null; section?: string | null; editing?: boolean }) =>
+    window.history.replaceState(null, "", studentsHref("instructor", view));
+  useEffect(() => {
+    rememberStudentsView("instructor", studentsHref("instructor", { course: courseId, section: sectionId, editing }));
+  }, [courseId, sectionId, editing]);
   const [query, setQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [registering, setRegistering] = useState(false);
@@ -213,28 +229,38 @@ export default function TeamsClient() {
     ? (shownOverview?.teams ?? []).filter((t) => t.section_id === section.id).sort(byName)
     : [];
   const hasGroups = sectionGroups.length > 0;
+  // Editing a grouped section, the table is who is left to drag onto a card.
+  const placing = editing && hasGroups;
   // New students go into one of the instructor's own groups here (the
   // students API needs one), so they land on their roster.
   const enrollGroups = sectionGroups.map((t) => ({ id: t.id, name: t.name, size: t.members.length }));
   const enrollBlocked = enrollGroups.length === 0 ? "Make a group in this section first; new students join one of your groups." : undefined;
-  // The section's students in no group, as searched and filtered.
-  const tableStudents = sectionStudents.filter(
-    (s) =>
-      !s.team_id &&
-      matchesFilter(s.id) &&
-      (!q || s.name.toLowerCase().includes(q) || (details.get(s.id)?.email ?? "").toLowerCase().includes(q)),
-  );
+  const shows = (s: Member) =>
+    matchesFilter(s.id) &&
+    (!q || s.name.toLowerCase().includes(q) || (details.get(s.id)?.email ?? "").toLowerCase().includes(q));
+  // Editing, the table is the section's students in no group; otherwise it is
+  // all of them, under a heading per group. Either way, as searched and filtered.
+  const tableStudents = sectionStudents.filter((s) => (!editing || !s.team_id) && shows(s));
+  const showGroupHeadings = !editing && hasGroups;
+  const tableBuckets: GroupBucket<Member>[] = showGroupHeadings
+    ? bucketByGroup(sectionStudents, sectionGroups, shows)
+    : [{ group: null, total: tableStudents.length, rows: tableStudents }];
 
+  const openProfile = (id: string) => router.push(`/instructor/students/${id}`);
   const openCourse = (id: string | null) => {
-    setCourseId(id);
-    setSectionId(null);
+    showRoster({ course: id });
     setSelectedIds(new Set());
     setQuery("");
   };
   const openSection = (id: string | null) => {
-    setSectionId(id);
+    showRoster({ course: courseId, section: id });
     setSelectedIds(new Set());
     setQuery("");
+  };
+  /** The two modes' tables hold different students, so switching drops the selection too. */
+  const setEditing = (next: boolean) => {
+    showRoster({ course: courseId, section: sectionId, editing: next });
+    setSelectedIds(new Set());
   };
 
   // Word-style picking: click one, Ctrl/Cmd+click to add, Shift+click for a run; Esc clears.
@@ -456,7 +482,7 @@ export default function TeamsClient() {
           </div>
         </>
       ) : (
-        // 3. One section: its groups, then who is in none
+        // 3. One section: its students under their groups, or the groups to edit
         <>
           <div className="mb-4 flex flex-wrap items-center gap-3">
             <button
@@ -472,21 +498,8 @@ export default function TeamsClient() {
             </span>
           </div>
 
-          <SectionGroups
-            sectionId={section.id}
-            studentCount={sectionStudents.length}
-            overview={shownOverview}
-            onChanged={refreshTeams}
-            pendingIds={pendingMoves}
-            onMove={moveStudents}
-            canAssignInstructor={false}
-          />
-
-          <div className="mb-2 mt-2 flex flex-wrap items-center justify-between gap-3">
-            <h3 className="font-display text-base font-semibold text-gray-900">
-              {hasGroups ? "Not in a group" : "Students"}{" "}
-              <span className="text-sm font-normal text-gray-400">({tableStudents.length})</span>
-            </h3>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <RosterModeToggle editing={editing} onChange={setEditing} />
             <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setBulkEnrolling(true)}
@@ -509,6 +522,24 @@ export default function TeamsClient() {
             </div>
           </div>
 
+          {editing && (
+            <>
+              <SectionGroups
+                sectionId={section.id}
+                studentCount={sectionStudents.length}
+                overview={shownOverview}
+                onChanged={refreshTeams}
+                pendingIds={pendingMoves}
+                onMove={moveStudents}
+                canAssignInstructor={false}
+              />
+              <h3 className="mb-2 mt-2 font-display text-base font-semibold text-gray-900">
+                {hasGroups ? "Not in a group" : "Students"}{" "}
+                <span className="text-sm font-normal text-gray-400">({tableStudents.length})</span>
+              </h3>
+            </>
+          )}
+
           {selectedStudents.length > 0 && (
             <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-brand-600/20 bg-brand-600/5 px-4 py-3">
               <p className="text-sm font-medium text-gray-700">{plural(selectedStudents.length, "student")} selected</p>
@@ -518,13 +549,13 @@ export default function TeamsClient() {
               >
                 Clear
               </button>
-              {hasGroups && <p className="text-sm text-gray-500">Drag any of them onto a group to add them all.</p>}
+              {placing && <p className="text-sm text-gray-500">Drag any of them onto a group to add them all.</p>}
             </div>
           )}
 
           <div
             onDragOver={(e) => {
-              if (!hasGroups || !isStudentDrag(e)) return;
+              if (!placing || !isStudentDrag(e)) return;
               e.preventDefault();
               e.dataTransfer.dropEffect = "move";
               setTableDropActive(true);
@@ -557,20 +588,23 @@ export default function TeamsClient() {
               <table className="w-full">
                 <thead className="border-b border-gray-100 bg-subtle">
                   <tr>
-                    <th className="w-12 px-4 py-3 sm:pl-6 sm:pr-0">
-                      <input
-                        type="checkbox"
-                        checked={allVisibleSelected}
-                        ref={(el) => {
-                          if (el) el.indeterminate = selectedStudents.length > 0 && !allVisibleSelected;
-                        }}
-                        onChange={toggleAllVisible}
-                        disabled={tableStudents.length === 0}
-                        aria-label={`Select all students in ${section.name}`}
-                        className="h-4 w-4 cursor-pointer accent-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
-                      />
-                    </th>
-                    {(hasGroups ? ["Name", "Enrolled"] : ["Student", "Status", "Last Active"]).map((h) => (
+                    {/* Picking rows is only for dragging them, so it is only there while editing. */}
+                    {editing && (
+                      <th className="w-12 px-4 py-3 sm:pl-6 sm:pr-0">
+                        <input
+                          type="checkbox"
+                          checked={allVisibleSelected}
+                          ref={(el) => {
+                            if (el) el.indeterminate = selectedStudents.length > 0 && !allVisibleSelected;
+                          }}
+                          onChange={toggleAllVisible}
+                          disabled={tableStudents.length === 0}
+                          aria-label={`Select all students in ${section.name}`}
+                          className="h-4 w-4 cursor-pointer accent-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
+                        />
+                      </th>
+                    )}
+                    {(placing ? ["Name", "Enrolled"] : ["Student", "Status", "Last Active"]).map((h) => (
                       <th
                         key={h}
                         className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 sm:px-6"
@@ -584,107 +618,123 @@ export default function TeamsClient() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-hairline">
-                  {tableStudents.map((student) => {
-                    const info = details.get(student.id);
-                    const risk = info?.risk_level ?? null;
-                    return (
-                      <tr
-                        key={student.id}
-                        draggable={hasGroups}
-                        onDragStart={(e) => {
-                          const carried = selectedIds.has(student.id)
-                            ? tableStudents.filter((s) => selectedIds.has(s.id))
-                            : [student];
-                          startStudentDrag(e, carried, null);
-                        }}
-                        title={
-                          hasGroups
-                            ? "Click to select, Ctrl+click to add more, Shift+click for a range, then drag onto a group"
-                            : "Click to select, Ctrl+click to add more, Shift+click for a range"
-                        }
-                        onClick={(e) => selectRow(student.id, e)}
-                        className={`select-none transition-colors ${hasGroups ? "cursor-grab-outlined" : "cursor-default"} ${
-                          pendingMoves.has(student.id)
-                            ? "pointer-events-none animate-pulse opacity-50 grayscale"
-                            : selectedIds.has(student.id)
-                              ? "bg-brand-600/10 shadow-[inset_3px_0_0_0_var(--color-brand-600)]"
-                              : "hover:bg-subtle"
-                        }`}
-                      >
-                        <td className="px-4 py-4 sm:pl-6 sm:pr-0" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.has(student.id)}
-                            onChange={() => toggleStudent(student.id)}
-                            aria-label={`Select ${student.name}`}
-                            className="h-4 w-4 cursor-pointer accent-brand-600"
-                          />
-                        </td>
-                        <td className="px-4 py-4 sm:px-6">
-                          <div className="flex items-center gap-3">
-                            <Avatar
-                              name={student.name}
-                              src={student.picture_url}
-                              userId={student.id}
-                              sex={student.sex}
-                              size="md"
-                              tone={risk === "at_risk" ? "risk" : "brand"}
-                            />
-                            <div className="min-w-0">
-                              <p className="truncate font-semibold text-gray-800">{student.name}</p>
-                              <p className="truncate text-sm text-gray-500">{info?.email ?? ""}</p>
-                            </div>
-                          </div>
-                        </td>
-                        {hasGroups ? (
-                          <td className="px-4 py-4 text-sm text-gray-500 sm:px-6">
-                            {info?.created_at
-                              ? new Date(info.created_at).toLocaleString("en-US", {
-                                  month: "short",
-                                  day: "numeric",
-                                  year: "numeric",
-                                  hour: "numeric",
-                                  minute: "2-digit",
-                                })
-                              : "—"}
-                          </td>
-                        ) : (
-                          <>
-                            <td className="px-4 py-4 sm:px-6">
-                              <span
-                                className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-                                  !risk
-                                    ? "bg-gray-100 text-gray-500"
-                                    : risk === "at_risk"
-                                      ? "bg-rose-50 text-rose-600"
-                                      : "bg-emerald-50 text-emerald-600"
-                                }`}
-                              >
-                                {!risk ? "Not scored yet" : risk === "at_risk" ? "Low Performing" : "Safe"}
-                              </span>
-                            </td>
-                            <td className="px-4 py-4 text-sm text-gray-500 sm:px-6">{formatLastActive(info?.last_activity)}</td>
-                          </>
-                        )}
-                        <td className="px-4 py-4 sm:px-6" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() => router.push(`/instructor/students/${student.id}`)}
-                            aria-label={`View ${student.name}'s profile`}
-                            title="View profile"
-                            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-brand-600/10 hover:text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40"
+                  {tableBuckets.map((bucket) => (
+                    <Fragment key={bucket.group?.id ?? "none"}>
+                      {showGroupHeadings && <GroupHeadingRow bucket={bucket} colSpan={4} showInstructor={false} />}
+                      {bucket.rows.map((student) => {
+                        const info = details.get(student.id);
+                        const risk = info?.risk_level ?? null;
+                        return (
+                          <tr
+                            key={student.id}
+                            draggable={placing}
+                            onDragStart={(e) => {
+                              const carried = selectedIds.has(student.id)
+                                ? tableStudents.filter((s) => selectedIds.has(s.id))
+                                : [student];
+                              startStudentDrag(e, carried, null);
+                            }}
+                            title={
+                              !editing
+                                ? `Open ${student.name}'s profile`
+                                : placing
+                                  ? "Click to select, Ctrl+click to add more, Shift+click for a range, then drag onto a group"
+                                  : "Click to select, Ctrl+click to add more, Shift+click for a range"
+                            }
+                            // Editing, a click picks the row; otherwise it opens the
+                            // profile, unless it ended a text selection (an email copied).
+                            onClick={(e) => {
+                              if (editing) selectRow(student.id, e);
+                              else if (!window.getSelection()?.toString()) openProfile(student.id);
+                            }}
+                            className={`transition-colors ${
+                              placing ? "cursor-grab-outlined select-none" : editing ? "cursor-default select-none" : "cursor-pointer"
+                            } ${
+                              pendingMoves.has(student.id)
+                                ? "pointer-events-none animate-pulse opacity-50 grayscale"
+                                : selectedIds.has(student.id)
+                                  ? "bg-brand-600/10 shadow-[inset_3px_0_0_0_var(--color-brand-600)]"
+                                  : "hover:bg-subtle"
+                            }`}
                           >
-                            <FontAwesomeIcon icon={faFolderOpen} className="h-4 w-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                            {editing && (
+                              <td className="px-4 py-4 sm:pl-6 sm:pr-0" onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIds.has(student.id)}
+                                  onChange={() => toggleStudent(student.id)}
+                                  aria-label={`Select ${student.name}`}
+                                  className="h-4 w-4 cursor-pointer accent-brand-600"
+                                />
+                              </td>
+                            )}
+                            <td className="px-4 py-4 sm:px-6">
+                              <div className="flex items-center gap-3">
+                                <Avatar
+                                  name={student.name}
+                                  src={student.picture_url}
+                                  userId={student.id}
+                                  sex={student.sex}
+                                  size="md"
+                                  tone={risk === "at_risk" ? "risk" : "brand"}
+                                />
+                                <div className="min-w-0">
+                                  <p className="truncate font-semibold text-gray-800">{student.name}</p>
+                                  <p className="truncate text-sm text-gray-500">{info?.email ?? ""}</p>
+                                </div>
+                              </div>
+                            </td>
+                            {placing ? (
+                              <td className="px-4 py-4 text-sm text-gray-500 sm:px-6">
+                                {info?.created_at
+                                  ? new Date(info.created_at).toLocaleString("en-US", {
+                                      month: "short",
+                                      day: "numeric",
+                                      year: "numeric",
+                                      hour: "numeric",
+                                      minute: "2-digit",
+                                    })
+                                  : "—"}
+                              </td>
+                            ) : (
+                              <>
+                                <td className="px-4 py-4 sm:px-6">
+                                  <span
+                                    className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                      !risk
+                                        ? "bg-gray-100 text-gray-500"
+                                        : risk === "at_risk"
+                                          ? "bg-rose-50 text-rose-600"
+                                          : "bg-emerald-50 text-emerald-600"
+                                    }`}
+                                  >
+                                    {!risk ? "Not scored yet" : risk === "at_risk" ? "Low Performing" : "Safe"}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-4 text-sm text-gray-500 sm:px-6">{formatLastActive(info?.last_activity)}</td>
+                              </>
+                            )}
+                            <td className="px-4 py-4 sm:px-6" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                onClick={() => openProfile(student.id)}
+                                aria-label={`View ${student.name}'s profile`}
+                                title="View profile"
+                                className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-brand-600/10 hover:text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40"
+                              >
+                                <FontAwesomeIcon icon={faFolderOpen} className="h-4 w-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </Fragment>
+                  ))}
                   {tableStudents.length === 0 && (
                     <tr>
-                      <td colSpan={hasGroups ? 4 : 5} className="py-12 text-center text-gray-400">
+                      <td colSpan={!editing ? 4 : placing ? 4 : 5} className="py-12 text-center text-gray-400">
                         {q || filterStatus !== "all"
                           ? "No students match"
-                          : hasGroups
+                          : placing
                             ? "Every student is in a group"
                             : "No students in this section yet"}
                       </td>
