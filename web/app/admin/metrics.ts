@@ -73,6 +73,9 @@ export type Tone = "good" | "warn" | "bad";
  * request should be quick; the slowest 5% get more headroom. */
 export const MEDIAN_SCALE = { fast: 300, slow: 1000, max: 3000 };
 export const P95_SCALE = { fast: 800, slow: 2500, max: 6000 };
+/** Below this many requests the 95th percentile is one of the five slowest,
+ * so one or two cold starts after a quiet night push it past `slow`. */
+export const P95_MIN_REQUESTS = 100;
 
 export function speedTone(ms: number, scale: { fast: number; slow: number }): Tone {
   // Same cut-offs as the gauge, whose band changes at each boundary.

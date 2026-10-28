@@ -49,16 +49,31 @@ async function checkWarehouse(supabase: ReturnType<typeof getSupabaseAdmin>): Pr
     return { id: 'dw', label: 'Data warehouse', status: 'fail', detail: value.error.message, duration_ms: ms };
   }
   const lastRun = (value.data as { etl?: { last_run_at?: string | null } } | null)?.etl?.last_run_at ?? null;
-  if (!lastRun) {
-    return { id: 'dw', label: 'Data warehouse', status: 'warn', detail: 'Reachable, but the ETL has never refreshed it', duration_ms: ms };
+  const hours = lastRun ? (Date.now() - new Date(lastRun).getTime()) / 3_600_000 : null;
+  if (hours !== null && hours <= ETL_STALE_HOURS) {
+    return {
+      id: 'dw',
+      label: 'Data warehouse',
+      status: 'pass',
+      detail: `Last refreshed by the ETL ${hours < 1 ? 'under an hour' : `${Math.round(hours)} h`} ago`,
+      duration_ms: ms,
+    };
   }
-  const hours = (Date.now() - new Date(lastRun).getTime()) / 3_600_000;
+  // Analytics refreshes the warehouse whenever someone opens it, so an old
+  // refresh only means nobody has looked lately. Running the ETL here shows
+  // whether it still works, which is what this check is for.
+  const etl = await timed(async () => supabase.rpc('run_dw_etl'));
+  if (etl.value.error) {
+    return { id: 'dw', label: 'Data warehouse', status: 'fail', detail: `The ETL failed: ${etl.value.error.message}`, duration_ms: ms + etl.ms };
+  }
   return {
     id: 'dw',
     label: 'Data warehouse',
-    status: hours > ETL_STALE_HOURS ? 'warn' : 'pass',
-    detail: `Last refreshed by the ETL ${hours < 1 ? 'under an hour' : `${Math.round(hours)} h`} ago`,
-    duration_ms: ms,
+    status: 'pass',
+    detail: hours === null
+      ? 'Refreshed by the ETL just now, for the first time'
+      : `Refreshed by the ETL just now (the last refresh was ${Math.round(hours)} h ago)`,
+    duration_ms: ms + etl.ms,
   };
 }
 

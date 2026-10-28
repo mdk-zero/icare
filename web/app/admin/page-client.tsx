@@ -21,6 +21,7 @@ import AiUsage from "./AiUsage";
 import TimeSeriesChart from "./TimeSeriesChart";
 import { CARD, MigrationPending, StatusText, TONE_STYLE } from "./ui";
 import {
+  P95_MIN_REQUESTS,
   P95_SCALE,
   fillBuckets,
   formatMs,
@@ -128,7 +129,10 @@ function StatusBanner({
   const healthVerdict = health ? runVerdict("health", health.summary) : null;
   const successPct = totals?.requests ? reliability(totals.requests, totals.errors) : null;
   const steady = successPct !== null ? reliabilityTone(successPct) : null;
-  const speed = totals?.requests && totals.p95_ms !== null ? speedTone(totals.p95_ms, P95_SCALE) : null;
+  const measuredSpeed = totals?.requests && totals.p95_ms !== null ? speedTone(totals.p95_ms, P95_SCALE) : null;
+  // A slow reading from a handful of requests still shows, but it can't say a system is failing.
+  const fewRequests = !!totals?.requests && totals.requests < P95_MIN_REQUESTS;
+  const speed = measuredSpeed === "bad" && fewRequests ? "warn" : measuredSpeed;
   const tone = worst([healthVerdict?.tone ?? null, steady, speed]);
   const style = BANNER[tone ?? "idle"];
   const stale = !health || mountedAt - Date.parse(health.created_at) > DAY_MS;
@@ -163,7 +167,9 @@ function StatusBanner({
       label: "Response time · last 24 hours",
       value: totals?.requests ? formatMs(totals.p95_ms) : DASH,
       tone: speed ?? "idle",
-      verdict: totals?.requests ? `${SPEED_WORD[speed!]} · 95th percentile; median ${formatMs(totals.p50_ms)}` : "No requests yet",
+      verdict: totals?.requests
+        ? `${SPEED_WORD[measuredSpeed!]} · 95th percentile${fewRequests ? ` of only ${totals.requests} requests` : ""}; median ${formatMs(totals.p50_ms)}`
+        : "No requests yet",
     },
   ];
 
