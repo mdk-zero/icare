@@ -32,6 +32,7 @@ import {
   autoSplit,
   parseGradeLeaf,
   refile,
+  studentStanding,
   type GradingSplit,
 } from "../../course-grading";
 import { seedCourses, type DemoCourseTables, type DemoOffering, type DemoRequirement } from "../fixtures/courses";
@@ -847,6 +848,36 @@ async function demoProgress(db: DemoDb, o: DemoOffering, onlyStudentId?: string)
     progress,
     totals: Object.fromEntries(items.map((r) => [r.id, ids.filter((id) => progress[id]?.[r.id]?.done).length])),
   };
+}
+
+/**
+ * The courses a student is taking or took, with each one's criteria and the
+ * student's standing, as loadStudentStandings() works them out for the
+ * Student report.
+ */
+export function demoStudentStandings(source: DemoDb, studentId: string) {
+  const db = courseDb(source);
+  return db.offerings
+    .filter((o) => termStatus(termOf(db, o)) !== "upcoming" && offeringRoster(db, o).students.some((s) => s.id === studentId))
+    .map((o) => {
+      const items = checklist(db, o.id);
+      const term = termOf(db, o);
+      const course = courseOf(db, o);
+      const skills = db.courseSkills.filter((s) => s.course_id === o.course_id).map((s) => s.skill_id);
+      const row = evaluate(items, skills, term, [studentId], demoFacts(db, [studentId], items.map((r) => r.id)))[studentId];
+      return {
+        id: o.id,
+        course: { code: course.code, title: course.title },
+        term: { name: term.name, starts_on: term.starts_on },
+        instructor: db.users.find((u) => u.id === o.faculty_id)?.name ?? "Instructor",
+        standing: studentStanding(autoSplit(items), items, row),
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.term.starts_on.localeCompare(a.term.starts_on) ||
+        a.course.code.localeCompare(b.course.code, undefined, { numeric: true }),
+    );
 }
 
 const offeringHeader = (db: DemoDb, o: DemoOffering) => {

@@ -263,8 +263,8 @@ export default function FacultyReportsClient() {
       type: "student",
       label: "Student",
       icon: faUser,
-      blurb: "Everything one student has been graded on: scenarios, case presentations and quizzes.",
-      contents: ["Averages", "Patient case grades", "Case presentations", "Quizzes", "Skill areas"],
+      blurb: "Everything one student has been graded on, and the criteria each of their courses is assessed on.",
+      contents: ["Averages", "Course criteria and grades", "Patient case grades", "Case presentations", "Quizzes", "Skill areas"],
       noun: "students",
       list: {
         items: studentTargets,

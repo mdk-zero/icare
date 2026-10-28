@@ -404,6 +404,65 @@ function autoGrades(
   return { invalid: false, grades };
 }
 
+/** One part of a course's grade, and where one student stands on it. */
+export interface CriterionStanding {
+  id: string;
+  name: string;
+  /** Percent of the final grade; for an automatic split, the part's share of the items. */
+  weight: number;
+  items: number;
+  /** Items the student has a score on. */
+  scored: number;
+  /** Their average on the part so far, or null with nothing scored. */
+  score: number | null;
+}
+
+export interface CourseStanding {
+  auto: boolean;
+  /** The split breaks a rule, so no grade is given (the criteria still show). */
+  invalid: boolean;
+  criteria: CriterionStanding[];
+  grade: number | null;
+  scored_weight: number;
+}
+
+/**
+ * One student's standing in a course, criterion by criterion: the same
+ * grades the course's Performance tab gives them. An automatic split leaves
+ * out the parts the course has no activities in.
+ */
+export function studentStanding(
+  split: GradingSplit | null,
+  requirements: readonly RequirementRow[],
+  row: Record<string, ItemProgress> | undefined,
+): CourseStanding {
+  const empty = { invalid: false, criteria: [], grade: null, scored_weight: 0 };
+  if (!split) return { auto: false, ...empty };
+  const byId = new Map(requirements.map((r) => [r.id, r]));
+  const result = computeGrades(split, requirements, { student: row ?? {} });
+  const grade = result.grades.student;
+  const criteria = split.parts
+    .map((p) => {
+      const items = [...p.items, ...p.components.flatMap((c) => c.items)].flatMap((id) => byId.get(id) ?? []);
+      return {
+        id: p.id,
+        name: p.name,
+        weight: p.weight,
+        items: items.length,
+        scored: items.filter((r) => itemScore(r, row?.[r.id]) !== null).length,
+        score: grade?.parts[p.id] ?? null,
+      };
+    })
+    .filter((c) => !split.auto || c.items > 0);
+  return {
+    auto: !!split.auto,
+    invalid: result.invalid,
+    criteria,
+    grade: grade?.grade ?? null,
+    scored_weight: grade?.scored_weight ?? 0,
+  };
+}
+
 /**
  * A class's average course grade: the mean of the grades so far of the given
  * students, leaving out those with nothing scored yet. `graded` counts the

@@ -5,7 +5,17 @@ import { NextResponse } from 'next/server';
 import type { ComponentProps } from 'react';
 import { ReportShell as ReportShellUI, type ReportDocument } from './kit-ui';
 
-export { TEAL, styles, scoreColor, StatGrid, Table, type ReportDocument, type ReportMeta } from './kit-ui';
+export {
+  TEAL,
+  styles,
+  scoreColor,
+  CourseCriteria,
+  StatGrid,
+  Table,
+  type CourseCriteriaEntry,
+  type ReportDocument,
+  type ReportMeta,
+} from './kit-ui';
 
 /**
  * The iCARE++ wordmark for the letterhead, read once per server instance.

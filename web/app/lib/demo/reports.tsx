@@ -1,13 +1,14 @@
 "use client";
 
 import { pdf, Text, View } from "@react-pdf/renderer";
-import { ReportShell, StatGrid, Table, type ReportDocument, type ReportMeta } from "../reports/kit-ui";
+import { CourseCriteria, ReportShell, StatGrid, Table, type ReportDocument, type ReportMeta } from "../reports/kit-ui";
 import { CASE_CRITERIA } from "../case-rubric";
 import { ratingLabel } from "../task-ratings";
 import type { DemoContext } from "./router";
 import { caseAverage, lastActivity, mean, quizAverage, submittedAttempts } from "./handlers/derive";
 import { sectionName, teamLabel as teamLabelUi, userById, visibleSections, visibleStudents } from "./handlers/scope";
 import { DEMO_INSTITUTION } from "./fixtures/school";
+import { demoStudentStandings } from "./handlers/courses";
 import { roleLabel } from "../role-labels";
 
 /** The PDF's built-in Helvetica has no middle dot, so labels use an en dash. */
@@ -28,6 +29,9 @@ const note = { fontSize: 8, color: "#6b7280", marginTop: 6 } as const;
 
 const pct = (v: number | null) => (v == null ? "—" : `${Math.round(v)}%`);
 const date = (v: string | null) => (v ? new Date(v).toLocaleDateString("en-PH", { dateStyle: "medium" }) : "—");
+/** When it was handed in, flagged when that was past its deadline. */
+const submitted = (a: { submitted_at: string | null; deadline: string | null }) =>
+  a.submitted_at ? `${date(a.submitted_at)}${a.deadline && Date.parse(a.submitted_at) > Date.parse(a.deadline) ? " (late)" : ""}` : "—";
 
 function meta(ctx: Ctx): ReportMeta {
   return {
@@ -75,19 +79,21 @@ function studentReport(ctx: Ctx, id: string): Built {
           { label: "Quiz average", value: pct(quizAverage(db, id)) },
           { label: "Cases graded", value: cases.filter((a) => a.status === "completed").length },
         ]} />
+        <H>Courses and assessment criteria</H>
+        <CourseCriteria courses={demoStudentStandings(db, id)} />
         <H>Patient cases</H>
-        <Table head={["Case", "Status", "Score", "Deadline"]} widths={[4, 1.4, 1, 1.4]} rows={cases.map((a) => [
+        <Table head={["Case", "Status", "Score", "Submitted"]} widths={[4, 1.4, 1, 1.4]} rows={cases.map((a) => [
           db.scenarios.find((x) => x.id === a.scenario_id)?.title ?? "—",
           a.status === "completed" ? "Graded" : a.submitted_at ? "Awaiting review" : a.status === "overdue" ? "Overdue" : "Open",
           pct(a.score),
-          date(a.deadline),
+          submitted(a),
         ])} />
         <H>Return Demonstrations</H>
-        <Table head={["Return Demonstration", "Status", "Score", "Deadline"]} widths={[4, 1.4, 1, 1.4]} rows={returnDemos.map((a) => [
+        <Table head={["Return Demonstration", "Status", "Score", "Graded"]} widths={[4, 1.4, 1, 1.4]} rows={returnDemos.map((a) => [
           db.scenarios.find((x) => x.id === a.scenario_id)?.title ?? "—",
           a.status === "completed" ? "Graded" : a.status === "overdue" ? "Overdue" : "Open",
           pct(a.score),
-          date(a.deadline),
+          a.status === "completed" ? date(a.completed_at) : "—",
         ])} />
         <H>Quizzes</H>
         <Table head={["Quiz", "Score", "Submitted"]} widths={[4, 1, 1.4]} rows={attempts.map((a) => [
@@ -145,9 +151,9 @@ function scenarioReport(ctx: Ctx, id: string): Built {
           { label: "Average", value: pct(mean(rows.filter((a) => a.score != null).map((a) => a.score!))) },
         ]} />
         <H>Students</H>
-        <Table head={["Student", "Group", "Status", "Score"]} widths={[3, 2, 1.4, 1]} rows={rows.map((a) => {
+        <Table head={["Student", "Group", "Status", "Submitted", "Score"]} widths={[3, 2, 1.4, 1.4, 1]} rows={rows.map((a) => {
           const s = userById(db, a.student_id);
-          return [s?.name ?? "—", teamLabel(db, s?.team_id) ?? "—", a.status === "completed" ? "Graded" : a.submitted_at ? "Awaiting review" : a.status, pct(a.score)];
+          return [s?.name ?? "—", teamLabel(db, s?.team_id) ?? "—", a.status === "completed" ? "Graded" : a.submitted_at ? "Awaiting review" : a.status, submitted(a), pct(a.score)];
         })} />
       </Shell>
     ),

@@ -13,6 +13,7 @@ import {
   type DocumentProps,
 } from '@react-pdf/renderer';
 import type { ReactElement, ReactNode } from 'react';
+import { formatGrade, type CourseStanding } from '../course-grading';
 
 /** What renderToBuffer accepts: a <Document> root, not any element. */
 export type ReportDocument = ReactElement<DocumentProps>;
@@ -73,6 +74,10 @@ export const styles = StyleSheet.create({
   statValue: { fontSize: 14, fontFamily: 'Helvetica-Bold', color: TEAL },
   statLabel: { fontSize: 8, color: '#6b7280', marginTop: 2, textAlign: 'center' },
   empty: { color: '#9ca3af', fontSize: 9, paddingVertical: 6 },
+  courseTitle: { fontFamily: 'Helvetica-Bold', marginTop: 10 },
+  courseSub: { fontSize: 8, color: '#6b7280', marginTop: 1, marginBottom: 4 },
+  courseGrade: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, paddingHorizontal: 4 },
+  note: { fontSize: 8, color: '#6b7280', marginTop: 6 },
   footer: {
     position: 'absolute',
     bottom: 24,
@@ -211,6 +216,78 @@ export function Table({
           ))}
         </View>
       ))}
+    </View>
+  );
+}
+
+/** One course in a student's report: where its grade comes from, and the student's standing. */
+export interface CourseCriteriaEntry {
+  id: string;
+  course: { code: string; title: string };
+  term: { name: string };
+  instructor: string;
+  standing: CourseStanding;
+}
+
+const gradeText = (n: number | null) => (n === null ? '—' : formatGrade(n));
+
+/**
+ * The criteria each of a student's courses is assessed on, with the
+ * student's average on each and their course grade so far. The real and the
+ * demo Student report share it, so both read the same.
+ */
+export function CourseCriteria({ courses }: { courses: CourseCriteriaEntry[] }) {
+  if (courses.length === 0) {
+    return <Text style={styles.empty}>Not on the roster of any course yet.</Text>;
+  }
+  const auto = courses.some((c) => c.standing.auto && c.standing.criteria.length);
+  const weighted = courses.some((c) => !c.standing.auto && c.standing.criteria.length);
+  return (
+    <View>
+      {courses.map(({ id, course, term, instructor, standing }) => {
+        const items = standing.criteria.reduce((n, c) => n + c.items, 0);
+        const scored = standing.criteria.reduce((n, c) => n + c.scored, 0);
+        const partial = standing.scored_weight < 100;
+        const detail = standing.invalid
+          ? "the criteria don't add up to 100%"
+          : standing.grade === null
+            ? 'nothing scored yet'
+            : standing.auto
+              ? `${scored} of ${items} items scored`
+              : `${standing.scored_weight}% of the grade scored`;
+        return (
+          <View key={id} wrap={false}>
+            <Text style={styles.courseTitle}>
+              {course.code} – {course.title}
+            </Text>
+            <Text style={styles.courseSub}>
+              {term.name} – Instructor: {instructor}
+            </Text>
+            <Table
+              head={['Criterion', 'Weight', 'Scored', 'Average']}
+              widths={[3, 1.3, 1.3, 1.9]}
+              rows={standing.criteria.map((c) => [c.name, `${c.weight}%`, `${c.scored}/${c.items}`, gradeText(c.score)])}
+              emptyText={standing.auto ? 'Nothing to grade in this course yet.' : 'No grading criteria set for this course yet.'}
+            />
+            {standing.criteria.length > 0 && (
+              <View style={styles.courseGrade}>
+                <Text style={{ fontFamily: 'Helvetica-Bold' }}>
+                  Course grade{partial && standing.grade !== null ? ' so far' : ''}{' '}
+                  <Text style={{ fontFamily: 'Helvetica', fontSize: 8, color: '#6b7280' }}>({detail})</Text>
+                </Text>
+                <Text style={{ fontFamily: 'Helvetica-Bold' }}>{standing.invalid ? '—' : gradeText(standing.grade)}</Text>
+              </View>
+            )}
+          </View>
+        );
+      })}
+      {(auto || weighted) && (
+        <Text style={styles.note}>
+          {auto && "Weight is a criterion's share of the course's items: the course grade is the average of every scored item. "}
+          {weighted && "The course grade is each criterion's average times its weight, added up. "}
+          Work with no score yet is left out, so a grade reads as the grade so far.
+        </Text>
+      )}
     </View>
   );
 }

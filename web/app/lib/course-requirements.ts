@@ -19,9 +19,11 @@ import { fetchStepRatings, fetchTaskCompletions, fetchTaskSteps, stepGradesByTas
 import { taskCredit } from './task-ratings';
 import { isMissingSkillColumn, skillIdFromTitle } from './taylor-skills';
 import { isMissingCaseTables } from './cases';
+import { studentStanding, type CourseStanding } from './course-grading';
 import {
   labelRequirements,
   loadCourseSkillIds,
+  loadGrading,
   loadOfferingRosters,
   loadRequirements,
   loadStudentOfferings,
@@ -404,4 +406,48 @@ export async function loadStudentCourses(supabase: Supabase, studentId: string):
     }),
   );
   return courses.sort((a, b) => a.course.code.localeCompare(b.course.code, undefined, { numeric: true }));
+}
+
+export interface StudentCourseStanding {
+  id: string;
+  course: { code: string; title: string };
+  term: { name: string; starts_on: string; ends_on: string };
+  instructor: string;
+  standing: CourseStanding;
+}
+
+/**
+ * The courses a student is taking or took (not those of a term still to
+ * come), each with its grading criteria and the student's grade so far, for
+ * the Student report. Newest term first.
+ */
+export async function loadStudentStandings(supabase: Supabase, studentId: string): Promise<StudentCourseStanding[]> {
+  const offerings = (await loadStudentOfferings(supabase, studentId)).filter((o) => termStatus(o.term) !== 'upcoming');
+  if (offerings.length === 0) return [];
+  const [requirements, skills] = await Promise.all([
+    loadRequirements(supabase, offerings.map((o) => o.id)),
+    loadCourseSkillIds(supabase, [...new Set(offerings.map((o) => o.course.id))]),
+  ]);
+  const courses = await Promise.all(
+    offerings.map(async (o): Promise<StudentCourseStanding> => {
+      const own = requirements.filter((r) => r.offering_id === o.id);
+      const [facts, { grading }] = await Promise.all([
+        loadProgressFacts(supabase, own, o.term, [studentId]),
+        loadGrading(supabase, o.id),
+      ]);
+      const row = evaluate(own, skills.get(o.course.id) ?? [], o.term, [studentId], facts)[studentId];
+      return {
+        id: o.id,
+        course: { code: o.course.code, title: o.course.title },
+        term: { name: o.term.name, starts_on: o.term.starts_on, ends_on: o.term.ends_on },
+        instructor: o.instructor,
+        standing: studentStanding(grading, own, row),
+      };
+    }),
+  );
+  return courses.sort(
+    (a, b) =>
+      b.term.starts_on.localeCompare(a.term.starts_on) ||
+      a.course.code.localeCompare(b.course.code, undefined, { numeric: true }),
+  );
 }

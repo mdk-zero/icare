@@ -1,7 +1,7 @@
 import { Text, View } from '@react-pdf/renderer';
 import type { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getFacultyStudentIds } from '@/app/lib/roster';
-import { ReportShell, StatGrid, Table, styles, type ReportMeta, type ReportDocument } from './kit';
+import { CourseCriteria, ReportShell, StatGrid, Table, styles, type ReportMeta, type ReportDocument } from './kit';
 import {
   CASE_STATUS_LABEL,
   NEEDS_PRACTICE_BELOW,
@@ -21,6 +21,8 @@ import { isActiveSkillArea } from '@/scripts/taylors-chapters';
 import { CASE_CRITERIA, isLateSubmission, type CaseObservations } from '../case-rubric';
 import { isLateSubmission as isLateAttempt } from '../assessment-timing';
 import { ratingLabel, scoreDescriptor, type TaskRating } from '../task-ratings';
+import { loadStudentStandings, type StudentCourseStanding } from '../course-requirements';
+import { isMissingCourseSchema } from '../courses';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -78,7 +80,7 @@ export async function buildStudentReport(
     .maybeSingle();
   if (!student) return { error: 'Student not found', status: 404 };
 
-  const [groups, { data: scenarios }, cases, { data: attempts }, { data: scores }] = await Promise.all([
+  const [groups, { data: scenarios }, cases, { data: attempts }, { data: scores }, courses] = await Promise.all([
     groupNames(supabase, [studentId]),
     supabase
       .from('scenario_assignments')
@@ -101,6 +103,7 @@ export async function buildStudentReport(
       .select('score, created_at, competency_areas(name)')
       .eq('student_id', studentId)
       .order('created_at', { ascending: false }),
+    studentCourses(supabase, studentId),
   ]);
   if (cases.error) console.error('Report: failed to read case submissions', cases.error);
 
@@ -112,7 +115,7 @@ export async function buildStudentReport(
     return {
       title,
       status: scenarioStatus(a),
-      handedIn: a.submitted_at ? `${date(a.submitted_at)}${late ? ' (late)' : ''}` : '—',
+      submitted: a.submitted_at ? `${date(a.submitted_at)}${late ? ' (late)' : ''}` : '—',
       score: a.status === 'completed' && a.score !== null ? Number(a.score) : null,
     };
   });
@@ -130,7 +133,7 @@ export async function buildStudentReport(
     return {
       title: p?.title ?? 'Case presentation',
       status: CASE_STATUS_LABEL[c.status as string] ?? String(c.status),
-      handedIn: c.submitted_at ? `${date(c.submitted_at)}${late ? ' (late)' : ''}` : '—',
+      submitted: c.submitted_at ? `${date(c.submitted_at)}${late ? ' (late)' : ''}` : '—',
       score: c.status === 'graded' && c.score !== null ? Number(c.score) : null,
     };
   });
@@ -181,11 +184,14 @@ export async function buildStudentReport(
         ]}
       />
 
+      <Text style={styles.sectionTitle}>Courses and assessment criteria</Text>
+      <CourseCriteria courses={courses} />
+
       <Text style={styles.sectionTitle}>Patient Cases</Text>
       <Table
-        head={['Patient Case', 'Status', 'Handed in', 'Grade']}
+        head={['Patient Case', 'Status', 'Submitted', 'Grade']}
         widths={[3, 1.3, 1.3, 1.9]}
-        rows={scenarioRows.map((r) => [r.title, r.status, r.handedIn, grade(r.score)])}
+        rows={scenarioRows.map((r) => [r.title, r.status, r.submitted, grade(r.score)])}
         emptyText="No patient cases assigned yet."
       />
 
@@ -199,9 +205,9 @@ export async function buildStudentReport(
 
       <Text style={styles.sectionTitle}>Case presentations</Text>
       <Table
-        head={['Presentation', 'Status', 'Handed in', 'Grade']}
+        head={['Presentation', 'Status', 'Submitted', 'Grade']}
         widths={[3, 1.3, 1.3, 1.9]}
-        rows={caseRows.map((r) => [r.title, r.status, r.handedIn, grade(r.score)])}
+        rows={caseRows.map((r) => [r.title, r.status, r.submitted, grade(r.score)])}
         emptyText="No case presentations assigned yet."
       />
 
@@ -227,6 +233,16 @@ export async function buildStudentReport(
   );
 
   return { subject: student.name, pdf };
+}
+
+/** The student's courses for the report; without the course tables (065) the report leaves them out. */
+async function studentCourses(supabase: Supabase, studentId: string): Promise<StudentCourseStanding[]> {
+  try {
+    return await loadStudentStandings(supabase, studentId);
+  } catch (err) {
+    if (!isMissingCourseSchema(err)) console.error('Report: failed to read the student\'s courses', err);
+    return [];
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -377,7 +393,7 @@ export async function buildScenarioReport(
       group: groups.get(a.student_id as string) ?? '—',
       status: scenarioStatus(a),
       late: isLate(a.submitted_at, a.deadline),
-      handedIn: a.submitted_at,
+      submitted: a.submitted_at,
       score: a.status === 'completed' && a.score !== null ? Number(a.score) : null,
     }))
     .sort((a, b) => a.group.localeCompare(b.group, undefined, { numeric: true }) || a.name.localeCompare(b.name));
@@ -414,13 +430,13 @@ export async function buildScenarioReport(
 
       <Text style={styles.sectionTitle}>Students</Text>
       <Table
-        head={['Student', 'Group', 'Status', 'Handed in', 'Grade']}
+        head={['Student', 'Group', 'Status', 'Submitted', 'Grade']}
         widths={[2.4, 1, 1.4, 1.4, 1.9]}
         rows={rows.map((r) => [
           r.name,
           r.group,
           r.status,
-          r.handedIn ? `${date(r.handedIn)}${r.late ? ' (late)' : ''}` : '—',
+          r.submitted ? `${date(r.submitted)}${r.late ? ' (late)' : ''}` : '—',
           grade(r.score),
         ])}
         emptyText="This patient case has not been assigned yet."
@@ -873,7 +889,7 @@ export async function buildCaseReport(
         { label: 'Patient', value: patient },
         { label: 'Hospital / ward', value: [c.hospital, c.ward].filter(Boolean).join(', ') || '—' },
         { label: 'Admitting diagnosis', value: c.admitting_diagnosis || '—' },
-        { label: 'Handed in', value: `${date(c.submitted_at)}${late ? ' (late)' : ''}` },
+        { label: 'Submitted', value: `${date(c.submitted_at)}${late ? ' (late)' : ''}` },
         { label: 'Graded', value: date(c.graded_at) },
       ]}
     >
