@@ -12,6 +12,7 @@ import { listSkillSummaries } from "../fixtures/skills";
 import { byName, manageableSections, sectionName, userById, visibleSections, visibleStudents } from "./scope";
 import { linkActivityCourses } from "./courses";
 import { CASES } from "../fixtures/cases-data";
+import type { WorkKind } from "@/app/lib/work-kinds";
 import caseTasks from "../fixtures/case-tasks.json";
 
 /** Case presentations, the Library, analytics, and the AI case generators. */
@@ -482,7 +483,43 @@ const AREA_NAMES: Record<string, string> = {
   "086113d0-4f87-47d2-b6b1-9ed69e3c741e": "Fluid, Electrolyte, and Acid–Base Balance",
 };
 
-/** The students and attempts the filters cover. */
+interface Work {
+  student_id: string;
+  kind: WorkKind;
+  score: number;
+  /** When it was handed in. */
+  at: string;
+}
+
+/**
+ * Every graded piece of work these students handed in, as the warehouse's
+ * dw.fact_student_work (migration 085) files it: each kind, dated by when
+ * the student did it.
+ */
+function gradedWork(db: Ctx["db"], ids: Set<string>): Work[] {
+  const kindOf = new Map(db.scenarios.map((s) => [s.id, s.kind === "return_demo" ? "return_demo" : "patient_case"] as const));
+  const work: Work[] = [];
+  for (const a of db.attempts) {
+    if (ids.has(a.student_id) && a.status === "submitted" && a.score != null && a.submitted_at) {
+      work.push({ student_id: a.student_id, kind: "quiz", score: a.score, at: a.submitted_at });
+    }
+  }
+  for (const a of db.assignments) {
+    const at = a.submitted_at ?? a.completed_at;
+    if (ids.has(a.student_id) && a.status === "completed" && a.score != null && at) {
+      work.push({ student_id: a.student_id, kind: kindOf.get(a.scenario_id) ?? "patient_case", score: a.score, at });
+    }
+  }
+  for (const c of db.caseSubmissions) {
+    const at = c.submitted_at ?? c.graded_at;
+    if (ids.has(c.student_id) && c.status === "graded" && c.score != null && at) {
+      work.push({ student_id: c.student_id, kind: "case_presentation", score: c.score, at });
+    }
+  }
+  return work;
+}
+
+/** The students and graded work the filters cover. */
 function analyticsScope(ctx: Ctx) {
   const { db, query } = ctx;
   const allowed = visibleSections(db, ctx.role, ctx.viewer.id).map((s) => s.id);
@@ -494,26 +531,35 @@ function analyticsScope(ctx: Ctx) {
   const to = query.get("to");
   const windowFrom = from ? Date.parse(from) : Date.now() - 8 * 7 * DAY_MS;
   const windowTo = to ? Date.parse(`${to}T23:59:59Z`) : Date.now();
-  const attempts = db.attempts.filter((a) => {
-    if (!ids.has(a.student_id) || a.status !== "submitted" || a.score == null || !a.submitted_at) return false;
-    const at = Date.parse(a.submitted_at);
+  const inWindow = (iso: string) => {
+    const at = Date.parse(iso);
     return at >= windowFrom && at <= windowTo;
-  });
-  return { sectionIds, students, attempts, bucket: deriveBucket(from, to) };
+  };
+  // The quiz attempts themselves, for the skill areas their questions test.
+  const attempts = db.attempts.filter(
+    (a) => ids.has(a.student_id) && a.status === "submitted" && a.score != null && !!a.submitted_at && inWindow(a.submitted_at),
+  );
+  const work = gradedWork(db, ids).filter((w) => inWindow(w.at));
+  return { sectionIds, students, attempts, work, bucket: deriveBucket(from, to) };
 }
 
 function topStudents(ctx: Ctx, scope: ReturnType<typeof analyticsScope>) {
   return scope.students
     .map((s) => {
-      const scores = scope.attempts.filter((a) => a.student_id === s.id).map((a) => a.score!);
+      const mine = scope.work.filter((w) => w.student_id === s.id);
+      const byKind: Partial<Record<WorkKind, number>> = {};
+      for (const kind of new Set(mine.map((w) => w.kind))) {
+        byKind[kind] = mean(mine.filter((w) => w.kind === kind).map((w) => w.score)) ?? 0;
+      }
       return {
         student_key: s.id,
         name: s.name,
         picture_url: s.picture_url,
         sex: s.sex,
         section: sectionName(ctx.db, s.section_id),
-        average_score: mean(scores) ?? 0,
-        attempts: scores.length,
+        average_score: mean(mine.map((w) => w.score)) ?? 0,
+        attempts: mine.length,
+        by_kind: byKind,
       };
     })
     .filter((s) => s.attempts > 0)
@@ -524,12 +570,12 @@ route("GET", "/api/analytics/summary", (ctx) => {
   if (!staffOnly(ctx) && ctx.role !== "super_admin") return forbidden();
   const { db } = ctx;
   const scope = analyticsScope(ctx);
-  const { students, attempts, bucket } = scope;
+  const { students, attempts, work, bucket } = scope;
 
   const trend = new Map<string, number[]>();
-  for (const a of attempts) {
-    const key = bucketStart(a.submitted_at!.slice(0, 10), bucket);
-    trend.set(key, [...(trend.get(key) ?? []), a.score!]);
+  for (const w of work) {
+    const key = bucketStart(w.at.slice(0, 10), bucket);
+    trend.set(key, [...(trend.get(key) ?? []), w.score]);
   }
   const weekly_trend = [...trend.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -564,9 +610,9 @@ route("GET", "/api/analytics/summary", (ctx) => {
   for (const g of groups) {
     const members = new Set(students.filter((s) => s.team_id === g.id).map((s) => s.id));
     const buckets = new Map<string, number[]>();
-    for (const a of attempts.filter((x) => members.has(x.student_id))) {
-      const key = bucketStart(a.submitted_at!.slice(0, 10), bucket);
-      buckets.set(key, [...(buckets.get(key) ?? []), a.score!]);
+    for (const w of work.filter((x) => members.has(x.student_id))) {
+      const key = bucketStart(w.at.slice(0, 10), bucket);
+      buckets.set(key, [...(buckets.get(key) ?? []), w.score]);
     }
     for (const [week_start, scores] of buckets) groupPoints.push({ group_id: g.id, week_start, average_score: mean(scores) ?? 0, attempts: scores.length });
   }
@@ -588,7 +634,14 @@ route("GET", "/api/analytics/summary", (ctx) => {
       cohort: {
         total_students: students.length,
         submitted_attempts: attempts.length,
-        average_score: mean(attempts.map((a) => a.score!)),
+        graded: work.length,
+        average_score: mean(work.map((w) => w.score)),
+        by_kind: Object.fromEntries(
+          [...new Set(work.map((w) => w.kind))].map((kind) => {
+            const of = work.filter((w) => w.kind === kind);
+            return [kind, { average_score: mean(of.map((w) => w.score)) ?? 0, graded: of.length, students: new Set(of.map((w) => w.student_id)).size }];
+          }),
+        ),
         active_students_30d: students.filter((s) => Date.parse(lastActivity(db, s.id) ?? "1970") > thirty).length,
       },
       weekly_trend,
@@ -633,14 +686,14 @@ route("POST", "/api/analytics/narrative", async (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   await sleep(1100);
   const scope = analyticsScope(ctx);
-  const avg = mean(scope.attempts.map((a) => a.score!));
+  const avg = mean(scope.work.map((w) => w.score));
   const top = topStudents(ctx, scope);
   const atRisk = scope.students.filter((s) => s.risk_level === "at_risk").sort(byName);
   return {
     generated_at: new Date().toISOString(),
     narrative: {
-      headline: `Quiz scores are holding at ${avg ?? "—"}% across ${scope.students.length} students`,
-      overview: `Over this period students handed in ${scope.attempts.length} quiz attempts. Vital Signs is the strongest skill area; Fluid, Electrolyte, and Acid–Base Balance trails it, mostly on IV site monitoring questions.`,
+      headline: `Grades are holding at ${avg ?? "—"}% across ${scope.students.length} students`,
+      overview: `Over this period ${scope.work.length} pieces of work were graded across patient cases, quizzes and case presentations. Vital Signs is the strongest skill area; Fluid, Electrolyte, and Acid–Base Balance trails it, mostly on IV site monitoring questions.`,
       highlights: [
         top[0] ? `${top[0].name} leads with an average of ${top[0].average_score}%.` : "Every group has submitted work this period.",
         "Most students who retook a quiz improved on their second attempt.",

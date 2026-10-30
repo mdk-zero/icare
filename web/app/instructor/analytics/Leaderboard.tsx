@@ -1,5 +1,19 @@
 import type { AnalyticsSummary } from "../../lib/api";
 import Avatar from "../../components/Avatar";
+import { describeByKind } from "../../lib/work-kinds";
+
+type Ranked = AnalyticsSummary["top_students"][number];
+
+/** "5 grades" once every kind of graded work counts (085); quiz "attempts" before it. */
+function countLabel(s: Ranked): string {
+  const noun = s.by_kind ? "grade" : "attempt";
+  return `${s.attempts} ${noun}${s.attempts === 1 ? "" : "s"}`;
+}
+
+/** The student's average per kind, for a row's tooltip. */
+const kindTitle = (s: Ranked) => describeByKind(s.by_kind) || undefined;
+
+const EMPTY = "Nothing graded in range yet — students rank here once their work is graded.";
 
 /** Ranked list of top scorers — a leaderboard, not a plain table, so rank
  * and magnitude are both legible at a glance (medal badge + a proportional
@@ -7,9 +21,7 @@ import Avatar from "../../components/Avatar";
 export function Leaderboard({ students }: { students: AnalyticsSummary["top_students"] }) {
   if (students.length === 0) {
     return (
-      <p className="text-gray-400 text-sm py-12 text-center">
-        No submitted attempts in range yet — scores will rank here once students start.
-      </p>
+      <p className="text-gray-400 text-sm py-12 text-center">{EMPTY}</p>
     );
   }
   const max = Math.max(...students.map((s) => s.average_score), 1);
@@ -26,6 +38,7 @@ export function Leaderboard({ students }: { students: AnalyticsSummary["top_stud
         return (
           <div
             key={s.student_key}
+            title={kindTitle(s)}
             className="relative flex items-center gap-3 overflow-hidden rounded-xl border border-hairline bg-surface p-3"
           >
             <div
@@ -50,7 +63,7 @@ export function Leaderboard({ students }: { students: AnalyticsSummary["top_stud
             <div className="relative z-10 min-w-0 flex-1">
               <p className="truncate text-sm font-semibold text-gray-900">{s.name}</p>
               <p className="truncate text-xs text-gray-400">
-                {s.section ?? "No section"} · {s.attempts} attempt{s.attempts === 1 ? "" : "s"}
+                {s.section ?? "No section"} · {countLabel(s)}
               </p>
             </div>
             <span className="relative z-10 shrink-0 text-sm font-bold text-brand-700 tabular-nums">
@@ -95,7 +108,7 @@ function rankBadgeClass(rank: number): string {
  * after. Used by the Dean's analytics card and both full leaderboard pages. */
 export function PodiumLeaderboard({
   students,
-  empty = "No submitted attempts yet.",
+  empty = EMPTY,
 }: {
   students: AnalyticsSummary["top_students"];
   empty?: string;
@@ -117,6 +130,7 @@ export function PodiumLeaderboard({
           return (
             <div
               key={s.student_key}
+              title={kindTitle(s)}
               className={`relative flex flex-col items-center rounded-2xl border px-3 pb-4 text-center ${
                 first
                   ? "border-amber-200 bg-gradient-to-b from-amber-50 to-transparent pt-6 sm:pb-6"
@@ -145,9 +159,7 @@ export function PodiumLeaderboard({
               >
                 {Math.round(s.average_score)}%
               </p>
-              <p className="text-[11px] text-gray-400">
-                {s.attempts} attempt{s.attempts === 1 ? "" : "s"}
-              </p>
+              <p className="text-[11px] text-gray-400">{countLabel(s)}</p>
             </div>
           );
         })}
@@ -159,6 +171,7 @@ export function PodiumLeaderboard({
             return (
               <div
                 key={s.student_key}
+                title={kindTitle(s)}
                 className="relative flex items-center gap-3 overflow-hidden rounded-xl border border-hairline bg-surface p-3"
               >
                 <div
@@ -174,7 +187,7 @@ export function PodiumLeaderboard({
                 <div className="relative z-10 min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-gray-900">{s.name}</p>
                   <p className="truncate text-xs text-gray-400">
-                    {s.section ?? "No section"} · {s.attempts} attempt{s.attempts === 1 ? "" : "s"}
+                    {s.section ?? "No section"} · {countLabel(s)}
                   </p>
                 </div>
                 <p className="relative z-10 shrink-0 text-sm font-bold tabular-nums text-gray-800">

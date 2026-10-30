@@ -4,6 +4,8 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { callAnalytics, resolveSummaryArgs, withStudentAvatars, type SummaryArgs } from '@/app/lib/analytics';
 import { isMissingTeamTables, loadTeams, manageableSectionIds } from '@/app/lib/teams';
 import { viewerDeanId } from '@/app/lib/dean-scope';
+import { loadGradedWork } from '@/app/lib/graded-work';
+import { WORK_KINDS, type WorkKind } from '@/app/lib/work-kinds';
 
 /**
  * Dashboard analytics read from the star-schema warehouse
@@ -20,6 +22,8 @@ const STALE_MS = 5 * 60 * 1000; // refresh the warehouse at most every 5 minutes
 
 type Summary = {
   etl?: { last_run_at?: string | null };
+  /** `graded` arrives with migration 085, when the figures cover every kind of work. */
+  cohort?: { graded?: number };
   room_utilization?: RoomUtilization[];
   weekly_trend?: { week_start: string; average_score: number; attempts: number }[];
   top_students?: { student_key: string }[];
@@ -69,8 +73,6 @@ async function ownRoomUtilization(
   });
 }
 
-/** Ids per `in` filter — each is a URL-encoded query param, so keep it short. */
-const MEMBER_CHUNK = 150;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** The start of `date`'s bucket, as the warehouse's date_trunc would put it (weeks start Monday). */
@@ -84,20 +86,23 @@ function bucketStart(date: string, bucket: SummaryArgs['p_bucket']): string {
 }
 
 /**
- * The summary's quiz trend split by group, for the performance chart: same
- * submitted attempts, same bucket truncation and the same window as the
- * warehouse's weekly_trend (from, or the last 8 weeks, through to), read from
- * the live attempts and group membership so a group move shows at once.
+ * The summary's grade trend split by group, for the performance chart: the
+ * same graded work, bucket truncation and window as the warehouse's
+ * weekly_trend (from, or the last 8 weeks, through to), read from the live
+ * tables and group membership so a group move shows at once. `kinds` is
+ * every kind once the warehouse counts them all (085), quizzes until then,
+ * so the chart never disagrees with the figures beside it.
  *
  * `groups` is every group the caller has in any of their sections, so the
  * chart can give each one a colour that survives the section filter; `points`
  * only covers the sections in scope. Faculty see only the groups they
- * supervise. Null when the groups or attempts couldn't be read.
+ * supervise. Null when the groups or the work couldn't be read.
  */
 async function readGroupTrend(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   session: { role: string; uid: string },
   args: SummaryArgs,
+  kinds: readonly WorkKind[],
 ) {
   try {
     const sectionIds = await manageableSectionIds(supabase, session.role, session.uid);
@@ -132,35 +137,15 @@ async function readGroupTrend(
     if (students.length === 0) return { groups, points: [] };
 
     const from = args.p_from ?? new Date(Date.now() - 56 * DAY_MS).toISOString().slice(0, 10);
-    const chunks: string[][] = [];
-    for (let i = 0; i < students.length; i += MEMBER_CHUNK) chunks.push(students.slice(i, i + MEMBER_CHUNK));
-    const results = await Promise.all(
-      chunks.map((chunk) => {
-        // An attempt is dated by its submission, or its start when it has none;
-        // it can't be submitted before it starts, so `to` bounds the start too.
-        let q = supabase
-          .from('assessment_attempts')
-          .select('student_id, score, submitted_at, created_at')
-          .eq('status', 'submitted')
-          .in('student_id', chunk)
-          .or(`submitted_at.gte.${from},created_at.gte.${from}`);
-        if (args.p_to) q = q.lt('created_at', new Date(Date.parse(args.p_to) + DAY_MS).toISOString());
-        return q;
-      }),
-    );
-    const failed = results.find((r) => r.error);
-    if (failed) throw failed.error;
+    const work = await loadGradedWork(supabase, students, { from, to: args.p_to, kinds });
 
     const acc = new Map<string, { group_id: string; week_start: string; sum: number; attempts: number }>();
-    for (const row of results.flatMap((r) => r.data ?? [])) {
-      if (row.score === null || row.score === undefined) continue;
-      const date = new Date((row.submitted_at ?? row.created_at) as string).toISOString().slice(0, 10);
-      if (date < from || (args.p_to && date > args.p_to)) continue;
-      const group_id = groupOf.get(row.student_id as string)!;
-      const week_start = bucketStart(date, args.p_bucket);
+    for (const row of work) {
+      const group_id = groupOf.get(row.student_id)!;
+      const week_start = bucketStart(row.date, args.p_bucket);
       const key = `${group_id}|${week_start}`;
       const cell = acc.get(key) ?? { group_id, week_start, sum: 0, attempts: 0 };
-      cell.sum += Number(row.score);
+      cell.sum += row.score;
       cell.attempts += 1;
       acc.set(key, cell);
     }
@@ -244,7 +229,14 @@ export async function GET(request: NextRequest) {
     const wantsTrend = !!summary && request.nextUrl.searchParams.get('group_trend') === '1';
     const [topStudents, groupTrend] = await Promise.all([
       summary?.top_students?.length ? withStudentAvatars(supabase, summary.top_students) : null,
-      wantsTrend ? readGroupTrend(supabase, session, args) : null,
+      wantsTrend
+        ? readGroupTrend(
+            supabase,
+            session,
+            args,
+            summary?.cohort?.graded === undefined ? ['quiz'] : WORK_KINDS.map((k) => k.kind),
+          )
+        : null,
     ]);
     if (summary && topStudents) summary = { ...summary, top_students: topStudents };
     const deanId = summary ? await viewerDeanId(supabase, session) : null;

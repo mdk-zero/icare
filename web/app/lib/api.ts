@@ -9,6 +9,7 @@ import { holdTabPresence, releaseTabPresence } from './tab-presence';
 import type { ItemProgress, OfferingSummary, RequirementInput, RequirementRow, TermStatus } from './course-progress';
 import type { GradingSplit } from './course-grading';
 import type { ScenarioKind } from './scenario-kind';
+import type { WorkKind } from './work-kinds';
 
 export interface User {
   id: string;
@@ -1451,17 +1452,36 @@ export interface AuditLogInsert {
   metadata?: Record<string, unknown> | null;
 }
 
+/** One kind of graded work's figures in the analytics summary (migration 085). */
+export interface WorkKindSummary {
+  average_score: number;
+  graded: number;
+  students: number;
+}
+
 // Warehouse-backed analytics (public.dw_analytics_summary via /api/analytics/summary)
 export interface AnalyticsSummary {
   etl: { last_run_at: string | null; rows_loaded: Record<string, number> } | null;
   /** Sections represented in the current scope, with their student counts. */
   sections: { id: string; name: string; students: number; active_students: number }[];
+  /**
+   * From migration 085 the scores cover every kind of graded work (Patient
+   * Cases, Quizzes, Case Presentations, Return Demonstrations) and `graded`
+   * and `by_kind` are present; before it, quizzes only. Active students are
+   * those who handed in any work in the period.
+   */
   cohort: {
     total_students: number;
+    /** Submitted quiz attempts. */
     submitted_attempts: number;
+    /** Graded pieces of work of every kind (085). */
+    graded?: number;
     average_score: number | null;
     active_students_30d: number;
+    /** Per kind; a kind with nothing graded in scope is absent (085). */
+    by_kind?: Partial<Record<WorkKind, WorkKindSummary>>;
   };
+  /** `attempts` is how many graded pieces of work fell in the bucket. */
   weekly_trend: { week_start: string; average_score: number; attempts: number }[];
   /** `weekly_trend` split by group, attached when asked for with
    * `groupTrend`. `groups` is every group the viewer has, for stable colours;
@@ -1495,7 +1515,7 @@ export interface AnalyticsSummary {
     notes_reviewed: number;
   };
   risk_distribution: Record<string, number>; // keys: 'safe' | 'at_risk'
-  /** Ranked by average submitted score, same section/date scope as everything else. */
+  /** Ranked by average grade, same section/date scope as everything else. */
   top_students: {
     /** = users.id */
     student_key: string;
@@ -1505,7 +1525,10 @@ export interface AnalyticsSummary {
     sex?: 'male' | 'female' | null;
     section: string | null;
     average_score: number;
+    /** Graded pieces of work behind the average (quiz attempts before 085). */
     attempts: number;
+    /** The student's average per kind (085). */
+    by_kind?: Partial<Record<WorkKind, number>>;
   }[];
   /** Whichever model most recently issued a risk label — pairs with the
    * offline accuracy figure shipped in model-eval-snapshot.ts, since there is
@@ -3786,6 +3809,9 @@ export interface GroupSummary {
   members: number;
   scenarios: { assigned: number; graded: number; cases: number; average: number | null };
   assessments: { taken: number; average: number | null };
+  /** Absent from a server deployed before Return Demonstrations joined the card. */
+  return_demos?: { assigned: number; graded: number; average: number | null };
+  case_presentations?: { submitted: number; graded: number; average: number | null };
 }
 
 export async function fetchGroupSummaries(): Promise<{ viewer_id: string | null; groups: GroupSummary[] } | null> {
@@ -4617,6 +4643,8 @@ export interface CoursePerformance {
   id: string;
   course: { code: string; title: string };
   term: Omit<CourseTermRef, 'id'>;
+  /** Who teaches it; on a Dean's list only. */
+  instructor?: string | null;
   /** On the roster, in the sections picked. */
   students: number;
   /** Of those, the ones with a grade so far. */
@@ -4625,7 +4653,11 @@ export interface CoursePerformance {
   average: number | null;
 }
 
-/** The instructor's courses whose term overlaps the range, counting only students of the picked sections. */
+/**
+ * The course assignments whose term overlaps the range, counting only
+ * students of the picked sections: an instructor's own, or every one of a
+ * Dean's courses.
+ */
 export const fetchCoursePerformance = (filters: AnalyticsFilters = {}) => {
   const params = new URLSearchParams();
   if (filters.sectionIds?.length) params.set('section_ids', filters.sectionIds.join(','));

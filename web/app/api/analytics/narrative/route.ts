@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
 import { callAnalytics, resolveSummaryArgs, type SummaryArgs } from '@/app/lib/analytics';
+import { WORK_KINDS, type WorkKind } from '@/app/lib/work-kinds';
 
 /**
  * Plain-language reading of the analytics dashboard.
@@ -18,8 +19,11 @@ interface WarehouseSummary {
   cohort?: {
     total_students?: number;
     submitted_attempts?: number;
+    /** 085 on: graded work of every kind, with a split per kind. */
+    graded?: number;
     average_score?: number | null;
     active_students_30d?: number;
+    by_kind?: Partial<Record<WorkKind, { average_score: number; graded: number; students: number }>>;
   };
   weekly_trend?: { week_start: string; average_score: number; attempts: number }[];
   competency_detail?: {
@@ -52,11 +56,37 @@ function buildPrompt(summary: WarehouseSummary, args: SummaryArgs): string {
   const period =
     args.p_from && args.p_to ? `${args.p_from} to ${args.p_to}` : 'the full available history';
 
+  // From 085 every kind of graded work counts; before it, quizzes only.
+  const allWork = cohort.graded !== undefined;
+  const unit = allWork ? 'graded pieces of work' : 'attempts';
+
   const bucket = BUCKET_NOUN[args.p_bucket];
   const trendBlock =
     trend.length > 0
-      ? trend.map((t) => `- ${t.week_start} (${bucket}): ${t.average_score}% over ${t.attempts} attempts`).join('\n')
-      : '(no submitted attempts in this period)';
+      ? trend.map((t) => `- ${t.week_start} (${bucket}): ${t.average_score}% over ${t.attempts} ${unit}`).join('\n')
+      : allWork
+        ? '(nothing graded in this period)'
+        : '(no submitted attempts in this period)';
+
+  const kindBlock = WORK_KINDS.map(({ kind, label }) => {
+    const k = cohort.by_kind?.[kind];
+    return k
+      ? `- ${label}: avg ${k.average_score}%, ${k.graded} graded across ${k.students} students`
+      : `- ${label}: nothing graded in this period`;
+  }).join('\n');
+
+  const cohortBlock = allWork
+    ? `- Students in scope: ${cohort.total_students ?? 0}
+- Students active (handed in at least one piece of work in the period): ${cohort.active_students_30d ?? 0}
+- Graded pieces of work (patient cases, quizzes, case presentations and return demonstrations): ${cohort.graded ?? 0}
+- Average grade across all of them: ${cohort.average_score ?? 'nothing graded'}
+
+Average grade by kind of work:
+${kindBlock}`
+    : `- Students in scope: ${cohort.total_students ?? 0}
+- Students active (submitted at least one attempt in the period): ${cohort.active_students_30d ?? 0}
+- Submitted quiz attempts: ${cohort.submitted_attempts ?? 0}
+- Average quiz score: ${cohort.average_score ?? 'no submitted attempts'}`;
 
   const competencyBlock =
     competencies.length > 0
@@ -88,12 +118,9 @@ Scope: ${scope}
 Period: ${period}
 
 Cohort totals for the period:
-- Students in scope: ${cohort.total_students ?? 0}
-- Students active (submitted at least one attempt in the period): ${cohort.active_students_30d ?? 0}
-- Submitted quiz attempts: ${cohort.submitted_attempts ?? 0}
-- Average quiz score: ${cohort.average_score ?? 'no submitted attempts'}
+${cohortBlock}
 
-Score trend, one point per ${bucket}:
+${allWork ? 'Grade' : 'Score'} trend, one point per ${bucket}:
 ${trendBlock}
 
 Faculty-validated skill area scores:

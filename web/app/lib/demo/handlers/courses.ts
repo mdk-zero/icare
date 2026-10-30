@@ -1008,15 +1008,21 @@ route("GET", "/api/faculty/courses/:id/progress", async (ctx) => {
   };
 });
 
-/** Analytics' "Performance per Course", from the same progress and split as the Progress tab. */
+/**
+ * Analytics' "Performance per Course", from the same progress and split as
+ * the Progress tab: an instructor's own course assignments, or every one of a
+ * Dean's courses with its instructor named.
+ */
 route("GET", "/api/analytics/courses", async (ctx) => {
-  if (!instructorOnly(ctx)) return forbidden();
+  const dean = deanOnly(ctx);
+  if (!dean && !instructorOnly(ctx)) return forbidden();
   const db = courseDb(ctx.db);
+  const deanCourses = dean ? new Set(ownCourses(ctx).map((c) => c.id)) : null;
   const wanted = new Set((ctx.query.get("section_ids") ?? "").split(",").filter(Boolean));
   const from = ctx.query.get("from");
   const to = ctx.query.get("to");
   const offerings = db.offerings.filter((o) => {
-    if (o.faculty_id !== ctx.viewer.id) return false;
+    if (deanCourses ? !deanCourses.has(o.course_id) || !o.faculty_id : o.faculty_id !== ctx.viewer.id) return false;
     const term = termOf(db, o);
     return !from || !to || termsOverlap(term, { starts_on: from, ends_on: to });
   });
@@ -1031,6 +1037,7 @@ route("GET", "/api/analytics/courses", async (ctx) => {
         id: o.id,
         course: { code: course.code, title: course.title },
         term,
+        ...(dean ? { instructor: db.users.find((u) => u.id === o.faculty_id)?.name ?? null } : {}),
         students: ids.length,
         ...classAverage(autoSplit(checklist(db, o.id)), result.requirements, result.progress, ids),
       };

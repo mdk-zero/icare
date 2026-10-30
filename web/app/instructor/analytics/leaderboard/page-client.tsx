@@ -64,7 +64,7 @@ export default function LeaderboardClient({
           label: "Analytics",
         }}
         title="Student Leaderboard"
-        subtitle="Every student in scope, ranked by average submitted score"
+        subtitle="Every student in scope, ranked by average grade across their graded work"
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -87,7 +87,7 @@ export default function LeaderboardClient({
               <FontAwesomeIcon icon={faTrophy} className="h-4 w-4 shrink-0 text-brand-600" />
               <span className="truncate">Top Students</span>
             </h2>
-            <p className="mt-0.5 text-sm text-gray-500">Highest average submitted score</p>
+            <p className="mt-0.5 text-sm text-gray-500">Highest average grade</p>
           </div>
           {students && students.length > 0 && (
             <span className="inline-flex shrink-0 items-center rounded-full bg-subtle px-2.5 py-1 text-xs font-medium text-gray-600 tabular-nums">
@@ -99,10 +99,7 @@ export default function LeaderboardClient({
         {loading ? (
           <PodiumLeaderboardSkeleton />
         ) : students ? (
-          <PodiumLeaderboard
-            students={students}
-            empty="No submitted attempts in range yet — scores will rank here once students start."
-          />
+          <PodiumLeaderboard students={students} />
         ) : (
           <div className="py-12 text-center">
             <p className="text-sm text-gray-500">The leaderboard couldn&apos;t be loaded.</p>

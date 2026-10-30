@@ -12,34 +12,91 @@ const pct = (n: number | null) => (n === null ? "—" : `${n}%`);
 
 const SCALE = [0, 25, 50, 75, 100];
 
-/** Room per group, so a crowded chart scrolls sideways instead of squeezing its columns. */
-const COLUMN_MIN_W = 76;
+/** One averaged kind of graded work, drawn as a column per group. */
+interface Measure {
+  key: string;
+  label: string;
+  color: string;
+  value: (g: GroupSummary) => number | null;
+}
+
+/**
+ * Patient Cases lead (a group shares one case), then quizzes; both are always
+ * drawn. Case presentations and Return Demonstrations join only when some
+ * group in view has one graded, so a class that doesn't use them keeps the
+ * two-column chart. Their colours are the group palette's last two, which the
+ * trend chart beside this card reaches only with a fifth or sixth group.
+ */
+const MEASURES: { measure: Measure; always: boolean }[] = [
+  {
+    measure: { key: "case", label: "Patient case", color: "var(--color-brand-600)", value: (g) => g.scenarios.average },
+    always: true,
+  },
+  {
+    measure: { key: "quiz", label: "Quiz", color: "var(--color-brand-300)", value: (g) => g.assessments.average },
+    always: true,
+  },
+  {
+    measure: {
+      key: "presentation",
+      label: "Case presentation",
+      color: "var(--color-group-6)",
+      value: (g) => g.case_presentations?.average ?? null,
+    },
+    always: false,
+  },
+  {
+    measure: {
+      key: "demo",
+      label: "Return demo",
+      color: "var(--color-group-5)",
+      value: (g) => g.return_demos?.average ?? null,
+    },
+    always: false,
+  },
+];
+
+function measuresFor(groups: GroupSummary[]): Measure[] {
+  return MEASURES.filter(({ measure, always }) => always || groups.some((g) => measure.value(g) !== null)).map(
+    ({ measure }) => measure,
+  );
+}
+
+/**
+ * Room per group, so a crowded chart scrolls sideways instead of squeezing
+ * its columns. Past two measures the columns slim down, so three groups
+ * still fit the card.
+ */
+const columnMinW = (measures: number) => (measures > 2 ? 24 + 18 * measures : 24 + 26 * measures);
 
 /** One measure as a column, its value just above the top; no score yet reads as a dash. */
 function Column({
   value,
   grown,
-  className,
+  color,
   label,
+  slim,
 }: {
   value: number | null;
   grown: boolean;
-  className: string;
+  color: string;
   label: string;
+  slim: boolean;
 }) {
+  const width = slim ? "w-3.5" : "w-4 sm:w-5";
   if (value === null) {
     return (
-      <div className="flex h-full w-4 items-end justify-center sm:w-5" title={`${label}: not scored yet`}>
+      <div className={`flex h-full items-end justify-center ${width}`} title={`${label}: not scored yet`}>
         <span className="text-[11px] text-gray-400">—</span>
       </div>
     );
   }
   const height = `${Math.min(Math.max(value, 0), 100)}%`;
   return (
-    <div className="relative flex h-full w-4 items-end sm:w-5" title={`${label}: ${value}%`}>
+    <div className={`relative flex h-full items-end ${width}`} title={`${label}: ${value}%`}>
       <div
-        className={`w-full rounded-t-md transition-[height] duration-700 ease-out ${className}`}
-        style={{ height: grown ? height : "0%" }}
+        className="w-full rounded-t-md transition-[height] duration-700 ease-out"
+        style={{ height: grown ? height : "0%", backgroundColor: color }}
       />
       <span
         className="absolute left-1/2 -translate-x-1/2 text-[10px] font-semibold tabular-nums text-gray-700 transition-[bottom] duration-700 ease-out"
@@ -52,11 +109,11 @@ function Column({
 }
 
 /**
- * One pair of columns per group: the patient case average (a group shares one
- * case, so it leads) beside the quiz average, against a dashed line at the
- * target. The y-axis stays put while a long row of groups scrolls under it.
+ * One cluster of columns per group, a column per measure, against a dashed
+ * line at the target. The y-axis stays put while a long row of groups scrolls
+ * under it.
  */
-function GroupBars({ groups }: { groups: GroupSummary[] }) {
+function GroupBars({ groups, measures }: { groups: GroupSummary[]; measures: Measure[] }) {
   const [grown, setGrown] = useState(false);
   useEffect(() => {
     const id = requestAnimationFrame(() => setGrown(true));
@@ -82,7 +139,7 @@ function GroupBars({ groups }: { groups: GroupSummary[] }) {
       </div>
 
       <div className="min-w-0 flex-1 overflow-x-auto">
-        <div style={{ minWidth: groups.length * COLUMN_MIN_W }}>
+        <div style={{ minWidth: groups.length * columnMinW(measures.length) }}>
           <div className={`${plot} border-b border-gray-300`}>
             {SCALE.slice(1).map((v) => (
               <div
@@ -101,11 +158,21 @@ function GroupBars({ groups }: { groups: GroupSummary[] }) {
               {groups.map((g) => (
                 <li
                   key={g.team_id}
-                  className="flex flex-1 items-end justify-center gap-1.5 px-1"
-                  aria-label={`${g.section_name ? `${g.section_name} · ` : ""}${g.name}: patient case average ${pct(g.scenarios.average)}, quiz average ${pct(g.assessments.average)}`}
+                  className={`flex flex-1 items-end justify-center px-1 ${measures.length > 2 ? "gap-1" : "gap-1.5"}`}
+                  aria-label={`${g.section_name ? `${g.section_name} · ` : ""}${g.name}: ${measures
+                    .map((m) => `${m.label.toLowerCase()} average ${pct(m.value(g))}`)
+                    .join(", ")}`}
                 >
-                  <Column value={g.scenarios.average} grown={grown} className="bg-brand-600" label="Patient case" />
-                  <Column value={g.assessments.average} grown={grown} className="bg-brand-300" label="Quiz" />
+                  {measures.map((m) => (
+                    <Column
+                      key={m.key}
+                      value={m.value(g)}
+                      grown={grown}
+                      color={m.color}
+                      label={m.label}
+                      slim={measures.length > 2}
+                    />
+                  ))}
                 </li>
               ))}
             </ul>
@@ -134,7 +201,8 @@ function GroupBars({ groups }: { groups: GroupSummary[] }) {
   );
 }
 
-function GroupTable({ groups }: { groups: GroupSummary[] }) {
+function GroupTable({ groups, measures }: { groups: GroupSummary[]; measures: Measure[] }) {
+  const has = (key: string) => measures.some((m) => m.key === key);
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -146,6 +214,8 @@ function GroupTable({ groups }: { groups: GroupSummary[] }) {
             <th className="px-3 py-2 text-right font-semibold">Patient case avg</th>
             <th className="px-3 py-2 text-right font-semibold">Graded</th>
             <th className="px-3 py-2 text-right font-semibold">Quiz avg</th>
+            {has("presentation") && <th className="px-3 py-2 text-right font-semibold">Case presentation avg</th>}
+            {has("demo") && <th className="px-3 py-2 text-right font-semibold">Return demo avg</th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-hairline">
@@ -166,6 +236,16 @@ function GroupTable({ groups }: { groups: GroupSummary[] }) {
               <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-gray-900">
                 {pct(g.assessments.average)}
               </td>
+              {has("presentation") && (
+                <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-gray-900">
+                  {pct(g.case_presentations?.average ?? null)}
+                </td>
+              )}
+              {has("demo") && (
+                <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-gray-900">
+                  {pct(g.return_demos?.average ?? null)}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -176,8 +256,9 @@ function GroupTable({ groups }: { groups: GroupSummary[] }) {
 
 /**
  * Every group in the faculty member's sections (or the sections picked in the
- * filter), with the mean of its members' individual scenario and Skill
- * Assessment grades. Read live, not from the warehouse, and all-time rather
+ * filter), with the mean of its members' individual grades per kind of work:
+ * Patient Cases, quizzes, and case presentations and Return Demonstrations
+ * once any are graded. Read live, not from the warehouse, and all-time rather
  * than the date range, so it says so. Hidden when there are no groups.
  */
 export default function GroupPerformance({ sectionIds }: { sectionIds: string[] }) {
@@ -187,6 +268,7 @@ export default function GroupPerformance({ sectionIds }: { sectionIds: string[] 
     (g) => sectionIds.length === 0 || sectionIds.includes(g.section_id),
   );
   if (groups.length === 0) return null;
+  const measures = measuresFor(groups);
 
   return (
     <Card padding="md" className="flex flex-col">
@@ -203,12 +285,11 @@ export default function GroupPerformance({ sectionIds }: { sectionIds: string[] 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           {view === "chart" && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-brand-600" /> Patient case avg
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-brand-300" /> Quiz avg
-              </span>
+              {measures.map((m) => (
+                <span key={m.key} className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: m.color }} /> {m.label} avg
+                </span>
+              ))}
               <span className="inline-flex items-center gap-1.5">
                 <span className="h-3 border-l border-dashed border-gray-500" /> Target {TARGET_SCORE}%
               </span>
@@ -232,7 +313,11 @@ export default function GroupPerformance({ sectionIds }: { sectionIds: string[] 
         </div>
       </div>
 
-      {view === "table" ? <GroupTable groups={groups} /> : <GroupBars groups={groups} />}
+      {view === "table" ? (
+        <GroupTable groups={groups} measures={measures} />
+      ) : (
+        <GroupBars groups={groups} measures={measures} />
+      )}
     </Card>
   );
 }

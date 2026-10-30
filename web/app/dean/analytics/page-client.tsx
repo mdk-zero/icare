@@ -16,10 +16,12 @@ import {
   faUserCheck,
   faClipboardCheck,
   faUserGraduate,
+  faBookMedical,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   apiFetch,
   fetchAnalyticsSummary,
+  fetchCoursePerformance,
   fetchFacultySections,
   fetchRooms,
 } from "../../lib/api";
@@ -28,6 +30,9 @@ import { usePageData } from "../../lib/use-page-data";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import { PodiumLeaderboard } from "../../instructor/analytics/Leaderboard";
+import ActivityBreakdown from "../../instructor/analytics/ActivityBreakdown";
+import { CourseBarChart } from "../../instructor/analytics/CoursePerformance";
+import { TARGET_SCORE } from "../../lib/performance-target";
 import AnalyticsFilterBar, {
   formatRangeLabel,
   rangeForPreset,
@@ -794,6 +799,17 @@ export default function AdminAnalyticsClient() {
     { keepPreviousData: true },
   );
 
+  // Course grades come from each course's progress, not the warehouse, so
+  // they are their own read. Not part of the first paint: working out every
+  // course's grades is the slowest read on the page, so its panel loads on
+  // its own.
+  const { data: courseData, loading: coursesLoading } = usePageData(
+    `admin:analytics:courses:${sectionKey}:${from}:${to}`,
+    () => fetchCoursePerformance({ sectionIds, from, to }),
+    { keepPreviousData: true },
+  );
+  const courseRows = courseData?.data?.courses ?? [];
+
   // Live figures that don't depend on the filters, so they aren't re-read on
   // every filter change.
   const {
@@ -934,6 +950,62 @@ export default function AdminAnalyticsClient() {
             />
           </div>
 
+          {/* Every kind of graded work (from the warehouse, 085) beside each
+              course's class average grade. */}
+          <div
+            className={`mb-6 grid grid-cols-1 gap-6 ${summary?.cohort.by_kind ? "xl:grid-cols-2" : ""}`}
+          >
+            {summary?.cohort.by_kind && (
+              <Panel>
+                <CardHeading
+                  icon={faClipboardCheck}
+                  title="Performance by Activity"
+                  subtitle="Average grade for each kind of graded work"
+                  tag={rangeTag}
+                />
+                {summary.cohort.average_score != null && (
+                  <p className="mb-5 flex items-baseline gap-2">
+                    <span className="font-display text-3xl font-bold tabular-nums text-gray-900">
+                      {summary.cohort.average_score}%
+                    </span>
+                    <span className="text-sm text-gray-500">
+                      overall, across {summary.cohort.graded ?? 0} graded pieces of work
+                    </span>
+                  </p>
+                )}
+                <ActivityBreakdown byKind={summary.cohort.by_kind} compact />
+              </Panel>
+            )}
+
+            <Panel>
+              <CardHeading
+                icon={faBookMedical}
+                title="Performance per Course"
+                subtitle="Class average grade per course assignment, semesters in this range"
+                tag={rangeTag}
+                aside={
+                  courseRows.length > 0 ? (
+                    <span className="hidden items-center gap-1.5 text-[11px] text-gray-500 sm:inline-flex">
+                      <span className="h-3 border-l border-dashed border-gray-500" /> Target {TARGET_SCORE}%
+                    </span>
+                  ) : undefined
+                }
+              />
+              {coursesLoading && !courseData ? (
+                <div className="h-[300px] animate-pulse rounded-xl bg-gray-100" aria-hidden />
+              ) : courseData?.error ? (
+                <p className="py-8 text-center text-sm text-gray-400">{courseData.error}</p>
+              ) : courseRows.length === 0 ? (
+                <p className="py-8 text-center text-sm text-gray-400">
+                  No course assignments with students in these sections during{" "}
+                  {formatRangeLabel(from, to)}.
+                </p>
+              ) : (
+                <CourseBarChart courses={courseRows} linkable={false} />
+              )}
+            </Panel>
+          </div>
+
           {/* Top students beside the room bed board; stacked below xl */}
           <div className="mb-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
             {/* Top students: podium for the first three, rows for the rest. A
@@ -943,7 +1015,7 @@ export default function AdminAnalyticsClient() {
               <CardHeading
                 icon={faTrophy}
                 title="Top Students"
-                subtitle="Highest average submitted score"
+                subtitle="Highest average grade"
                 tag={rangeTag}
               />
               <div className="flex-1">
@@ -1059,8 +1131,8 @@ export default function AdminAnalyticsClient() {
                 />
                 <MiniStat
                   icon={faClipboardCheck}
-                  label="Attempts"
-                  value={summary?.cohort.submitted_attempts ?? 0}
+                  label={summary?.cohort.graded === undefined ? "Quiz attempts" : "Graded work"}
+                  value={summary?.cohort.graded ?? summary?.cohort.submitted_attempts ?? 0}
                   chip="bg-amber-50 text-amber-600"
                 />
                 <MiniStat

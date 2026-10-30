@@ -42,10 +42,11 @@ function fit(text: string, px: number, charW: number): string {
  * One column per course, its height the class average grade, in an equal
  * band each so a few courses spread across the card instead of huddling in
  * the middle. Pinned to 0–100 like the skill areas: these are percentages.
- * Hovering anywhere in a course's band picks it; clicking opens the course's
- * Performance tab, where the average comes from.
+ * Hovering anywhere in a course's band picks it; for an instructor
+ * (`linkable`), clicking opens the course's Performance tab, where the
+ * average comes from. A Dean's columns name the instructor instead.
  */
-function CourseBarChart({ courses }: { courses: CourseRow[] }) {
+export function CourseBarChart({ courses, linkable = true }: { courses: CourseRow[]; linkable?: boolean }) {
   const router = useRouter();
   const boxRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState<number | null>(null);
@@ -129,12 +130,14 @@ function CourseBarChart({ courses }: { courses: CourseRow[] }) {
             return (
               <g
                 key={c.id}
-                role="link"
+                role={linkable ? "link" : "img"}
                 tabIndex={0}
-                aria-label={`${c.course.code} ${c.course.title}, ${c.term.name}: ${status}. Opens the course's Performance tab.`}
-                className="cursor-pointer outline-none"
-                onClick={() => open(c)}
-                onKeyDown={(e) => onKeyDown(e, c)}
+                aria-label={`${c.course.code} ${c.course.title}, ${c.term.name}${
+                  c.instructor ? `, taught by ${c.instructor}` : ""
+                }: ${status}.${linkable ? " Opens the course's Performance tab." : ""}`}
+                className={`outline-none ${linkable ? "cursor-pointer" : ""}`}
+                onClick={linkable ? () => open(c) : undefined}
+                onKeyDown={linkable ? (e) => onKeyDown(e, c) : undefined}
                 onPointerEnter={() => setHover(i)}
                 onPointerLeave={() => setHover((h) => (h === i ? null : h))}
                 onFocus={() => setHover(i)}
@@ -217,7 +220,10 @@ function CourseBarChart({ courses }: { courses: CourseRow[] }) {
           <p className="text-xs font-semibold text-gray-900">
             {hovered.course.code} <span className="font-normal text-gray-600">{hovered.course.title}</span>
           </p>
-          <p className="mb-1.5 text-[11px] text-gray-400">{hovered.term.name}</p>
+          <p className="mb-1.5 text-[11px] text-gray-400">
+            {hovered.term.name}
+            {hovered.instructor ? ` · ${hovered.instructor}` : ""}
+          </p>
           <p className="text-xs text-gray-600">
             <span className="font-semibold tabular-nums text-gray-900">
               {hovered.average === null ? "—" : formatGrade(hovered.average)}
@@ -229,7 +235,9 @@ function CourseBarChart({ courses }: { courses: CourseRow[] }) {
               ? `${hovered.students} student${hovered.students === 1 ? "" : "s"}, none graded`
               : `${hovered.graded} of ${hovered.students} students graded`}
           </p>
-          <p className="mt-1.5 border-t border-hairline pt-1.5 text-[11px] text-brand-600">Click to open the course</p>
+          {linkable && (
+            <p className="mt-1.5 border-t border-hairline pt-1.5 text-[11px] text-brand-600">Click to open the course</p>
+          )}
         </div>
       )}
     </div>

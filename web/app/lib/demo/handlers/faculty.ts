@@ -632,11 +632,15 @@ route("GET", "/api/faculty/teams/summary", (ctx) => {
     groups: teams.map((t) => {
       const members = db.users.filter((u) => u.role === "student" && u.team_id === t.id);
       const ids = new Set(members.map((m) => m.id));
-      // A group's case figures are over Patient Cases; Return Demonstrations (072) are left out.
-      const assigned = db.assignments.filter(
-        (a) => ids.has(a.student_id) && db.scenarios.find((s) => s.id === a.scenario_id)?.kind !== "return_demo",
-      );
+      // Patient Cases and Return Demonstrations (072) are averaged apart.
+      const isDemo = (scenarioId: string) => db.scenarios.find((s) => s.id === scenarioId)?.kind === "return_demo";
+      const mine = db.assignments.filter((a) => ids.has(a.student_id));
+      const assigned = mine.filter((a) => !isDemo(a.scenario_id));
       const graded = assigned.filter((a) => a.status === "completed");
+      const demos = mine.filter((a) => isDemo(a.scenario_id));
+      const demosGraded = demos.filter((a) => a.status === "completed" && a.score != null);
+      const cases = db.caseSubmissions.filter((c) => ids.has(c.student_id) && (c.status === "submitted" || c.status === "graded"));
+      const casesGraded = cases.filter((c) => c.status === "graded" && c.score != null);
       const attempts = db.attempts.filter((a) => ids.has(a.student_id) && a.status === "submitted");
       return {
         team_id: t.id,
@@ -653,6 +657,8 @@ route("GET", "/api/faculty/teams/summary", (ctx) => {
           average: mean(graded.map((a) => a.score ?? 0)),
         },
         assessments: { taken: attempts.length, average: mean(attempts.map((a) => a.score ?? 0)) },
+        return_demos: { assigned: demos.length, graded: demosGraded.length, average: mean(demosGraded.map((a) => a.score!)) },
+        case_presentations: { submitted: cases.length, graded: casesGraded.length, average: mean(casesGraded.map((c) => c.score!)) },
       };
     }),
   };

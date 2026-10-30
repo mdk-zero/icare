@@ -14,6 +14,7 @@ import {
   faArrowsRotate,
   faTrophy,
   faXmark,
+  faClipboardCheck,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchAnalyticsSummary,
@@ -38,6 +39,7 @@ import AiThinking from "../../components/AiThinking";
 import { Leaderboard, LeaderboardSkeleton } from "./Leaderboard";
 import GroupPerformance from "./GroupPerformance";
 import CoursePerformance from "./CoursePerformance";
+import ActivityBreakdown from "./ActivityBreakdown";
 import { parseDay, formatRange } from "./dates";
 import { buildTrendSeries, TrendLegend, TrendBarChart, TrendTable } from "./GroupTrendChart";
 import { isActiveSkillArea } from "../../../scripts/taylors-chapters";
@@ -702,6 +704,8 @@ export default function FacultyAnalyticsClient() {
     ? JSON.stringify({
         avg: summary.cohort.average_score,
         attempts: summary.cohort.submitted_attempts,
+        graded: summary.cohort.graded,
+        kinds: summary.cohort.by_kind,
         active: summary.cohort.active_students_30d,
         total: summary.cohort.total_students,
         risk: summary.risk_distribution,
@@ -767,6 +771,8 @@ export default function FacultyAnalyticsClient() {
   const closeNarrative = useCallback(() => setNarrativeOpen(false), []);
 
   const atRisk = summary?.risk_distribution?.at_risk ?? 0;
+  // Every kind of graded work once the warehouse counts them all (085).
+  const gradeNoun = summary?.cohort.graded === undefined ? "quiz score" : "grade";
   const trendSeries = buildTrendSeries(summary);
   // The split failed to load (the summary itself did) — say so rather than
   // drawing one merged series in its place.
@@ -1015,6 +1021,24 @@ export default function FacultyAnalyticsClient() {
             ))}
           </div>
 
+          {/* Every kind of graded work behind the average above (085). */}
+          {summary?.cohort.by_kind && (
+            <Card padding="md" className="mb-4">
+              <div className="mb-5 flex items-center gap-2.5">
+                <div className="rounded-xl bg-brand-600/10 p-2.5">
+                  <FontAwesomeIcon icon={faClipboardCheck} className="h-5 w-5 text-brand-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Performance by Activity</h3>
+                  <p className="text-xs text-gray-400">
+                    Average grade for each kind of graded work, {formatRange(from, to)}
+                  </p>
+                </div>
+              </div>
+              <ActivityBreakdown byKind={summary.cohort.by_kind} />
+            </Card>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 items-stretch">
             <Card padding="md" className="flex flex-col">
               <div className="flex items-center gap-2.5 mb-5">
@@ -1047,8 +1071,8 @@ export default function FacultyAnalyticsClient() {
                     <h3 className="font-semibold text-gray-900">Classroom Performance Overview</h3>
                     <p className="text-xs text-gray-400">
                       {trendSolo
-                        ? `Average quiz score over time — ${trendSolo.name}`
-                        : "Average quiz score over time, one bar per group"}
+                        ? `Average ${gradeNoun} over time — ${trendSolo.name}`
+                        : `Average ${gradeNoun} over time, one bar per group`}
                     </p>
                   </div>
                 </div>
@@ -1092,7 +1116,7 @@ export default function FacultyAnalyticsClient() {
                   </p>
                 ) : trendSeries.length === 0 ? (
                   <p className="text-gray-400 text-sm py-16 text-center">
-                    No submitted attempts in {formatRange(from, to)}.
+                    No graded work in {formatRange(from, to)}.
                   </p>
                 ) : trendView === "table" ? (
                   <TrendTable series={trendSeries} bucket={bucket} />
