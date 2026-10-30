@@ -58,7 +58,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const supabase = getSupabaseAdmin();
     const offering = await loadOwnOffering(supabase, session.uid, id);
     if (!offering) return notFound('Course');
-    if (termStatus(offering.term) === 'ended') return badRequest('This term has ended, so its roster is locked');
+    if (termStatus(offering.term) === 'ended') return badRequest('This semester has ended, so its roster is locked');
 
     const choices = await instructorSectionChoices(supabase, offering);
     const byId = new Map(choices.map((s) => [s.id, s]));

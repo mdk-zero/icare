@@ -119,7 +119,7 @@ export default function FacultyCoursesClient() {
                     icon={faChevronRight}
                     className={`h-3 w-3 transition-transform ${pastOpen ? "rotate-90" : ""}`}
                   />
-                  Past terms
+                  Past semesters
                   <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-500">
                     {plural(pastCourses, "course")}
                   </span>
@@ -222,9 +222,9 @@ function CourseCard({ offering: o }: { offering: FacultyCourseSummary }) {
     o.progress || next
       ? null
       : status === "ended"
-        ? "Term ended · checklist locked"
+        ? "Semester ended · checklist locked"
         : status === "upcoming"
-          ? "The term hasn't started yet"
+          ? "The semester hasn't started yet"
           : o.student_count === 0
             ? "No students yet"
             : null;

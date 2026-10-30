@@ -183,7 +183,7 @@ export default function CourseBrowser({
                       label={`Actions for ${o.faculty_name ?? "assignment"}`}
                       actions={[
                         { label: "Change instructor", icon: faPenToSquare, onClick: () => actions.changeInstructor(o) },
-                        { label: "Remove from term", icon: faTrashCan, danger: true, onClick: () => actions.removeOffering(o) },
+                        { label: "Remove from semester", icon: faTrashCan, danger: true, onClick: () => actions.removeOffering(o) },
                       ]}
                     />
                   </li>
@@ -291,7 +291,7 @@ export default function CourseBrowser({
     <div className="space-y-6">
       {assigned.length === 0 ? (
         <p className="rounded-xl border border-dashed border-gray-300 bg-surface px-4 py-8 text-center text-sm text-gray-500">
-          No course is assigned in this term yet. Use Assign Course: it adds the term and the course as it goes.
+          No course is assigned in this semester yet. Use Assign Course: it adds the semester and the course as it goes.
         </p>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -360,7 +360,7 @@ export default function CourseBrowser({
 
       {unassigned.length > 0 && (
         <section>
-          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500">Not assigned this term</h3>
+          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500">Not assigned this semester</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {unassigned.map((c) => (
               <div key={c.id} className="flex items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-surface px-4 py-3">

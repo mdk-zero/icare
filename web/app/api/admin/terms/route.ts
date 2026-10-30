@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       .select('id, name, starts_on, ends_on')
       .single();
     if (error?.code === '23505') {
-      return NextResponse.json({ error: `You already have a term named "${parsed.value.name}"` }, { status: 409 });
+      return NextResponse.json({ error: `You already have a semester named "${parsed.value.name}"` }, { status: 409 });
     }
     if (error) throw error;
 
@@ -32,6 +32,6 @@ export async function POST(request: NextRequest) {
     );
     return NextResponse.json({ term: { ...term, offering_count: 0 } }, { status: 201 });
   } catch (err) {
-    return courseFailure(err, 'Unable to create term');
+    return courseFailure(err, 'Unable to create semester');
   }
 }

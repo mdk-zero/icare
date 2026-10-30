@@ -22,7 +22,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const supabase = getSupabaseAdmin();
     const offering = await loadOwnOffering(supabase, session.uid, id);
     if (!offering) return notFound('Course');
-    if (termStatus(offering.term) === 'ended') return badRequest('This term has ended, so its roster is locked');
+    if (termStatus(offering.term) === 'ended') return badRequest('This semester has ended, so its roster is locked');
 
     await setAddedStudent(supabase, id, studentId, false, session.uid);
     await logAudit(

@@ -41,7 +41,7 @@ export default function CoursesScreen() {
     >
       <Text style={Type.screenTitle}>Courses</Text>
       <Text style={styles.subtitle}>
-        {firstName ? `Hi ${firstName}. ` : ""}What your students must accomplish this term, course by course.
+        {firstName ? `Hi ${firstName}. ` : ""}What your students must accomplish this semester, course by course.
       </Text>
       <SyncStatus onSynced={reload} />
 

@@ -173,7 +173,7 @@ export default function ProgressTab({
           </button>
         }
       >
-        List what your students must accomplish this term; each student&rsquo;s
+        List what your students must accomplish this semester; each student&rsquo;s
         progress shows here.
       </EmptyState>
     );
@@ -688,7 +688,7 @@ export default function ProgressTab({
         ) : (
           <>
             A cell shows the best score on that activity or skill; a count shows
-            the average across that work this term. Click a cell with no grade
+            the average across that work this semester. Click a cell with no grade
             to enter the score the student earned outside the app; on a count,
             each score adds one more piece of work. Grades from graded work
             can&rsquo;t be changed here.

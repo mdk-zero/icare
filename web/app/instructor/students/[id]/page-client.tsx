@@ -741,7 +741,7 @@ export default function StudentDetailClient() {
             {
               key: 'requirements',
               label: 'Requirements',
-              hint: 'This term, your courses',
+              hint: 'This semester, your courses',
               count: requirementCount.total > 0 ? `${requirementCount.done}/${requirementCount.total}` : 0,
               unit: 'met',
               icon: faBookMedical,

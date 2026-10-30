@@ -177,14 +177,14 @@ export interface TermInput {
 
 export function parseTerm(body: Record<string, unknown>): Parsed<TermInput> {
   const name = typeof body.name === 'string' ? body.name.trim() : '';
-  if (!name) return { ok: false, error: 'Term name is required' };
+  if (!name) return { ok: false, error: 'Semester name is required' };
   if (name.length > COURSE_LIMITS.termName) {
-    return { ok: false, error: `Term name is too long (max ${COURSE_LIMITS.termName} characters)` };
+    return { ok: false, error: `Semester name is too long (max ${COURSE_LIMITS.termName} characters)` };
   }
   if (!isIsoDate(body.starts_on) || !isIsoDate(body.ends_on)) {
     return { ok: false, error: 'Start and end dates are required' };
   }
-  if (body.ends_on < body.starts_on) return { ok: false, error: 'The term must end on or after its start date' };
+  if (body.ends_on < body.starts_on) return { ok: false, error: 'The semester must end on or after its start date' };
   return { ok: true, value: { name, starts_on: body.starts_on, ends_on: body.ends_on } };
 }
 

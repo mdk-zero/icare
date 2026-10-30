@@ -128,7 +128,7 @@ export default function AssignCourseClient() {
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faChalkboardUser} className="h-3.5 w-3.5" />, label: "Curriculum" }}
         title="Assign Course"
-        subtitle="Pick the term, the course and the instructor who teaches it"
+        subtitle="Pick the semester, the course and the instructor who teaches it"
       />
       <button
         onClick={() => router.push("/dean/courses")}
@@ -142,17 +142,17 @@ export default function AssignCourseClient() {
         <div className="rounded-2xl border border-hairline bg-surface p-4 shadow-tile sm:p-6">
           {loading && !data ? (
             <p className="flex items-center gap-2 text-sm text-gray-500">
-              <EcgLoader className="text-brand-600" /> Loading your terms and courses…
+              <EcgLoader className="text-brand-600" /> Loading your semesters and courses…
             </p>
           ) : (
             <>
               {/* 01 — Term */}
               <SheetStep
                 n={1}
-                title="Term"
+                title="Semester"
                 done={termDone}
                 tag={<span className="text-xs font-medium text-red-600">Required</span>}
-                hint="Only work graded within the term's dates counts toward the course."
+                hint="Only work graded within the semester's dates counts toward the course."
               >
                 <TermPicker semester={semester} year={year} years={years} onChange={pickTerm} disabled={saving} idPrefix="assign" />
                 {term ? (
@@ -248,7 +248,7 @@ export default function AssignCourseClient() {
                 </select>
                 {clash && (
                   <p className="mt-1.5 text-xs text-amber-600">
-                    {instructor?.name ?? "This instructor"} already teaches this course in this term.
+                    {instructor?.name ?? "This instructor"} already teaches this course in this semester.
                   </p>
                 )}
               </SheetStep>
@@ -273,7 +273,7 @@ export default function AssignCourseClient() {
             <dl className="divide-y divide-hairline text-sm">
               <div className="flex items-center gap-3 px-4 py-2.5">
                 <FontAwesomeIcon icon={faCalendarDays} className="h-3.5 w-3.5 text-gray-400" />
-                <dt className="sr-only">Term</dt>
+                <dt className="sr-only">Semester</dt>
                 <dd className="min-w-0 flex-1">
                   <span className="font-medium text-gray-900">{name}</span>
                   {!term && <span className="ml-1.5 text-xs text-brand-700">new</span>}

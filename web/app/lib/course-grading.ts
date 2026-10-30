@@ -101,7 +101,7 @@ export const GRADING_LIMITS = { parts: 10, components: 10, name: 60 } as const;
 const hundredths = (n: number) => Math.round(n * 100);
 const MAX_ID = 64;
 
-export const GRADING_ENDED_LOCK = 'This term has ended, so its grading split is locked. Scores can still be changed.';
+export const GRADING_ENDED_LOCK = 'This semester has ended, so its grading split is locked. Scores can still be changed.';
 export const GRADING_NEEDS_MIGRATION = 'The grading split needs database migration 067 (course grading) applied first.';
 export const EXAMS_NEED_MIGRATION = 'Written Exams need database migration 067 (course grading) applied first.';
 export const GRADING_CHANGED = 'The grading split changed since you opened it. Reload to see the latest.';
