@@ -263,7 +263,7 @@ export default function CoursePerformance({
           </div>
           <div>
             <h3 className="font-semibold text-gray-900">Performance per Course</h3>
-            <p className="text-xs text-gray-400">Class average grade, terms in this range</p>
+            <p className="text-xs text-gray-400">Class average grade, semesters in this range</p>
           </div>
         </div>
         {courses.length > 0 && (

@@ -338,7 +338,7 @@ export default function RequirementModal({
                 {pickedScenario && pickedScenario.completed_before_term > 0 && (
                   <p className="mt-1.5 flex items-start gap-1.5 text-xs text-amber-700">
                     <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 h-3 w-3 shrink-0" />
-                    {`${pickedScenario.completed_before_term} of your students in this course finished this case before the term began. A student does each case once, so it can't count for them this term.`}
+                    {`${pickedScenario.completed_before_term} of your students in this course finished this case before the semester began. A student does each case once, so it can't count for them this semester.`}
                   </p>
                 )}
               </div>
@@ -396,7 +396,7 @@ export default function RequirementModal({
                   <span>
                     Only count work covering this course&rsquo;s skills
                     <span className="block text-xs text-gray-500">
-                      Leave off to count every {activityType === "scenario" ? "Patient Case" : "Quiz"} graded this term.
+                      Leave off to count every {activityType === "scenario" ? "Patient Case" : "Quiz"} graded this semester.
                     </span>
                   </span>
                 </label>
@@ -446,7 +446,7 @@ export default function RequirementModal({
                   ))}
                 </select>
                 <p className="mt-1.5 text-xs text-gray-500">
-                  Met by a graded Patient Case task or Quiz on this skill, inside the term.
+                  Met by a graded Patient Case task or Quiz on this skill, inside the semester.
                 </p>
               </div>
             </>

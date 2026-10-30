@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
   if (!body) return badRequest('Invalid JSON body');
   const { course_id: courseId, term_id: termId } = body;
   if (typeof courseId !== 'string' || !courseId) return badRequest('Choose a course');
-  if (typeof termId !== 'string' || !termId) return badRequest('Choose a term');
+  if (typeof termId !== 'string' || !termId) return badRequest('Choose a semester');
   const sectionIds = stringList(body.section_ids ?? []);
 
   try {
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       supabase.from('academic_terms').select('id, name').eq('id', termId).eq('admin_id', session.uid).maybeSingle().then(must),
     ]);
     if (!course) return badRequest('That course is not one of yours');
-    if (!term) return badRequest('That term is not one of yours');
+    if (!term) return badRequest('That semester is not one of yours');
 
     const target = await checkAssignmentTarget(supabase, session.uid, body.faculty_id, sectionIds);
     if (!target.ok) return badRequest(target.error);

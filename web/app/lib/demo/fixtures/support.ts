@@ -73,16 +73,16 @@ export function seedSupportRequests(users: DemoUser[]): DemoNotification[] {
             id: demoId(KIND.notification, 8199),
             user_id: dean.id,
             type: "system",
-            title: "Support replied: Exporting the term report",
+            title: "Support replied: Exporting the semester report",
             body: `${admin?.name ?? "iCARE++ Support"}: ${deanAnswer}\n\nThe full reply is in your email.`,
-            data: { kind: "support_update", event: "replied", subject: "Exporting the term report" },
+            data: { kind: "support_update", event: "replied", subject: "Exporting the semester report" },
             read_at: null,
             created_at: ago(1.3),
           },
         ]
       : [];
   const deanAnswer =
-    "Hi Ramon, open Reports from the sidebar, pick the term, and choose Download All Sections. It saves one PDF with a page per section.";
+    "Hi Ramon, open Reports from the sidebar, pick the semester, and choose Download All Sections. It saves one PDF with a page per section.";
 
   return [
     ...deanReply(deanAnswer),
@@ -97,8 +97,8 @@ export function seedSupportRequests(users: DemoUser[]): DemoNotification[] {
     ...request(dean, "Dean", 1.4, true, {
       status: "answered",
       topic: "How do I…?",
-      subject: "Exporting the term report",
-      message: "Where do I download the end-of-term report for all my sections at once?",
+      subject: "Exporting the semester report",
+      message: "Where do I download the end-of-semester report for all my sections at once?",
       replies: [
         {
           id: demoId(KIND.misc, 8190),

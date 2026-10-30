@@ -340,13 +340,13 @@ export function TermDates({
         </div>
       </div>
       {startsOn && endsOn && endsOn < startsOn && (
-        <p className="text-xs text-rose-600">The term must end on or after its start date.</p>
+        <p className="text-xs text-rose-600">The semester must end on or after its start date.</p>
       )}
       {overlapping.length > 0 && (
         <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800">
           <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
-            {`Overlaps ${overlapping.map((t) => `${t.name} (${formatTermDates(t)})`).join(", ")}. That is allowed, but work graded in the overlap counts for both terms.`}
+            {`Overlaps ${overlapping.map((t) => `${t.name} (${formatTermDates(t)})`).join(", ")}. That is allowed, but work graded in the overlap counts for both semesters.`}
           </span>
         </p>
       )}
@@ -483,7 +483,7 @@ export function TermFormModal({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!datesValid) {
-      setError("The term must end on or after its start date.");
+      setError("The semester must end on or after its start date.");
       return;
     }
     setSaving(true);
@@ -504,7 +504,7 @@ export function TermFormModal({
   return (
     <ModalFrame
       icon={faCalendarDays}
-      title={term ? `Edit ${term.name}` : "New term"}
+      title={term ? `Edit ${term.name}` : "New semester"}
       subtitle="Only work graded within these dates counts toward requirements"
       busy={saving}
       onClose={onClose}
@@ -514,7 +514,7 @@ export function TermFormModal({
         <p className="text-xs text-gray-500">
           Named <span className="font-semibold text-gray-700">{name}</span>.
         </p>
-        {duplicate && <p className="text-xs text-amber-600">You already have this term.</p>}
+        {duplicate && <p className="text-xs text-amber-600">You already have this semester.</p>}
         <TermDates
           startsOn={dates.starts_on}
           endsOn={dates.ends_on}
@@ -533,7 +533,7 @@ export function TermFormModal({
         <ModalActions
           busy={saving}
           onClose={onClose}
-          submitLabel={term ? "Save term" : "Add term"}
+          submitLabel={term ? "Save semester" : "Add semester"}
           disabled={!datesValid || duplicate}
         />
       </form>
@@ -602,7 +602,7 @@ export function AssignmentModal({
       return;
     }
     if (!term && !datesValid) {
-      setError("Set when the term starts and ends.");
+      setError("Set when the semester starts and ends.");
       return;
     }
     setSaving(true);
@@ -654,8 +654,8 @@ export function AssignmentModal({
       title={offering ? `Edit ${code || "assignment"}` : "Assign a course"}
       subtitle={
         offering
-          ? `${editTerm?.name ?? "Term"} · the checklist stays with the assignment`
-          : "The term, the course and who teaches it, in one go"
+          ? `${editTerm?.name ?? "Semester"} · the checklist stays with the assignment`
+          : "The semester, the course and who teaches it, in one go"
       }
       busy={saving}
       onClose={onClose}
@@ -719,7 +719,7 @@ export function AssignmentModal({
           </select>
           {clash && (
             <p className="mt-1.5 text-xs text-amber-600">
-              {instructor?.name ?? "This instructor"} already teaches this course in this term. Edit that assignment instead.
+              {instructor?.name ?? "This instructor"} already teaches this course in this semester. Edit that assignment instead.
             </p>
           )}
           <p className="mt-1.5 text-xs text-gray-500">

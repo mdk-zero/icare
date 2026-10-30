@@ -630,7 +630,7 @@ export async function loadDeanOffering(supabase: Supabase, adminId: string, id: 
     term_id: row.term_id as string,
     faculty_id: (row.faculty_id as string | null) ?? null,
     course: { code: course.code, title: course.title },
-    term: term ?? { name: 'Term', starts_on: '', ends_on: '' },
+    term: term ?? { name: 'Semester', starts_on: '', ends_on: '' },
   };
 }
 
@@ -740,7 +740,7 @@ export async function countInstructorEntries(supabase: Supabase, requirementIds:
   return checks + scores;
 }
 
-export const TERM_ENDED_LOCK = 'This term has ended, so its checklist is locked. Scores and ticks can still be changed.';
+export const TERM_ENDED_LOCK = 'This semester has ended, so its checklist is locked. Scores and ticks can still be changed.';
 
 /** Before 070 the activity tables have no offering_id column. */
 function isMissingActivityCourse(error: { code?: string } | null): boolean {

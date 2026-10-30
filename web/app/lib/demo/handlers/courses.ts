@@ -295,7 +295,7 @@ route("POST", "/api/admin/terms", (ctx) => {
   if (!parsed.ok) return json({ error: parsed.error }, 400);
   const { name } = parsed.value;
   if (ownTerms(ctx).some((t) => t.name.toLowerCase() === name.toLowerCase())) {
-    return json({ error: `You already have a term named "${name}"` }, 409);
+    return json({ error: `You already have a semester named "${name}"` }, 409);
   }
   const term = { id: newId(), admin_id: ctx.viewer.id, ...parsed.value, created_at: new Date().toISOString() };
   db.terms.push(term);
@@ -326,7 +326,7 @@ route("PATCH", "/api/admin/terms/:id", (ctx) => {
   const parsed = parseTerm(ctx.body ?? {});
   if (!parsed.ok) return json({ error: parsed.error }, 400);
   if (ownTerms(ctx).some((t) => t.id !== term.id && t.name.toLowerCase() === parsed.value.name.toLowerCase())) {
-    return json({ error: `You already have a term named "${parsed.value.name}"` }, 409);
+    return json({ error: `You already have a semester named "${parsed.value.name}"` }, 409);
   }
   audit(db, ctx.viewer, "term.update", "academic_terms", { from: { name: term.name }, to: parsed.value }, term.id);
   Object.assign(term, parsed.value);
@@ -369,7 +369,7 @@ function notifyAssigned(ctx: Ctx, o: DemoOffering) {
     user_id: o.faculty_id,
     type: "assignment_created",
     title: "New course assignment",
-    body: `You were assigned ${course.code} ${course.title}${sections ? ` for ${sections}` : ""} (${term?.name ?? "this term"}). ${
+    body: `You were assigned ${course.code} ${course.title}${sections ? ` for ${sections}` : ""} (${term?.name ?? "this semester"}). ${
       sections ? "Set up its requirements checklist." : "Add the sections you teach it in, then set up its requirements checklist."
     }`,
     data: { kind: "course", offeringId: o.id },
@@ -385,7 +385,7 @@ route("POST", "/api/admin/course-offerings", (ctx) => {
   const course = ownCourses(ctx).find((c) => c.id === body?.course_id);
   const term = ownTerms(ctx).find((t) => t.id === body?.term_id);
   if (!course) return json({ error: "That course is not one of yours" }, 400);
-  if (!term) return json({ error: "That term is not one of yours" }, 400);
+  if (!term) return json({ error: "That semester is not one of yours" }, 400);
   const problem = checkTarget(ctx, body?.faculty_id, body?.section_ids ?? []);
   if (problem) return json({ error: problem }, 400);
   if (db.offerings.some((o) => o.course_id === course.id && o.term_id === term.id && o.faculty_id === body.faculty_id)) {
@@ -426,7 +426,7 @@ route("PATCH", "/api/admin/course-offerings/:id", (ctx) => {
     reassigned &&
     db.offerings.some((o) => o.id !== offering.id && o.course_id === offering.course_id && o.term_id === offering.term_id && o.faculty_id === ctx.body.faculty_id)
   ) {
-    return json({ error: "That instructor already teaches this course in this term." }, 409);
+    return json({ error: "That instructor already teaches this course in this semester." }, 409);
   }
   offering.faculty_id = ctx.body.faculty_id;
   offering.section_ids = [...new Set<string>(ctx.body.section_ids ?? [])];
@@ -693,7 +693,7 @@ function linkProblem(db: DemoDb, o: DemoOffering, input: RequirementInput): stri
   return null;
 }
 
-const LOCKED = "This term has ended, so its checklist is locked. Scores and ticks can still be changed.";
+const LOCKED = "This semester has ended, so its checklist is locked. Scores and ticks can still be changed.";
 
 route("POST", "/api/faculty/courses/:id/requirements", async (ctx) => {
   if (!instructorOnly(ctx)) return forbidden();
@@ -944,7 +944,7 @@ route("PUT", "/api/faculty/courses/:id/sections", (ctx) => {
   if (!o) return notFound("Course not found");
   const ids: unknown = ctx.body?.section_ids;
   if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string")) return json({ error: "Invalid sections" }, 400);
-  if (termStatus(termOf(db, o)) === "ended") return json({ error: "This term has ended, so its roster is locked" }, 400);
+  if (termStatus(termOf(db, o)) === "ended") return json({ error: "This semester has ended, so its roster is locked" }, 400);
   if (ids.some((id) => !db.sections.some((s) => s.id === id))) return json({ error: "One of those sections is not open to you" }, 400);
   o.section_ids = [...new Set<string>(ids)];
   audit(db, ctx.viewer, "course.sections.update", "course_offerings", { sections: o.section_ids.map((id) => sectionName(db, id)) }, o.id);
@@ -972,7 +972,7 @@ route("POST", "/api/faculty/courses/:id/students", (ctx) => {
   const db = courseDb(ctx.db);
   const o = ownFacultyOffering(ctx, ctx.params.id);
   if (!o) return notFound("Course not found");
-  if (termStatus(termOf(db, o)) === "ended") return json({ error: "This term has ended, so its roster is locked" }, 400);
+  if (termStatus(termOf(db, o)) === "ended") return json({ error: "This semester has ended, so its roster is locked" }, 400);
   const studentId: unknown = ctx.body?.student_id;
   const student = db.users.find((u) => u.id === studentId && u.role === "student");
   if (!student) return notFound("Student not found");
@@ -988,7 +988,7 @@ route("DELETE", "/api/faculty/courses/:id/students/:studentId", (ctx) => {
   const db = courseDb(ctx.db);
   const o = ownFacultyOffering(ctx, ctx.params.id);
   if (!o) return notFound("Course not found");
-  if (termStatus(termOf(db, o)) === "ended") return json({ error: "This term has ended, so its roster is locked" }, 400);
+  if (termStatus(termOf(db, o)) === "ended") return json({ error: "This semester has ended, so its roster is locked" }, 400);
   db.offeringStudents = db.offeringStudents.filter((r) => !(r.offering_id === o.id && r.student_id === ctx.params.studentId));
   audit(db, ctx.viewer, "course.student.remove", "course_offerings", { student_id: ctx.params.studentId }, o.id);
   return { success: true };

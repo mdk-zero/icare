@@ -76,7 +76,7 @@ export default function StudentsScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />}
     >
       <Text style={Type.screenTitle}>Students</Text>
-      <Text style={styles.subtitle}>This term&apos;s requirements across your courses, the furthest behind first.</Text>
+      <Text style={styles.subtitle}>This semester&apos;s requirements across your courses, the furthest behind first.</Text>
       <SyncStatus onSynced={reload} />
 
       <View style={styles.search}>
@@ -96,7 +96,7 @@ export default function StudentsScreen() {
       ) : error && !data ? (
         <EmptyState icon="cloud-offline-outline" message={error} />
       ) : students.length === 0 ? (
-        <EmptyState icon="people-outline" message="No students in this term's courses yet." />
+        <EmptyState icon="people-outline" message="No students in this semester's courses yet." />
       ) : shown.length === 0 ? (
         <EmptyState icon="search-outline" message="No student matches that search." />
       ) : (

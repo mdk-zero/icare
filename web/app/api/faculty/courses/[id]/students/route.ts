@@ -81,7 +81,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const supabase = getSupabaseAdmin();
     const offering = await loadOwnOffering(supabase, session.uid, id);
     if (!offering) return notFound('Course');
-    if (termStatus(offering.term) === 'ended') return badRequest('This term has ended, so its roster is locked');
+    if (termStatus(offering.term) === 'ended') return badRequest('This semester has ended, so its roster is locked');
     const student = must(
       await supabase.from('users').select('id, name').eq('id', studentId).eq('role', 'student').maybeSingle(),
     ) as { id: string; name: string | null } | null;

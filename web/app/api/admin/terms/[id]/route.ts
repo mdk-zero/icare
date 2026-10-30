@@ -41,10 +41,10 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   try {
     const supabase = getSupabaseAdmin();
     const term = await ownTerm(supabase, session.uid, id);
-    if (!term) return notFound('Term');
+    if (!term) return notFound('Semester');
     return NextResponse.json({ term, ...(await termImpact(supabase, id)) });
   } catch (err) {
-    return courseFailure(err, 'Unable to load term');
+    return courseFailure(err, 'Unable to load semester');
   }
 }
 
@@ -62,7 +62,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const supabase = getSupabaseAdmin();
     const current = await ownTerm(supabase, session.uid, id);
-    if (!current) return notFound('Term');
+    if (!current) return notFound('Semester');
 
     const { data: term, error } = await supabase
       .from('academic_terms')
@@ -71,7 +71,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .select('id, name, starts_on, ends_on')
       .single();
     if (error?.code === '23505') {
-      return NextResponse.json({ error: `You already have a term named "${parsed.value.name}"` }, { status: 409 });
+      return NextResponse.json({ error: `You already have a semester named "${parsed.value.name}"` }, { status: 409 });
     }
     if (error) throw error;
 
@@ -87,7 +87,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     );
     return NextResponse.json({ term });
   } catch (err) {
-    return courseFailure(err, 'Unable to update term');
+    return courseFailure(err, 'Unable to update semester');
   }
 }
 
@@ -100,7 +100,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const supabase = getSupabaseAdmin();
     const term = await ownTerm(supabase, session.uid, id);
-    if (!term) return notFound('Term');
+    if (!term) return notFound('Semester');
     const impact = await termImpact(supabase, id);
 
     must(await supabase.from('academic_terms').delete().eq('id', id));
@@ -112,6 +112,6 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     );
     return NextResponse.json({ success: true, ...impact });
   } catch (err) {
-    return courseFailure(err, 'Unable to delete term');
+    return courseFailure(err, 'Unable to delete semester');
   }
 }
