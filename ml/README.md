@@ -132,6 +132,17 @@ app asks for the stream to show a percentage; the nightly workflow doesn't.
   least-mastered skills, and on a practice run the questions last answered
   wrong come first.
 
+  Benchmark (`eval/out/bkt_eval_as.md`): ASSISTments 2009-2010 skill-builder
+  log, 446,844 answers from 4,151 students on 110 skills, 5-fold
+  cross-validation by student, predicting each held-out answer before it is
+  seen.
+
+  | Model | AUC | Accuracy | RMSE |
+  |---|---|---|---|
+  | BKT | 0.7665 | 0.7592 | 0.4122 |
+  | Skill average | 0.6431 | 0.6984 | 0.4473 |
+  | Student running average | 0.7619 | 0.7303 | 0.4262 |
+
 ## Evaluation (Phase 3.7 / manuscript Ch. IV)
 
 ```bash

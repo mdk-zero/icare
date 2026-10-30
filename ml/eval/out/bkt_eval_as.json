@@ -1,0 +1,45 @@
+{
+  "evaluated_at": "2026-10-30T08:23:16+00:00",
+  "data": {
+    "source": "ASSISTments 2009-2010 skill builder (as.csv, CAHLR/pyBKT-examples)",
+    "students": 4151,
+    "skills": 110,
+    "answers": 446844,
+    "fit_thresholds": {
+      "min_students": 5,
+      "min_answers": 40
+    },
+    "parameters_on_full_data": {
+      "fitted": 102,
+      "chapter": 0,
+      "default": 8
+    }
+  },
+  "held_out": {
+    "predictions": 446844,
+    "share_correct": 0.6952,
+    "folds": 5,
+    "parameters_used": {
+      "fitted": 445313,
+      "chapter": 0,
+      "default": 1531
+    },
+    "bkt": {
+      "auc": 0.7665,
+      "accuracy": 0.7592,
+      "rmse": 0.4122
+    },
+    "baselines": {
+      "skill_average": {
+        "auc": 0.6431,
+        "accuracy": 0.6984,
+        "rmse": 0.4473
+      },
+      "student_running_average": {
+        "auc": 0.7619,
+        "accuracy": 0.7303,
+        "rmse": 0.4262
+      }
+    }
+  }
+}
