@@ -6,6 +6,12 @@ quiz review, and the **content-based quiz recommender** (Objective 2.2). It read
 role over PostgREST) and writes `performance_predictions`,
 `learning_recommendations`, `bkt_parameters`, `ml_models`, and `notifications`.
 
+Besides the nightly whole-cohort run, the web app re-scores a single student
+in the background (`/predict/at-risk` then `/recommend/refresh`, scoped to
+them) whenever they hand in a graded quiz or a Patient Case / Return Demo, and
+whenever an instructor finalizes one of those grades. The Assess button is for
+running it by hand.
+
 The two halves form one pipeline. The at-risk models decide **who** needs
 intervention. Knowledge tracing and the recommender decide **what** each
 student practises: BKT estimates mastery of every Taylor's skill, the web
@@ -60,7 +66,7 @@ All endpoints except `/health` require header `X-ICARE-ML-KEY: $ML_SERVICE_SECRE
 | `GET /models` | registry contents |
 | `POST /models/{id}/promote` | staging → active (retires the previous active of that kind) |
 | `POST /predict/at-risk` `{student_ids?}` | batch-score cohort, write `performance_predictions`, notify roster faculty on new at-risk transitions |
-| `POST /recommend/refresh` `{student_ids?, k?}` | refit `bkt_parameters`, then recompute + persist `learning_recommendations` |
+| `POST /recommend/refresh` `{student_ids?, k?}` | refit `bkt_parameters` (whole-cohort runs only), then recompute + persist `learning_recommendations` |
 | `GET /recommend/{student_id}?k=5` | ad-hoc ranking (not persisted) |
 
 Both `POST` jobs answer with plain JSON by default. With
@@ -121,7 +127,8 @@ app asks for the stream to show a percentage; the nightly workflow doesn't.
 - **Bayesian Knowledge Tracing** (`app/bkt.py`) — one two-state hidden
   Markov model per Taylor's skill, over each student's quiz answers in order
   (graded attempts and practice runs). EM (Baum-Welch, as in pyBKT) fits
-  P(L0), P(T), P(G), P(S) on every `/recommend/refresh`, with guess and slip
+  P(L0), P(T), P(G), P(S) on every whole-cohort `/recommend/refresh` (nightly,
+  or an admin's run; scoped runs leave it alone), with guess and slip
   capped below 0.5 to avoid degenerate fits. Cold start: a skill needs 5
   students and 40 answers for its own fit; below that it takes its chapter's
   pooled fit, then the defaults (0.3 / 0.1 / 0.2 / 0.1), and is refit as

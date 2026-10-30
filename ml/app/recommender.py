@@ -275,13 +275,19 @@ def refresh_recommendations(
 
     # What each student practises has two halves: these quiz picks, and the
     # adaptive review inside a quiz, which reads the BKT parameters fitted
-    # here. A failed fit leaves the previous parameters in place; it never
-    # costs the recommendations.
-    try:
-        bkt = refresh_bkt_parameters(db)
-    except Exception:
-        logger.exception("BKT parameter fit failed")
-        bkt = {"error": "BKT fit failed"}
+    # here. BKT learns from every student at once and moves slowly, so only a
+    # whole-cohort run (nightly, or an admin's) refits it; a scoped one — an
+    # instructor's Assess, or the web's re-score after a student hands
+    # something in — leaves it alone. A failed fit keeps the previous
+    # parameters; it never costs the recommendations.
+    if student_ids:
+        bkt: dict[str, Any] = {"skipped": "scoped run"}
+    else:
+        try:
+            bkt = refresh_bkt_parameters(db)
+        except Exception:
+            logger.exception("BKT parameter fit failed")
+            bkt = {"error": "BKT fit failed"}
     progress.step()
 
     model_id = ensure_recommender_registered(db)
