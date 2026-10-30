@@ -187,6 +187,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       selection = await selectQuestionsForAttempt(supabase, {
         assessmentId,
         studentId: session.uid,
+        practice,
       });
     } catch (err) {
       if (err instanceof SelectionError) {

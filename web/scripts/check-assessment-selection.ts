@@ -22,6 +22,7 @@ import {
   distribute,
   type SelectionResult,
 } from '../app/lib/assessment-selection';
+import { DEFAULT_BKT, predictCorrect, traceMastery, updateMastery } from '../app/lib/bkt';
 
 config({ path: '.env.local' });
 
@@ -72,20 +73,26 @@ function fakeClient(tables: Record<string, Record<string, unknown>[]>) {
 
 function buildFixture(opts: {
   totalQuestions: number | null;
-  pools: { name: string; min: number; count: number }[];
+  pools: { name: string; min: number; count: number; skill?: string }[];
   priorAttempt?: {
     /** 'practiced' is a practice run past the attempt limit (083). */
     status?: string;
     seenQuestionIds: string[];
+    /** Per criterion, the share of its seen questions answered right (the first ones). */
     scores: { criteriaIndex: number; score: number; total: number }[];
+    /** Seen questions answered wrong, on top of what `scores` says. */
+    wrongQuestionIds?: string[];
   };
+  /** Answers on another quiz 'B', handed in before the prior attempt: skill -> right/wrong in order. */
+  otherQuiz?: Record<string, boolean[]>;
 }) {
-  const criteria = opts.pools.map((p, i) => ({
+  const criteria: Record<string, unknown>[] = opts.pools.map((p, i) => ({
     id: `c${i}`,
     assessment_id: 'A',
     name: p.name,
     min_questions: p.min,
     sort_order: i,
+    skill_id: p.skill ?? null,
   }));
   const questions: Record<string, unknown>[] = [];
   let n = 0;
@@ -109,23 +116,49 @@ function buildFixture(opts: {
     questions,
     assessment_attempts: [],
     attempt_questions: [],
-    attempt_criteria_scores: [],
+    attempt_answers: [],
   };
 
   if (opts.priorAttempt) {
+    const prior = opts.priorAttempt;
     tables.assessment_attempts = [
-      { id: 'PRIOR', assessment_id: 'A', student_id: 'S', status: opts.priorAttempt.status ?? 'submitted' },
+      { id: 'PRIOR', assessment_id: 'A', student_id: 'S', status: prior.status ?? 'submitted', submitted_at: '2026-10-02T00:00:00Z' },
     ];
-    tables.attempt_questions = opts.priorAttempt.seenQuestionIds.map((qid) => ({
+    tables.attempt_questions = prior.seenQuestionIds.map((qid, position) => ({
       attempt_id: 'PRIOR',
       question_id: qid,
+      position,
     }));
-    tables.attempt_criteria_scores = opts.priorAttempt.scores.map((s) => ({
-      attempt_id: 'PRIOR',
-      criteria_id: `c${s.criteriaIndex}`,
-      score: s.score,
-      total: s.total,
-    }));
+    const criterionOf = new Map(questions.map((q) => [q.id as string, q.criteria_id as string]));
+    const right = new Map(prior.scores.map((sc) => [`c${sc.criteriaIndex}`, sc.score / 100]));
+    const seenIn = new Map<string, string[]>();
+    for (const qid of prior.seenQuestionIds) {
+      const c = criterionOf.get(qid)!;
+      seenIn.set(c, [...(seenIn.get(c) ?? []), qid]);
+    }
+    tables.attempt_answers = prior.seenQuestionIds.map((qid) => {
+      const c = criterionOf.get(qid)!;
+      const mine = seenIn.get(c)!;
+      const correct =
+        mine.indexOf(qid) < Math.round((right.get(c) ?? 1) * mine.length) && !prior.wrongQuestionIds?.includes(qid);
+      return { attempt_id: 'PRIOR', question_id: qid, is_correct: correct };
+    });
+  }
+  if (opts.otherQuiz) {
+    tables.assessment_attempts.push({
+      id: 'OTHER', assessment_id: 'B', student_id: 'S', status: 'submitted', submitted_at: '2026-10-01T00:00:00Z',
+    });
+    let n = 0;
+    for (const [skill, results] of Object.entries(opts.otherQuiz)) {
+      tables.assessment_criteria.push({ id: `b-${skill}`, assessment_id: 'B', name: `Skill ${skill}`, skill_id: skill });
+      for (const correct of results) {
+        const id = `b${n}`;
+        tables.questions.push({ id, assessment_id: 'B', position: n, criteria_id: `b-${skill}` });
+        tables.attempt_questions.push({ attempt_id: 'OTHER', question_id: id, position: n });
+        tables.attempt_answers.push({ attempt_id: 'OTHER', question_id: id, is_correct: correct });
+        n++;
+      }
+    }
   }
   return { tables, questions };
 }
@@ -227,6 +260,7 @@ async function main() {
       `   Strong: ${strong.allocated} (weakness ${strong.weakness}), Weak: ${weak.allocated} (weakness ${weak.weakness})`,
     );
     check('weak criterion is weighted higher', (weak.weakness ?? 0) > (strong.weakness ?? 0));
+    check('weakness is 1 - BKT mastery', Math.abs((weak.weakness ?? 0) - (1 - (weak.mastery ?? 0))) < 1e-9);
     check('weak criterion gets more questions', weak.allocated > strong.allocated);
     // Unseen is preferred *within* a criterion, but allocation wins: Strong is
     // capped at 2 despite having 3 unseen, because the retake is meant to
@@ -267,6 +301,65 @@ async function main() {
     invariants(r, 8, 'after practice');
     check('a practice run counts as history', r.attemptNumber === 2);
     check('weak criterion gets more questions', r.allocations[1].allocated > r.allocations[0].allocated);
+  }
+
+  console.log('\n=== BKT update rules match ml/app/bkt.py ===');
+  {
+    const near = (a: number, b: number) => Math.abs(a - b) < 5e-5;
+    check('a right answer from P(L0) = 0.3', near(updateMastery(0.3, true, DEFAULT_BKT), 0.6927));
+    check('a wrong answer from P(L0) = 0.3', near(updateMastery(0.3, false, DEFAULT_BKT), 0.1458));
+    check('right, wrong, right ends at 0.6906', near(traceMastery(DEFAULT_BKT, [true, false, true]), 0.6906));
+    check('first prediction is 0.41', near(predictCorrect(DEFAULT_BKT.p_init, DEFAULT_BKT), 0.41));
+    check('no answers leaves P(L0)', traceMastery(DEFAULT_BKT, []) === DEFAULT_BKT.p_init);
+  }
+
+  console.log('\n=== practice re-asks what was missed; a graded retake prefers unseen ===');
+  {
+    const fixture = () =>
+      buildFixture({
+        totalQuestions: 4,
+        pools: [{ name: 'Only', min: 1, count: 6 }],
+        priorAttempt: {
+          seenQuestionIds: ['q0', 'q1', 'q2', 'q3'],
+          scores: [{ criteriaIndex: 0, score: 100, total: 4 }],
+          wrongQuestionIds: ['q1', 'q2'],
+        },
+      }).tables;
+    const practice = await selectQuestionsForAttempt(fakeClient(fixture()), {
+      assessmentId: 'A', studentId: 'S', practice: true, rng: seeded(3),
+    });
+    const graded = await selectQuestionsForAttempt(fakeClient(fixture()), {
+      assessmentId: 'A', studentId: 'S', rng: seeded(3),
+    });
+    const ids = (r: SelectionResult) => new Set(r.questions.map((q) => q.id));
+    check('practice serves both missed questions', ids(practice).has('q1') && ids(practice).has('q2'));
+    check('practice fills up with unseen ones', ids(practice).has('q4') && ids(practice).has('q5'));
+    check('a graded retake serves both unseen questions', ids(graded).has('q4') && ids(graded).has('q5'));
+  }
+
+  console.log('\n=== another quiz on the same skill counts toward mastery ===');
+  {
+    const { tables } = buildFixture({
+      totalQuestions: 8,
+      pools: [
+        { name: 'Skill 1-1', min: 1, count: 6, skill: '1-1' },
+        { name: 'Skill 1-2', min: 1, count: 6, skill: '1-2' },
+      ],
+      priorAttempt: {
+        // all right on this quiz, on both skills
+        seenQuestionIds: ['q0', 'q1', 'q6', 'q7'],
+        scores: [
+          { criteriaIndex: 0, score: 100, total: 2 },
+          { criteriaIndex: 1, score: 100, total: 2 },
+        ],
+      },
+      otherQuiz: { '1-1': [true, true, true], '1-2': [false, false, false] },
+    });
+    const r = await selectQuestionsForAttempt(fakeClient(tables), { assessmentId: 'A', studentId: 'S', rng: seeded(5) });
+    const [a, b] = r.allocations;
+    console.log(`   1-1 mastery ${a.mastery?.toFixed(3)} → ${a.allocated}, 1-2 mastery ${b.mastery?.toFixed(3)} → ${b.allocated}`);
+    check('the skill missed on the other quiz has lower mastery', (b.mastery ?? 1) < (a.mastery ?? 0));
+    check('and gets more of the paper', b.allocated > a.allocated);
   }
 
   console.log('\n=== an expired attempt is not history ===');

@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { SHORT_ANSWER } from './short-answer';
 import { scoredStatuses } from './quiz-practice';
+import { DEFAULT_BKT, loadBktParameters, traceMastery } from './bkt';
+import { isMissingSkillColumn, skillIdFromTitle } from './taylor-skills';
 
 /**
  * Picks the questions one attempt serves.
@@ -18,10 +20,15 @@ import { scoredStatuses } from './quiz-practice';
  *   from a paper that grades against it.
  *
  *   Emphasis — the first attempt spreads what is left over the criteria in
- *   proportion to how much material each has. A retake spends it on whatever
- *   the student scored worst on, and prefers questions they have not seen.
- *   Practice runs past the attempt limit (083) count as history here, though
- *   never toward a grade, so each one steers the next.
+ *   proportion to how much material each has, so every student's first paper
+ *   follows the same blueprint. A retake or practice run (083) is the adaptive
+ *   review: each criterion's Taylor's skill gets a mastery estimate from
+ *   Bayesian Knowledge Tracing — the student's every quiz answer on that
+ *   skill, in order, through the update rules in bkt.ts with the parameters
+ *   the ML service fitted (084) — and the surplus goes to the least-mastered
+ *   skills. Within a criterion a graded retake serves unseen questions first;
+ *   a practice run serves the ones the student last got wrong first, then
+ *   unseen ones.
  *
  * Order is interleaved rather than grouped, so a student never meets all of one
  * criterion's questions in a block.
@@ -30,9 +37,6 @@ import { scoredStatuses } from './quiz-practice';
  * question is invisible here and publish validation refuses to publish while
  * any exist — a question is either owned by a criterion or it is not asked.
  */
-
-/** Weakness assumed for a criterion the student has no history on. Matches the ML recommender's exploration weight. */
-const NEUTRAL_WEAKNESS = 0.5;
 
 export interface SelectedQuestion {
   id: string;
@@ -54,7 +58,9 @@ export interface CriterionAllocation {
   allocated: number;
   /** How many of the allocated the student has not been served before. */
   unseen_used: number;
-  /** 0 = perfect history, 1 = never correct, null = first attempt. */
+  /** BKT P(known) for the criterion's skill; null on a first attempt, which doesn't adapt. */
+  mastery: number | null;
+  /** 1 - mastery: what the surplus is weighted by. */
   weakness: number | null;
 }
 
@@ -97,6 +103,18 @@ interface CriterionRow {
   name: string;
   min_questions: number;
   sort_order: number;
+  skill_id?: string | null;
+}
+
+/** The knowledge component BKT traces a criterion's questions under: its skill, else the criterion itself. */
+function knowledgeComponent(skillId: string | null | undefined, criteriaId: string | null, assessmentId: string) {
+  if (skillId) return skillId;
+  return criteriaId ? `criterion:${criteriaId}` : `quiz:${assessmentId}`;
+}
+
+/** A criterion's skill: skill_id (049), else the one its name cites. */
+function criterionSkill(c: { skill_id?: string | null; name?: string | null }): string | null {
+  return c.skill_id ?? skillIdFromTitle(c.name ?? '');
 }
 
 type Rng = () => number;
@@ -242,21 +260,29 @@ function interleave(
  */
 export async function selectQuestionsForAttempt(
   supabase: SupabaseClient,
-  options: { assessmentId: string; studentId: string; rng?: Rng },
+  options: {
+    assessmentId: string;
+    studentId: string;
+    /** A practice run past the attempt limit: missed questions come first. */
+    practice?: boolean;
+    rng?: Rng;
+  },
 ): Promise<SelectionResult> {
-  const { assessmentId, studentId, rng = Math.random } = options;
+  const { assessmentId, studentId, practice = false, rng = Math.random } = options;
 
-  const [assessmentRes, criteriaRes, questionsRes] = await Promise.all([
+  const readCriteria = (columns: string) =>
+    supabase
+      .from('assessment_criteria')
+      .select(columns)
+      .eq('assessment_id', assessmentId)
+      .order('sort_order', { ascending: true });
+  const [assessmentRes, criteriaFirst, questionsRes] = await Promise.all([
     supabase
       .from('assessments')
       .select('id, total_questions')
       .eq('id', assessmentId)
       .maybeSingle(),
-    supabase
-      .from('assessment_criteria')
-      .select('id, name, min_questions, sort_order')
-      .eq('assessment_id', assessmentId)
-      .order('sort_order', { ascending: true }),
+    readCriteria('id, name, min_questions, sort_order, skill_id'),
     supabase
       .from('questions')
       .select('id, position, content, options, question_type, criteria_id')
@@ -264,27 +290,38 @@ export async function selectQuestionsForAttempt(
       .order('position', { ascending: true }),
   ]);
 
+  // Before 049 there is no skill_id; the skill then comes from the name.
+  const criteriaRes =
+    criteriaFirst.error && isMissingSkillColumn(criteriaFirst.error)
+      ? await readCriteria('id, name, min_questions, sort_order')
+      : criteriaFirst;
+
   if (!assessmentRes.data) throw new SelectionError('Assessment not found', 404);
   if (criteriaRes.error || questionsRes.error) {
     throw new SelectionError('Unable to read the assessment', 500);
   }
 
-  const criteria = (criteriaRes.data ?? []) as CriterionRow[];
+  const criteria = (criteriaRes.data ?? []) as unknown as CriterionRow[];
   const allQuestions = (questionsRes.data ?? []) as QuestionRow[];
   if (allQuestions.length === 0) throw new SelectionError('Assessment has no questions');
 
   // An assessment with no criteria has nothing to balance, so the whole bank
   // is one bucket. Keeps quizzes that predate criteria working.
   const useCriteria = criteria.length > 0;
-  const buckets: { id: string | null; name: string; min: number; pool: QuestionRow[] }[] =
+  const buckets: { id: string | null; name: string; min: number; skill: string | null; kc: string; pool: QuestionRow[] }[] =
     useCriteria
-      ? criteria.map((c) => ({
-          id: c.id,
-          name: c.name,
-          min: Math.max(0, c.min_questions ?? 0),
-          pool: allQuestions.filter((q) => q.criteria_id === c.id),
-        }))
-      : [{ id: null, name: 'All questions', min: 0, pool: allQuestions }];
+      ? criteria.map((c) => {
+          const skill = criterionSkill(c);
+          return {
+            id: c.id,
+            name: c.name,
+            min: Math.max(0, c.min_questions ?? 0),
+            skill,
+            kc: knowledgeComponent(skill, c.id, assessmentId),
+            pool: allQuestions.filter((q) => q.criteria_id === c.id),
+          };
+        })
+      : [{ id: null, name: 'All questions', min: 0, skill: null, kc: knowledgeComponent(null, null, assessmentId), pool: allQuestions }];
 
   const eligible = buckets.reduce((sum, b) => sum + b.pool.length, 0);
   if (eligible === 0) {
@@ -295,43 +332,86 @@ export async function selectQuestionsForAttempt(
   const paperSize = Math.max(1, Math.min(requested, eligible));
 
   // ---------- history ----------
-  const { data: priorAttempts } = await supabase
+  // Every finished run the student has on any quiz: a skill is often asked on
+  // more than one, and BKT should hear all of it.
+  const { data: history } = await supabase
     .from('assessment_attempts')
-    .select('id')
-    .eq('assessment_id', assessmentId)
+    .select('id, assessment_id, submitted_at')
     .eq('student_id', studentId)
     .in('status', await scoredStatuses(supabase));
+  const attempts = (history ?? []) as { id: string; assessment_id: string; submitted_at: string | null }[];
 
-  const priorIds = (priorAttempts ?? []).map((a) => a.id);
+  const priorIds = attempts.filter((a) => a.assessment_id === assessmentId).map((a) => a.id);
   const isRetake = priorIds.length > 0;
 
   const seen = new Set<string>();
-  const weaknessByCriteria = new Map<string, number>();
+  /** This quiz's questions the student got wrong the last time they answered them. */
+  const missed = new Set<string>();
+  const masteryByKc = new Map<string, number>();
 
   if (isRetake) {
-    const [servedRes, scoresRes] = await Promise.all([
-      supabase.from('attempt_questions').select('question_id').in('attempt_id', priorIds),
-      supabase
-        .from('attempt_criteria_scores')
-        .select('criteria_id, score, total')
-        .in('attempt_id', priorIds),
+    const attemptIds = attempts.map((a) => a.id);
+    const [servedRes, answersRes] = await Promise.all([
+      supabase.from('attempt_questions').select('attempt_id, question_id, position').in('attempt_id', attemptIds),
+      supabase.from('attempt_answers').select('attempt_id, question_id, is_correct').in('attempt_id', attemptIds),
     ]);
+    const prior = new Set(priorIds);
+    const served = (servedRes.data ?? []) as { attempt_id: string; question_id: string; position: number }[];
+    for (const row of served) if (prior.has(row.attempt_id)) seen.add(row.question_id);
 
-    for (const row of servedRes.data ?? []) seen.add(row.question_id);
-
-    // Weight each past result by the questions behind it: a 6-question
-    // criterion is stronger evidence than a 1-question one.
-    const evidence = new Map<string, { weighted: number; questions: number }>();
-    for (const row of scoresRes.data ?? []) {
-      if (!row.criteria_id || !row.total || row.total <= 0) continue;
-      const entry = evidence.get(row.criteria_id) ?? { weighted: 0, questions: 0 };
-      entry.weighted += Number(row.score) * row.total;
-      entry.questions += row.total;
-      evidence.set(row.criteria_id, entry);
+    // Which knowledge component each answered question belongs to.
+    const answers = (answersRes.data ?? []) as { attempt_id: string; question_id: string; is_correct: boolean }[];
+    const answeredIds = [...new Set(answers.map((a) => a.question_id))];
+    const { data: answeredQuestions } = answeredIds.length
+      ? await supabase.from('questions').select('id, criteria_id, assessment_id').in('id', answeredIds)
+      : { data: [] };
+    const questionMeta = new Map(
+      ((answeredQuestions ?? []) as { id: string; criteria_id: string | null; assessment_id: string }[]).map((q) => [q.id, q]),
+    );
+    const criteriaIds = [...new Set([...questionMeta.values()].map((q) => q.criteria_id).filter((id): id is string => !!id))];
+    const skillOfCriterion = new Map<string, string | null>();
+    if (criteriaIds.length > 0) {
+      let res = await supabase.from('assessment_criteria').select('id, name, skill_id').in('id', criteriaIds);
+      if (res.error && isMissingSkillColumn(res.error)) {
+        res = (await supabase.from('assessment_criteria').select('id, name').in('id', criteriaIds)) as typeof res;
+      }
+      for (const c of (res.data ?? []) as { id: string; name: string; skill_id?: string | null }[]) {
+        skillOfCriterion.set(c.id, criterionSkill(c));
+      }
     }
-    for (const [criteriaId, entry] of evidence) {
-      const average = entry.weighted / entry.questions;
-      weaknessByCriteria.set(criteriaId, Math.min(1, Math.max(0, 1 - average / 100)));
+
+    // Oldest first: runs by when they were handed in, answers by their place on the paper.
+    const submittedAt = new Map(attempts.map((a) => [a.id, a.submitted_at ?? '']));
+    const slot = new Map(served.map((r) => [`${r.attempt_id}:${r.question_id}`, r.position]));
+    const ordered = [...answers].sort(
+      (a, b) =>
+        (submittedAt.get(a.attempt_id) ?? '').localeCompare(submittedAt.get(b.attempt_id) ?? '') ||
+        a.attempt_id.localeCompare(b.attempt_id) ||
+        (slot.get(`${a.attempt_id}:${a.question_id}`) ?? 0) - (slot.get(`${b.attempt_id}:${b.question_id}`) ?? 0),
+    );
+
+    const sequences = new Map<string, boolean[]>();
+    const lastResult = new Map<string, boolean>();
+    for (const answer of ordered) {
+      const meta = questionMeta.get(answer.question_id);
+      if (!meta) continue;
+      const kc = knowledgeComponent(
+        meta.criteria_id ? skillOfCriterion.get(meta.criteria_id) : null,
+        meta.criteria_id,
+        meta.assessment_id,
+      );
+      sequences.set(kc, [...(sequences.get(kc) ?? []), Boolean(answer.is_correct)]);
+      if (meta.assessment_id === assessmentId) lastResult.set(answer.question_id, Boolean(answer.is_correct));
+    }
+    for (const [questionId, correct] of lastResult) if (!correct) missed.add(questionId);
+
+    const params = await loadBktParameters(
+      supabase,
+      buckets.map((b) => b.skill).filter((id): id is string => !!id),
+    );
+    for (const b of buckets) {
+      const skillParams = (b.skill && params.get(b.skill)) || DEFAULT_BKT;
+      masteryByKc.set(b.kc, traceMastery(skillParams, sequences.get(b.kc) ?? []));
     }
   }
 
@@ -349,13 +429,10 @@ export async function selectQuestionsForAttempt(
   const headroom = buckets.map((b, i) => caps[i] - mins[i]);
   const remainder = paperSize - mins.reduce((a, b) => a + b, 0);
 
-  // First sitting spreads by how much material each criterion has; a retake
-  // spends the surplus where the student is weakest.
-  const weights = buckets.map((b, i) => {
-    if (!isRetake) return headroom[i];
-    const weakness = b.id ? (weaknessByCriteria.get(b.id) ?? NEUTRAL_WEAKNESS) : NEUTRAL_WEAKNESS;
-    return weakness * headroom[i];
-  });
+  // First sitting spreads by how much material each criterion has; the
+  // adaptive review spends the surplus on the least-mastered skills.
+  const weaknessOf = (b: (typeof buckets)[number]) => 1 - (masteryByKc.get(b.kc) ?? DEFAULT_BKT.p_init);
+  const weights = buckets.map((b, i) => (isRetake ? weaknessOf(b) * headroom[i] : headroom[i]));
 
   const extra = distribute(remainder, weights, headroom);
   const allocated = mins.map((m, i) => m + extra[i]);
@@ -363,8 +440,9 @@ export async function selectQuestionsForAttempt(
   // ---------- pick within each criterion ----------
   const picks = buckets.map((bucket, i) => {
     const take = allocated[i];
-    // A retake shows unseen questions first — that surplus in the bank is the
-    // whole reason a paper can be smaller than it.
+    // A graded retake shows unseen questions first — that surplus in the bank
+    // is the whole reason a paper can be smaller than it. A practice run is a
+    // review: what the student last got wrong comes back first.
     const unseen = shuffle(
       bucket.pool.filter((q) => !seen.has(q.id)),
       rng,
@@ -373,7 +451,11 @@ export async function selectQuestionsForAttempt(
       bucket.pool.filter((q) => seen.has(q.id)),
       rng,
     );
-    const ordered = isRetake ? [...unseen, ...already] : shuffle(bucket.pool, rng);
+    const ordered = !isRetake
+      ? shuffle(bucket.pool, rng)
+      : practice
+        ? [...already.filter((q) => missed.has(q.id)), ...unseen, ...already.filter((q) => !missed.has(q.id))]
+        : [...unseen, ...already];
     const chosen = ordered.slice(0, take);
     return {
       criteriaId: bucket.id,
@@ -399,9 +481,8 @@ export async function selectQuestionsForAttempt(
       pool: caps[i],
       allocated: allocated[i],
       unseen_used: picks[i].unseenUsed,
-      weakness: isRetake
-        ? (bucket.id ? (weaknessByCriteria.get(bucket.id) ?? NEUTRAL_WEAKNESS) : NEUTRAL_WEAKNESS)
-        : null,
+      mastery: isRetake ? (masteryByKc.get(bucket.kc) ?? DEFAULT_BKT.p_init) : null,
+      weakness: isRetake ? weaknessOf(bucket) : null,
     })),
     attemptNumber: priorIds.length + 1,
     excludedUnassigned: allQuestions.filter((q) => !q.criteria_id).length,
