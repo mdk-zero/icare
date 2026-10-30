@@ -801,3 +801,17 @@ html {
     animation: none;
   }
 }
+
+/*
+ * iOS Safari zooms the viewport when a form control under 16px gains focus,
+ * leaving the page scrolled sideways. Keep controls at 16px on phones so the
+ * layout stays put while typing. Unlayered on purpose, so it wins over the
+ * text-sm utilities Tailwind emits inside @layer utilities.
+ */
+@media (max-width: 639px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

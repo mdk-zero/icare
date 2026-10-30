@@ -74,7 +74,8 @@ export default function NotificationsScreen() {
     void markRead(notification.id);
     // A newly published Library material opens straight to it, and a new
     // course assignment (instructors) to its checklist.
-    const { kind, materialId, offeringId, assessment_id, assignment_id, patient_id } = notification.data ?? {};
+    const { kind, materialId, offeringId, assessment_id, assignment_id, patient_id, case_submission_id, case_presentation_id } =
+      notification.data ?? {};
     if (kind === 'library' && typeof materialId === 'string') router.push(`/library/${materialId}`);
     if (kind === 'course' && typeof offeringId === 'string') router.push(`/course/${offeringId}`);
     // A newly assigned quiz opens on its details; a patient case on its patient
@@ -87,6 +88,10 @@ export default function NotificationsScreen() {
     }
     // A Return Demonstration opens on its skills' checklists.
     if (kind === 'return_demo' && typeof assignment_id === 'string') router.push(`/retdem/${assignment_id}`);
+    // A Case Presentation (assigned or graded) opens on the student's own case;
+    // an older notice without it opens the Clinic tab, where the case is listed.
+    if (typeof case_submission_id === 'string') router.push(`/cases/${case_submission_id}`);
+    else if (typeof case_presentation_id === 'string') router.push('/clinic');
   };
 
   return (
