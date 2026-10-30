@@ -36,6 +36,6 @@ export function openCase(router: Router, a: CaseLink) {
       ? // Can't tell yet whether it started: a short spinner, never the page skeleton.
         { gate: 'wait' }
       : {};
-  if (a.patient_id) router.push({ pathname: '/clinic/patient/[id]', params: { id: a.patient_id, ...gate } });
+  if (a.patient_id) router.push({ pathname: '/clinic/patient/[id]', params: { id: a.patient_id, case: '1', ...gate } });
   else router.push({ pathname: '/clinic/assignment/[id]', params: { id: a.id, ...gate } });
 }

@@ -6,7 +6,7 @@ import {
   StyleSheet,
   RefreshControl,
 } from 'react-native';
-import { useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, SkeletonBlock, EmptyState } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
@@ -48,6 +48,8 @@ export default function PatientHubScreen() {
   const params = useLocalSearchParams<{
     id: string;
     gate?: string;
+    /** '1' when opened as a patient case (a case list or notification), not from the ward. */
+    case?: string;
     assignment?: string;
     title?: string;
     due?: string;
@@ -70,6 +72,13 @@ export default function PatientHubScreen() {
   const assignment = assignments.find((a) => a.status !== 'completed') ?? assignments[0] ?? null;
   const assignmentId = assignment?.id ?? null;
   const isAssigned = Boolean(patient?.is_assigned && assignmentId);
+
+  // Opened for an assigned case this is the student's patient case; from the ward it's just the patient.
+  const navigation = useNavigation();
+  const asCase = params.case === '1' || assignmentId !== null;
+  React.useLayoutEffect(() => {
+    navigation.setOptions({ title: asCase ? 'Patient Case' : 'Patient' });
+  }, [navigation, asCase]);
 
   const [taskResult, setTaskResult] = React.useState<ScenarioTasksResult | null>(null);
   const [chartError, setChartError] = React.useState<string | null>(null);
