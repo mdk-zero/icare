@@ -48,7 +48,9 @@ MIN_FIT_STUDENTS = 5
 MIN_FIT_ANSWERS = 40
 
 EM_MAX_ITERATIONS = 200
-EM_TOLERANCE = 1e-6
+# Relative to the log-likelihood, so a skill with 20,000 answers converges as
+# readily as one with 50.
+EM_TOLERANCE = 1e-7
 
 SKILL_IN_NAME = re.compile(r"\bSkills? (\d{1,2}-\d{1,2})\b")
 
@@ -118,23 +120,35 @@ def _clip(params: BktParams) -> BktParams:
     )
 
 
-def _pad(sequences: list[list[bool]]) -> tuple[np.ndarray, np.ndarray]:
-    """Sequences as one students x answers matrix, plus where each one has an answer."""
-    longest = max(len(s) for s in sequences)
-    obs = np.zeros((len(sequences), longest), dtype=int)
-    mask = np.zeros((len(sequences), longest), dtype=bool)
-    for i, seq in enumerate(sequences):
+Padded = tuple[np.ndarray, np.ndarray, np.ndarray]
+
+# Long sequences (thousands of answers on one skill) drive one state's forward
+# probability to zero and its backward ratio towards infinity, and 0 x inf is
+# NaN. A floor and a cap keep both finite; neither moves a realistic fit.
+PROBABILITY_FLOOR = 1e-12
+RATIO_CAP = 1e200
+
+
+def _pad(sequences: list[list[bool]]) -> Padded:
+    """Sequences longest first as one students x answers matrix, where each
+    one has an answer, and how many are still going at each step — so a step
+    only touches the sequences that reach it."""
+    ordered = sorted(sequences, key=len, reverse=True)
+    lengths = np.array([len(s) for s in ordered])
+    longest = int(lengths[0])
+    obs = np.zeros((len(ordered), longest), dtype=int)
+    for i, seq in enumerate(ordered):
         obs[i, : len(seq)] = seq
-        mask[i, : len(seq)] = True
-    return obs, mask
+    mask = np.arange(longest)[None, :] < lengths[:, None]
+    active = mask.sum(axis=0)
+    return obs, mask, active
 
 
-def _em_step(params: BktParams, padded: tuple[np.ndarray, np.ndarray]) -> tuple[BktParams, float]:
+def _em_step(params: BktParams, padded: Padded) -> tuple[BktParams, float]:
     """One Baum-Welch pass over every sequence at once, returning the updated
     parameters and the log-likelihood of `params`. States: 0 = not known,
-    1 = known; no forgetting. Positions past a sequence's end carry the last
-    state forward and contribute nothing."""
-    obs, mask = padded
+    1 = known; no forgetting."""
+    obs, mask, active = padded
     n, steps = obs.shape
     transition = np.array([[1 - params.p_learn, params.p_learn], [0.0, 1.0]])
     # emission[state, observation]: observation 1 = correct
@@ -145,33 +159,44 @@ def _em_step(params: BktParams, padded: tuple[np.ndarray, np.ndarray]) -> tuple[
     start = np.array([1 - params.p_init, params.p_init])
     emit = emission[:, obs].transpose(1, 2, 0)  # n x steps x 2: P(answer | state)
 
+    def settle(probabilities: np.ndarray) -> np.ndarray:
+        floored = np.maximum(probabilities, PROBABILITY_FLOOR)
+        return floored / floored.sum(axis=1, keepdims=True)
+
+    # Forward, scaled: scale[i, t] = P(answer t | answers before it).
     alpha = np.zeros((n, steps, 2))
     scale = np.ones((n, steps))
     first = start * emit[:, 0]
     scale[:, 0] = first.sum(axis=1)
-    alpha[:, 0] = first / scale[:, 0, None]
+    alpha[:, 0] = settle(first / scale[:, 0, None])
     for t in range(1, steps):
-        step = (alpha[:, t - 1] @ transition) * emit[:, t]
+        k = active[t]
+        step = (alpha[:k, t - 1] @ transition) * emit[:k, t]
         total = step.sum(axis=1)
-        live = mask[:, t]
-        scale[:, t] = np.where(live, total, 1.0)
-        alpha[:, t] = np.where(live[:, None], step / np.where(live, total, 1.0)[:, None], alpha[:, t - 1])
+        scale[:k, t] = total
+        alpha[:k, t] = settle(step / total[:, None])
     log_likelihood = float(np.log(scale).sum())
 
+    # Backward, with the same scaling. Past a sequence's end it stays 1.
     beta = np.ones((n, steps, 2))
     for t in range(steps - 2, -1, -1):
-        back = (emit[:, t + 1] * beta[:, t + 1]) @ transition.T / scale[:, t + 1, None]
-        beta[:, t] = np.where(mask[:, t + 1][:, None], back, 1.0)
+        k = active[t + 1]
+        back = (emit[:k, t + 1] * beta[:k, t + 1]) @ transition.T / scale[:k, t + 1, None]
+        beta[:k, t] = np.minimum(back, RATIO_CAP)
 
     gamma = alpha * beta
-    gamma /= gamma.sum(axis=2, keepdims=True)
+    total = gamma.sum(axis=2, keepdims=True)
+    gamma = np.divide(gamma, total, out=np.zeros_like(gamma), where=total > 0)
     gamma *= mask[:, :, None]
 
     # P(not known at t, known at t+1 | the sequence), wherever t+1 exists
     nxt = mask[:, 1:]
-    learned = (
-        alpha[:, :-1, 0] * transition[0, 1] * emit[:, 1:, 1] * beta[:, 1:, 1] / scale[:, 1:]
-    ) * nxt
+    learned = np.divide(
+        alpha[:, :-1, 0] * transition[0, 1] * emit[:, 1:, 1] * beta[:, 1:, 1],
+        scale[:, 1:],
+        out=np.zeros_like(scale[:, 1:]),
+        where=nxt,
+    )
     learn_den = float((gamma[:, :-1, 0] * nxt).sum())
     right = (obs == 1) & mask
     wrong = (obs == 0) & mask
@@ -185,6 +210,10 @@ def _em_step(params: BktParams, padded: tuple[np.ndarray, np.ndarray]) -> tuple[
         p_slip=float((gamma[:, :, 1] * wrong).sum()) / known if known > 0 else params.p_slip,
     )
     return _clip(updated), log_likelihood
+
+
+def _finite(params: BktParams) -> bool:
+    return all(np.isfinite(v) for v in (params.p_init, params.p_learn, params.p_guess, params.p_slip))
 
 
 def log_likelihood(params: BktParams, sequences: list[list[bool]]) -> float:
@@ -210,8 +239,9 @@ def fit(sequences: list[list[bool]]) -> tuple[BktParams, float]:
         previous = -np.inf
         for _ in range(EM_MAX_ITERATIONS):
             candidate, ll = _em_step(params, padded)
-            # ll is the likelihood of `params`, the point just stepped from.
-            if ll - previous < EM_TOLERANCE:
+            # ll is the likelihood of `params`, the point just stepped from;
+            # converged once a step gains less than a sliver of it.
+            if not _finite(candidate) or ll - previous < EM_TOLERANCE * max(1.0, abs(ll)):
                 break
             params, previous = candidate, ll
         final_ll = _em_step(params, padded)[1]
