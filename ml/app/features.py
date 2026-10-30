@@ -100,7 +100,10 @@ def build_student_features(
     time_limits = {a["id"]: a.get("time_limit_seconds") for a in assessments}
     assessment_deadlines = {a["id"]: _parse_ts(a.get("deadline")) for a in assessments}
     deadlines = {a["id"]: _parse_ts(a.get("deadline")) for a in assignments}
-    attempt_owner = {a["id"]: a["student_id"] for a in attempts}
+    # Answer accuracy reads graded attempts only. A practice run past the
+    # attempt limit (web migration 083, status 'practiced') re-asks questions
+    # whose answers the student has already seen, so it would flatter it.
+    attempt_owner = {a["id"]: a["student_id"] for a in attempts if a["status"] == "submitted"}
     question_to_comps: dict[str, list[str]] = {}
     for qc in question_comps:
         question_to_comps.setdefault(qc["question_id"], []).append(qc["competency_id"])
