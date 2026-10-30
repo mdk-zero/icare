@@ -81,7 +81,7 @@ export default function NotificationsScreen() {
     // (or its brief), behind a short spinner until it knows whether it started.
     if (typeof assessment_id === 'string') router.push(`/quiz-info/${assessment_id}`);
     if (kind === 'scenario' && typeof patient_id === 'string') {
-      router.push({ pathname: '/clinic/patient/[id]', params: { id: patient_id, gate: 'wait' } });
+      router.push({ pathname: '/clinic/patient/[id]', params: { id: patient_id, case: '1', gate: 'wait' } });
     } else if (kind === 'scenario' && typeof assignment_id === 'string') {
       router.push({ pathname: '/clinic/assignment/[id]', params: { id: assignment_id, gate: 'wait' } });
     }
