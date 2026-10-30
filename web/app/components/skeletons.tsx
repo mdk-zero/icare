@@ -4,7 +4,7 @@ export function SkeletonStatTile() {
     <div className="flex flex-col rounded-2xl border border-hairline bg-surface p-4 shadow-tile animate-pulse">
       <div className="flex items-start justify-between gap-2">
         <div className="mt-0.5 h-3 w-24 rounded bg-gray-100" />
-        <div className="h-12 w-12 shrink-0 rounded-full bg-gray-100" />
+        <div className="h-9 w-9 shrink-0 rounded-full bg-gray-100 sm:h-12 sm:w-12" />
       </div>
       <div className="mt-2 h-9 w-20 rounded bg-gray-100" />
       <div className="mt-2.5 h-3 w-28 rounded bg-gray-100" />

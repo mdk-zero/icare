@@ -858,7 +858,7 @@ export default function FacultyAnalyticsClient() {
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-stretch">
         <div className="min-w-0 flex-1 rounded-xl border border-hairline bg-surface shadow-tile">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3">
+          <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-3">
             <div className="flex items-center gap-2.5">
               <CardLabel>Sections</CardLabel>
               <SectionPicker
@@ -871,7 +871,7 @@ export default function FacultyAnalyticsClient() {
 
             <span className="hidden h-6 w-px bg-hairline sm:block" />
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2.5">
               <CardLabel>Range</CardLabel>
               <div className="flex flex-wrap items-center gap-1">
                 {PRESETS.map((p) => (
@@ -892,7 +892,7 @@ export default function FacultyAnalyticsClient() {
             </div>
 
             {preset === "custom" && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <input
                   type="date"
                   value={draft.from}
@@ -913,7 +913,7 @@ export default function FacultyAnalyticsClient() {
               </div>
             )}
 
-            <div className="ml-auto flex items-center gap-3">
+            <div className="flex items-center gap-3 self-end sm:ml-auto sm:self-auto">
               <div className="flex items-center gap-2 text-xs text-gray-400">
                 {refreshing && <EcgLoader size="xs" className="text-brand-600" />}
                 <span className="tabular-nums">{formatRange(from, to)}</span>

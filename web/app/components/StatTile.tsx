@@ -58,7 +58,7 @@ export default function StatTile({
   const isUp = (change ?? 0) >= 0;
   const isGood = goodDirection === "up" ? isUp : !isUp;
 
-  const classes = `group relative flex flex-col overflow-hidden rounded-2xl border border-hairline bg-surface p-5 text-left shadow-tile transition-all duration-200 ${
+  const classes = `group relative flex flex-col overflow-hidden rounded-2xl border border-hairline bg-surface p-4 text-left shadow-tile transition-all duration-200 sm:p-5 ${
     interactive
       ? "cursor-pointer hover:-translate-y-0.5 hover:shadow-tile-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2"
       : ""
@@ -79,17 +79,17 @@ export default function StatTile({
           {label}
         </span>
         <span
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ring-2 ring-inset ring-current/10 transition-transform duration-200 group-hover:scale-105 ${iconBg} ${iconColor}`}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ring-2 ring-inset ring-current/10 transition-transform duration-200 group-hover:scale-105 sm:h-11 sm:w-11 ${iconBg} ${iconColor}`}
         >
-          <FontAwesomeIcon icon={icon} className="h-5 w-5" />
+          <FontAwesomeIcon icon={icon} className="h-4 w-4 sm:h-5 sm:w-5" />
         </span>
       </span>
       <span
-        className={`relative mt-3.5 block font-display text-[2.75rem] font-bold leading-none tabular-nums ${valueColor}`}
+        className={`relative mt-2 block font-display text-[2rem] font-bold leading-none tabular-nums sm:mt-3.5 sm:text-[2.75rem] ${valueColor}`}
       >
         {shown}
       </span>
-      <span className="relative mt-3 flex min-h-[1rem] flex-wrap items-center gap-1.5 text-xs">
+      <span className="relative mt-2 flex min-h-[1rem] flex-wrap items-center gap-1.5 text-xs sm:mt-3">
         {change === null && <span className="font-semibold text-gray-400">—</span>}
         {change != null && (
           <span
