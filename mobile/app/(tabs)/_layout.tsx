@@ -16,6 +16,10 @@ const TAB_ICONS: TabIcons = {
   profile: "user",
 };
 
+// Without this, the tab navigator defaults to whichever Tabs.Screen
+// is registered first (Clinic) instead of Home.
+export const unstable_settings = { anchor: "index" };
+
 export default function TabLayout() {
   // The badge follows the live feed, so it moves as soon as a notification is
   // written rather than on the next tab switch.
@@ -33,9 +37,6 @@ export default function TabLayout() {
       {/* Profile sits beside the bell, so Home stays the middle tab; Home shows the time. */}
       <AppHeader notificationCount={unreadCount} showClock={false} onProfile={() => router.push("/profile")} />
       <Tabs
-        // Without this, the tab navigator defaults to whichever Tabs.Screen
-        // is registered first (Clinic) instead of Home.
-        initialRouteName="index"
         tabBar={(props) => <FloatingTabBar {...props} icons={TAB_ICONS} hidden={["profile"]} />}
         screenOptions={{
           headerShown: false,

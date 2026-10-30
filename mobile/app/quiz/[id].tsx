@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert, AppState, TextInput } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert, AppState, TextInput, type ScrollViewInstance } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, usePreventRemove, useRouter } from 'expo-router';
 import { setStatusBarHidden } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -188,7 +188,7 @@ export default function QuizInterfaceScreen() {
   // Questions passed over with Skip and not answered since.
   const [skipped, setSkipped] = useState<Set<string>>(() => new Set());
   const [showReview, setShowReview] = useState(false);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const reviewY = useRef(0);
   const { user } = useAuth();
   const [remaining, setRemaining] = useState<number | null>(null);
@@ -337,20 +337,16 @@ export default function QuizInterfaceScreen() {
 
   // Back button, back swipe or any other way off this screen: the quiz is
   // submitted as it stands, or the student stays.
-  useEffect(() => {
-    if (!taking) return;
-    return navigation.addListener('beforeRemove', (e) => {
-      e.preventDefault();
-      Alert.alert(
-        'Leave the quiz?',
-        'Leaving submits your quiz with the answers you have now, and it counts as this attempt.',
-        [
-          { text: 'Stay', style: 'cancel' },
-          { text: 'Submit and leave', style: 'destructive', onPress: () => void doSubmitRef.current(answersRef.current) },
-        ],
-      );
-    });
-  }, [navigation, taking]);
+  usePreventRemove(taking, () => {
+    Alert.alert(
+      'Leave the quiz?',
+      'Leaving submits your quiz with the answers you have now, and it counts as this attempt.',
+      [
+        { text: 'Stay', style: 'cancel' },
+        { text: 'Submit and leave', style: 'destructive', onPress: () => void doSubmitRef.current(answersRef.current) },
+      ],
+    );
+  });
 
   // Home button or app switcher. Only 'background' counts: pulling down the
   // notification shade or an incoming call only makes the app 'inactive'.

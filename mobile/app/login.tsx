@@ -13,6 +13,8 @@ import {
   Keyboard,
   useWindowDimensions,
   type LayoutChangeEvent,
+  type ScrollViewInstance,
+  type TextInputInstance,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -138,9 +140,9 @@ export default function LoginScreen() {
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const { login, isLoading } = useAuth();
   const router = useRouter();
-  const emailRef = useRef<TextInput>(null);
-  const passwordRef = useRef<TextInput>(null);
-  const scrollRef = useRef<ScrollView>(null);
+  const emailRef = useRef<TextInputInstance>(null);
+  const passwordRef = useRef<TextInputInstance>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   // Where the form starts inside the scroll content: the sheet's offset plus
   // the form's offset within the sheet.
   const sheetY = useRef(0);

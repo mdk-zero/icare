@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, type LayoutChangeEvent } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, type LayoutChangeEvent, type ScrollViewInstance } from 'react-native';
 import Svg, { Rect, Line, Path, Circle, G, Defs, Pattern, ClipPath } from 'react-native-svg';
 import { useTheme } from '@/hooks/useTheme';
 import type { DoorSide, WardFixture, WardRoom } from '@/lib/api';
@@ -357,7 +357,7 @@ export function FloorPlan({ rooms, fixtures, highlightRoomId, onPressRoom }: Flo
   const { isDark } = useTheme();
   const c = isDark ? PLAN_COLORS.dark : PLAN_COLORS.light;
   const [width, setWidth] = React.useState(0);
-  const scrollRef = React.useRef<ScrollView>(null);
+  const scrollRef = React.useRef<ScrollViewInstance>(null);
   const openedOn = React.useRef<string | null>(null);
 
   const placed = React.useMemo(

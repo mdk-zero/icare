@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   type LayoutChangeEvent,
+  type ScrollViewInstance,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
@@ -44,7 +45,7 @@ function byRoomNumber(a: WardRoom, b: WardRoom) {
 export function RoomPages({ rooms, highlightRoomId, onPressRoom }: RoomPagesProps) {
   const { Palette, Accent } = useTheme();
   const [width, setWidth] = React.useState(0);
-  const scrollRef = React.useRef<ScrollView>(null);
+  const scrollRef = React.useRef<ScrollViewInstance>(null);
   const openedOn = React.useRef<string | null>(null);
 
   const sorted = [...rooms].sort(byRoomNumber);

@@ -18,5 +18,7 @@ run.
 - **When it fails for a reason that isn't the code**, such as a generated folder or a tool
   change, fix `check.sh` in the same change rather than working around it.
 
-The mobile audit warning is expected for now: npm's suggested fixes are major-version jumps tied
-to the Expo SDK. They belong with the next SDK upgrade, which needs a new APK build anyway.
+The mobile audit warning is expected for now. What is left after the SDK 58 upgrade sits inside
+Expo's own tooling (`zod` and `deepmerge` under `@expo/cli` and `@expo/config`), where `--force`
+would break Expo, and in `react-native-markdown-display` (`linkify-it`), which has no fix. Leave
+them for the next SDK upgrade.
