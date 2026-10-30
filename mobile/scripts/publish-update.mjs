@@ -21,6 +21,12 @@
  * It only reaches APKs whose native code matches (runtimeVersion uses the
  * "fingerprint" policy). A change to native code needs a new APK build;
  * students who keep the old APK simply don't get the update.
+ *
+ * The fingerprint is taken from node_modules, not package.json, so the script
+ * also refuses to run when node_modules doesn't match package-lock.json. On
+ * 2026-10-30 an update was published after pulling the SDK 58 upgrade without
+ * `npm ci`: the SDK 57 node_modules gave it the old APKs' runtime version, and
+ * its SDK 58 code crashed those APKs on every tab switch.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -57,7 +63,26 @@ if (dirty) {
   );
 }
 
-const easJson = JSON.parse(readFileSync(path.join(mobileDir, 'eas.json'), 'utf8'));
+const readJson = (file) => JSON.parse(readFileSync(path.join(mobileDir, file), 'utf8'));
+const pkg = readJson('package.json');
+const lock = readJson('package-lock.json');
+const stale = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).flatMap((name) => {
+  const locked = lock.packages?.[`node_modules/${name}`]?.version;
+  let installed = 'missing';
+  try {
+    installed = readJson(`node_modules/${name}/package.json`).version;
+  } catch {}
+  return locked && installed !== locked ? [`${name}: installed ${installed}, lockfile ${locked}`] : [];
+});
+if (stale.length) {
+  fail(
+    `node_modules doesn't match package-lock.json:\n  ${stale.join('\n  ')}\n` +
+      'The update would get the runtime version of the installed packages and reach APKs\n' +
+      'its code was not written for. Run `npm ci` in mobile/ first.',
+  );
+}
+
+const easJson = readJson('eas.json');
 function profileEnv(name, seen = new Set()) {
   const build = easJson.build?.[name];
   if (!build) fail(`eas.json has no build profile named "${name}".`);
