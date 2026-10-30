@@ -193,12 +193,8 @@ function DropdownHeading({
         <Text style={[styles.dropdownCountText, { color: countColors.color }]}>{count}</Text>
       </View>
       <View style={{ flex: 1 }} />
-      <Ionicons
-        name="chevron-down"
-        size={18}
-        color={Palette.textSecondary}
-        style={{ transform: [{ rotate: open ? "180deg" : "0deg" }] }}
-      />
+      {/* Down while the list is showing, right while it's hidden. */}
+      <Ionicons name={open ? "chevron-down" : "chevron-forward"} size={18} color={Palette.textSecondary} />
     </Pressable>
   );
 }
