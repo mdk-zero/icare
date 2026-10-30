@@ -16,6 +16,7 @@ tags, weakness profile).
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -24,11 +25,14 @@ import httpx
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 
+from .bkt import refresh_bkt_parameters
 from .config import get_settings
 from .db import Db
 from .features import FEATURE_STEPS, StudentFeatures, build_student_features
 from .progress import Progress, Report
 from .registry import ensure_recommender_registered
+
+logger = logging.getLogger(__name__)
 
 NEUTRAL_WEAKNESS = 0.5
 
@@ -264,16 +268,28 @@ def refresh_recommendations(
 ) -> dict[str, Any]:
     settings = get_settings()
     k = k or settings.recommend_k
-    # The validated-score and checklist reads, then one step per student: each
-    # student's list is rewritten with its own delete and insert, which is
-    # where a large cohort spends its time.
-    progress = Progress(FEATURE_STEPS + 2, steps_per_student=1, report=report)
+    # The knowledge-tracing fit, the validated-score and checklist reads, then
+    # one step per student: each student's list is rewritten with its own
+    # delete and insert, which is where a large cohort spends its time.
+    progress = Progress(FEATURE_STEPS + 3, steps_per_student=1, report=report)
+
+    # What each student practises has two halves: these quiz picks, and the
+    # adaptive review inside a quiz, which reads the BKT parameters fitted
+    # here. A failed fit leaves the previous parameters in place; it never
+    # costs the recommendations.
+    try:
+        bkt = refresh_bkt_parameters(db)
+    except Exception:
+        logger.exception("BKT parameter fit failed")
+        bkt = {"error": "BKT fit failed"}
+    progress.step()
+
     model_id = ensure_recommender_registered(db)
     context = RecommenderContext(db)
 
     features = build_student_features(db, student_ids, progress)
     if not features:
-        return {"students": 0, "recommendations": 0}
+        return {"students": 0, "recommendations": 0, "bkt": bkt}
 
     validated_rows = db.select(
         "competency_scores", "student_id,competency_id,score,created_at",
@@ -318,7 +334,7 @@ def refresh_recommendations(
             )
             written += len(recs)
         progress.step()
-    return {"students": len(features), "recommendations": written}
+    return {"students": len(features), "recommendations": written, "bkt": bkt}
 
 
 def recommendations_for_student(db: Db, student_id: str, k: int) -> list[dict[str, Any]]:

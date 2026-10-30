@@ -1,10 +1,17 @@
 # iCARE++ ML service
 
 FastAPI service for **at-risk performance prediction** (Random Forest + Logistic
-Regression, Objective 2.1) and the **content-based quiz recommender**
-(Objective 2.2). It reads the same Supabase project the web app uses (service
+Regression, Objective 2.1), **Bayesian Knowledge Tracing** for the adaptive
+quiz review, and the **content-based quiz recommender** (Objective 2.2). It reads the same Supabase project the web app uses (service
 role over PostgREST) and writes `performance_predictions`,
-`learning_recommendations`, `ml_models`, and `notifications`.
+`learning_recommendations`, `bkt_parameters`, `ml_models`, and `notifications`.
+
+The two halves form one pipeline. The at-risk models decide **who** needs
+intervention. Knowledge tracing and the recommender decide **what** each
+student practises: BKT estimates mastery of every Taylor's skill, the web
+app's adaptive quiz review spends a retake or practice run on the
+least-mastered skills, and the recommender points to other quizzes on the
+weakest competencies.
 
 ## Run
 
@@ -53,7 +60,7 @@ All endpoints except `/health` require header `X-ICARE-ML-KEY: $ML_SERVICE_SECRE
 | `GET /models` | registry contents |
 | `POST /models/{id}/promote` | staging → active (retires the previous active of that kind) |
 | `POST /predict/at-risk` `{student_ids?}` | batch-score cohort, write `performance_predictions`, notify roster faculty on new at-risk transitions |
-| `POST /recommend/refresh` `{student_ids?, k?}` | recompute + persist `learning_recommendations` |
+| `POST /recommend/refresh` `{student_ids?, k?}` | refit `bkt_parameters`, then recompute + persist `learning_recommendations` |
 | `GET /recommend/{student_id}?k=5` | ad-hoc ranking (not persisted) |
 
 Both `POST` jobs answer with plain JSON by default. With
@@ -111,14 +118,40 @@ app asks for the stream to show a percentage; the nightly workflow doesn't.
   question-competency tags, matched against a per-student weakness profile
   (answer accuracy blended with faculty-validated scores; unexplored
   competencies get a neutral exploration weight). Computed live; registered in `ml_models` for auditability.
+- **Bayesian Knowledge Tracing** (`app/bkt.py`) — one two-state hidden
+  Markov model per Taylor's skill, over each student's quiz answers in order
+  (graded attempts and practice runs). EM (Baum-Welch, as in pyBKT) fits
+  P(L0), P(T), P(G), P(S) on every `/recommend/refresh`, with guess and slip
+  capped below 0.5 to avoid degenerate fits. Cold start: a skill needs 5
+  students and 40 answers for its own fit; below that it takes its chapter's
+  pooled fit, then the defaults (0.3 / 0.1 / 0.2 / 0.1), and is refit as
+  answers accumulate. The parameters go to `bkt_parameters` (web migration
+  084). The web app's adaptive review (`web/app/lib/bkt.ts`,
+  `assessment-selection.ts`) applies the same update rules to the student's
+  answers at the moment it deals a paper. The surplus questions go to the
+  least-mastered skills, and on a practice run the questions last answered
+  wrong come first.
 
 ## Evaluation (Phase 3.7 / manuscript Ch. IV)
 
 ```bash
 python -m eval.predict_eval                 # Model Accuracy Report (holdout)
 python -m eval.recsys_eval --ground-truth faculty_truth.csv --k 5
+python -m eval.bkt_eval                     # BKT next-answer prediction, live answers
+python -m eval.bkt_eval --csv as.csv --student-col user_id --skill-col skill_name \
+    --order-col order_id --label "ASSISTments 2009-2010"   # public benchmark
 ```
 
-Both write JSON + Markdown tables to `eval/out/`. `recsys_eval` expects a
+All write JSON + Markdown tables to `eval/out/`. `recsys_eval` expects a
 faculty ground-truth CSV (`student_id,assessment_id`) collected during the
 soft launch and reports Precision@K, Recall@K, and Hit Rate@K.
+
+`bkt_eval` judges knowledge tracing by how well it predicts a student's next
+answer on a skill. It uses cross-validation by student, fitting on the other
+folds and predicting each held-out answer before seeing it. It reports AUC,
+accuracy and RMSE beside two baselines: the skill's average, and the
+student's own running average. On live data it needs real quiz traffic:
+until students have answered enough, every skill runs on the defaults and
+the numbers mean nothing. The ASSISTments 2009-2010 skill-builder log
+(`as.csv` from CAHLR/pyBKT-examples) is the standard public benchmark for
+checking the implementation itself.
