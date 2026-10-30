@@ -15,7 +15,6 @@ import {
 import PageHeader from "../../components/PageHeader";
 import FilterSelect from "../../components/FilterSelect";
 import StatTile from "../../components/StatTile";
-import ActionsMenu from "../../components/ActionsMenu";
 import CourseSkillsModal from "../../components/CourseSkillsModal";
 import { toast } from "../../components/Toast";
 import { usePageData } from "../../lib/use-page-data";
@@ -110,7 +109,7 @@ export default function CoursesClient() {
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faBookMedical} className="h-3.5 w-3.5" />, label: "Curriculum" }}
         title="Courses"
-        subtitle="Your terms and courses, and which instructors teach them"
+        subtitle="Your semesters and courses, and which instructors teach them"
       />
 
       {loadError && (
@@ -141,13 +140,13 @@ export default function CoursesClient() {
         <StatTile
           icon={faCalendarDays}
           value={terms.length}
-          label="Terms"
-          caption={current ? `Current: ${current.name}` : "No term is running today"}
+          label="Semesters"
+          caption={current ? `Current: ${current.name}` : "No semester is running today"}
         />
         <StatTile
           icon={faChalkboardUser}
           value={current ? offerings.filter((o) => o.term_id === current.id).length : 0}
-          label="Assignments this term"
+          label="Assignments this semester"
         />
       </div>
 
@@ -166,10 +165,10 @@ export default function CoursesClient() {
         <FilterSelect
           value={selectedTerm}
           onChange={(e) => setTermFilter(e.target.value)}
-          aria-label="Term"
+          aria-label="Semester"
           disabled={terms.length === 0}
         >
-          {terms.length === 0 && <option value="">No terms yet</option>}
+          {terms.length === 0 && <option value="">No semesters yet</option>}
           {terms.map((t) => (
             <option key={t.id} value={t.id}>
               {t.name} · {TERM_STATUS_LABEL[termStatus(t)]}
@@ -186,15 +185,24 @@ export default function CoursesClient() {
                 Overlaps {termOverlaps.map((o) => o.name).join(", ")}
               </span>
             )}
-            <div className="ml-auto">
-              <ActionsMenu
-                variant="compact"
-                label={`Actions for ${termRow.name}`}
-                actions={[
-                  { label: "Edit term", icon: faPenToSquare, onClick: () => setDialog({ kind: "term", term: termRow }) },
-                  { label: "Delete term", icon: faTrashCan, danger: true, onClick: () => setDialog({ kind: "deleteTerm", term: termRow }) },
-                ]}
-              />
+            {/* Out in the open rather than behind a menu, so they are found at a glance. */}
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setDialog({ kind: "term", term: termRow })}
+                className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-surface px-3.5 py-2 text-sm font-medium text-gray-700 transition-colors hover:border-brand-600/50 hover:text-brand-700"
+              >
+                <FontAwesomeIcon icon={faPenToSquare} className="h-3.5 w-3.5" />
+                Edit semester
+              </button>
+              <button
+                type="button"
+                onClick={() => setDialog({ kind: "deleteTerm", term: termRow })}
+                className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-surface px-3.5 py-2 text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50"
+              >
+                <FontAwesomeIcon icon={faTrashCan} className="h-3.5 w-3.5" />
+                Delete semester
+              </button>
             </div>
           </>
         )}
@@ -256,11 +264,11 @@ export default function CoursesClient() {
           loadImpact={() => fetchTermImpact(dialog.term.id)}
           describe={(i) => [
             i.offering_count === 0
-              ? "No course is assigned in this term."
-              : `${plural(i.offering_count, "course assignment")} and ${plural(i.requirement_count, "checklist item")} in this term are removed.`,
+              ? "No course is assigned in this semester."
+              : `${plural(i.offering_count, "course assignment")} and ${plural(i.requirement_count, "checklist item")} in this semester are removed.`,
             "Your courses and all graded work are kept.",
           ]}
-          keepLabel="Keep term"
+          keepLabel="Keep semester"
           confirmLabel={`Delete ${dialog.term.name}`}
           onDelete={async () => {
             const result = await deleteTerm(dialog.term.id);
