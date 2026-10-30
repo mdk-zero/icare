@@ -9,6 +9,7 @@ import {
   Pressable,
   TextInput,
   ActivityIndicator,
+  type TextInputInstance,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { FontAwesome6 } from '@expo/vector-icons';
@@ -62,9 +63,9 @@ export default function ForgotPasswordScreen() {
   const [message, setMessage] = useState('');
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
-  const otpRef = useRef<TextInput>(null);
-  const newPasswordRef = useRef<TextInput>(null);
-  const confirmPasswordRef = useRef<TextInput>(null);
+  const otpRef = useRef<TextInputInstance>(null);
+  const newPasswordRef = useRef<TextInputInstance>(null);
+  const confirmPasswordRef = useRef<TextInputInstance>(null);
 
   const handleRequestCode = async () => {
     setError('');

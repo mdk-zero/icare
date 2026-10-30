@@ -9,6 +9,7 @@ import {
   RefreshControl,
   LayoutAnimation,
   type LayoutChangeEvent,
+  type ScrollViewInstance,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -256,7 +257,7 @@ export default function ClinicScreen() {
 
   // Where each dropdown sits in the scroll content, and which one's heading
   // is pinned below the app header because its list is being scrolled.
-  const scrollRef = React.useRef<ScrollView>(null);
+  const scrollRef = React.useRef<ScrollViewInstance>(null);
   const layouts = React.useRef<Partial<Record<DropdownKey, { y: number; height: number }>>>({});
   const scrollY = React.useRef(0);
   const [pinned, setPinned] = React.useState<DropdownKey | null>(null);

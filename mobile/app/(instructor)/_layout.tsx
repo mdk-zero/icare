@@ -13,6 +13,9 @@ const TAB_ICONS: TabIcons = {
   me: "user",
 };
 
+// The first tab opened is Courses.
+export const unstable_settings = { anchor: "courses" };
+
 /**
  * The instructor's app: their courses and requirement checklists, their
  * students' progress, and their account. Grading stays on the web portal.
@@ -29,7 +32,6 @@ export default function InstructorLayout() {
     <View style={{ flex: 1, backgroundColor: Palette.background }}>
       <AppHeader notificationCount={unread} tagline="INSTRUCTOR" />
       <Tabs
-        initialRouteName="courses"
         tabBar={(props) => <FloatingTabBar {...props} icons={TAB_ICONS} />}
         screenOptions={{ headerShown: false }}
       >
