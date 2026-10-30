@@ -205,7 +205,7 @@ export default function AssignStudentsModal({
                 ? `Only the students you handle in this ${noun}'s course are listed.`
                 : `This ${noun} isn't in a course, so the students you handle in all your courses are listed.`}
             </p>
-            <div className="border border-gray-200 rounded-xl max-h-[320px] overflow-y-auto custom-scrollbar">
+            <div className="border border-gray-200 rounded-xl max-h-[320px] overflow-x-auto overflow-y-auto custom-scrollbar">
               {roster === null ? (
                 <div className="flex items-center justify-center gap-2 p-6 text-sm text-gray-500">
                   <EcgLoader className="text-brand-600" />
