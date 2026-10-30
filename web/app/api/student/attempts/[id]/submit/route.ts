@@ -5,6 +5,12 @@ import { logAudit } from '@/app/lib/audit';
 import { deriveCompetencyScoresForAttempt } from '@/app/lib/competency';
 import { isLateSubmission } from '@/app/lib/assessment-timing';
 import { acceptedAnswers, matchesShortAnswer, SHORT_ANSWER } from '@/app/lib/short-answer';
+import {
+  PRACTICE_STATUS,
+  isPracticeRun,
+  loadAttemptLimit,
+  practiceLive,
+} from '@/app/lib/quiz-practice';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -64,19 +70,42 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const { data: attempt } = await supabase
       .from('assessment_attempts')
-      .select('id, assessment_id, student_id, assignment_id, status, started_at, score, time_taken_seconds, assessments(time_limit_seconds)')
+      .select('id, assessment_id, student_id, assignment_id, status, started_at, score, time_taken_seconds, assessments(time_limit_seconds, max_attempts)')
       .eq('id', attemptId)
       .single();
 
     if (!attempt || attempt.student_id !== session.uid) {
       return NextResponse.json({ error: 'Attempt not found' }, { status: 404 });
     }
-    if (attempt.status !== 'in_progress' && attempt.status !== 'submitted') {
+    if (
+      attempt.status !== 'in_progress' &&
+      attempt.status !== 'submitted' &&
+      attempt.status !== PRACTICE_STATUS
+    ) {
       return NextResponse.json({ error: 'Attempt already closed' }, { status: 409 });
     }
     // A retry of a submit that already went through (the client timed out
     // waiting, or a double-tap): answer with the result again, write nothing.
-    const alreadySubmitted = attempt.status === 'submitted';
+    const alreadySubmitted = attempt.status !== 'in_progress';
+    const quiz = attempt.assessments as unknown as {
+      time_limit_seconds: number | null;
+      max_attempts: number | null;
+    } | null;
+
+    // Past the graded tries this run is practice (083): saved, and it steers
+    // the next paper, but no grade or average ever reads it. Decided again
+    // here rather than trusted from the start, so a try the instructor
+    // granted mid-run is graded.
+    let practice = attempt.status === PRACTICE_STATUS;
+    if (!alreadySubmitted) {
+      const limit = await loadAttemptLimit(supabase, {
+        assessmentId: attempt.assessment_id,
+        studentId: session.uid,
+        quizMaxAttempts: quiz?.max_attempts ?? null,
+        excludeAttemptId: attemptId,
+      });
+      practice = isPracticeRun(limit.spent, limit.maxAttempts) && (await practiceLive(supabase));
+    }
 
     // Grade against the paper this attempt was actually served, not the whole
     // bank: a 20-question paper drawn from a 50-question bank would otherwise
@@ -212,8 +241,24 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       });
 
     }
-    const timeLimit = (attempt.assessments as unknown as { time_limit_seconds: number | null } | null)
-      ?.time_limit_seconds;
+    const timeLimit = quiz?.time_limit_seconds;
+
+    // What a practice result is set against: the grade it leaves alone.
+    let gradedScore: number | null = null;
+    if (practice) {
+      const { data: best } = await supabase
+        .from('assessment_attempts')
+        .select('score')
+        .eq('assessment_id', attempt.assessment_id)
+        .eq('student_id', session.uid)
+        .eq('status', 'submitted')
+        .not('score', 'is', null)
+        .order('score', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      gradedScore = best ? Number(best.score) : null;
+    }
+
     const respond = (finalScore: number, timeTaken: number) =>
       NextResponse.json({
         score: finalScore,
@@ -221,7 +266,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         total: questions.length,
         time_taken_seconds: timeTaken,
         // Graded and counted either way; a late one is flagged, not refused.
-        late: isLateSubmission(timeTaken, timeLimit),
+        // Practice has no grade to flag.
+        late: !practice && isLateSubmission(timeTaken, timeLimit),
+        practice,
+        ...(practice ? { graded_score: gradedScore } : {}),
         criteria_breakdown: criteriaBreakdown,
         results: [...graded]
           .sort((a, b) => a.position - b.position)
@@ -246,7 +294,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       0,
       Math.round((Date.now() - new Date(attempt.started_at).getTime()) / 1000),
     );
-    const late = isLateSubmission(timeTaken, timeLimit);
+    const late = !practice && isLateSubmission(timeTaken, timeLimit);
 
     // Finalizing the attempt is what claims the submission: one conditional
     // UPDATE, so when a double-tap or a retry races this request exactly one
@@ -255,7 +303,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const { data: finalized, error: attemptError } = await supabase
       .from('assessment_attempts')
       .update({
-        status: 'submitted',
+        status: practice ? PRACTICE_STATUS : 'submitted',
         submitted_at: new Date().toISOString(),
         score,
         time_taken_seconds: timeTaken,
@@ -273,8 +321,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // The score is saved; the per-question answers and the criteria breakdown
-    // are detail for review. A failure here is logged, not surfaced — the
-    // backfill scripts can rebuild the breakdown.
+    // are detail for review, and what the next paper is chosen from — practice
+    // included. A failure here is logged, not surfaced — the backfill scripts
+    // can rebuild the breakdown.
     const { error: answersError } = await supabase.from('attempt_answers').insert(
       graded.map((g) => ({
         attempt_id: attemptId,
@@ -307,7 +356,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // that finalized the attempt gets here, so it runs once. Awaited so the
     // scores exist by the time the student sees their results, but never
     // allowed to fail the submission; the backfill can recover a missed one.
-    if (criteriaBreakdown.length > 0) {
+    // Not for practice: a re-run of questions already seen with their answers
+    // would lift the standing without showing anything new.
+    if (!practice && criteriaBreakdown.length > 0) {
       try {
         await deriveCompetencyScoresForAttempt(supabase, attemptId);
       } catch (err) {
@@ -315,7 +366,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    if (attempt.assignment_id) {
+    if (!practice && attempt.assignment_id) {
       await supabase
         .from('assessment_assignments')
         .update({ status: 'completed' })
@@ -335,6 +386,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           total: questions.length,
           time_taken_seconds: timeTaken,
           late,
+          practice,
         },
       },
       request,

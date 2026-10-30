@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { scoredStatuses } from '@/app/lib/quiz-practice';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -36,7 +37,9 @@ export async function GET(_request: Request, { params }: RouteParams) {
       .select('id')
       .eq('assessment_id', assessmentId)
       .eq('student_id', session.uid)
-      .eq('status', 'submitted');
+      // Practice runs count: a student whose only graded try expired still
+      // studies from the papers they practiced on.
+      .in('status', await scoredStatuses(supabase));
     if (attemptsError) throw attemptsError;
     if (!attempts?.length) {
       return NextResponse.json(

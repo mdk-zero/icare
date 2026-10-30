@@ -55,6 +55,7 @@ function fakeClient(tables: Record<string, Record<string, unknown>[]>) {
           rows = rows.filter((r) => vals.includes(r[col]));
           return api;
         },
+        limit: () => api,
         order: (col: string) => {
           rows = [...rows].sort((a, b) => Number(a[col]) - Number(b[col]));
           return api;
@@ -72,7 +73,12 @@ function fakeClient(tables: Record<string, Record<string, unknown>[]>) {
 function buildFixture(opts: {
   totalQuestions: number | null;
   pools: { name: string; min: number; count: number }[];
-  priorAttempt?: { seenQuestionIds: string[]; scores: { criteriaIndex: number; score: number; total: number }[] };
+  priorAttempt?: {
+    /** 'practiced' is a practice run past the attempt limit (083). */
+    status?: string;
+    seenQuestionIds: string[];
+    scores: { criteriaIndex: number; score: number; total: number }[];
+  };
 }) {
   const criteria = opts.pools.map((p, i) => ({
     id: `c${i}`,
@@ -108,7 +114,7 @@ function buildFixture(opts: {
 
   if (opts.priorAttempt) {
     tables.assessment_attempts = [
-      { id: 'PRIOR', assessment_id: 'A', student_id: 'S', status: 'submitted' },
+      { id: 'PRIOR', assessment_id: 'A', student_id: 'S', status: opts.priorAttempt.status ?? 'submitted' },
     ];
     tables.attempt_questions = opts.priorAttempt.seenQuestionIds.map((qid) => ({
       attempt_id: 'PRIOR',
@@ -234,6 +240,51 @@ async function main() {
     const seen = new Set(['q0', 'q1', 'q2', 'q6', 'q7', 'q8']);
     const repeats = r.questions.filter((q) => seen.has(q.id)).length;
     check('repeats only appear once the unseen pool is dry', repeats === 3, `${repeats} repeats`);
+  }
+
+  console.log('\n=== practice run past the limit steers the next paper ===');
+  {
+    const { tables } = buildFixture({
+      totalQuestions: 8,
+      pools: [
+        { name: 'Strong', min: 1, count: 6 },
+        { name: 'Weak', min: 1, count: 6 },
+      ],
+      priorAttempt: {
+        status: 'practiced',
+        seenQuestionIds: ['q0', 'q1', 'q2', 'q6', 'q7', 'q8'],
+        scores: [
+          { criteriaIndex: 0, score: 100, total: 3 },
+          { criteriaIndex: 1, score: 0, total: 3 },
+        ],
+      },
+    });
+    const r = await selectQuestionsForAttempt(fakeClient(tables), {
+      assessmentId: 'A',
+      studentId: 'S',
+      rng: seeded(7),
+    });
+    invariants(r, 8, 'after practice');
+    check('a practice run counts as history', r.attemptNumber === 2);
+    check('weak criterion gets more questions', r.allocations[1].allocated > r.allocations[0].allocated);
+  }
+
+  console.log('\n=== an expired attempt is not history ===');
+  {
+    const { tables } = buildFixture({
+      totalQuestions: 8,
+      pools: [
+        { name: 'Strong', min: 1, count: 6 },
+        { name: 'Weak', min: 1, count: 6 },
+      ],
+      priorAttempt: { status: 'expired', seenQuestionIds: ['q0'], scores: [] },
+    });
+    const r = await selectQuestionsForAttempt(fakeClient(tables), {
+      assessmentId: 'A',
+      studentId: 'S',
+      rng: seeded(7),
+    });
+    check('dealt as a first attempt', r.attemptNumber === 1 && r.allocations.every((a) => a.weakness === null));
   }
 
   console.log('\n=== edge: minimums exceed the paper ===');

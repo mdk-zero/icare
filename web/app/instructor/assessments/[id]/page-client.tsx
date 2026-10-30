@@ -1388,7 +1388,7 @@ export default function AssessmentQuestionsClient({
                 </div>
               </div>
               <p className="text-xs text-gray-500">
-                {`Every attempt serves the whole quiz. Students get ${DEFAULT_ATTEMPTS} attempt${DEFAULT_ATTEMPTS === 1 ? "" : "s"} as standard; allow more if the quiz calls for it.`}
+                {`Students get ${DEFAULT_ATTEMPTS} graded attempt${DEFAULT_ATTEMPTS === 1 ? "" : "s"} as standard, and their best graded attempt counts. After that they can keep practicing: practice runs focus on what they missed and never change the grade.`}
               </p>
                 <div>
                   <p className={underlineLabel}>Published to sections</p>

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { SHORT_ANSWER } from './short-answer';
+import { scoredStatuses } from './quiz-practice';
 
 /**
  * Picks the questions one attempt serves.
@@ -19,6 +20,8 @@ import { SHORT_ANSWER } from './short-answer';
  *   Emphasis — the first attempt spreads what is left over the criteria in
  *   proportion to how much material each has. A retake spends it on whatever
  *   the student scored worst on, and prefers questions they have not seen.
+ *   Practice runs past the attempt limit (083) count as history here, though
+ *   never toward a grade, so each one steers the next.
  *
  * Order is interleaved rather than grouped, so a student never meets all of one
  * criterion's questions in a block.
@@ -297,7 +300,7 @@ export async function selectQuestionsForAttempt(
     .select('id')
     .eq('assessment_id', assessmentId)
     .eq('student_id', studentId)
-    .eq('status', 'submitted');
+    .in('status', await scoredStatuses(supabase));
 
   const priorIds = (priorAttempts ?? []).map((a) => a.id);
   const isRetake = priorIds.length > 0;

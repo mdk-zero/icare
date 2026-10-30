@@ -8,13 +8,16 @@ import {
   SelectionError,
 } from '@/app/lib/assessment-selection';
 import { quizInDeanScope } from '@/app/lib/assessment-access';
+import {
+  PRACTICE_STATUS,
+  isPracticeRun,
+  loadAttemptLimit,
+  practiceLive,
+} from '@/app/lib/quiz-practice';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
-
-/** Attempts that have run their course. An in_progress attempt is still the current one. */
-const SPENT_STATUSES = ['submitted', 'expired'];
 
 /**
  * Slack past the time limit before an open attempt counts as abandoned: the
@@ -31,6 +34,10 @@ const EXPIRY_GRACE_MS = 2 * 60 * 1000;
  * came from. Once a retry limit exists that behaviour would charge a student
  * for a quiz they never sat, so an unfinished attempt is handed back with the
  * exact paper it was already served rather than replaced.
+ *
+ * Past the limit the quiz no longer closes: the next run is practice (083),
+ * dealt the same adaptive way but never graded. Before 083 is applied it
+ * closes as it always did.
  *
  * Questions come back without correct_index or explanation — grading is
  * server-side, in the submit route.
@@ -56,28 +63,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Assessment not available' }, { status: 404 });
     }
 
-    const { data: assignment } = await supabase
-      .from('assessment_assignments')
-      .select('id, status, max_attempts')
-      .eq('assessment_id', assessmentId)
-      .eq('student_id', session.uid)
-      .maybeSingle();
+    const limit = await loadAttemptLimit(supabase, {
+      assessmentId,
+      studentId: session.uid,
+      quizMaxAttempts: assessment.max_attempts ?? null,
+    });
+    const { assignment, maxAttempts } = limit;
     // Unless it was given to them, only a quiz of their own Dean's (077).
     if (!assignment && !(await quizInDeanScope(supabase, session, assessmentId))) {
       return NextResponse.json({ error: 'Assessment not available' }, { status: 404 });
     }
-
-    // A per-student override beats the assessment default; null at both levels
-    // means unlimited.
-    const maxAttempts = assignment?.max_attempts ?? assessment.max_attempts ?? null;
-
-    const { count: spentCount } = await supabase
-      .from('assessment_attempts')
-      .select('id', { count: 'exact', head: true })
-      .eq('assessment_id', assessmentId)
-      .eq('student_id', session.uid)
-      .in('status', SPENT_STATUSES);
-    let spent = spentCount ?? 0;
+    let spent = limit.spent;
+    // Past the graded tries, and 083 applied: whatever runs next is practice.
+    const practiceNow = async () =>
+      isPracticeRun(spent, maxAttempts) && (await practiceLive(supabase));
 
     // ---------- resume ----------
     let { data: open } = await supabase
@@ -93,24 +92,44 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // An attempt left open past its time limit (the app was closed, the phone
     // died) has run out: handing it back would only put the student straight
     // into "time's up". Close it as expired — it counts as a try, like any
-    // attempt that ran its course — and deal a fresh one below.
+    // attempt that ran its course — and deal a fresh one below. A practice run
+    // left that way is deleted instead, so it never spends a graded try.
     let previousExpired = false;
     if (open && assessment.time_limit_seconds) {
       const elapsedMs = Date.now() - new Date(open.started_at).getTime();
       if (elapsedMs > assessment.time_limit_seconds * 1000 + EXPIRY_GRACE_MS) {
-        const { error: expireError } = await supabase
-          .from('assessment_attempts')
-          .update({ status: 'expired' })
-          .eq('id', open.id)
-          .eq('status', 'in_progress');
+        const wasPractice = await practiceNow();
+        const { error: expireError } = wasPractice
+          ? await supabase
+              .from('assessment_attempts')
+              .delete()
+              .eq('id', open.id)
+              .eq('status', 'in_progress')
+          : await supabase
+              .from('assessment_attempts')
+              .update({ status: 'expired' })
+              .eq('id', open.id)
+              .eq('status', 'in_progress');
         if (expireError) {
           console.error('Failed to expire a timed-out attempt', expireError);
           return NextResponse.json({ error: 'Unable to start attempt' }, { status: 500 });
         }
         open = null;
-        spent += 1;
+        if (!wasPractice) spent += 1;
         previousExpired = true;
       }
+    }
+
+    const practice = await practiceNow();
+    let practiceNumber: number | null = null;
+    if (practice) {
+      const { count: practiced } = await supabase
+        .from('assessment_attempts')
+        .select('id', { count: 'exact', head: true })
+        .eq('assessment_id', assessmentId)
+        .eq('student_id', session.uid)
+        .eq('status', PRACTICE_STATUS);
+      practiceNumber = (practiced ?? 0) + 1;
     }
 
     const meta = {
@@ -118,6 +137,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       attempts_used: spent,
       attempts_remaining: maxAttempts === null ? null : Math.max(0, maxAttempts - spent),
       previous_expired: previousExpired,
+      practice,
+      // A practice run is numbered on its own; "Attempt 3 of 2" would read wrong.
+      ...(practice ? { practice_number: practiceNumber } : { attempt_number: spent + 1 }),
     };
 
     if (open) {
@@ -138,7 +160,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             question_type: q.question_type,
           })),
           resumed: true,
-          attempt_number: spent + 1,
           ...meta,
         });
       }
@@ -148,7 +169,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // ---------- limit ----------
-    if (maxAttempts !== null && spent >= maxAttempts) {
+    if (maxAttempts !== null && spent >= maxAttempts && !practice) {
       return NextResponse.json(
         {
           error:
@@ -213,7 +234,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unable to start attempt' }, { status: 500 });
     }
 
-    if (assignment && assignment.status === 'pending') {
+    if (!practice && assignment && assignment.status === 'pending') {
       await supabase
         .from('assessment_assignments')
         .update({ status: 'in_progress' })
@@ -230,6 +251,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           assessment_id: assessmentId,
           questions: selection.questions.length,
           attempt_number: selection.attemptNumber,
+          practice,
         },
       },
       request,
@@ -251,7 +273,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           question_type: q.question_type,
         })),
         resumed: false,
-        attempt_number: selection.attemptNumber,
         ...meta,
       },
       { status: 201 },

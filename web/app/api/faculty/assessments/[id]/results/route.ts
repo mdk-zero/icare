@@ -5,6 +5,7 @@ import { getScopedStudentIds } from '@/app/lib/admin-scope';
 
 import { isMissingTeamTables } from '@/app/lib/teams';
 import { isLateSubmission } from '@/app/lib/assessment-timing';
+import { PRACTICE_STATUS } from '@/app/lib/quiz-practice';
 import { quizInDeanScope } from '@/app/lib/assessment-access';
 
 type Status = 'submitted' | 'in_progress' | 'not_started';
@@ -152,7 +153,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     }
 
     const results = inScopeStudents.map((student) => {
-      const attempts = attemptsByStudent.get(student.id) ?? [];
+      const all = attemptsByStudent.get(student.id) ?? [];
+      // Practice runs past the limit (083) never touch the grade; they are
+      // only counted, so an instructor can see who kept going.
+      const attempts = all.filter((a) => a.status !== PRACTICE_STATUS);
+      const practiceCount = all.length - attempts.length;
       const submitted = attempts.filter((a) => a.status === 'submitted');
 
       // Newest submission first, so "latest" is the most recent graded run.
@@ -180,6 +185,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         status,
         attempt_count: attempts.length,
         submitted_count: submitted.length,
+        practice_count: practiceCount,
         best_score: scores.length > 0 ? Math.max(...scores) : null,
         latest_score: latest?.score ?? null,
         latest_submitted_at: latest?.submitted_at ?? null,

@@ -35,6 +35,8 @@ interface StudentResult {
   status: Status;
   attempt_count: number;
   submitted_count: number;
+  /** Ungraded practice runs past the attempt limit (083); absent in demo data. */
+  practice_count?: number;
   best_score: number | null;
   latest_score: number | null;
   latest_submitted_at: string | null;
@@ -216,7 +218,7 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
 
   /** Exports what is on screen, so a filtered view exports the filtered rows. */
   const exportCsv = () => {
-    const header = "student,email,section,group,status,best_score,attempts,last_submitted,time_taken";
+    const header = "student,email,section,group,status,best_score,attempts,practice_runs,last_submitted,time_taken";
     const rows = filtered.map((r) =>
       [
         r.name,
@@ -226,6 +228,7 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
         STATUS_LABEL[r.status],
         r.best_score ?? "",
         r.attempt_count,
+        r.practice_count ?? 0,
         r.latest_submitted_at ?? "",
         r.latest_time_taken_seconds ?? "",
       ]
@@ -507,6 +510,11 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
                         </td>
                         <td className="px-4 py-4 text-sm text-gray-600 sm:px-6">
                           {r.attempt_count === 0 ? "—" : r.attempt_count}
+                          {r.practice_count ? (
+                            <span className="ml-1.5 text-xs text-gray-400" title="Ungraded practice runs after the last attempt">
+                              · +{r.practice_count} practice
+                            </span>
+                          ) : null}
                         </td>
                         <td className="px-4 py-4 text-sm text-gray-500 sm:px-6">
                           {formatDateTime(r.latest_submitted_at)}

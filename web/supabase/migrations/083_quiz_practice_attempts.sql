@@ -1,0 +1,25 @@
+-- =================================================================
+-- 083: Practice runs past a quiz's attempt limit.
+--
+-- A quiz adapts on a retake: the paper leans toward the criteria the
+-- student scored worst on and serves unseen questions first. With one
+-- try (the default) there was never a retake, so nothing adapted.
+--
+-- Once a student has used their graded tries (submitted + expired, at
+-- or above the assignment override or the quiz's max_attempts) they can
+-- keep taking the quiz as practice. A finished practice run is stored as
+-- 'practiced' rather than 'submitted'. Every grade, average, report,
+-- warehouse function and ML score feature reads 'submitted' only, so a
+-- practice run never moves any of them; the graded score stays the best
+-- of the first N tries. Question selection reads both, so practice keeps
+-- steering the next paper.
+--
+-- An open practice run is an ordinary 'in_progress' attempt. One left
+-- past its time limit is deleted rather than expired, so it never spends
+-- a graded try.
+--
+-- Until this is applied the app behaves as before: at the limit the quiz
+-- cannot be started again.
+-- =================================================================
+
+alter type public.attempt_status add value if not exists 'practiced';

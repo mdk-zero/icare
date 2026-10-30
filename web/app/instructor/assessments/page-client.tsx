@@ -792,8 +792,10 @@ export default function FacultyAssessmentsClient() {
                   className={inputClassName}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Overrides the quiz&apos;s own limit for the students below. Leave
-                  blank to use it. Re-assigning without a value clears any override.
+                  Graded tries for the students below; their best one counts, and
+                  after the last they can keep practicing ungraded. Overrides the
+                  quiz&apos;s own limit. Leave blank to use it. Re-assigning without a
+                  value clears any override.
                 </p>
               </div>
             </div>
