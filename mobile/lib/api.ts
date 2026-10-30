@@ -500,14 +500,14 @@ export async function submitScenarioAssignment(
 }
 
 // ---------------------------------------------------------------
-// AI study tips (LLM, generated from the student's open scenarios)
+// AI study tips (LLM, one per skill that needs improvement; shown in the Library)
 // ---------------------------------------------------------------
 
 export interface AiTip {
   title: string;
   tip: string;
-  /** The open scenario this tip is about, or null when it spans several. */
-  scenario_title: string | null;
+  /** The Taylor's skill this tip is about. */
+  skill_id?: string;
 }
 
 export interface AiTipsResult {
@@ -519,8 +519,8 @@ export interface AiTipsResult {
 
 /**
  * Tips are generated server-side and cached there against the student's
- * assignment state, so calling this on every mount costs a row read, not an
- * LLM call, until the assignments actually change.
+ * "Needs improvement" list, so calling this on every mount costs a row read,
+ * not an LLM call, until the list actually changes.
  */
 export async function fetchAiTips(): Promise<CachedResult<AiTipsResult>> {
   const result = await cachedGet<AiTipsResult>('/api/student/tips');
@@ -588,8 +588,42 @@ export async function fetchRecommendations(): Promise<CachedResult<Recommendatio
   return { ...result, data: result.data.recommendations ?? [] };
 }
 
-export async function dismissRecommendation(id: string): Promise<void> {
-  await api('/api/student/recommendations', { method: 'PATCH', body: { id } });
+// ---------------------------------------------------------------
+// Skills that need improvement (the top of the Library)
+// ---------------------------------------------------------------
+
+export interface SkillEvidence {
+  kind: 'quiz' | 'patient_case' | 'return_demo';
+  /** The quiz's, Patient Case's or Return Demonstration's title. */
+  title: string;
+  at: string;
+  weak: boolean;
+  /** Quiz only: the percent on this skill's questions. */
+  score: number | null;
+  correct: number | null;
+  total: number | null;
+  /** Checklists only: the steps (or whole tasks) rated Needs Practice. */
+  needs_practice: string[];
+}
+
+export interface FocusSkill {
+  skill_id: string;
+  title: string;
+  chapter: number;
+  area: string;
+  /** What flags it, newest first: every weak result since its last good one. */
+  evidence: SkillEvidence[];
+  /** Published quizzes covering the skill; show the ones in the student's own quiz list. */
+  quiz_ids: string[];
+}
+
+/**
+ * The skills whose latest graded result needs improvement: a quiz under 75% on
+ * the skill's questions, or a checklist rated Needs Practice.
+ */
+export async function fetchSkillFocus(): Promise<CachedResult<FocusSkill[]>> {
+  const result = await cachedGet<{ skills: FocusSkill[] }>('/api/student/library/focus');
+  return { ...result, data: result.data.skills ?? [] };
 }
 
 // ---------------------------------------------------------------

@@ -30,9 +30,7 @@ import { gradedLabel, performOn } from "@/lib/return-demos";
 import { useAppHeaderHeight } from "@/components/navigation/AppTabs";
 import {
   fetchWard,
-  fetchAiTips,
   fetchMyCases,
-  AiTip,
   WardRoom,
   WardPatient,
   WardAssignment,
@@ -146,31 +144,6 @@ function AssignmentBanner({
   );
 }
 
-function TipCard({ tip }: { tip: AiTip }) {
-  const { Palette, Accent, Shadow, Type } = useTheme();
-  const styles = React.useMemo(
-    () => createStyles(Palette, Accent, Shadow, Type),
-    [Palette, Accent, Shadow, Type],
-  );
-
-  return (
-    <View style={styles.tipCard}>
-      <View style={[styles.tipIconBox, { backgroundColor: Accent.blue.bg }]}>
-        <Ionicons name="bulb" size={14} color={Accent.blue.fg} />
-      </View>
-      <View style={styles.tipBody}>
-        <Text style={styles.tipTitle}>{tip.title}</Text>
-        {tip.scenario_title ? (
-          <Text style={styles.tipScenario} numberOfLines={1}>
-            {tip.scenario_title}
-          </Text>
-        ) : null}
-        <Text style={styles.tipText}>{tip.tip}</Text>
-      </View>
-    </View>
-  );
-}
-
 type DropdownKey = "pending" | "completed" | "hospital";
 
 /** Top to bottom, as they appear on the screen. */
@@ -240,8 +213,6 @@ export default function ClinicScreen() {
   const headerHeight = useAppHeaderHeight();
 
   const { data, loading, refreshing, error, fromCache, refresh, reload } = useApiData(fetchWard);
-  // Separate call: a slow LLM generation must never hold up the ward.
-  const tips = useApiData(fetchAiTips);
   const cases = useApiData(fetchMyCases);
   // A case assigned or graded shows up at once: its notification arrives live.
   const reloadCases = cases.reload;
@@ -262,13 +233,11 @@ export default function ClinicScreen() {
     }, [reload]),
   );
 
-  const refreshTips = tips.refresh;
   const refreshCases = cases.refresh;
   const handleRefresh = React.useCallback(() => {
     refresh();
-    refreshTips();
     refreshCases();
-  }, [refresh, refreshTips, refreshCases]);
+  }, [refresh, refreshCases]);
 
   const openAssignment = React.useCallback(
     (assignment: WardAssignment) => {
@@ -351,12 +320,10 @@ export default function ClinicScreen() {
       .map((a) => (a.patient_id ? patientsById.get(a.patient_id)?.room_id : null))
       .find((roomId): roomId is string => Boolean(roomId)) ?? null;
 
-  const tipList = tips.data?.tips ?? [];
   const caseList = cases.data ?? [];
   // Write-ups still in the student's hands: not started, or a draft.
   const pendingCases = caseList.filter((c) => c.status === "not_started" || c.status === "draft");
   const pendingCount = openAssignments.length + pendingCases.length;
-  const showTips = tips.loading || tipList.length > 0 || Boolean(tips.error);
 
   const headings: Record<DropdownKey, { title: string; count: number; tone?: "alert" }> = {
     pending: { title: "Pending Tasks", count: pendingCount, tone: "alert" },
@@ -527,30 +494,6 @@ export default function ClinicScreen() {
           </View>
         ) : null}
 
-        {showTips ? (
-          <View style={styles.section}>
-            <SectionHeader
-              title="AI Study Tips"
-              subtitle="Generated from your assigned patient cases"
-            />
-            {tips.loading && tipList.length === 0 ? (
-              <View style={styles.tipCard}>
-                <View style={styles.tipBody}>
-                  <SkeletonBlock width="55%" height={13} />
-                  <SkeletonBlock width="100%" height={11} style={styles.tipSkeletonLine} />
-                  <SkeletonBlock width="80%" height={11} style={styles.tipSkeletonLine} />
-                </View>
-              </View>
-            ) : tipList.length > 0 ? (
-              tipList.map((tip, index) => <TipCard key={`${tip.title}-${index}`} tip={tip} />)
-            ) : (
-              <EmptyState
-                icon="cloud-offline-outline"
-                message={tips.error ?? "No tips available right now."}
-              />
-            )}
-          </View>
-        ) : null}
       </ScrollView>
 
       {/* The heading of the list being scrolled, held just below the app header. */}
@@ -839,14 +782,6 @@ function createStyles(
       borderColor: Palette.border,
       ...Shadow.card,
     },
-    tipIconBox: {
-      width: 28,
-      height: 28,
-      borderRadius: Radius.sm,
-      alignItems: "center",
-      justifyContent: "center",
-      marginRight: Spacing.md,
-    },
     tipBody: {
       flex: 1,
     },
@@ -859,19 +794,6 @@ function createStyles(
       alignItems: "center",
       flexWrap: "wrap",
       gap: Spacing.sm,
-      marginTop: 6,
-    },
-    tipTitle: Type.itemTitle,
-    tipScenario: {
-      fontSize: 11,
-      fontWeight: "600",
-      color: Palette.textMuted,
-      marginTop: 2,
-    },
-    tipText: {
-      fontSize: 13,
-      color: Palette.textSecondary,
-      lineHeight: 19,
       marginTop: 6,
     },
     tipSkeletonLine: {

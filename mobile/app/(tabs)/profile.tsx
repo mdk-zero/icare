@@ -20,8 +20,8 @@ import { SectionHeader } from "@/components/ui";
 import { GoalsList } from "@/components/GoalsList";
 import { useAuth } from "@/hooks/useAuth";
 import { useAvatarImage, useAvatarPicker } from "@/hooks/useAvatar";
-import { useApiData, allCached } from "@/hooks/useApiData";
-import { fetchProgress, fetchRecommendations } from "@/lib/api";
+import { useApiData } from "@/hooks/useApiData";
+import { fetchProgress } from "@/lib/api";
 import { clearCache } from "@/lib/client";
 import { ThemePreference, useThemePreference } from "@/hooks/useThemePreference";
 import { roleLabel } from "@/lib/roles";
@@ -78,10 +78,7 @@ export default function ProfileScreen() {
     () => createStyles(Palette, Accent, Shadow, Type),
     [Palette, Accent, Shadow, Type],
   );
-  const { data, refreshing, refresh } = useApiData(() =>
-    allCached(fetchProgress(), fetchRecommendations()),
-  );
-  const [progress, recommendations] = data ?? [null, []];
+  const { data: progress, refreshing, refresh } = useApiData(fetchProgress);
 
   const { source: avatarSource } = useAvatarImage(user);
   const { uploading, changeAvatar } = useAvatarPicker();
@@ -157,12 +154,6 @@ export default function ProfileScreen() {
       icon: "notifications" as const,
       accent: Accent.amber,
       onPress: () => router.push("/notifications"),
-    },
-    {
-      label: "Recommended for You",
-      icon: "book" as const,
-      accent: Accent.green,
-      onPress: () => router.push("/recommendations"),
     },
     {
       label: "Request Assistance",

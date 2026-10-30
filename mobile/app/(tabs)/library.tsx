@@ -6,10 +6,19 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenHeader, SkeletonBlock, EmptyState } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
-import { fetchLibrary, type LibraryItem, type LibraryKind } from '@/lib/api';
+import {
+  fetchAiTips,
+  fetchAssessments,
+  fetchLibrary,
+  fetchRecommendations,
+  fetchSkillFocus,
+  type LibraryItem,
+  type LibraryKind,
+} from '@/lib/api';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { kindStyle } from '@/lib/library-kinds';
+import { FocusSection } from '@/components/library/FocusSection';
 
 type Accent = ReturnType<typeof useTheme>['Accent'];
 
@@ -29,16 +38,39 @@ export default function LibraryScreen() {
   const { Palette, Accent, Shadow, Type } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Shadow, Type), [Palette, Shadow, Type]);
   const { data, loading, refreshing, error, refresh, reload } = useApiData(fetchLibrary);
+  // What needs improvement, and what goes with it. Separate calls: a slow AI
+  // tip must never hold up the materials.
+  const focus = useApiData(fetchSkillFocus);
+  const tips = useApiData(fetchAiTips);
+  const quizzes = useApiData(fetchAssessments);
+  const recommendations = useApiData(fetchRecommendations);
   const [filter, setFilter] = React.useState<Filter>('all');
   const [collapsed, setCollapsed] = React.useState<Set<number>>(new Set());
 
-  // "New" dots clear after a material is opened.
+  // "New" dots clear after a material is opened; a grade given in the
+  // meantime can add or clear a skill that needs improvement.
+  const reloadFocus = focus.reload;
+  const reloadQuizzes = quizzes.reload;
   useFocusEffect(
     React.useCallback(() => {
       if (data) reload();
+      reloadFocus();
+      reloadQuizzes();
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [reload]),
+    }, [reload, reloadFocus, reloadQuizzes]),
   );
+
+  const refreshFocus = focus.refresh;
+  const refreshTips = tips.refresh;
+  const refreshQuizzes = quizzes.refresh;
+  const refreshRecommendations = recommendations.refresh;
+  const refreshAll = React.useCallback(() => {
+    refresh();
+    refreshFocus();
+    refreshTips();
+    refreshQuizzes();
+    refreshRecommendations();
+  }, [refresh, refreshFocus, refreshTips, refreshQuizzes, refreshRecommendations]);
 
   const pending = loading && !data;
 
@@ -54,13 +86,21 @@ export default function LibraryScreen() {
 
   const open = (m: LibraryItem) => router.push(`/library/${m.id}`);
 
+  // Every material of a skill, whatever the filter, for the skills that need improvement.
+  const materialsBySkill = React.useMemo(() => {
+    const map = new Map<string, LibraryItem[]>();
+    for (const c of data?.chapters ?? []) for (const s of c.skills) map.set(s.id, s.materials);
+    return map;
+  }, [data]);
+  const focusSkills = focus.data ?? [];
+
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 88 }]}
       showsVerticalScrollIndicator={false}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
+        <RefreshControl refreshing={refreshing} onRefresh={refreshAll} colors={[Palette.primary]} tintColor={Palette.primary} />
       }
     >
       <ScreenHeader
@@ -74,6 +114,18 @@ export default function LibraryScreen() {
         icon="library-outline"
         accent="teal"
       />
+
+      <FocusSection
+        skills={focusSkills}
+        loading={focus.loading}
+        tips={tips.data?.tips ?? []}
+        tipsLoading={tips.loading}
+        quizzes={quizzes.data ?? []}
+        recommendations={recommendations.data ?? []}
+        materialsBySkill={materialsBySkill}
+        renderMaterial={(m) => <MaterialRow item={m} onPress={() => open(m)} styles={styles} Accent={Accent} Palette={Palette} />}
+      />
+      {focusSkills.length > 0 ? <Text style={styles.allHeading}>All materials</Text> : null}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
         {FILTERS.map((f) => {
@@ -228,6 +280,7 @@ function createStyles(
     content: { padding: Spacing.lg, paddingBottom: 128 },
     pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
     filters: { gap: 8, paddingVertical: Spacing.md },
+    allHeading: { ...Type.sectionTitle, marginTop: Spacing.sm },
     chip: {
       paddingHorizontal: 14,
       paddingVertical: 7,
