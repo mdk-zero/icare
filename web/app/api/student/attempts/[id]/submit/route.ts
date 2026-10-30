@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { deriveCompetencyScoresForAttempt } from '@/app/lib/competency';
+import { refreshStudentInBackground } from '@/app/lib/ml';
 import { isLateSubmission } from '@/app/lib/assessment-timing';
 import { acceptedAnswers, matchesShortAnswer, SHORT_ANSWER } from '@/app/lib/short-answer';
 import {
@@ -391,6 +392,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       },
       request,
     );
+
+    // A graded result moves the ML's picture of the student, so re-score them
+    // after the response goes out. Practice runs don't reach its features.
+    if (!practice) refreshStudentInBackground(session.uid);
 
     return respond(score, timeTaken);
   } catch (err) {

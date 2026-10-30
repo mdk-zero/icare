@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { refreshStudentInBackground } from '@/app/lib/ml';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -61,6 +62,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       console.error('Failed to submit assignment', error);
       return NextResponse.json({ error: 'Unable to submit patient case' }, { status: 500 });
     }
+
+    // Handed-in work counts toward the ML's completion features; re-score
+    // the student after the response goes out.
+    refreshStudentInBackground(session.uid);
 
     return NextResponse.json({ assignment: updated });
   } catch (err) {

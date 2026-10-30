@@ -7,10 +7,12 @@
  * they are allowed to touch.
  *
  * Shared by the admin route (whole cohort) and the faculty route (their own
- * sections) so the two cannot drift on timeout, headers, or error shape.
+ * sections) so the two cannot drift on timeout, headers, or error shape, and
+ * by the routes that re-score one student in the background after new graded
+ * work (refreshStudentInBackground).
  */
 
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { NDJSON, readNdjson } from './ndjson';
 import { getSupabaseAdmin } from './supabase/server';
 
@@ -23,6 +25,12 @@ const ACTION_PATH: Record<MlAction, string> = {
 
 /** Scoring a cohort is slow; the admin UI runs both jobs back to back. */
 const RUN_TIMEOUT_MS = 120_000;
+
+/**
+ * Per job, for one student. Render's free plan sleeps the service, and waking
+ * it takes up to a minute before the job itself starts.
+ */
+const BACKGROUND_TIMEOUT_MS = 110_000;
 
 /**
  * One line of a run as the browser reads it: steps done while the job works,
@@ -162,4 +170,44 @@ async function* serviceEvents(
     console.error('ML service stream failed', err);
   }
   yield { error: 'ML service run failed' };
+}
+
+/**
+ * Re-score one student once the response has gone out: their at-risk
+ * prediction (which notifies their instructors if they newly need
+ * intervention), then their quiz recommendations. Called when a student hands
+ * in graded work and when an instructor finalizes a grade, so the ML keeps up
+ * without anyone pressing Assess; the nightly run still covers everyone.
+ *
+ * Never delays or fails the request that called it. A run that can't start or
+ * times out — the service unconfigured, asleep too long, or deployed before
+ * this — is logged, and the nightly run catches the student up.
+ */
+export function refreshStudentInBackground(studentId: string): void {
+  const serviceUrl = process.env.ML_SERVICE_URL;
+  const serviceSecret = process.env.ML_SERVICE_SECRET;
+  if (!serviceUrl || !serviceSecret || !studentId) return;
+
+  after(async () => {
+    // In order: the recommender reads the fresh features the prediction used.
+    for (const action of ['predict', 'recommend'] as const) {
+      try {
+        const response = await fetch(`${serviceUrl.replace(/\/$/, '')}${ACTION_PATH[action]}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-ICARE-ML-KEY': serviceSecret },
+          // One student, never an empty list: [] would read as the whole cohort.
+          body: JSON.stringify({ student_ids: [studentId] }),
+          signal: AbortSignal.timeout(BACKGROUND_TIMEOUT_MS),
+        });
+        if (!response.ok) {
+          console.error('Background ML run failed', action, response.status);
+          return;
+        }
+        await response.json().catch(() => null);
+      } catch (err) {
+        console.error('Background ML run failed', action, err);
+        return;
+      }
+    }
+  });
 }

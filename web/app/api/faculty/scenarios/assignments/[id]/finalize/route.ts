@@ -10,6 +10,7 @@ import {
   spendGradeEditApproval,
 } from '@/app/lib/grade-edit-requests';
 import { logAudit } from '@/app/lib/audit';
+import { refreshStudentInBackground } from '@/app/lib/ml';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -148,6 +149,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         request,
       );
     }
+
+    // A finished grade (its Needs Practice ratings included) feeds the
+    // student's recommendations; re-score them after the response goes out.
+    // Progress saves above don't, or every rating saved would start a run.
+    refreshStudentInBackground(updated.student_id as string);
 
     return NextResponse.json({ assignment: updated, score, completed: true, remaining: 0 });
   } catch (err) {
