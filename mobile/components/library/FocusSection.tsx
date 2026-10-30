@@ -82,7 +82,7 @@ export function FocusSection({
             <SkeletonBlock width="60%" height={14} />
             <SkeletonBlock width="40%" height={11} style={{ marginTop: 6 }} />
           </View>
-          <Ionicons name="chevron-down" size={18} color={Palette.textFaint} />
+          <Ionicons name="chevron-forward" size={18} color={Palette.textFaint} />
         </View>
       </View>
     );
@@ -118,7 +118,7 @@ export function FocusSection({
             {summary}
           </Text>
         </View>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={Palette.textMuted} />
+        <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={18} color={Palette.textMuted} />
       </Pressable>
 
       {open && skills.length > 0 ? (
