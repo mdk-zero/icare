@@ -275,8 +275,13 @@ export interface StudentAssessment {
   max_attempts: number | null;
   /** Attempts that have run their course — submitted or expired. */
   attempts_used: number;
-  /** null when unlimited; 0 means the quiz can no longer be started. */
+  /** null when unlimited; 0 means the graded tries are used up. */
   attempts_remaining: number | null;
+  /** Graded tries used up, but the quiz can still be taken as ungraded practice. */
+  practice_available?: boolean;
+  /** Practice runs finished; they never change best_score. */
+  practice_count?: number;
+  last_practice_score?: number | null;
 }
 
 export async function fetchAssessments(): Promise<CachedResult<StudentAssessment[]>> {
@@ -322,6 +327,9 @@ export interface StartedAttempt {
   attempts_remaining?: number | null;
   /** The last attempt was left open past its time limit and was closed; this one is new. */
   previous_expired?: boolean;
+  /** An ungraded practice run past the attempt limit; numbered on its own. */
+  practice?: boolean;
+  practice_number?: number;
 }
 
 export async function startAttempt(assessmentId: string): Promise<StartedAttempt> {
@@ -337,6 +345,10 @@ export interface AttemptResult {
   time_taken_seconds: number;
   /** Submitted after the time limit: still graded and counted, but flagged to faculty. */
   late?: boolean;
+  /** Saved as practice: it steers the next paper but leaves the grade alone. */
+  practice?: boolean;
+  /** For practice: the graded score it left alone (null if no graded try was scored). */
+  graded_score?: number | null;
   results: {
     question_id: string;
     selected_index: number | null;

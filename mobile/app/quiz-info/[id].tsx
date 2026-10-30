@@ -97,11 +97,22 @@ export default function QuizInfoScreen() {
 
   const done = quiz.attempt_count > 0;
   const exhausted = quiz.attempts_remaining === 0;
+  // Graded tries used up: the quiz stays open as ungraded practice (when the
+  // server offers it), otherwise it is closed.
+  const canPractice = exhausted && !!quiz.practice_available;
+  const blocked = exhausted && !canPractice;
+  const practiceRuns = quiz.practice_count ?? 0;
   const due = quiz.assignment?.deadline
     ? new Date(quiz.assignment.deadline).toLocaleDateString([], { month: 'short', day: 'numeric' })
     : null;
   const score = quiz.best_score;
   const passed = score !== null && score >= PASSING_SCORE;
+  const practiceNote = canPractice ? (
+    <Text style={styles.practiceNote}>
+      Your graded {quiz.max_attempts === 1 ? 'try is' : 'tries are'} used up. Practice runs focus on what you
+      missed and won&apos;t change {score !== null ? `your score of ${Math.round(score)}%` : 'your grade'}.
+    </Text>
+  ) : null;
 
   // Said before the quiz starts, because the quiz enforces it (app/quiz/[id].tsx).
   const strictRules = (
@@ -177,6 +188,11 @@ export default function QuizInfoScreen() {
                       day: 'numeric',
                     })}`
                   : ''}
+                {practiceRuns > 0
+                  ? ` · ${practiceRuns} practice ${practiceRuns === 1 ? 'run' : 'runs'}${
+                      quiz.last_practice_score != null ? `, last ${Math.round(quiz.last_practice_score)}%` : ''
+                    }`
+                  : ''}
                 . Passing mark is {PASSING_SCORE}%.
               </Text>
             </View>
@@ -199,14 +215,15 @@ export default function QuizInfoScreen() {
 
           {strictRules}
           <PrimaryButton
-            title={exhausted ? 'No tries left' : 'Take it again'}
+            title={blocked ? 'No tries left' : canPractice ? 'Practice again' : 'Take it again'}
             onPress={() => router.push(`/quiz/${quiz.id}`)}
-            disabled={exhausted}
+            disabled={blocked}
             size="lg"
           />
-          {exhausted ? (
+          {blocked ? (
             <Text style={styles.note}>Ask your instructor if you need another try.</Text>
           ) : null}
+          {practiceNote}
         </View>
       ) : (
         <View style={styles.card}>
@@ -221,11 +238,12 @@ export default function QuizInfoScreen() {
           </View>
           {strictRules}
           <PrimaryButton
-            title={exhausted ? 'No tries left' : 'Start quiz'}
+            title={blocked ? 'No tries left' : canPractice ? 'Practice quiz' : 'Start quiz'}
             onPress={() => router.push(`/quiz/${quiz.id}`)}
-            disabled={exhausted}
+            disabled={blocked}
             size="lg"
           />
+          {practiceNote}
         </View>
       )}
     </ScrollView>
@@ -308,6 +326,7 @@ function createStyles(
     studyTitle: { fontSize: 14, fontWeight: '700', color: Palette.ink },
     studyBody: { fontSize: 12, color: Palette.textMuted, marginTop: 1 },
     note: { fontSize: 12, color: Accent.red.fg, textAlign: 'center' },
+    practiceNote: { fontSize: 12, color: Palette.textSecondary, textAlign: 'center', lineHeight: 17 },
     readyRow: { flexDirection: 'row', gap: Spacing.sm, alignItems: 'flex-start' },
     readyText: { flex: 1, fontSize: 13, color: Palette.textSecondary, lineHeight: 19 },
     strictRow: {

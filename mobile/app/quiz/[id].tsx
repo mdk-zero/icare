@@ -527,7 +527,9 @@ export default function QuizInterfaceScreen() {
           minute: '2-digit',
         }),
       },
-      ...(started.attempt_number
+      ...(started.practice && started.practice_number
+        ? [{ label: 'Attempt', value: `Practice ${started.practice_number}` }]
+        : started.attempt_number
         ? [
             {
               label: 'Attempt',
@@ -581,7 +583,18 @@ export default function QuizInterfaceScreen() {
             </View>
           ) : null}
 
-          {result.late ? (
+          {result.practice ? (
+            <View style={styles.lateNote}>
+              <Ionicons name="refresh-circle" size={14} color={Palette.primary} />
+              <Text style={[styles.lateText, { color: Palette.primary }]}>
+                {result.graded_score != null
+                  ? `Practice run, not graded. Your graded score stays ${Math.round(result.graded_score)}%.`
+                  : 'Practice run, not graded. Your grade is unchanged.'}
+              </Text>
+            </View>
+          ) : null}
+
+          {result.late && !result.practice ? (
             <View style={styles.lateNote}>
               <Ionicons name="alert-circle" size={14} color={Accent.amber.fg} />
               <Text style={[styles.lateText, { color: Accent.amber.fg }]}>
@@ -600,7 +613,8 @@ export default function QuizInterfaceScreen() {
           </View>
         </Card>
 
-        <ReflectionCard source="assessment" sourceId={started.attempt.id} />
+        {/* Reflections are on graded work; a practice run isn't one. */}
+        {result.practice ? null : <ReflectionCard source="assessment" sourceId={started.attempt.id} />}
 
         {showReview && (
           <View onLayout={(e) => (reviewY.current = e.nativeEvent.layout.y)}>
@@ -688,6 +702,11 @@ export default function QuizInterfaceScreen() {
         <Text style={styles.strictTitle} numberOfLines={1}>
           {started.assessment.title}
         </Text>
+        {started.practice ? (
+          <View style={[styles.strictChip, { backgroundColor: Accent.violet.bg }]}>
+            <Text style={[styles.strictChipText, { color: Accent.violet.fg }]}>Practice · not graded</Text>
+          </View>
+        ) : null}
         <View style={[styles.strictChip, leaves > 0 && { backgroundColor: Accent.red.bg }]}>
           <Text style={[styles.strictChipText, leaves > 0 && { color: Accent.red.fg }]}>
             {leaves > 0 ? `Left the app ${leaves}/${LEAVE_LIMIT}` : 'Strict mode'}
