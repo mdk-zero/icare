@@ -38,8 +38,8 @@ export default function LibraryScreen() {
   const { Palette, Accent, Shadow, Type } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Shadow, Type), [Palette, Shadow, Type]);
   const { data, loading, refreshing, error, refresh, reload } = useApiData(fetchLibrary);
-  // What needs improvement, and what goes with it. Separate calls: a slow AI
-  // tip must never hold up the materials.
+  // What needs improvement, and what goes with it, in a closed panel above the
+  // materials. Separate calls: a slow AI tip must never hold up the materials.
   const focus = useApiData(fetchSkillFocus);
   const tips = useApiData(fetchAiTips);
   const quizzes = useApiData(fetchAssessments);
@@ -125,7 +125,6 @@ export default function LibraryScreen() {
         materialsBySkill={materialsBySkill}
         renderMaterial={(m) => <MaterialRow item={m} onPress={() => open(m)} styles={styles} Accent={Accent} Palette={Palette} />}
       />
-      {focusSkills.length > 0 ? <Text style={styles.allHeading}>All materials</Text> : null}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
         {FILTERS.map((f) => {
@@ -280,7 +279,6 @@ function createStyles(
     content: { padding: Spacing.lg, paddingBottom: 128 },
     pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
     filters: { gap: 8, paddingVertical: Spacing.md },
-    allHeading: { ...Type.sectionTitle, marginTop: Spacing.sm },
     chip: {
       paddingHorizontal: 14,
       paddingVertical: 7,

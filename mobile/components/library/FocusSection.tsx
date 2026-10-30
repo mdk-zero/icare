@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, LayoutAnimation } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SkeletonBlock } from '@/components/ui';
@@ -13,6 +13,8 @@ const FIRST_SKILLS = 3;
 const MAX_MATERIALS = 3;
 const MAX_QUIZZES = 2;
 const MAX_STEPS = 3;
+/** ML quiz picks, after the ones already listed under a skill. */
+const MAX_SUGGESTIONS = 3;
 
 const KIND_LABEL: Record<SkillEvidence['kind'], string> = {
   quiz: 'Quiz',
@@ -23,11 +25,13 @@ const KIND_LABEL: Record<SkillEvidence['kind'], string> = {
 type Theme = ReturnType<typeof useTheme>;
 
 /**
- * The top of the Library: the skills whose latest quiz, Patient Case or
- * Return Demonstration result needs improvement, each with what flagged it,
- * an AI study tip, its Library materials and the quizzes that cover it; then
- * the ML service's quiz picks. Hidden when nothing needs improvement and the
- * ML has nothing to suggest.
+ * A closed panel at the top of the Library, so the materials come first: its
+ * header says how many skills need improvement and how many quizzes the ML
+ * suggests, and opening it shows each skill that the latest quiz, Patient Case
+ * or Return Demonstration result flagged, with what flagged it, an AI study
+ * tip, its Library materials and the quizzes that cover it; then the ML
+ * service's quiz picks. Hidden when nothing needs improvement and the ML has
+ * nothing to suggest.
  */
 export function FocusSection({
   skills,
@@ -52,24 +56,33 @@ export function FocusSection({
   const { Palette, Accent } = theme;
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const router = useRouter();
+  const [open, setOpen] = React.useState(false);
   const [showAll, setShowAll] = React.useState(false);
 
   const quizById = new Map(quizzes.map((q) => [q.id, q]));
   const tipBySkill = new Map(tips.filter((t) => t.skill_id).map((t) => [t.skill_id as string, t]));
   // Suggestions for quizzes the student can open, and not already listed under a skill.
   const underSkills = new Set(skills.flatMap((s) => s.quiz_ids));
-  const suggestions = recommendations.filter(
-    (r) => r.assessments && quizById.has(r.assessment_id) && !underSkills.has(r.assessment_id),
+  const suggestions = recommendations
+    .filter((r) => r.assessments && quizById.has(r.assessment_id) && !underSkills.has(r.assessment_id))
+    .slice(0, MAX_SUGGESTIONS);
+
+  const icon = (
+    <View style={[styles.icon, { backgroundColor: Accent.blue.bg }]}>
+      <Ionicons name="bulb" size={18} color={Accent.blue.fg} />
+    </View>
   );
 
   if (loading && skills.length === 0) {
     return (
-      <View style={styles.section} accessibilityLabel="Loading what needs improvement">
-        <SkeletonBlock width={140} height={12} />
-        <View style={[styles.card, { marginTop: Spacing.sm }]}>
-          <SkeletonBlock width="70%" height={15} />
-          <SkeletonBlock width="90%" height={11} style={{ marginTop: 10 }} />
-          <SkeletonBlock width="60%" height={11} style={{ marginTop: 6 }} />
+      <View style={styles.panel} accessibilityLabel="Loading recommendations">
+        <View style={styles.header}>
+          {icon}
+          <View style={{ flex: 1 }}>
+            <SkeletonBlock width="60%" height={14} />
+            <SkeletonBlock width="40%" height={11} style={{ marginTop: 6 }} />
+          </View>
+          <Ionicons name="chevron-down" size={18} color={Palette.textFaint} />
         </View>
       </View>
     );
@@ -78,21 +91,47 @@ export function FocusSection({
 
   const shown = showAll ? skills : skills.slice(0, FIRST_SKILLS);
   const openQuiz = (id: string) => router.push(`/quiz-info/${id}`);
+  const toggle = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setOpen((v) => !v);
+  };
+  const summary = [
+    skills.length > 0 ? `${skills.length} ${skills.length === 1 ? 'skill' : 'skills'} to improve` : null,
+    suggestions.length > 0 ? `${suggestions.length} suggested ${suggestions.length === 1 ? 'quiz' : 'quizzes'}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
-    <View style={styles.section}>
-      {skills.length > 0 ? (
-        <>
-          <View style={styles.headingRow}>
-            <Ionicons name="trending-up" size={16} color={Accent.red.fg} />
-            <Text style={styles.heading}>Needs improvement</Text>
-            <View style={[styles.count, { backgroundColor: Accent.red.bg }]}>
-              <Text style={[styles.countText, { color: Accent.red.fg }]}>{skills.length}</Text>
-            </View>
-          </View>
-          <Text style={styles.subheading}>
-            Skills your latest quiz, Patient Case or Return Demo results flagged. Study these first.
+    <View style={styles.panel}>
+      <Pressable
+        onPress={toggle}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityHint={open ? 'Hides your recommendations' : 'Shows your recommendations and study tips'}
+        style={({ pressed }) => [styles.header, pressed && styles.headerPressed]}
+      >
+        {icon}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Recommendations & study tips</Text>
+          <Text style={styles.summary} numberOfLines={1}>
+            {summary}
           </Text>
+        </View>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={Palette.textMuted} />
+      </Pressable>
+
+      {open && skills.length > 0 ? (
+        <>
+          <View style={styles.block}>
+            <View style={styles.headingRow}>
+              <Ionicons name="trending-up" size={14} color={Accent.red.fg} />
+              <Text style={styles.heading}>Needs improvement</Text>
+            </View>
+            <Text style={styles.subheading}>
+              Skills your latest quiz, Patient Case or Return Demo results flagged. Study these first.
+            </Text>
+          </View>
 
           {shown.map((skill) => {
             const tip = tipBySkill.get(skill.skill_id);
@@ -102,7 +141,7 @@ export function FocusSection({
               .filter((q): q is StudentAssessment => !!q)
               .slice(0, MAX_QUIZZES);
             return (
-              <View key={skill.skill_id} style={styles.card}>
+              <View key={skill.skill_id} style={styles.block}>
                 <Text style={styles.eyebrow}>
                   Chapter {skill.chapter} · {skill.area}
                 </Text>
@@ -152,7 +191,14 @@ export function FocusSection({
           })}
 
           {skills.length > FIRST_SKILLS ? (
-            <Pressable onPress={() => setShowAll((v) => !v)} style={styles.more} accessibilityRole="button">
+            <Pressable
+              onPress={() => {
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                setShowAll((v) => !v);
+              }}
+              style={[styles.block, styles.more]}
+              accessibilityRole="button"
+            >
               <Text style={styles.moreText}>
                 {showAll ? 'Show fewer' : `Show ${skills.length - FIRST_SKILLS} more`}
               </Text>
@@ -162,37 +208,35 @@ export function FocusSection({
         </>
       ) : null}
 
-      {suggestions.length > 0 ? (
-        <>
-          <View style={[styles.headingRow, skills.length > 0 && { marginTop: Spacing.md }]}>
-            <Ionicons name="sparkles" size={16} color={Accent.violet.fg} />
+      {open && suggestions.length > 0 ? (
+        <View style={styles.block}>
+          <View style={styles.headingRow}>
+            <Ionicons name="sparkles" size={14} color={Accent.violet.fg} />
             <Text style={styles.heading}>Suggested quizzes</Text>
           </View>
           <Text style={styles.subheading}>Picked by the iCARE AI from your quiz scores and checklist ratings.</Text>
-          <View style={styles.card}>
-            {suggestions.slice(0, 3).map((r) => (
-              <Pressable
-                key={r.id}
-                style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-                onPress={() => openQuiz(r.assessment_id)}
-                accessibilityRole="button"
-              >
-                <View style={[styles.rowIcon, { backgroundColor: Accent.violet.bg }]}>
-                  <Ionicons name="help-circle" size={18} color={Accent.violet.fg} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.rowTitle} numberOfLines={2}>
-                    {r.assessments?.title}
-                  </Text>
-                  <Text style={styles.rowMeta} numberOfLines={2}>
-                    {r.reason}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={Palette.textFaint} />
-              </Pressable>
-            ))}
-          </View>
-        </>
+          {suggestions.map((r) => (
+            <Pressable
+              key={r.id}
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+              onPress={() => openQuiz(r.assessment_id)}
+              accessibilityRole="button"
+            >
+              <View style={[styles.rowIcon, { backgroundColor: Accent.violet.bg }]}>
+                <Ionicons name="help-circle" size={18} color={Accent.violet.fg} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rowTitle} numberOfLines={2}>
+                  {r.assessments?.title}
+                </Text>
+                <Text style={styles.rowMeta} numberOfLines={2}>
+                  {r.reason}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={Palette.textFaint} />
+            </Pressable>
+          ))}
+        </View>
       ) : null}
     </View>
   );
@@ -275,21 +319,29 @@ function QuizRow({
 
 function createStyles({ Palette, Shadow, Type }: Theme) {
   return StyleSheet.create({
-    section: { marginTop: Spacing.sm, marginBottom: Spacing.sm },
-    headingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    heading: { ...Type.sectionTitle },
-    count: { paddingHorizontal: 7, paddingVertical: 1, borderRadius: 999 },
-    countText: { fontSize: 11, fontWeight: '800' },
-    subheading: { ...Type.caption, marginTop: 2, marginBottom: Spacing.sm },
-    card: {
+    panel: {
       backgroundColor: Palette.surface,
       borderRadius: Radius.lg,
       borderWidth: 1,
       borderColor: Palette.border,
-      padding: Spacing.md,
-      marginBottom: Spacing.sm,
+      marginTop: Spacing.sm,
+      overflow: 'hidden',
       ...Shadow.card,
     },
+    header: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: Spacing.md },
+    headerPressed: { backgroundColor: Palette.surfaceMuted },
+    icon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    title: Type.itemTitle,
+    summary: { ...Type.caption, marginTop: 2 },
+    block: {
+      borderTopWidth: 1,
+      borderTopColor: Palette.borderLight,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+    },
+    headingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    heading: { ...Type.itemTitle },
+    subheading: { ...Type.caption, marginTop: 2 },
     eyebrow: Type.eyebrow,
     skillTitle: { ...Type.itemTitle, marginTop: 2 },
     skillId: { color: Palette.primary, fontWeight: '700' },
@@ -315,7 +367,7 @@ function createStyles({ Palette, Shadow, Type }: Theme) {
     rowIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
     rowTitle: Type.itemTitle,
     rowMeta: { ...Type.micro, marginTop: 2 },
-    more: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: Spacing.sm },
+    more: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
     moreText: { fontSize: 13, fontWeight: '700', color: Palette.primary },
   });
 }
