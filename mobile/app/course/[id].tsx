@@ -73,7 +73,7 @@ export default function CourseScreen() {
                     <View style={styles.track} />
                     <SkeletonBlock width={150} height={11} />
                   </View>
-                  <Ionicons name="chevron-down" size={18} color={Palette.textFaint} />
+                  <Ionicons name="chevron-forward" size={18} color={Palette.textFaint} />
                 </View>
               </View>
             ))}
@@ -133,7 +133,7 @@ export default function CourseScreen() {
                             {met} of {students.length} met · {r.kind === "manual" ? "you tick it" : "ticks when graded"}
                           </Text>
                         </View>
-                        <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={18} color={Palette.textFaint} />
+                        <Ionicons name={expanded ? "chevron-down" : "chevron-forward"} size={18} color={Palette.textFaint} />
                       </Pressable>
                       {expanded &&
                         students.map((s) => {

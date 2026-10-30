@@ -86,7 +86,7 @@ function QuizHistoryRow({
         </Text>
         {retaken ? (
           <Ionicons
-            name={open ? 'chevron-up' : 'chevron-down'}
+            name={open ? 'chevron-down' : 'chevron-forward'}
             size={16}
             color={Palette.textMuted}
             style={styles.chevron}

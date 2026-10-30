@@ -162,7 +162,7 @@ export default function LibraryScreen() {
                   <SkeletonBlock width={70} height={10} radius={3} />
                   <SkeletonBlock width="55%" height={16} style={{ marginTop: 6 }} />
                 </View>
-                <Ionicons name="chevron-up" size={18} color={Palette.textFaint} />
+                <Ionicons name="chevron-down" size={18} color={Palette.textFaint} />
               </View>
               <View style={styles.skill}>
                 <SkeletonBlock width="70%" height={13} style={{ marginBottom: 8 }} />
@@ -204,7 +204,7 @@ export default function LibraryScreen() {
                 <Text style={styles.eyebrow}>Chapter {c.chapter}</Text>
                 <Text style={styles.chapterTitle}>{c.area}</Text>
               </View>
-              <Ionicons name={isCollapsed ? 'chevron-down' : 'chevron-up'} size={18} color={Palette.textMuted} />
+              <Ionicons name={isCollapsed ? 'chevron-forward' : 'chevron-down'} size={18} color={Palette.textMuted} />
             </Pressable>
 
             {!isCollapsed &&

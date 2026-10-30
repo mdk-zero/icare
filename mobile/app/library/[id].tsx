@@ -172,7 +172,7 @@ export default function LibraryMaterialScreen() {
           <Pressable style={styles.stepsHeader} onPress={() => setShowSteps((v) => !v)}>
             <Ionicons name="list-outline" size={18} color={Palette.primary} />
             <Text style={styles.stepsTitle}>Skill checklist ({skill.steps.length} steps)</Text>
-            <Ionicons name={showSteps ? 'chevron-up' : 'chevron-down'} size={16} color={Palette.textMuted} />
+            <Ionicons name={showSteps ? 'chevron-down' : 'chevron-forward'} size={16} color={Palette.textMuted} />
           </Pressable>
           {showSteps ? (
             <View>
