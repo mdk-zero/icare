@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCircleCheck } from "@fortawesome/free-solid-svg-icons";
 import { fetchCohortMastery, fetchStudentSkillMastery } from "../lib/api";
@@ -9,11 +9,13 @@ import {
   MIN_FIT_ANSWERS,
   MIN_FIT_STUDENTS,
   countSources,
+  masteryPercent,
   type BktSource,
   type CohortMastery,
   type SkillMastery,
 } from "../lib/bkt";
 import { usePageData } from "../lib/use-page-data";
+import SkillMasteryChart, { MasteryChartKey, SkillMasteryChartSkeleton, hasSpread } from "./SkillMasteryChart";
 
 /**
  * Bayesian Knowledge Tracing on the portal's pages: one student's skills on
@@ -23,19 +25,10 @@ import { usePageData } from "../lib/use-page-data";
  * changes them.
  */
 
-/** How many of the class's weakest skills show before "Show all". */
+/** Rows in the class chart's loading placeholder. */
 const COHORT_ROWS = 6;
 
 const THRESHOLD_PCT = Math.round(MASTERY_THRESHOLD * 100);
-
-/**
- * P(known) as a percentage. Never rounds up to the mastery line or to a
- * certainty the model can't reach: 94.6% is not yet mastered, and 99.9% isn't 100%.
- */
-function masteryPercent(value: number): number {
-  const pct = Math.round(value * 100);
-  return Math.min(pct, value < MASTERY_THRESHOLD ? THRESHOLD_PCT - 1 : 99);
-}
 
 export function useStudentMastery(studentId: string | undefined) {
   return usePageData(studentId ? `skill-mastery:student:${studentId}` : null, () =>
@@ -224,8 +217,7 @@ export function MasteryBrief({ skills, onOpen }: { skills: SkillMastery[] | null
 
 /** The class's skills, weakest first, for inside a card on Analytics. */
 export function CohortMasteryBody({ data, loading }: { data: CohortMastery | null | undefined; loading: boolean }) {
-  const [showAll, setShowAll] = useState(false);
-  if (loading) return <MeterSkeleton rows={COHORT_ROWS} />;
+  if (loading) return <SkillMasteryChartSkeleton rows={COHORT_ROWS} />;
   if (!data) {
     return <p className="py-8 text-center text-sm text-gray-400">Skill mastery couldn&apos;t be loaded. Refresh to try again.</p>;
   }
@@ -236,7 +228,6 @@ export function CohortMasteryBody({ data, loading }: { data: CohortMastery | nul
       </p>
     );
   }
-  const shown = showAll ? data.skills : data.skills.slice(0, COHORT_ROWS);
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
@@ -248,30 +239,9 @@ export function CohortMasteryBody({ data, loading }: { data: CohortMastery | nul
           <span className="font-semibold tabular-nums text-gray-900">{data.answers.toLocaleString()}</span>{" "}
           {data.answers === 1 ? "result" : "results"}
         </p>
-        <MasteryKey />
+        <MasteryChartKey spread={hasSpread(data.skills)} />
       </div>
-      <Grid>
-        {shown.map((s) => (
-          <MasteryRow
-            key={s.skill_id}
-            skillId={s.skill_id}
-            title={s.title}
-            value={s.average_mastery}
-            mastered={s.mastered === s.students}
-            detail={`${s.mastered} of ${s.students} ${s.students === 1 ? "student" : "students"} mastered · ${s.answers} ${s.answers === 1 ? "result" : "results"}`}
-          />
-        ))}
-      </Grid>
-      {data.skills.length > COHORT_ROWS && (
-        <button
-          type="button"
-          onClick={() => setShowAll((v) => !v)}
-          aria-expanded={showAll}
-          className="mt-4 text-sm font-medium text-brand-600 transition-colors hover:text-brand-700"
-        >
-          {showAll ? "Show the weakest only" : `Show all ${data.skills.length} skills`}
-        </button>
-      )}
+      <SkillMasteryChart skills={data.skills} />
       <SourceNote skills={data.skills} />
     </>
   );

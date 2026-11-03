@@ -33,6 +33,14 @@ export const DEFAULT_BKT: BktParams = { p_init: 0.3, p_learn: 0.1, p_guess: 0.2,
 export const MASTERY_THRESHOLD = 0.95;
 
 /**
+ * P(known) as a percentage. Never rounds up to the mastery line or to a
+ * certainty the model can't reach: 94.6% is not yet mastered, and 99.9% isn't 100%.
+ */
+export function masteryPercent(value: number): number {
+  return Math.min(Math.round(value * 100), value < MASTERY_THRESHOLD ? Math.round(MASTERY_THRESHOLD * 100) - 1 : 99);
+}
+
+/**
  * What a skill needs for a fit of its own, for the notes that explain a default.
  * Keep in step with MIN_FIT_STUDENTS and MIN_FIT_ANSWERS in ml/app/bkt.py.
  */
@@ -73,6 +81,8 @@ export interface CohortSkillMastery {
   title: string;
   /** The mean of those students' P(known), 0 to 1. */
   average_mastery: number;
+  /** Each student's P(known), lowest first and unnamed: the chart's weakest quarter and range. */
+  distribution: number[];
   students: number;
   mastered: number;
   answers: number;
@@ -106,6 +116,7 @@ export function summariseCohort(byStudent: ReadonlyMap<string, readonly SkillMas
         skill_id: e.skill_id,
         title: e.title,
         average_mastery: 0,
+        distribution: [],
         students: 0,
         mastered: 0,
         answers: 0,
@@ -113,6 +124,7 @@ export function summariseCohort(byStudent: ReadonlyMap<string, readonly SkillMas
         sum: 0,
       };
       row.sum += e.mastery;
+      row.distribution.push(Math.round(e.mastery * 1000) / 1000);
       row.students += 1;
       row.answers += e.answers;
       if (e.mastery >= MASTERY_THRESHOLD) row.mastered += 1;
@@ -121,7 +133,11 @@ export function summariseCohort(byStudent: ReadonlyMap<string, readonly SkillMas
   }
   return {
     skills: [...skills.values()]
-      .map(({ sum, ...row }) => ({ ...row, average_mastery: sum / row.students }))
+      .map(({ sum, ...row }) => ({
+        ...row,
+        average_mastery: sum / row.students,
+        distribution: row.distribution.sort((a, b) => a - b),
+      }))
       .sort((a, b) => a.average_mastery - b.average_mastery || a.skill_id.localeCompare(b.skill_id)),
     students_traced: [...byStudent.values()].filter((estimates) => estimates.length > 0).length,
     total_students: totalStudents,
