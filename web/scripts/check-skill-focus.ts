@@ -3,9 +3,10 @@
  * Library lists under "Needs improvement".
  *
  * The rules are small but easy to get backwards — the quiz cutoff, N/A being
- * no evidence, only the latest result deciding — so the pure core is checked
- * on synthetic results, then every student with graded work is run through
- * the loader against the real database (read-only) for a sanity pass.
+ * no evidence, BKT mastery deciding which skills are listed and in what
+ * order — so the pure core is checked on synthetic results, then every
+ * student with graded work is run through the loader against the real
+ * database (read-only) for a sanity pass.
  *
  *   npm run check:focus
  *
@@ -17,11 +18,13 @@ import { createClient } from '@supabase/supabase-js';
 import {
   QUIZ_NEEDS_IMPROVEMENT_BELOW,
   checklistEvidence,
-  judgeSkills,
   loadSkillFocus,
   quizEvidence,
-  type SkillEvidence,
+  rankByMastery,
+  ratingCorrect,
+  type SkillObservation,
 } from '../app/lib/skill-focus';
+import { DEFAULT_BKT, MASTERY_THRESHOLD, type BktParams } from '../app/lib/bkt';
 import { buildSkillTipsPrompt, sanitizeSkillTips } from '../app/lib/skill-tips';
 
 config({ path: '.env.local' });
@@ -56,33 +59,42 @@ async function main() {
     rated('2026-10-01', 'needs_practice', 'excellent', 'needs_practice')?.needs_practice.join() === 'Step 1,Step 3',
   );
 
-  console.log('\n=== only the latest result decides ===');
-  const judge = (entries: Record<string, (SkillEvidence | null)[]>) =>
-    judgeSkills(new Map(Object.entries(entries).map(([k, v]) => [k, v.filter((e): e is SkillEvidence => !!e)])));
+  console.log('\n=== checklist ratings as BKT observations ===');
+  check('Excellent and Satisfactory are right', ratingCorrect('excellent') === true && ratingCorrect('satisfactory') === true);
+  check('Needs Practice is wrong', ratingCorrect('needs_practice') === false);
+  check('N/A is no observation', ratingCorrect('not_applicable') === null);
+
+  console.log('\n=== BKT mastery decides ===');
+  // Observations from strings like "1101": right, right, wrong, right.
+  const seq = (at: string, pattern: string): SkillObservation[] =>
+    [...pattern].map((c, i) => ({ at, group: at, slot: i, correct: c === '1' }));
+  const rank = (entries: Record<string, SkillObservation[]>, params = new Map<string, BktParams>()) =>
+    rankByMastery(new Map(Object.entries(entries)), new Map(), params);
   {
-    const r = judge({ '1-1': [quiz('2026-10-01', 4, 10), rated('2026-10-05', 'excellent')] });
-    check('a later good result clears a skill', r.length === 0);
+    const r = rank({ '1-1': seq('2026-10-01', '11111') });
+    check(`five right answers reach mastery (${MASTERY_THRESHOLD})`, r.length === 0);
   }
   {
-    const r = judge({ '1-1': [rated('2026-10-01', 'excellent'), quiz('2026-10-05', 4, 10)] });
-    check('a later weak result flags it again', r.length === 1 && r[0].evidence.length === 1);
+    const r = rank({ '1-1': seq('2026-10-01', '1') });
+    check('one right answer is not mastery yet', r.length === 1 && r[0].mastery > DEFAULT_BKT.p_init);
   }
   {
-    const r = judge({
-      '1-1': [quiz('2026-09-01', 4, 10), rated('2026-09-10', 'satisfactory'), quiz('2026-10-01', 5, 10), rated('2026-10-03', 'needs_practice')],
-    });
-    check(
-      'evidence is every weak result since the last good one, newest first',
-      r[0]?.evidence.map((e) => e.at).join() === '2026-10-03,2026-10-01',
-    );
+    const r = rank({ '1-1': [...seq('2026-09-01', '11111'), ...seq('2026-10-01', '000')] });
+    check('later misses pull a mastered skill back into the list', r.length === 1);
   }
   {
-    const r = judge({
-      '1-1': [quiz('2026-09-01', 4, 10)],
-      '2-3': [rated('2026-10-02', 'needs_practice')],
-      '3-1': [quiz('2026-10-01', 9, 10)],
-    });
-    check('newest-flagged skill first, good skills left out', r.map((s) => s.skillId).join() === '2-3,1-1');
+    const r = rank({ '1-1': [...seq('2026-10-01', '000'), ...seq('2026-09-01', '11111')] });
+    // Given misses first, but they happened last: traced in time order they pull it down.
+    check('observations are traced in time order, not the order given', r.length === 1);
+  }
+  {
+    const r = rank({ '1-1': seq('2026-10-01', '10'), '2-3': seq('2026-10-01', '000'), '3-1': seq('2026-10-01', '111111') });
+    check('least mastered first, mastered skills left out', r.map((s) => s.skillId).join() === '2-3,1-1');
+  }
+  {
+    const easy: BktParams = { p_init: 0.9, p_learn: 0.3, p_guess: 0.2, p_slip: 0.1 };
+    const r = rank({ '1-1': seq('2026-10-01', '11') }, new Map([['1-1', easy]]));
+    check("a skill's fitted parameters are used over the defaults", r.length === 0);
   }
 
   console.log('\n=== AI tip guard ===');
@@ -112,6 +124,7 @@ async function main() {
           area: 'Vital Signs',
           evidence: [rated('2026-10-03', 'needs_practice')!, quiz('2026-10-01', 2, 3)],
           quiz_ids: [],
+          mastery: 0.4,
         },
       ],
       new Map([['1-7', 'Accurate blood pressure.']]),
@@ -135,12 +148,9 @@ async function main() {
       try {
         const skills = await loadSkillFocus(supabase, id);
         if (skills.length > 0) flagged++;
-        for (const s of skills) {
-          const sane =
-            s.evidence.length > 0 &&
-            s.evidence.every((e) => e.weak) &&
-            s.evidence.every((e) => (e.kind === 'quiz' ? (e.score ?? 100) < QUIZ_NEEDS_IMPROVEMENT_BELOW : e.needs_practice.length > 0));
-          if (!sane) check(`student ${id.slice(0, 8)} skill ${s.skill_id} evidence is all weak`, false);
+        for (const [i, s] of skills.entries()) {
+          const sane = s.mastery >= 0 && s.mastery < MASTERY_THRESHOLD && (i === 0 || skills[i - 1].mastery <= s.mastery);
+          if (!sane) check(`student ${id.slice(0, 8)} skill ${s.skill_id} is unmastered and in order`, false);
         }
       } catch (err) {
         check(`student ${id.slice(0, 8)} loads`, false, err instanceof Error ? err.message : String(err));

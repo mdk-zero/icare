@@ -3,22 +3,23 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { listSkills, skillIdFromTitle, isMissingSkillColumn } from './taylor-skills';
 import { fetchStepRatings, fetchTaskCompletions, fetchTaskSteps } from './scenario-tasks';
 import { scenarioKinds, kindOf, type ScenarioKind } from './scenario-kind';
+import { loadBktParameters, traceMastery, DEFAULT_BKT, MASTERY_THRESHOLD, type BktParams } from './bkt';
 
 /**
  * The Taylor's skills a student needs to improve on, for the "Needs
- * improvement" section of the mobile Library and the AI study tips grounded
- * in it.
+ * improvement" section of the mobile Library (with that skill's Library
+ * materials) and the AI study tips grounded in it.
  *
- * Every graded activity reaches a skill: a quiz through its criteria
- * (`assessment_criteria.skill_id`), a Patient Case or Return Demonstration
- * through its checklist tasks (`scenario_tasks.skill_id`). A result on a skill
- * needs improvement when
- *   - a quiz scored under QUIZ_NEEDS_IMPROVEMENT_BELOW on that skill's
- *     questions (graded attempts only; practice runs past the limit never
- *     count), or
- *   - a released checklist rated a task or step on it Needs Practice.
- * Only the latest result on a skill decides: a later quiz at or above the
- * cutoff, or a later checklist with nothing at Needs Practice, clears it.
+ * Bayesian Knowledge Tracing decides. Every graded activity reaches a skill:
+ * a quiz through its criteria (`assessment_criteria.skill_id`), a Patient
+ * Case or Return Demonstration through its checklist tasks
+ * (`scenario_tasks.skill_id`). Each quiz answer, and each checklist step rated
+ * Excellent / Satisfactory (right) or Needs Practice (wrong), is one
+ * observation on its skill, in the order they happened — the same sequences
+ * the ML service fits each skill's parameters on (ml/app/bkt.py). Tracing them
+ * gives P(the student knows the skill); a skill below MASTERY_THRESHOLD is
+ * listed, the least mastered first. Case Presentations have no checklist and
+ * are not skills laboratory work, so they never count.
  */
 
 /** The quiz passing mark: a skill scored under it needs improvement. */
@@ -50,6 +51,26 @@ export interface FocusSkill {
   evidence: SkillEvidence[];
   /** Published quizzes with a criterion on this skill; the app shows the ones the student can open. */
   quiz_ids: string[];
+  /** BKT's P(the student knows the skill), 0-1. */
+  mastery: number;
+}
+
+/** One observation on a skill: a quiz answer or a rated checklist step. */
+export interface SkillObservation {
+  /** When it happened (ISO): the attempt's hand-in, the task's grading. */
+  at: string;
+  /** The attempt, or the assignment and task, it belongs to. */
+  group: string;
+  /** Its place in the group: the question's on the paper, the step's in the checklist. */
+  slot: number;
+  correct: boolean;
+}
+
+/** A checklist rating as an observation: done to standard or not. N/A says nothing. */
+export function ratingCorrect(rating: string): boolean | null {
+  if (rating === 'excellent' || rating === 'satisfactory' || rating === 'very_good' || rating === 'good') return true;
+  if (rating === 'needs_practice' || rating === 'fair' || rating === 'needs_improvement') return false;
+  return null;
 }
 
 // ---------------------------------------------------------------
@@ -57,25 +78,28 @@ export interface FocusSkill {
 // ---------------------------------------------------------------
 
 /**
- * Which skills need improvement, from every result on every skill. A skill is
- * kept when its latest result is weak, with the weak results since its last
- * good one. Newest-flagged skills first.
+ * Which skills need improvement: each skill with observations is traced with
+ * its BKT parameters (DEFAULT_BKT until the ML service has fitted it), and
+ * kept while P(known) is under MASTERY_THRESHOLD. Least mastered first, with
+ * its results newest first.
  */
-export function judgeSkills(evidenceBySkill: ReadonlyMap<string, readonly SkillEvidence[]>): {
-  skillId: string;
-  evidence: SkillEvidence[];
-}[] {
-  const out: { skillId: string; evidence: SkillEvidence[] }[] = [];
-  for (const [skillId, all] of evidenceBySkill) {
-    const newestFirst = [...all].sort((a, b) => b.at.localeCompare(a.at));
-    const flagging: SkillEvidence[] = [];
-    for (const e of newestFirst) {
-      if (!e.weak) break;
-      flagging.push(e);
-    }
-    if (flagging.length > 0) out.push({ skillId, evidence: flagging });
+export function rankByMastery(
+  observationsBySkill: ReadonlyMap<string, readonly SkillObservation[]>,
+  evidenceBySkill: ReadonlyMap<string, readonly SkillEvidence[]>,
+  params: ReadonlyMap<string, BktParams>,
+): { skillId: string; mastery: number; evidence: SkillEvidence[] }[] {
+  const out: { skillId: string; mastery: number; evidence: SkillEvidence[] }[] = [];
+  for (const [skillId, observations] of observationsBySkill) {
+    if (observations.length === 0) continue;
+    const ordered = [...observations].sort(
+      (a, b) => a.at.localeCompare(b.at) || a.group.localeCompare(b.group) || a.slot - b.slot,
+    );
+    const mastery = traceMastery(params.get(skillId) ?? DEFAULT_BKT, ordered.map((o) => o.correct));
+    if (mastery >= MASTERY_THRESHOLD) continue;
+    const evidence = [...(evidenceBySkill.get(skillId) ?? [])].sort((a, b) => b.at.localeCompare(a.at));
+    out.push({ skillId, mastery, evidence });
   }
-  return out.sort((a, b) => b.evidence[0].at.localeCompare(a.evidence[0].at));
+  return out.sort((a, b) => a.mastery - b.mastery || a.skillId.localeCompare(b.skillId, undefined, { numeric: true }));
 }
 
 /** A quiz criterion's result on one skill. */
@@ -186,8 +210,87 @@ async function quizResults(supabase: SupabaseClient, studentId: string, into: Ma
   }
 }
 
-/** Released checklist ratings per skill, from Patient Cases and Return Demonstrations. */
-async function checklistResults(supabase: SupabaseClient, studentId: string, into: Map<string, SkillEvidence[]>) {
+function observe(map: Map<string, SkillObservation[]>, skillId: string, observation: SkillObservation) {
+  map.set(skillId, [...(map.get(skillId) ?? []), observation]);
+}
+
+/**
+ * Every quiz answer per skill, as BKT observations: graded attempts and
+ * practice runs both (practice is learning too), in the order the ML service
+ * reads them.
+ */
+async function quizObservations(supabase: SupabaseClient, studentId: string, into: Map<string, SkillObservation[]>) {
+  // Filtered here rather than in the query: before 083 there is no
+  // 'practiced' status, and naming it would fail the read.
+  const { data: rows, error } = await supabase
+    .from('assessment_attempts')
+    .select('id, status, submitted_at')
+    .eq('student_id', studentId)
+    .neq('status', 'in_progress');
+  if (error) throw error;
+  const attempts = (rows ?? []).filter(
+    (a) => (a.status === 'submitted' || a.status === 'practiced') && a.submitted_at,
+  );
+  if (attempts.length === 0) return;
+  const attemptIds = attempts.map((a) => a.id as string);
+  const submittedAt = new Map(attempts.map((a) => [a.id as string, a.submitted_at as string]));
+
+  const [answersRes, servedRes] = await Promise.all([
+    supabase.from('attempt_answers').select('attempt_id, question_id, is_correct').in('attempt_id', attemptIds),
+    supabase.from('attempt_questions').select('attempt_id, question_id, position').in('attempt_id', attemptIds),
+  ]);
+  if (answersRes.error) throw answersRes.error;
+  // attempt_questions only records papers dealt from a pool; without it the
+  // question's own position stands in.
+  const position = new Map(
+    (servedRes.data ?? []).map((s) => [`${s.attempt_id}:${s.question_id}`, Number(s.position ?? 0)]),
+  );
+  const answers = answersRes.data ?? [];
+  if (answers.length === 0) return;
+
+  const questionIds = [...new Set(answers.map((a) => a.question_id as string))];
+  const { data: questions, error: questionsError } = await supabase
+    .from('questions')
+    .select('id, criteria_id, position')
+    .in('id', questionIds);
+  if (questionsError) throw questionsError;
+  const criteriaIds = [...new Set((questions ?? []).map((q) => q.criteria_id as string | null).filter((c): c is string => !!c))];
+  const criteria = criteriaIds.length
+    ? await supabase.from('assessment_criteria').select('id, name, skill_id').in('id', criteriaIds)
+    : { data: [], error: null };
+  if (criteria.error && !isMissingSkillColumn(criteria.error)) throw criteria.error;
+  const skillOfCriterion = new Map<string, string>();
+  for (const c of (criteria.data ?? []) as { id: string; name?: string | null; skill_id?: string | null }[]) {
+    const skillId = c.skill_id ?? skillIdFromTitle(String(c.name ?? ''));
+    if (skillId) skillOfCriterion.set(c.id, skillId);
+  }
+  const questionById = new Map((questions ?? []).map((q) => [q.id as string, q]));
+
+  for (const a of answers) {
+    const question = questionById.get(a.question_id as string);
+    const skillId = question?.criteria_id ? skillOfCriterion.get(question.criteria_id as string) : undefined;
+    const at = submittedAt.get(a.attempt_id as string);
+    if (!skillId || !at) continue;
+    observe(into, skillId, {
+      at,
+      group: a.attempt_id as string,
+      slot: position.get(`${a.attempt_id}:${a.question_id}`) ?? Number(question?.position ?? 0),
+      correct: Boolean(a.is_correct),
+    });
+  }
+}
+
+/**
+ * Released checklist ratings per skill, from Patient Cases and Return
+ * Demonstrations: a result per case and skill for the panel, and each rated
+ * step (or whole task) as a BKT observation.
+ */
+async function checklistResults(
+  supabase: SupabaseClient,
+  studentId: string,
+  into: Map<string, SkillEvidence[]>,
+  observations: Map<string, SkillObservation[]>,
+) {
   const { data: assignments, error } = await supabase
     .from('scenario_assignments')
     .select('id, scenario_id, status, assigned_at, completed_at')
@@ -243,15 +346,21 @@ async function checklistResults(supabase: SupabaseClient, studentId: string, int
       // The student sees a task's ratings once it is graded, or once the case
       // is finalized — the rule the tasks route follows.
       if (!completedCase && !completion?.rating) continue;
-      const rated: { label: string; rating: string }[] = [];
+      const rated: { label: string; rating: string; slot: number }[] = [];
       for (const step of stepsByTask.get(task.id) ?? []) {
         const rating = stepRatingOf.get(`${a.id}:${step.id}`);
-        if (rating) rated.push({ label: step.title, rating });
+        if (rating) rated.push({ label: step.title, rating, slot: Number(step.sort_order ?? 0) });
       }
       // A task graded as a whole stands for itself; one graded by its steps
       // is described by them.
-      if (rated.length === 0 && completion?.rating) rated.push({ label: task.title, rating: completion.rating });
+      if (rated.length === 0 && completion?.rating) rated.push({ label: task.title, rating: completion.rating, slot: 0 });
       if (rated.length === 0) continue;
+      const gradedAt =
+        completion?.completed_at ?? (a.completed_at as string | null) ?? (a.assigned_at as string);
+      for (const r of rated) {
+        const correct = ratingCorrect(r.rating);
+        if (correct !== null) observe(observations, skillId, { at: gradedAt, group: `${a.id}:${task.id}`, slot: r.slot, correct });
+      }
       bySkill.set(skillId, [...(bySkill.get(skillId) ?? []), ...rated]);
       if (completion?.completed_at && (!lastGraded || completion.completed_at > lastGraded)) {
         lastGraded = completion.completed_at;
@@ -264,11 +373,17 @@ async function checklistResults(supabase: SupabaseClient, studentId: string, int
   }
 }
 
-/** The student's skills that need improvement, newest-flagged first. */
+/** The student's skills that need improvement, least mastered first. */
 export async function loadSkillFocus(supabase: SupabaseClient, studentId: string): Promise<FocusSkill[]> {
   const evidence = new Map<string, SkillEvidence[]>();
-  await Promise.all([quizResults(supabase, studentId, evidence), checklistResults(supabase, studentId, evidence)]);
-  const judged = judgeSkills(evidence);
+  const observations = new Map<string, SkillObservation[]>();
+  await Promise.all([
+    quizResults(supabase, studentId, evidence),
+    quizObservations(supabase, studentId, observations),
+    checklistResults(supabase, studentId, evidence, observations),
+  ]);
+  const params = await loadBktParameters(supabase, [...observations.keys()]);
+  const judged = rankByMastery(observations, evidence, params);
   if (judged.length === 0) return [];
 
   const weakIds = judged.map((j) => j.skillId);
@@ -289,7 +404,7 @@ export async function loadSkillFocus(supabase: SupabaseClient, studentId: string
   }
   const skillById = new Map(skills.map((s) => [s.id, s]));
 
-  return judged.flatMap(({ skillId, evidence: flagging }) => {
+  return judged.flatMap(({ skillId, mastery, evidence: results }) => {
     const skill = skillById.get(skillId);
     if (!skill) return [];
     return [
@@ -298,8 +413,9 @@ export async function loadSkillFocus(supabase: SupabaseClient, studentId: string
         title: skill.title,
         chapter: skill.chapter,
         area: skill.area,
-        evidence: flagging,
+        evidence: results,
         quiz_ids: [...(quizzesBySkill.get(skillId) ?? [])],
+        mastery: Math.round(mastery * 1000) / 1000,
       },
     ];
   });

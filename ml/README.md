@@ -125,8 +125,11 @@ app asks for the stream to show a percentage; the nightly workflow doesn't.
   (answer accuracy blended with faculty-validated scores; unexplored
   competencies get a neutral exploration weight). Computed live; registered in `ml_models` for auditability.
 - **Bayesian Knowledge Tracing** (`app/bkt.py`) — one two-state hidden
-  Markov model per Taylor's skill, over each student's quiz answers in order
-  (graded attempts and practice runs). EM (Baum-Welch, as in pyBKT) fits
+  Markov model per Taylor's skill, over each student's results on it in the
+  order they happened: quiz answers (graded attempts and practice runs) and
+  Patient Case / Return Demonstration checklist ratings (each step rated
+  Excellent or Satisfactory is a right answer, Needs Practice a wrong one,
+  N/A nothing). Case Presentations have no checklist and are left out. EM (Baum-Welch, as in pyBKT) fits
   P(L0), P(T), P(G), P(S) on every whole-cohort `/recommend/refresh` (nightly,
   or an admin's run; scoped runs leave it alone), with guess and slip
   capped below 0.5 to avoid degenerate fits. Cold start: a skill needs 5
@@ -137,7 +140,10 @@ app asks for the stream to show a percentage; the nightly workflow doesn't.
   `assessment-selection.ts`) applies the same update rules to the student's
   answers at the moment it deals a paper. The surplus questions go to the
   least-mastered skills, and on a practice run the questions last answered
-  wrong come first.
+  wrong come first. The mobile Library's "Needs improvement" panel
+  (`web/app/lib/skill-focus.ts`) traces the same observations with the same
+  parameters and lists every skill under 95% mastery, least mastered first,
+  each with its Library materials.
 
   Benchmark (`eval/out/bkt_eval_as.md`): ASSISTments 2009-2010 skill-builder
   log, 446,844 answers from 4,151 students on 110 skills, 5-fold

@@ -11,7 +11,6 @@ import type { AiTip, FocusSkill, LibraryItem, Recommendation, SkillEvidence, Stu
 const FIRST_SKILLS = 3;
 /** Per skill, so one card never outgrows the screen. */
 const MAX_MATERIALS = 3;
-const MAX_QUIZZES = 2;
 const MAX_STEPS = 3;
 /** ML quiz picks, after the ones already listed under a skill. */
 const MAX_SUGGESTIONS = 3;
@@ -27,9 +26,9 @@ type Theme = ReturnType<typeof useTheme>;
 /**
  * A closed panel at the top of the Library, so the materials come first: its
  * header says how many skills need improvement and how many quizzes the ML
- * suggests, and opening it shows each skill that the latest quiz, Patient Case
- * or Return Demonstration result flagged, with what flagged it, an AI study
- * tip, its Library materials and the quizzes that cover it; then the ML
+ * suggests, and opening it shows each skill BKT says isn't mastered yet (least
+ * mastered first), with its mastery, its latest results, an AI study tip and
+ * its Library materials (or a note that it has none yet); then the ML
  * service's quiz picks. Hidden when nothing needs improvement and the ML has
  * nothing to suggest.
  */
@@ -61,10 +60,9 @@ export function FocusSection({
 
   const quizById = new Map(quizzes.map((q) => [q.id, q]));
   const tipBySkill = new Map(tips.filter((t) => t.skill_id).map((t) => [t.skill_id as string, t]));
-  // Suggestions for quizzes the student can open, and not already listed under a skill.
-  const underSkills = new Set(skills.flatMap((s) => s.quiz_ids));
+  // Suggestions for quizzes the student can open.
   const suggestions = recommendations
-    .filter((r) => r.assessments && quizById.has(r.assessment_id) && !underSkills.has(r.assessment_id))
+    .filter((r) => r.assessments && quizById.has(r.assessment_id))
     .slice(0, MAX_SUGGESTIONS);
 
   const icon = (
@@ -129,17 +127,14 @@ export function FocusSection({
               <Text style={styles.heading}>Needs improvement</Text>
             </View>
             <Text style={styles.subheading}>
-              Skills your latest quiz, Patient Case or Return Demo results flagged. Study these first.
+              Your weakest skills first, estimated from your quizzes, Patient Cases and Return Demos. Study these
+              materials first.
             </Text>
           </View>
 
           {shown.map((skill) => {
             const tip = tipBySkill.get(skill.skill_id);
             const materials = (materialsBySkill.get(skill.skill_id) ?? []).slice(0, MAX_MATERIALS);
-            const skillQuizzes = skill.quiz_ids
-              .map((id) => quizById.get(id))
-              .filter((q): q is StudentAssessment => !!q)
-              .slice(0, MAX_QUIZZES);
             return (
               <View key={skill.skill_id} style={styles.block}>
                 <Text style={styles.eyebrow}>
@@ -149,6 +144,7 @@ export function FocusSection({
                   <Text style={styles.skillId}>Skill {skill.skill_id} · </Text>
                   {skill.title}
                 </Text>
+                {skill.mastery !== undefined ? <MasteryBar mastery={skill.mastery} styles={styles} theme={theme} /> : null}
 
                 {skill.evidence.slice(0, 2).map((e, i) => (
                   <EvidenceLine key={`${e.kind}-${e.at}-${i}`} evidence={e} styles={styles} theme={theme} />
@@ -177,15 +173,6 @@ export function FocusSection({
                 ) : (
                   <Text style={styles.none}>No materials for this skill yet.</Text>
                 )}
-
-                {skillQuizzes.length > 0 ? (
-                  <>
-                    <Text style={styles.listLabel}>Practise</Text>
-                    {skillQuizzes.map((q) => (
-                      <QuizRow key={q.id} quiz={q} onPress={() => openQuiz(q.id)} styles={styles} theme={theme} />
-                    ))}
-                  </>
-                ) : null}
               </View>
             );
           })}
@@ -242,6 +229,36 @@ export function FocusSection({
   );
 }
 
+/**
+ * How well the student knows the skill, as BKT estimates it: red under 50%,
+ * amber up to the 95% that counts as mastered.
+ */
+function MasteryBar({
+  mastery,
+  styles,
+  theme,
+}: {
+  mastery: number;
+  styles: ReturnType<typeof createStyles>;
+  theme: Theme;
+}) {
+  const { Accent, Palette } = theme;
+  const percent = Math.round(mastery * 100);
+  const tone = mastery < 0.5 ? Accent.red : Accent.amber;
+  return (
+    <View
+      style={styles.mastery}
+      accessible
+      accessibilityLabel={`Mastery ${percent} percent. 95 percent counts as mastered.`}
+    >
+      <View style={[styles.masteryTrack, { backgroundColor: Palette.border }]}>
+        <View style={[styles.masteryFill, { width: `${Math.max(percent, 3)}%`, backgroundColor: tone.fg }]} />
+      </View>
+      <Text style={[styles.masteryText, { color: tone.fg }]}>{percent}% mastered</Text>
+    </View>
+  );
+}
+
 function EvidenceLine({
   evidence: e,
   styles,
@@ -256,13 +273,15 @@ function EvidenceLine({
   const verdict =
     e.kind === 'quiz'
       ? `${Math.round(e.score ?? 0)}% on this skill`
-      : `Needs Practice on ${e.needs_practice.length} ${e.needs_practice.length === 1 ? 'step' : 'steps'}`;
+      : e.weak
+        ? `Needs Practice on ${e.needs_practice.length} ${e.needs_practice.length === 1 ? 'step' : 'steps'}`
+        : 'Satisfactory or better';
   return (
     <View style={styles.evidence}>
       <Text style={styles.evidenceLine} numberOfLines={2}>
         <Text style={styles.evidenceKind}>{KIND_LABEL[e.kind]} · </Text>
         {e.title}
-        <Text style={{ color: Accent.red.fg, fontWeight: '700' }}> · {verdict}</Text>
+        <Text style={{ color: e.weak ? Accent.red.fg : Accent.green.fg, fontWeight: '700' }}> · {verdict}</Text>
         <Text style={styles.evidenceWhen}> · {when}</Text>
       </Text>
       {e.needs_practice.slice(0, MAX_STEPS).map((step) => (
@@ -274,46 +293,6 @@ function EvidenceLine({
         <Text style={styles.step}>+ {e.needs_practice.length - MAX_STEPS} more</Text>
       ) : null}
     </View>
-  );
-}
-
-function QuizRow({
-  quiz,
-  onPress,
-  styles,
-  theme,
-}: {
-  quiz: StudentAssessment;
-  onPress: () => void;
-  styles: ReturnType<typeof createStyles>;
-  theme: Theme;
-}) {
-  const { Accent, Palette } = theme;
-  // What opening it will do: the info screen decides, this only says so.
-  const action =
-    quiz.attempt_count === 0 && quiz.attempts_remaining !== 0
-      ? 'Take quiz'
-      : quiz.attempts_remaining === 0
-        ? quiz.practice_available
-          ? 'Practice again'
-          : 'No tries left'
-        : 'Take it again';
-  return (
-    <Pressable style={({ pressed }) => [styles.row, pressed && styles.pressed]} onPress={onPress} accessibilityRole="button">
-      <View style={[styles.rowIcon, { backgroundColor: Accent.teal.bg }]}>
-        <Ionicons name="school" size={18} color={Accent.teal.fg} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.rowTitle} numberOfLines={2}>
-          {quiz.title}
-        </Text>
-        <Text style={styles.rowMeta}>
-          {quiz.best_score !== null ? `Best ${Math.round(quiz.best_score)}% · ` : ''}
-          {action}
-        </Text>
-      </View>
-      <Ionicons name="chevron-forward" size={16} color={Palette.textFaint} />
-    </Pressable>
   );
 }
 
@@ -345,6 +324,10 @@ function createStyles({ Palette, Shadow, Type }: Theme) {
     eyebrow: Type.eyebrow,
     skillTitle: { ...Type.itemTitle, marginTop: 2 },
     skillId: { color: Palette.primary, fontWeight: '700' },
+    mastery: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
+    masteryTrack: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden' },
+    masteryFill: { height: '100%', borderRadius: 3 },
+    masteryText: { ...Type.micro, fontWeight: '700' },
     evidence: { marginTop: 6 },
     evidenceLine: { ...Type.caption, lineHeight: 17 },
     evidenceKind: { fontWeight: '700', color: Palette.text },
