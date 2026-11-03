@@ -58,6 +58,7 @@ import RequirementsTab, { requirementsTally, useStudentRequirements } from "./re
 import { fetchStudentReflections, type FacultyReflection } from "../../../lib/api";
 import SkillAreaTrend from "./skill-area-trend";
 import { SendAppLinkButton } from "../../../components/AppLink";
+import { MasteryBrief, StudentMasteryPanel, useStudentMastery } from "../../../components/SkillMastery";
 import QuizHistory, { groupAttempts, scoreColor } from "./quiz-history";
 import AssignmentGrader, { ScenarioSummaryCard } from "../../scenarios/review/assignment-grader";
 import {
@@ -76,6 +77,7 @@ const STUDENT_SUMMARY_PHRASES = [
   "Going through patient cases…",
   "Analyzing skill areas…",
   "Checking the risk prediction…",
+  "Checking skill mastery…",
   "Drafting recommendations…",
 ];
 
@@ -368,6 +370,7 @@ export default function StudentDetailClient() {
   const student = data?.student ?? null;
   const requirements = useStudentRequirements(studentId);
   const requirementCount = requirementsTally(requirements.data?.data);
+  const mastery = useStudentMastery(studentId);
   const performanceHistory = data?.performanceHistory ?? NO_PERFORMANCE_HISTORY;
   // Retakes of a quiz count once, as the Performance tab lists them.
   const quizCount = useMemo(() => groupAttempts(performanceHistory).length, [performanceHistory]);
@@ -667,10 +670,13 @@ export default function StudentDetailClient() {
           </div>
 
           {!riskPrediction ? (
-            <p className="text-sm text-gray-500 py-4">
-              Not scored yet. A student is scored once they have started or completed work; the ML
-              service then scores the cohort nightly (or run it from Admin &gt; Analytics).
-            </p>
+            <div className="space-y-3">
+              <p className="text-sm text-gray-500 py-1">
+                Not scored yet. A student is scored once they have started or completed work; the ML
+                service then scores the cohort nightly (or run it from Admin &gt; Analytics).
+              </p>
+              <MasteryBrief skills={mastery.data} onOpen={() => setActiveTab('competencies')} />
+            </div>
           ) : (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -720,6 +726,7 @@ export default function StudentDetailClient() {
                     : 'No graded quizzes yet, so this rating is based on missed deadlines rather than scores.'}
                 </p>
               )}
+              <MasteryBrief skills={mastery.data} onOpen={() => setActiveTab('competencies')} />
               <p className="text-xs text-gray-400 border-t border-hairline pt-3">
                 {riskPrediction.ml_models
                   ? `${riskPrediction.ml_models.kind.replace(/_/g, ' ')} v${riskPrediction.ml_models.version}${riskPrediction.ml_models.is_baseline ? ' (pre-trained baseline)' : ''}`
@@ -893,6 +900,8 @@ export default function StudentDetailClient() {
                   </div>
                 </>
               )}
+
+              <StudentMasteryPanel skills={mastery.data} loading={mastery.loading} />
 
               <SkillAreaTrend
                 records={scoreHistory.map((r) => ({

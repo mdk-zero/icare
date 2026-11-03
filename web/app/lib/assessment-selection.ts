@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { SHORT_ANSWER } from './short-answer';
 import { scoredStatuses } from './quiz-practice';
-import { DEFAULT_BKT, loadBktParameters, traceMastery } from './bkt';
+import { DEFAULT_BKT, answersInOrder, loadBktParameters, traceMastery } from './bkt';
 import { isMissingSkillColumn, skillIdFromTitle } from './taylor-skills';
 
 /**
@@ -113,7 +113,7 @@ function knowledgeComponent(skillId: string | null | undefined, criteriaId: stri
 }
 
 /** A criterion's skill: skill_id (049), else the one its name cites. */
-function criterionSkill(c: { skill_id?: string | null; name?: string | null }): string | null {
+export function criterionSkill(c: { skill_id?: string | null; name?: string | null }): string | null {
   return c.skill_id ?? skillIdFromTitle(c.name ?? '');
 }
 
@@ -380,19 +380,9 @@ export async function selectQuestionsForAttempt(
       }
     }
 
-    // Oldest first: runs by when they were handed in, answers by their place on the paper.
-    const submittedAt = new Map(attempts.map((a) => [a.id, a.submitted_at ?? '']));
-    const slot = new Map(served.map((r) => [`${r.attempt_id}:${r.question_id}`, r.position]));
-    const ordered = [...answers].sort(
-      (a, b) =>
-        (submittedAt.get(a.attempt_id) ?? '').localeCompare(submittedAt.get(b.attempt_id) ?? '') ||
-        a.attempt_id.localeCompare(b.attempt_id) ||
-        (slot.get(`${a.attempt_id}:${a.question_id}`) ?? 0) - (slot.get(`${b.attempt_id}:${b.question_id}`) ?? 0),
-    );
-
     const sequences = new Map<string, boolean[]>();
     const lastResult = new Map<string, boolean>();
-    for (const answer of ordered) {
+    for (const answer of answersInOrder(answers, attempts, served)) {
       const meta = questionMeta.get(answer.question_id);
       if (!meta) continue;
       const kc = knowledgeComponent(

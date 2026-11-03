@@ -149,7 +149,7 @@ const faqs = [
   {
     question: "How does the ML-driven assessment work?",
     answer:
-      "The machine learning model analyzes every student response across patient cases, quizzes, and EHR entries to build a detailed competency profile. It identifies knowledge gaps and provides objective scoring that eliminates grading bias. Laboratory instructors get a clear picture of each student’s skill strengths and areas needing improvement.",
+      "Three kinds of model work together. Random Forest and Logistic Regression models flag the students who may need intervention. Bayesian Knowledge Tracing estimates how well each student knows every skill from their quiz answers, and retakes give the weakest skills more questions. A content-based recommender then points students to other quizzes on those skills. Laboratory instructors get a clear picture of each student’s skill strengths and areas needing improvement.",
   },
   {
     question: "Can a laboratory instructor create their own patient cases?",

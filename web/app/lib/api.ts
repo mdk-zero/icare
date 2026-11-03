@@ -10,6 +10,7 @@ import type { ItemProgress, OfferingSummary, RequirementInput, RequirementRow, T
 import type { GradingSplit } from './course-grading';
 import type { ScenarioKind } from './scenario-kind';
 import type { WorkKind } from './work-kinds';
+import type { CohortMastery, SkillMastery } from './bkt';
 
 export interface User {
   id: string;
@@ -1704,6 +1705,46 @@ export async function fetchLatestPrediction(studentId: string): Promise<RiskPred
     return json.prediction ?? null;
   } catch (err) {
     console.error('fetchLatestPrediction() failed', err);
+    return null;
+  }
+}
+
+/** A student's BKT mastery per skill, weakest first; null if it couldn't be read. */
+export async function fetchStudentSkillMastery(studentId: string): Promise<SkillMastery[] | null> {
+  try {
+    const res = await apiFetch(`/api/analytics/skill-mastery?student_id=${encodeURIComponent(studentId)}`, {
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      console.error('fetchStudentSkillMastery() failed', res.status);
+      return null;
+    }
+    const json = (await res.json()) as { skills: SkillMastery[] };
+    return json.skills;
+  } catch (err) {
+    console.error('fetchStudentSkillMastery() failed', err);
+    return null;
+  }
+}
+
+/** BKT mastery rolled up per skill for an analytics filter; null if it couldn't be read. */
+export async function fetchCohortMastery(
+  sectionIds: readonly string[],
+  courseId: string | null,
+): Promise<CohortMastery | null> {
+  const params = new URLSearchParams();
+  if (sectionIds.length > 0) params.set('section_ids', sectionIds.join(','));
+  if (courseId) params.set('offering_id', courseId);
+  try {
+    const res = await apiFetch(`/api/analytics/skill-mastery?${params}`, { credentials: 'include' });
+    if (!res.ok) {
+      console.error('fetchCohortMastery() failed', res.status);
+      return null;
+    }
+    const json = (await res.json()) as { cohort: CohortMastery };
+    return json.cohort;
+  } catch (err) {
+    console.error('fetchCohortMastery() failed', err);
     return null;
   }
 }

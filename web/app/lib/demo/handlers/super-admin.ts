@@ -386,6 +386,27 @@ route("GET", "/api/super-admin/overview", (ctx) => {
 // Test results
 // ---------------------------------------------------------------------------
 
+route("GET", "/api/super-admin/ml-status", (ctx) => {
+  if (!adminOnly(ctx)) return forbidden();
+  const skills = new Set(ctx.db.criteria.map((c) => c.name.split(" · ")[0])).size;
+  return {
+    models: [
+      { kind: "knowledge_tracing", name: "Bayesian Knowledge Tracing", version: "1.0.0", is_baseline: false },
+      { kind: "recommender", name: "Content-based quiz recommender", version: "1.0.0", is_baseline: false },
+      { kind: "logistic_regression", name: "OULAD baseline (logistic regression)", version: "0.1.0-oulad", is_baseline: true },
+      { kind: "random_forest", name: "OULAD baseline (random forest)", version: "0.1.0-oulad", is_baseline: true },
+    ],
+    bkt: {
+      skills,
+      fitted: skills,
+      chapter: 0,
+      default: 0,
+      answers: ctx.db.attempts.reduce((sum, a) => sum + (a.status === "submitted" ? a.total_questions : 0), 0),
+      fitted_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+    },
+  };
+});
+
 route("GET", "/api/super-admin/test-runs", (ctx) => {
   if (!adminOnly(ctx)) return forbidden();
   const since = ctx.query.get("since");

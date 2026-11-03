@@ -7,9 +7,10 @@ import { CASE_CRITERIA, isLateSubmission } from "@/app/lib/case-rubric";
 import { isTaskRating, type TaskRating } from "@/app/lib/task-ratings";
 import { audit } from "./shared";
 import { parseDeadline } from "@/app/lib/deadline-input";
-import { DAY_MS, hasWork, lastActivity, mean } from "./derive";
+import { DAY_MS, hasWork, lastActivity, mean, skillMastery } from "./derive";
+import { summariseCohort } from "@/app/lib/bkt";
 import { listSkillSummaries } from "../fixtures/skills";
-import { byName, manageableSections, sectionName, userById, visibleSections, visibleStudents } from "./scope";
+import { byName, canSeeStudent, manageableSections, sectionName, userById, visibleSections, visibleStudents } from "./scope";
 import { courseActivityIds, courseDb, linkActivityCourses, offeringRoster } from "./courses";
 import { CASES } from "../fixtures/cases-data";
 import type { WorkKind } from "@/app/lib/work-kinds";
@@ -695,6 +696,18 @@ route("GET", "/api/analytics/summary", (ctx) => {
       active_model: { kind: "random_forest", version: "2026.09.1" },
     },
   };
+});
+
+route("GET", "/api/analytics/skill-mastery", (ctx) => {
+  if (!staffOnly(ctx)) return forbidden();
+  const { db } = ctx;
+  const id = ctx.query.get("student_id");
+  if (id) {
+    if (!userById(db, id) || !canSeeStudent(db, ctx.role, ctx.viewer.id, id)) return notFound("Student not found");
+    return { skills: skillMastery(db, id) };
+  }
+  const { students } = analyticsScope(ctx);
+  return { cohort: summariseCohort(new Map(students.map((s) => [s.id, skillMastery(db, s.id)])), students.length) };
 });
 
 route("GET", "/api/analytics/leaderboard", (ctx) => {

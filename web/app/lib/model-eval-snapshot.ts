@@ -42,3 +42,30 @@ export const MODEL_EVAL_SNAPSHOT: Record<string, ModelEvalEntry> = {
 };
 
 export const DEFAULT_MODEL_KIND = "random_forest";
+
+/**
+ * The same kind of snapshot for Bayesian Knowledge Tracing, copied from
+ * ml/eval/out/bkt_eval_as.json: how well it predicts a student's next answer on
+ * a skill, on a public benchmark. Live quiz data is too small to score yet.
+ * Refresh by re-running `python -m eval.bkt_eval --csv as.csv ...` (ml/README.md).
+ */
+export interface BktEvalEntry {
+  model: string;
+  auc: number;
+  accuracy: number;
+  rmse: number;
+}
+
+export const BKT_EVAL_DATASET = {
+  name: "ASSISTments 2009-2010 skill builder",
+  answers: 446844,
+  students: 4151,
+  skills: 110,
+  folds: 5,
+};
+
+export const BKT_EVAL_SNAPSHOT: BktEvalEntry[] = [
+  { model: "Bayesian Knowledge Tracing", auc: 0.7665, accuracy: 0.7592, rmse: 0.4122 },
+  { model: "Baseline: skill average", auc: 0.6431, accuracy: 0.6984, rmse: 0.4473 },
+  { model: "Baseline: student running average", auc: 0.7619, accuracy: 0.7303, rmse: 0.4262 },
+];

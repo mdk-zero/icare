@@ -30,6 +30,93 @@ export const DEFAULT_BKT: BktParams = { p_init: 0.3, p_learn: 0.1, p_guess: 0.2,
 /** P(known) at which a skill counts as mastered, the usual BKT cutoff. */
 export const MASTERY_THRESHOLD = 0.95;
 
+/**
+ * What a skill needs for a fit of its own, for the notes that explain a default.
+ * Keep in step with MIN_FIT_STUDENTS and MIN_FIT_ANSWERS in ml/app/bkt.py.
+ */
+export const MIN_FIT_STUDENTS = 5;
+export const MIN_FIT_ANSWERS = 40;
+
+/** Where a skill's parameters came from: its own fit, its chapter's, or the cold start. */
+export type BktSource = 'fitted' | 'chapter' | 'default';
+
+export interface BktFit extends BktParams {
+  source: BktSource;
+}
+
+/** One student's estimate on one skill. */
+export interface SkillMastery {
+  skill_id: string;
+  title: string;
+  /** P(known) after the student's last answer, 0 to 1. */
+  mastery: number;
+  answers: number;
+  correct: number;
+  source: BktSource;
+}
+
+/** One skill across the students who have answered on it. */
+export interface CohortSkillMastery {
+  skill_id: string;
+  title: string;
+  /** The mean of those students' P(known), 0 to 1. */
+  average_mastery: number;
+  students: number;
+  mastered: number;
+  answers: number;
+  source: BktSource;
+}
+
+export interface CohortMastery {
+  /** Weakest first. */
+  skills: CohortSkillMastery[];
+  /** Students in scope with at least one answer on a skill. */
+  students_traced: number;
+  total_students: number;
+  answers: number;
+}
+
+/** How many skills in the list rest on each source. */
+export function countSources(skills: readonly { source: BktSource }[]): Record<BktSource, number> {
+  const counts: Record<BktSource, number> = { fitted: 0, chapter: 0, default: 0 };
+  for (const skill of skills) counts[skill.source] += 1;
+  return counts;
+}
+
+/** The per-student estimates rolled up per skill, weakest first. */
+export function summariseCohort(byStudent: ReadonlyMap<string, readonly SkillMastery[]>, totalStudents: number): CohortMastery {
+  const skills = new Map<string, CohortSkillMastery & { sum: number }>();
+  let answers = 0;
+  for (const estimates of byStudent.values()) {
+    for (const e of estimates) {
+      answers += e.answers;
+      const row = skills.get(e.skill_id) ?? {
+        skill_id: e.skill_id,
+        title: e.title,
+        average_mastery: 0,
+        students: 0,
+        mastered: 0,
+        answers: 0,
+        source: e.source,
+        sum: 0,
+      };
+      row.sum += e.mastery;
+      row.students += 1;
+      row.answers += e.answers;
+      if (e.mastery >= MASTERY_THRESHOLD) row.mastered += 1;
+      skills.set(e.skill_id, row);
+    }
+  }
+  return {
+    skills: [...skills.values()]
+      .map(({ sum, ...row }) => ({ ...row, average_mastery: sum / row.students }))
+      .sort((a, b) => a.average_mastery - b.average_mastery || a.skill_id.localeCompare(b.skill_id)),
+    students_traced: [...byStudent.values()].filter((estimates) => estimates.length > 0).length,
+    total_students: totalStudents,
+    answers,
+  };
+}
+
 /** P(the next answer is right) given P(the skill is known). */
 export function predictCorrect(pKnown: number, params: BktParams): number {
   return pKnown * (1 - params.p_slip) + (1 - pKnown) * params.p_guess;
@@ -48,6 +135,22 @@ export function traceMastery(params: BktParams, answers: readonly boolean[]): nu
   return answers.reduce((pKnown, correct) => updateMastery(pKnown, correct, params), params.p_init);
 }
 
+/** Oldest first: runs by when they were handed in, answers by their place on the paper. */
+export function answersInOrder<T extends { attempt_id: string; question_id: string }>(
+  answers: readonly T[],
+  attempts: readonly { id: string; submitted_at: string | null }[],
+  served: readonly { attempt_id: string; question_id: string; position: number }[],
+): T[] {
+  const submittedAt = new Map(attempts.map((a) => [a.id, a.submitted_at ?? '']));
+  const slot = new Map(served.map((r) => [`${r.attempt_id}:${r.question_id}`, r.position]));
+  return [...answers].sort(
+    (a, b) =>
+      (submittedAt.get(a.attempt_id) ?? '').localeCompare(submittedAt.get(b.attempt_id) ?? '') ||
+      a.attempt_id.localeCompare(b.attempt_id) ||
+      (slot.get(`${a.attempt_id}:${a.question_id}`) ?? 0) - (slot.get(`${b.attempt_id}:${b.question_id}`) ?? 0),
+  );
+}
+
 /** Before 084 the table is missing: 42P01 from Postgres, PGRST205 from PostgREST. */
 function isMissingTable(error: { code?: string } | null): boolean {
   return error?.code === '42P01' || error?.code === 'PGRST205';
@@ -57,12 +160,12 @@ function isMissingTable(error: { code?: string } | null): boolean {
 export async function loadBktParameters(
   supabase: SupabaseClient,
   skillIds: readonly string[],
-): Promise<Map<string, BktParams>> {
-  const params = new Map<string, BktParams>();
+): Promise<Map<string, BktFit>> {
+  const params = new Map<string, BktFit>();
   if (skillIds.length === 0) return params;
   const { data, error } = await supabase
     .from('bkt_parameters')
-    .select('skill_id, p_init, p_learn, p_guess, p_slip')
+    .select('skill_id, p_init, p_learn, p_guess, p_slip, source')
     .in('skill_id', [...new Set(skillIds)]);
   if (error) {
     if (!isMissingTable(error)) console.error('Failed to read BKT parameters; using defaults', error);
@@ -74,6 +177,7 @@ export async function loadBktParameters(
       p_learn: Number(row.p_learn),
       p_guess: Number(row.p_guess),
       p_slip: Number(row.p_slip),
+      source: row.source as BktSource,
     });
   }
   return params;

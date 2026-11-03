@@ -20,7 +20,7 @@ import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { apiFetch } from "@/app/lib/api";
 import { usePageData } from "@/app/lib/use-page-data";
 import { SkeletonText } from "../../components/skeletons";
-import { MODEL_EVAL_DATASET, MODEL_EVAL_SNAPSHOT } from "@/app/lib/model-eval-snapshot";
+import { BKT_EVAL_DATASET, BKT_EVAL_SNAPSHOT, MODEL_EVAL_DATASET, MODEL_EVAL_SNAPSHOT } from "@/app/lib/model-eval-snapshot";
 import PageHeader from "../../components/PageHeader";
 import { CARD, MigrationPending, StatusText } from "../ui";
 import { formatMs } from "../metrics";
@@ -202,7 +202,7 @@ export default function TestsClient() {
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faFlaskVial} className="w-3.5 h-3.5" />, label: "System" }}
         title="System Tests"
-        subtitle="System health checks, automated frontend and API tests, load and data warehouse benchmarks, and the prediction models' evaluation"
+        subtitle="System health checks, automated frontend and API tests, load and data warehouse benchmarks, and the ML models' evaluation"
       />
       {pending && (
         <div className="mb-5">
@@ -265,11 +265,11 @@ function SuiteSummary({ runs, now, loading }: { runs: TestRun[]; now: number; lo
     }),
     {
       key: "models",
-      label: "Prediction models",
+      label: "ML models",
       anchor: "models",
       icon: faRobot,
-      verdict: { tone: "idle", text: `Best F1 ${(bestF1 * 100).toFixed(1)}%` },
-      meta: "Offline snapshot",
+      verdict: { tone: "idle", text: `F1 ${(bestF1 * 100).toFixed(1)}% · BKT AUC ${BKT_EVAL_SNAPSHOT[0].auc.toFixed(2)}` },
+      meta: "Offline snapshots",
     },
   ];
   return (
@@ -981,7 +981,24 @@ function SuiteSection({
 
 /* ------------------------------------------------------------------- ML */
 
+/** What each kind in the registry is for, in the order the pipeline reads. */
+const ML_MODELS = [
+  { kind: "random_forest", name: "Random Forest", job: "Who needs intervention: the low-performing flag" },
+  { kind: "logistic_regression", name: "Logistic Regression", job: "Who needs intervention: the comparison baseline" },
+  { kind: "knowledge_tracing", name: "Bayesian Knowledge Tracing", job: "What to practice: mastery per skill, which steers quiz retakes" },
+  { kind: "recommender", name: "Content-based recommender (TF-IDF)", job: "What to practice: other quizzes on the weakest skill areas" },
+];
+
+interface MlStatus {
+  models: { kind: string; version: string; is_baseline: boolean }[];
+  bkt: { skills: number; fitted: number; chapter: number; default: number; answers: number; fitted_at: string | null } | null;
+}
+
 function MlSection() {
+  const { data: status, loading } = usePageData("super-admin:ml-status", async (): Promise<MlStatus | null> => {
+    const res = await apiFetch("/api/super-admin/ml-status", { credentials: "include" });
+    return res.ok ? ((await res.json()) as MlStatus) : null;
+  });
   const models = Object.values(MODEL_EVAL_SNAPSHOT);
   const metrics = [
     ["accuracy", "Accuracy"],
@@ -990,15 +1007,52 @@ function MlSection() {
     ["f1", "F1"],
     ["rocAuc", "ROC-AUC"],
   ] as const;
+  const bkt = status?.bkt;
   return (
     <section id="models" className={`${CARD} p-4 sm:p-5 scroll-mt-4`}>
       <SectionHead
         icon={faRobot}
-        title="Risk-prediction model evaluation"
-        subtitle={`${MODEL_EVAL_DATASET.name} set: ${MODEL_EVAL_DATASET.samples.toLocaleString()} samples, ${Math.round(
+        title="ML models"
+        subtitle="The four models the ML service runs, and how each was evaluated"
+      />
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px] text-sm">
+          <thead className="bg-subtle">
+            <tr>
+              <th className={`${TH} text-left`}>Model</th>
+              <th className={`${TH} text-left`}>What it decides</th>
+              <th className={`${TH} text-right`}>Active version</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-hairline">
+            {ML_MODELS.map((m) => {
+              const live = status?.models.find((row) => row.kind === m.kind);
+              return (
+                <tr key={m.kind}>
+                  <td className="py-2 px-3 text-gray-800 font-medium">{m.name}</td>
+                  <td className="py-2 px-3 text-gray-600">{m.job}</td>
+                  <td className="py-2 px-3 text-right tabular-nums text-gray-700">
+                    {loading ? (
+                      <SkeletonText className="ml-auto h-4 w-16" />
+                    ) : live ? (
+                      `v${live.version}${live.is_baseline ? " (baseline)" : ""}`
+                    ) : (
+                      <span className="text-gray-400">{status ? "Not registered" : "—"}</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <h3 className="mt-6 font-semibold text-gray-800">Risk prediction</h3>
+      <p className="mb-3 text-xs text-gray-500">
+        {`${MODEL_EVAL_DATASET.name} set: ${MODEL_EVAL_DATASET.samples.toLocaleString()} samples, ${Math.round(
           MODEL_EVAL_DATASET.atRiskRate * 1000,
         ) / 10}% at-risk, threshold ${MODEL_EVAL_DATASET.threshold}`}
-      />
+      </p>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] text-sm">
           <thead className="bg-subtle">
@@ -1059,6 +1113,58 @@ function MlSection() {
       <p className="text-xs text-gray-400 mt-3">
         A fixed offline snapshot from <code className="font-mono">ml/eval/predict_eval.py</code>; the warehouse has no
         ground-truth outcomes to score live predictions against.
+      </p>
+
+      <h3 className="mt-6 font-semibold text-gray-800">Bayesian Knowledge Tracing</h3>
+      <p className="mb-3 text-xs text-gray-500">
+        {`${BKT_EVAL_DATASET.name}: ${BKT_EVAL_DATASET.answers.toLocaleString()} answers from ${BKT_EVAL_DATASET.students.toLocaleString()} students on ${BKT_EVAL_DATASET.skills} skills, ${BKT_EVAL_DATASET.folds}-fold cross-validation by student, predicting each answer before seeing it`}
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px] text-sm">
+          <thead className="bg-subtle">
+            <tr>
+              <th className={`${TH} text-left`}>Model</th>
+              <th className={`${TH} text-right`}>AUC</th>
+              <th className={`${TH} text-right`}>Accuracy</th>
+              <th className={`${TH} text-right`}>RMSE (lower is better)</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-hairline">
+            {BKT_EVAL_SNAPSHOT.map((m, i) => (
+              <tr key={m.model}>
+                <td className={`py-2 px-3 ${i === 0 ? "text-gray-800 font-medium" : "text-gray-600"}`}>{m.model}</td>
+                <td className="py-2 px-3 text-right tabular-nums text-gray-700">{m.auc.toFixed(4)}</td>
+                <td className="py-2 px-3 text-right tabular-nums text-gray-700">{(m.accuracy * 100).toFixed(1)}%</td>
+                <td className="py-2 px-3 text-right tabular-nums text-gray-700">{m.rmse.toFixed(4)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-4 p-3 rounded-xl border border-hairline">
+        <p className="text-xs font-medium text-gray-600 mb-1">Live fit, from the last whole-cohort run</p>
+        {loading ? (
+          <SkeletonText className="my-0.5 h-4 w-64" />
+        ) : !bkt ? (
+          <p className="text-sm text-gray-500">
+            {status ? "No fit stored yet: migration 084 isn't applied." : "Couldn't read the fit."}
+          </p>
+        ) : bkt.skills === 0 ? (
+          <p className="text-sm text-gray-500">No skills fitted yet. The next whole-cohort run fills this in.</p>
+        ) : (
+          <p className="text-sm text-gray-700">
+            <span className="tabular-nums">
+              {bkt.skills} {bkt.skills === 1 ? "skill" : "skills"} with answers ({bkt.answers.toLocaleString()} in all):{" "}
+              {bkt.fitted} fitted, {bkt.chapter} on a chapter&apos;s fit, {bkt.default} on the starting parameters
+            </span>
+            {bkt.fitted_at && <span className="text-gray-500"> · {new Date(bkt.fitted_at).toLocaleString()}</span>}
+          </p>
+        )}
+      </div>
+      <p className="text-xs text-gray-400 mt-3">
+        A fixed offline snapshot from <code className="font-mono">ml/eval/bkt_eval.py</code>, on a public benchmark
+        because live quiz data is too small to score yet. The recommender has no figures here: its evaluation needs a
+        faculty ground-truth list (<code className="font-mono">ml/eval/recsys_eval.py</code>).
       </p>
     </section>
   );

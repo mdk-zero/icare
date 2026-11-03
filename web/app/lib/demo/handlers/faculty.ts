@@ -872,7 +872,14 @@ export function mlRun(ctx: Ctx, students: ReturnType<typeof myStudents>) {
   const scored = students.filter((s) => hasWork(ctx.db, s.id));
   const result =
     action === "recommend"
-      ? { recommendations: scored.length * 2 }
+      ? {
+          recommendations: scored.length * 2,
+          // As the service does: only a whole-cohort run refits BKT.
+          bkt:
+            ctx.role === "admin"
+              ? { written: true, skills: new Set(ctx.db.criteria.map((c) => c.name.split(" · ")[0])).size }
+              : { skipped: "scoped run" },
+        }
       : { scored: scored.length, at_risk: scored.filter((s) => s.risk_level === "at_risk").length };
   if (action === "predict") audit(ctx.db, ctx.viewer, "ml.run", "ml", { message: "Ran the risk check" });
   return ndjson([...Array.from({ length: total }, (_, i) => ({ done: i + 1, total })), { result }], 180);

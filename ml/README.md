@@ -137,7 +137,9 @@ app asks for the stream to show a percentage; the nightly workflow doesn't.
   `assessment-selection.ts`) applies the same update rules to the student's
   answers at the moment it deals a paper. The surplus questions go to the
   least-mastered skills, and on a practice run the questions last answered
-  wrong come first.
+  wrong come first. The portal shows the same estimates (`web/app/lib/skill-mastery.ts`):
+  per student on their profile, per skill on Analytics, and the benchmark and
+  live fit on System Tests.
 
   Benchmark (`eval/out/bkt_eval_as.md`): ASSISTments 2009-2010 skill-builder
   log, 446,844 answers from 4,151 students on 110 skills, 5-fold

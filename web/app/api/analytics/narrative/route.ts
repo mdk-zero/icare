@@ -4,7 +4,12 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
 import { callAnalytics, resolveSummaryArgs, type SummaryArgs } from '@/app/lib/analytics';
 import { courseArgs, courseFigures, loadCourseScope, type CourseScope } from '@/app/lib/analytics-course';
+import { MASTERY_THRESHOLD, summariseCohort, type CohortMastery } from '@/app/lib/bkt';
+import { analyticsStudentIds, loadSkillMastery } from '@/app/lib/skill-mastery';
 import { WORK_KINDS, type WorkKind } from '@/app/lib/work-kinds';
+
+/** How many of the weakest skills the summary is told about. */
+const WEAKEST_SKILLS = 5;
 
 /**
  * Plain-language reading of the analytics dashboard.
@@ -45,7 +50,12 @@ const BUCKET_NOUN: Record<SummaryArgs['p_bucket'], string> = {
   year: 'year',
 };
 
-function buildPrompt(summary: WarehouseSummary, args: SummaryArgs, course: CourseScope | null): string {
+function buildPrompt(
+  summary: WarehouseSummary,
+  args: SummaryArgs,
+  course: CourseScope | null,
+  mastery: CohortMastery | null,
+): string {
   const cohort = summary.cohort ?? {};
   const trend = summary.weekly_trend ?? [];
   const competencies = summary.competency_detail ?? [];
@@ -113,6 +123,21 @@ ${kindBlock}`
       ? `${atRisk} students classified low performing, ${safe} on track (latest ML prediction per student).`
       : '(the ML prediction service has not produced any predictions for these students yet)';
 
+  const masteryBlock =
+    mastery && mastery.skills.length > 0
+      ? `${mastery.students_traced} of ${mastery.total_students} students traced across ${mastery.answers} quiz answers. Weakest skills:\n` +
+        mastery.skills
+          .slice(0, WEAKEST_SKILLS)
+          .map(
+            (s) =>
+              `- Skill ${s.skill_id} ${s.title}: average ${Math.round(s.average_mastery * 100)}%, ${s.mastered} of ${s.students} students mastered`,
+          )
+          .join('\n') +
+        (mastery.skills.every((s) => s.source === 'default')
+          ? '\nThese skills are still on starting parameters, so treat the percentages as rough estimates.'
+          : '')
+      : '(no quiz answers on a skill yet)';
+
   return `You are a nursing education analyst briefing a faculty member on their cohort dashboard. Describe only the data below. Never invent a number, a student, or a trend that is not present.
 
 Scope: ${scope}
@@ -136,6 +161,9 @@ ${activityBlock}
 
 Low-performance prediction (call these students "low performing", never "at risk"):
 ${riskBlock}
+
+Skill mastery estimated by Bayesian Knowledge Tracing, from each student's whole quiz record rather than this period (${Math.round(MASTERY_THRESHOLD * 100)}% counts as mastered):
+${masteryBlock}
 
 Return ONLY a valid JSON object with this exact structure (no markdown, no explanations):
 
@@ -206,7 +234,15 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const generated = await callAI(buildPrompt(summary, args, course));
+    // The reading stands without it, so a failure here doesn't cost the summary.
+    const mastery = await analyticsStudentIds(supabase, resolved, course)
+      .then(async (ids) => summariseCohort(await loadSkillMastery(supabase, ids), ids.length))
+      .catch((err) => {
+        console.error('Failed to read skill mastery for the narrative', err);
+        return null;
+      });
+
+    const generated = await callAI(buildPrompt(summary, args, course, mastery));
 
     return NextResponse.json({
       narrative: {

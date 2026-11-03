@@ -18,7 +18,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 const day = (ts: string) => new Date(ts).toISOString().slice(0, 10);
 
-function chunks<T>(xs: readonly T[]): T[][] {
+export function chunks<T>(xs: readonly T[]): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < xs.length; i += CHUNK) out.push(xs.slice(i, i + CHUNK));
   return out;

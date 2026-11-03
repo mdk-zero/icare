@@ -27,6 +27,7 @@ import Card from "../../../components/Card";
 import StatTile from "../../../components/StatTile";
 import PageHeader from "../../../components/PageHeader";
 import { SendAppLinkButton } from "../../../components/AppLink";
+import { MasteryBrief, StudentMasteryPanel, useStudentMastery } from "../../../components/SkillMastery";
 import { usePageData } from "../../../lib/use-page-data";
 import { studentsViewHref } from "../../../lib/students-view";
 import {
@@ -126,6 +127,7 @@ export default function StudentDetailClient() {
   const scenarioHistory = data?.scenarioHistory ?? NO_SCENARIO_HISTORY;
   const competencies = data?.competencies ?? NO_COMPETENCIES;
   const prediction = data?.prediction ?? null;
+  const mastery = useStudentMastery(studentId);
 
   const riskLevel: "low" | "high" | null = prediction
     ? prediction.risk === "at_risk"
@@ -257,10 +259,13 @@ export default function StudentDetailClient() {
           </div>
 
           {!prediction ? (
-            <p className="text-sm text-gray-400">
-              Not scored yet. A student is scored once they have started or completed work and the ML jobs
-              have run from the Analytics page.
-            </p>
+            <div className="space-y-3">
+              <p className="text-sm text-gray-400">
+                Not scored yet. A student is scored once they have started or completed work and the ML jobs
+                have run from the Analytics page.
+              </p>
+              <MasteryBrief skills={mastery.data} onOpen={() => setActiveTab("competencies")} />
+            </div>
           ) : (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -303,6 +308,7 @@ export default function StudentDetailClient() {
                   </div>
                 </div>
               )}
+              <MasteryBrief skills={mastery.data} onOpen={() => setActiveTab("competencies")} />
             </div>
           )}
         </Card>
@@ -400,7 +406,7 @@ export default function StudentDetailClient() {
           )}
 
           {activeTab === "competencies" && (
-            <div>
+            <div className="space-y-6">
               {Object.keys(competencies).length === 0 ? (
                 <p className="text-gray-500 text-center py-8">
                   No validated skill area scores yet — faculty record them from the student&apos;s Skill Areas tab.
@@ -423,6 +429,8 @@ export default function StudentDetailClient() {
                   ))}
                 </div>
               )}
+
+              <StudentMasteryPanel skills={mastery.data} loading={mastery.loading} />
             </div>
           )}
         </div>
