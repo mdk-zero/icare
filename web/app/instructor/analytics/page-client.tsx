@@ -919,120 +919,119 @@ export default function FacultyAnalyticsClient() {
         subtitle="Performance and clinical training data from the iCARE++ warehouse"
       />
 
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-stretch">
-        <div className="min-w-0 flex-1 rounded-xl border border-hairline bg-surface shadow-tile">
-          <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-3">
-            {hasCourseFilter && (
-              <>
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <CardLabel>Course</CardLabel>
-                  <CourseFilter
-                    offerings={offerings}
-                    value={courseId}
-                    loading={coursesListLoading}
-                    onChange={selectCourse}
-                  />
-                </div>
-
-                <span className="hidden h-6 w-px bg-hairline sm:block" />
-              </>
-            )}
-
-            <div className="flex items-center gap-2.5">
-              <CardLabel>Sections</CardLabel>
-              <SectionPicker
-                sections={sectionChoices}
-                selected={sectionIds}
-                counts={studentsBySection}
-                onChange={setSectionIds}
-              />
-            </div>
-
-            {/* Three filters don't share a line, so the range always takes the
-                second: left to wrap, this divider would dangle at the first's end. */}
-            <span className={hasCourseFilter ? "hidden basis-full sm:block" : "hidden h-6 w-px bg-hairline sm:block"} />
-
-            <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2.5">
-              <CardLabel>Range</CardLabel>
-              <div className="flex flex-wrap items-center gap-1">
-                {(course ? [TERM_PRESET, ...PRESETS] : PRESETS).map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => applyPreset(p.id)}
-                    aria-pressed={activePreset === p.id}
-                    className={`rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
-                      activePreset === p.id
-                        ? "bg-brand-600 text-white"
-                        : "text-gray-600 hover:bg-subtle hover:text-gray-900"
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {activePreset === "custom" && (
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="date"
-                  value={draft.from}
-                  max={draft.to || undefined}
-                  onChange={(e) => setCustom("from", e.target.value)}
-                  className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-gray-700"
-                  aria-label="Range start"
-                />
-                <span className="text-gray-400">–</span>
-                <input
-                  type="date"
-                  value={draft.to}
-                  min={draft.from || undefined}
-                  onChange={(e) => setCustom("to", e.target.value)}
-                  className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-gray-700"
-                  aria-label="Range end"
+      <div className="mb-4 rounded-xl border border-hairline bg-surface shadow-tile">
+        <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-3">
+          {hasCourseFilter && (
+            <>
+              <div className="flex min-w-0 items-center gap-2.5">
+                <CardLabel>Course</CardLabel>
+                <CourseFilter
+                  offerings={offerings}
+                  value={courseId}
+                  loading={coursesListLoading}
+                  onChange={selectCourse}
                 />
               </div>
-            )}
 
-            <div className="flex items-center gap-3 self-end sm:ml-auto sm:self-auto">
-              <div className="flex items-center gap-2 text-xs text-gray-400">
-                {refreshing && <EcgLoader size="xs" className="text-brand-600" />}
-                <span className="tabular-nums">{formatRange(from, to)}</span>
-              </div>
+              <span className="hidden h-6 w-px bg-hairline sm:block" />
+            </>
+          )}
+
+          <div className="flex items-center gap-2.5">
+            <CardLabel>Sections</CardLabel>
+            <SectionPicker
+              sections={sectionChoices}
+              selected={sectionIds}
+              counts={studentsBySection}
+              onChange={setSectionIds}
+            />
+          </div>
+
+          {/* At the end of the filters' row rather than among them: it reads
+              whatever they select, but isn't itself a filter. Last of all on a
+              phone. Held while a filter change is still loading, so the summary
+              can't be filed under the old figures. */}
+          <button
+            type="button"
+            onClick={openNarrative}
+            disabled={!narrativeKey || refreshing}
+            title={
+              refreshing
+                ? "Waiting for the latest figures…"
+                : "Generate a plain-language reading of the current selection"
+            }
+            className="order-last flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-transparent bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60 sm:order-none sm:ml-auto"
+          >
+            {narrativeBusy ? (
+              <EcgLoader />
+            ) : (
+              <FontAwesomeIcon icon={faWandMagicSparkles} className="h-3.5 w-3.5" />
+            )}
+            AI Summary
+          </button>
+
+          {/* The range always takes a line of its own, so nothing wraps unevenly. */}
+          <span className="hidden basis-full sm:block" />
+
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2.5">
+            <CardLabel>Range</CardLabel>
+            <div className="flex flex-wrap items-center gap-1">
+              {(course ? [TERM_PRESET, ...PRESETS] : PRESETS).map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => applyPreset(p.id)}
+                  aria-pressed={activePreset === p.id}
+                  className={`rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
+                    activePreset === p.id
+                      ? "bg-brand-600 text-white"
+                      : "text-gray-600 hover:bg-subtle hover:text-gray-900"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
             </div>
           </div>
 
-          {sectionChoices.length === 0 && !course && (
-            <p className="border-t border-hairline px-4 py-2.5 text-xs text-amber-700">
-              You don&apos;t manage any sections yet, so there is nothing to report on. Your Dean or
-              Program Chair assigns sections from their Instructors page.
-            </p>
+          {activePreset === "custom" && (
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="date"
+                value={draft.from}
+                max={draft.to || undefined}
+                onChange={(e) => setCustom("from", e.target.value)}
+                className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-gray-700"
+                aria-label="Range start"
+              />
+              <span className="text-gray-400">–</span>
+              <input
+                type="date"
+                value={draft.to}
+                min={draft.from || undefined}
+                onChange={(e) => setCustom("to", e.target.value)}
+                className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-gray-700"
+                aria-label="Range end"
+              />
+            </div>
           )}
+
+          <div className="flex items-center gap-3 self-end sm:ml-auto sm:self-auto">
+            <div className="flex items-center gap-2 text-xs text-gray-400">
+              {refreshing && <EcgLoader size="xs" className="text-brand-600" />}
+              <span className="tabular-nums">{formatRange(from, to)}</span>
+            </div>
+          </div>
         </div>
 
-        {/* Beside the filters rather than in them: it reads whatever they
-            select, but isn't itself a filter. Held while a filter change is
-            still loading, so the summary can't be filed under the old figures. */}
-        <button
-          type="button"
-          onClick={openNarrative}
-          disabled={!narrativeKey || refreshing}
-          title={
-            refreshing
-              ? "Waiting for the latest figures…"
-              : "Generate a plain-language reading of the current selection"
-          }
-          className="flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-brand-600 px-4 py-3 text-sm font-medium text-white shadow-tile transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {narrativeBusy ? (
-            <EcgLoader />
-          ) : (
-            <FontAwesomeIcon icon={faWandMagicSparkles} className="h-3.5 w-3.5" />
-          )}
-          AI Summary
-        </button>
+        {sectionChoices.length === 0 && !course && (
+          <p className="border-t border-hairline px-4 py-2.5 text-xs text-amber-700">
+            You don&apos;t manage any sections yet, so there is nothing to report on. Your Dean or
+            Program Chair assigns sections from their Instructors page.
+          </p>
+        )}
       </div>
+
 
       {narrativeOpen && narrativeRequest && (
         <NarrativeModal

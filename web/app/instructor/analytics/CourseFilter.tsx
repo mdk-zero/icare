@@ -79,7 +79,7 @@ export default function CourseFilter({
         aria-expanded={open}
         aria-label={`Course: ${summary}`}
         title={selected ? summary : undefined}
-        className="flex max-w-full items-center gap-2 rounded-lg border border-hairline bg-surface px-3 py-1.5 text-sm text-gray-700 transition-colors hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50 sm:max-w-72"
+        className="flex max-w-full items-center gap-2 rounded-lg border border-hairline bg-surface px-3 py-1.5 text-sm text-gray-700 transition-colors hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50 sm:max-w-56 xl:max-w-72"
       >
         <FontAwesomeIcon icon={faBookMedical} className="h-3.5 w-3.5 shrink-0 text-brand-600" />
         <span className="min-w-0 truncate font-medium">{summary}</span>
