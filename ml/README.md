@@ -15,9 +15,9 @@ running it by hand.
 The two halves form one pipeline. The at-risk models decide **who** needs
 intervention. Knowledge tracing and the recommender decide **what** each
 student practises: BKT estimates mastery of every Taylor's skill, the web
-app's adaptive quiz review spends a retake or practice run on the
-least-mastered skills, and the recommender points to other quizzes on the
-weakest competencies.
+app's review quiz brings back the questions a student got wrong with the
+least-mastered skills first, and the recommender points to other quizzes on
+the weakest competencies.
 
 ## Run
 
@@ -126,18 +126,18 @@ app asks for the stream to show a percentage; the nightly workflow doesn't.
   competencies get a neutral exploration weight). Computed live; registered in `ml_models` for auditability.
 - **Bayesian Knowledge Tracing** (`app/bkt.py`) — one two-state hidden
   Markov model per Taylor's skill, over each student's quiz answers in order
-  (graded attempts and practice runs). EM (Baum-Welch, as in pyBKT) fits
+  (graded attempts and review quizzes). EM (Baum-Welch, as in pyBKT) fits
   P(L0), P(T), P(G), P(S) on every whole-cohort `/recommend/refresh` (nightly,
   or an admin's run; scoped runs leave it alone), with guess and slip
   capped below 0.5 to avoid degenerate fits. Cold start: a skill needs 5
   students and 40 answers for its own fit; below that it takes its chapter's
   pooled fit, then the defaults (0.3 / 0.1 / 0.2 / 0.1), and is refit as
   answers accumulate. The parameters go to `bkt_parameters` (web migration
-  084). The web app's adaptive review (`web/app/lib/bkt.ts`,
+  084). The web app's review quiz (`web/app/lib/bkt.ts`,
   `assessment-selection.ts`) applies the same update rules to the student's
-  answers at the moment it deals a paper. The surplus questions go to the
-  least-mastered skills, and on a practice run the questions last answered
-  wrong come first. The portal shows the same estimates (`web/app/lib/skill-mastery.ts`):
+  answers at the moment it deals a paper. It holds only the questions last
+  answered wrong, grouped by skill with the least mastered first; graded tries
+  don't adapt. The portal shows the same estimates (`web/app/lib/skill-mastery.ts`):
   per student on their profile, per skill on Analytics, and the benchmark and
   live fit on System Tests.
 
