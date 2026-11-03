@@ -618,11 +618,14 @@ export interface FocusSkill {
   evidence: SkillEvidence[];
   /** Published quizzes covering the skill; show the ones in the student's own quiz list. */
   quiz_ids: string[];
+  /** BKT's P(the student knows the skill), 0-1. Absent from a server or cached read from before it was sent. */
+  mastery?: number;
 }
 
 /**
- * The skills whose latest graded result needs improvement: a quiz under 75% on
- * the skill's questions, or a checklist rated Needs Practice.
+ * The skills Bayesian Knowledge Tracing says the student hasn't mastered yet,
+ * least mastered first, from their quiz answers and Patient Case / Return
+ * Demonstration checklist ratings.
  */
 export async function fetchSkillFocus(): Promise<CachedResult<FocusSkill[]>> {
   const result = await cachedGet<{ skills: FocusSkill[] }>('/api/student/library/focus');

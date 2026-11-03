@@ -23,6 +23,9 @@ function resultLine(e: SkillEvidence): string {
   if (e.kind === 'quiz') {
     return `  Quiz "${e.title}": ${Math.round(e.score ?? 0)}% on this skill's ${e.total} question(s)`;
   }
+  if (e.needs_practice.length === 0) {
+    return `  ${SCENARIO_KIND_NOUN[e.kind]} "${e.title}": every step rated Satisfactory or better`;
+  }
   const steps = e.needs_practice.slice(0, MAX_STEPS_PER_RESULT).map((s) => `"${s}"`).join('; ');
   return `  ${SCENARIO_KIND_NOUN[e.kind]} "${e.title}": rated Needs Practice on ${steps}`;
 }
@@ -30,7 +33,7 @@ function resultLine(e: SkillEvidence): string {
 export function buildSkillTipsPrompt(skills: FocusSkill[], goals: Map<string, string>): string {
   const skillBlock = skills
     .map((s) => {
-      const lines = [`- Skill ${s.skill_id} "${s.title}" (${s.area})`];
+      const lines = [`- Skill ${s.skill_id} "${s.title}" (${s.area}), estimated mastery ${Math.round(s.mastery * 100)}%`];
       const goal = goals.get(s.skill_id);
       if (goal) lines.push(`  Taylor's goal: ${goal.slice(0, 300)}`);
       lines.push(...s.evidence.slice(0, 3).map(resultLine));
@@ -40,7 +43,7 @@ export function buildSkillTipsPrompt(skills: FocusSkill[], goals: Map<string, st
 
   return `You are a clinical instructor coaching one nursing student on the Taylor's skills their recent results show they need to improve. Base every tip on the skills and results below. Never invent a skill, a step, a quiz, a patient case, or a score that is not listed.
 
-Skills this student needs to improve, most recently flagged first:
+Skills this student needs to improve, least mastered first (mastery is Bayesian Knowledge Tracing's estimate over their quizzes, Patient Cases and Return Demonstrations; results newest first):
 
 ${skillBlock}
 

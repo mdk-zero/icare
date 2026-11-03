@@ -3,22 +3,25 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { listSkills, skillIdFromTitle, isMissingSkillColumn } from './taylor-skills';
 import { fetchStepRatings, fetchTaskCompletions, fetchTaskSteps } from './scenario-tasks';
 import { scenarioKinds, kindOf, type ScenarioKind } from './scenario-kind';
+import { MASTERY_THRESHOLD, type SkillMastery } from './bkt';
+import { loadSkillMastery } from './skill-mastery';
 
 /**
  * The Taylor's skills a student needs to improve on, for the "Needs
- * improvement" section of the mobile Library and the AI study tips grounded
- * in it.
+ * improvement" section of the mobile Library (with that skill's Library
+ * materials) and the AI study tips grounded in it.
  *
- * Every graded activity reaches a skill: a quiz through its criteria
- * (`assessment_criteria.skill_id`), a Patient Case or Return Demonstration
- * through its checklist tasks (`scenario_tasks.skill_id`). A result on a skill
- * needs improvement when
- *   - a quiz scored under QUIZ_NEEDS_IMPROVEMENT_BELOW on that skill's
- *     questions (graded attempts only; practice runs past the limit never
- *     count), or
- *   - a released checklist rated a task or step on it Needs Practice.
- * Only the latest result on a skill decides: a later quiz at or above the
- * cutoff, or a later checklist with nothing at Needs Practice, clears it.
+ * Bayesian Knowledge Tracing decides: the student's mastery of each skill, from
+ * their quiz answers and finished Patient Case and Return Demonstration
+ * ratings (skill-mastery.ts, the estimate Progress shows and the ML service
+ * fits on). A skill below MASTERY_THRESHOLD is listed, the least mastered
+ * first. Case Presentations have no checklist and are not skills laboratory
+ * work, so they never count.
+ *
+ * The results shown under each skill come from every graded activity on it: a
+ * quiz through its criteria (`assessment_criteria.skill_id`), a Patient Case
+ * or Return Demonstration through its checklist tasks
+ * (`scenario_tasks.skill_id`).
  */
 
 /** The quiz passing mark: a skill scored under it needs improvement. */
@@ -50,6 +53,8 @@ export interface FocusSkill {
   evidence: SkillEvidence[];
   /** Published quizzes with a criterion on this skill; the app shows the ones the student can open. */
   quiz_ids: string[];
+  /** BKT's P(the student knows the skill), 0-1. */
+  mastery: number;
 }
 
 // ---------------------------------------------------------------
@@ -57,25 +62,21 @@ export interface FocusSkill {
 // ---------------------------------------------------------------
 
 /**
- * Which skills need improvement, from every result on every skill. A skill is
- * kept when its latest result is weak, with the weak results since its last
- * good one. Newest-flagged skills first.
+ * Which skills need improvement: those BKT puts under MASTERY_THRESHOLD, the
+ * least mastered first, each with its results newest first.
  */
-export function judgeSkills(evidenceBySkill: ReadonlyMap<string, readonly SkillEvidence[]>): {
-  skillId: string;
-  evidence: SkillEvidence[];
-}[] {
-  const out: { skillId: string; evidence: SkillEvidence[] }[] = [];
-  for (const [skillId, all] of evidenceBySkill) {
-    const newestFirst = [...all].sort((a, b) => b.at.localeCompare(a.at));
-    const flagging: SkillEvidence[] = [];
-    for (const e of newestFirst) {
-      if (!e.weak) break;
-      flagging.push(e);
-    }
-    if (flagging.length > 0) out.push({ skillId, evidence: flagging });
-  }
-  return out.sort((a, b) => b.evidence[0].at.localeCompare(a.evidence[0].at));
+export function rankByMastery(
+  mastery: readonly Pick<SkillMastery, 'skill_id' | 'mastery'>[],
+  evidenceBySkill: ReadonlyMap<string, readonly SkillEvidence[]>,
+): { skillId: string; mastery: number; evidence: SkillEvidence[] }[] {
+  return mastery
+    .filter((m) => m.mastery < MASTERY_THRESHOLD)
+    .map((m) => ({
+      skillId: m.skill_id,
+      mastery: m.mastery,
+      evidence: [...(evidenceBySkill.get(m.skill_id) ?? [])].sort((a, b) => b.at.localeCompare(a.at)),
+    }))
+    .sort((a, b) => a.mastery - b.mastery || a.skillId.localeCompare(b.skillId, undefined, { numeric: true }));
 }
 
 /** A quiz criterion's result on one skill. */
@@ -264,11 +265,15 @@ async function checklistResults(supabase: SupabaseClient, studentId: string, int
   }
 }
 
-/** The student's skills that need improvement, newest-flagged first. */
+/** The student's skills that need improvement, least mastered first. */
 export async function loadSkillFocus(supabase: SupabaseClient, studentId: string): Promise<FocusSkill[]> {
   const evidence = new Map<string, SkillEvidence[]>();
-  await Promise.all([quizResults(supabase, studentId, evidence), checklistResults(supabase, studentId, evidence)]);
-  const judged = judgeSkills(evidence);
+  const [, , mastery] = await Promise.all([
+    quizResults(supabase, studentId, evidence),
+    checklistResults(supabase, studentId, evidence),
+    loadSkillMastery(supabase, [studentId]),
+  ]);
+  const judged = rankByMastery(mastery.get(studentId) ?? [], evidence);
   if (judged.length === 0) return [];
 
   const weakIds = judged.map((j) => j.skillId);
@@ -289,7 +294,7 @@ export async function loadSkillFocus(supabase: SupabaseClient, studentId: string
   }
   const skillById = new Map(skills.map((s) => [s.id, s]));
 
-  return judged.flatMap(({ skillId, evidence: flagging }) => {
+  return judged.flatMap(({ skillId, mastery, evidence: results }) => {
     const skill = skillById.get(skillId);
     if (!skill) return [];
     return [
@@ -298,8 +303,9 @@ export async function loadSkillFocus(supabase: SupabaseClient, studentId: string
         title: skill.title,
         chapter: skill.chapter,
         area: skill.area,
-        evidence: flagging,
+        evidence: results,
         quiz_ids: [...(quizzesBySkill.get(skillId) ?? [])],
+        mastery: Math.round(mastery * 1000) / 1000,
       },
     ];
   });
