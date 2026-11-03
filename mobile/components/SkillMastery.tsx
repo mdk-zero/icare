@@ -32,10 +32,10 @@ function masteryPercent(value: number): number {
 function sourceNote(skills: SkillMastery[]): string {
   const count = (source: SkillMastery['source']) => skills.filter((s) => s.source === source).length;
   const [fitted, chapter, cold] = [count('fitted'), count('chapter'), count('default')];
-  const fit = `A skill gets its own fit at ${MIN_FIT_STUDENTS} students and ${MIN_FIT_ANSWERS} answers.`;
+  const fit = `A skill gets its own fit at ${MIN_FIT_STUDENTS} students and ${MIN_FIT_ANSWERS} results.`;
   if (cold === skills.length) return `Rough estimates for now: every skill here is on the starting parameters. ${fit}`;
   const parts = [
-    fitted > 0 && `${fitted} ${fitted === 1 ? 'skill' : 'skills'} fitted on ${fitted === 1 ? 'its' : 'their'} own answers`,
+    fitted > 0 && `${fitted} ${fitted === 1 ? 'skill' : 'skills'} fitted on ${fitted === 1 ? 'its' : 'their'} own results`,
     chapter > 0 && `${chapter} on a chapter's fit`,
     cold > 0 && `${cold} on the starting parameters`,
   ].filter(Boolean);
@@ -88,7 +88,7 @@ export function SkillMasterySection({
             {shown.map((skill, index) => {
               const pct = masteryPercent(skill.mastery);
               const mastered = skill.mastery >= MASTERY_THRESHOLD;
-              const detail = `${skill.correct} of ${skill.answers} ${skill.answers === 1 ? 'answer' : 'answers'} right`;
+              const detail = `${skill.correct} of ${skill.answers} ${skill.answers === 1 ? 'result' : 'results'} good`;
               return (
                 <View
                   key={skill.skill_id}

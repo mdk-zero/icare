@@ -630,7 +630,7 @@ export async function fetchSkillFocus(): Promise<CachedResult<FocusSkill[]>> {
 }
 
 // ---------------------------------------------------------------
-// Skill mastery (Bayesian Knowledge Tracing over quiz answers)
+// Skill mastery (Bayesian Knowledge Tracing over quiz answers and checklist ratings)
 // ---------------------------------------------------------------
 
 export interface SkillMastery {
@@ -638,7 +638,9 @@ export interface SkillMastery {
   title: string;
   /** The chance the student knows the skill after their last answer, 0 to 1. */
   mastery: number;
+  /** Quiz answers and rated Patient Case or Return Demonstration tasks on the skill. */
   answers: number;
+  /** Of those, the right answers and the Excellent or Satisfactory ratings. */
   correct: number;
   /** Where the skill's parameters came from: its own fit, its chapter's, or the cold start. */
   source: 'fitted' | 'chapter' | 'default';
