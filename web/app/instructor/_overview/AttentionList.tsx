@@ -14,13 +14,14 @@ import Avatar from "../../components/Avatar";
 import { CardLabel } from "../../components/Card";
 import type { FacultyOverview } from "../../lib/api";
 import { daysSince, plural } from "./format";
+import { ATTENTION_SHOWN } from "./layout";
+import SlackNote from "./SlackNote";
 
 type Student = FacultyOverview["attention"][number];
 
 /** Kept in step with the server's thresholds in lib/faculty-dashboard.ts. */
 const LOW_AVERAGE = 60;
 const QUIET_DAYS = 7;
-const SHOWN = 6;
 
 interface Reason {
   icon: IconDefinition;
@@ -91,8 +92,9 @@ export default function AttentionList({
   total: number;
   roster: number;
 }) {
-  const shown = students.slice(0, SHOWN);
+  const shown = students.slice(0, ATTENTION_SHOWN);
   const more = total - shown.length;
+  const onTrack = roster - total;
 
   return (
     <section className="flex h-full flex-col overflow-hidden rounded-xl border border-hairline bg-surface shadow-tile">
@@ -123,14 +125,15 @@ export default function AttentionList({
           </p>
         </div>
       ) : (
-        <ol className="flex-1 divide-y divide-hairline">
+        <ol className="flex flex-1 flex-col divide-y divide-hairline">
           {shown.map((student, i) => {
             const why = reasons(student);
             return (
-              <li key={student.id}>
+              // The on-track note takes up spare height; without one, the rows share it.
+              <li key={student.id} className={`flex flex-col ${onTrack > 0 ? "" : "flex-1"}`}>
                 <Link
                   href={`/instructor/students/${student.id}`}
-                  className="group relative flex items-center gap-3 py-3 pl-5 pr-4 transition-colors hover:bg-subtle focus-visible:bg-subtle focus-visible:outline-none"
+                  className="group relative flex flex-1 items-center gap-3 py-3 pl-5 pr-4 transition-colors hover:bg-subtle focus-visible:bg-subtle focus-visible:outline-none"
                 >
                   <span
                     aria-hidden
@@ -174,10 +177,12 @@ export default function AttentionList({
               </li>
             );
           })}
-          {roster - total > 0 && (
-            <li className="flex items-center gap-2.5 px-5 py-3.5 text-[13px] text-slate-500">
-              <FontAwesomeIcon icon={faCircleCheck} className="h-3.5 w-3.5 text-emerald-500" />
-              {roster - total === 1 ? "The other student is on track." : `The other ${roster - total} students are on track.`}
+          {onTrack > 0 && (
+            <li className="min-h-12 flex-1 [container-type:size]">
+              <SlackNote
+                title={onTrack === 1 ? "The other student is on track" : `The other ${onTrack} students are on track`}
+                detail={`${onTrack === 1 ? "They aren't" : "None of them are"} low performing, behind on work, or gone quiet.`}
+              />
             </li>
           )}
         </ol>

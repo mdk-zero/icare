@@ -27,7 +27,8 @@ import PageHeader from "../components/PageHeader";
 import StatTile from "../components/StatTile";
 import { CardLabel } from "../components/Card";
 import AttentionList from "./_overview/AttentionList";
-import WaitingCard from "./_overview/WaitingCard";
+import WaitingCard, { ComingUpCard } from "./_overview/WaitingCard";
+import { comingUpGoesBelow } from "./_overview/layout";
 import SectionMonitor from "./_overview/SectionMonitor";
 import AlertFeed from "./_overview/AlertFeed";
 import ActivityFeed from "./_overview/ActivityFeed";
@@ -102,6 +103,7 @@ export default function FacultyDashboard() {
   const atRisk = stats?.at_risk_students ?? 0;
   const review = stats?.awaiting_review ?? 0;
   const overdue = stats?.overdue_assignments ?? 0;
+  const comingUpBelow = comingUpGoesBelow(overview, total);
 
   // One scale for every monitor, so equal heights mean equal scores.
   const observed = overview.sections
@@ -184,9 +186,17 @@ export default function FacultyDashboard() {
               roster={total}
             />
           </div>
-          <div className="animate-rise flex flex-col gap-4" style={rise(2)}>
-            <WaitingCard review={overview.review_queue} dueSoon={overview.due_soon} />
+          <div className="animate-rise" style={rise(2)}>
+            <WaitingCard
+              review={overview.review_queue}
+              dueSoon={comingUpBelow ? undefined : overview.due_soon}
+            />
           </div>
+          {comingUpBelow && (
+            <div className="animate-rise lg:col-span-3" style={rise(3)}>
+              <ComingUpCard items={overview.due_soon} />
+            </div>
+          )}
         </div>
 
         {overview.sections.length > 0 && (

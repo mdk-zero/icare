@@ -7,6 +7,14 @@
  */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * For a block that fills whatever height is left: its ancestor sets
+ * `[container-type:size]`, and these switch on when there's room for a line, or
+ * for a full message. Height queries, so no JS has to measure anything.
+ */
+@custom-variant fits-line (@container (min-height: 2.75rem));
+@custom-variant roomy (@container (min-height: 8.75rem));
+
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
