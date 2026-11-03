@@ -627,6 +627,35 @@ export async function fetchSkillFocus(): Promise<CachedResult<FocusSkill[]>> {
 }
 
 // ---------------------------------------------------------------
+// Skill mastery (Bayesian Knowledge Tracing over quiz answers)
+// ---------------------------------------------------------------
+
+export interface SkillMastery {
+  skill_id: string;
+  title: string;
+  /** The chance the student knows the skill after their last answer, 0 to 1. */
+  mastery: number;
+  answers: number;
+  correct: number;
+  /** Where the skill's parameters came from: its own fit, its chapter's, or the cold start. */
+  source: 'fitted' | 'chapter' | 'default';
+}
+
+/** The signed-in student's own estimates, weakest first. */
+export async function fetchMySkillMastery(): Promise<CachedResult<SkillMastery[]>> {
+  const result = await cachedGet<{ skills: SkillMastery[] }>('/api/student/skill-mastery');
+  return { ...result, data: result.data.skills ?? [] };
+}
+
+/** A student's estimates for their instructor, weakest first. */
+export async function fetchStudentSkillMastery(studentId: string): Promise<CachedResult<SkillMastery[]>> {
+  const result = await cachedGet<{ skills: SkillMastery[] }>(
+    `/api/analytics/skill-mastery?student_id=${encodeURIComponent(studentId)}`,
+  );
+  return { ...result, data: result.data.skills ?? [] };
+}
+
+// ---------------------------------------------------------------
 // Progress
 // ---------------------------------------------------------------
 

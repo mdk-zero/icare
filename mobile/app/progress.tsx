@@ -5,7 +5,8 @@ import { Card, StatCard, SectionHeader, SkeletonBlock } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useApiData } from '@/hooks/useApiData';
-import { fetchProgress, type ProgressAttempt } from '@/lib/api';
+import { SkillMasterySection } from '@/components/SkillMastery';
+import { fetchMySkillMastery, fetchProgress, type ProgressAttempt } from '@/lib/api';
 
 interface QuizGroup {
   key: string;
@@ -115,6 +116,12 @@ function QuizHistoryRow({
 
 export default function ProgressScreen() {
   const { data, loading, refreshing, error, refresh } = useApiData(fetchProgress);
+  const mastery = useApiData(fetchMySkillMastery);
+  const refreshMastery = mastery.refresh;
+  const onRefresh = React.useCallback(() => {
+    refresh();
+    refreshMastery();
+  }, [refresh, refreshMastery]);
   const { Palette, Accent } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette), [Palette]);
   const scoreColor = React.useMemo(() => makeScoreColor(Accent), [Accent]);
@@ -151,7 +158,7 @@ export default function ProgressScreen() {
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Palette.primary]} tintColor={Palette.primary} />
       }
     >
       <View style={styles.statsGrid}>
@@ -205,6 +212,15 @@ export default function ProgressScreen() {
           ))}
         </Card>
       </View>
+
+      <SkillMasterySection
+        skills={mastery.data}
+        loading={mastery.loading}
+        error={mastery.error}
+        intro="Bayesian Knowledge Tracing: how likely it is that you know each skill, updated after every quiz answer. Weakest first. Retakes and practice runs give these skills more questions."
+        empty="No estimates yet. They start with your first quiz answer on a skill."
+        style={styles.section}
+      />
 
       <View style={styles.section}>
         <SectionHeader title="Quiz History" count={quizzes.length || undefined} />

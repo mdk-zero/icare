@@ -6,15 +6,17 @@ import { useTheme } from "@/hooks/useTheme";
 import { useApiData } from "@/hooks/useApiData";
 import { EmptyState, SkeletonBlock, SyncStatus } from "@/components/ui";
 import { StatusDot, useRequirementTicks } from "@/components/RequirementTicks";
-import { fetchStudentRequirements, type ItemProgress } from "@/lib/api";
+import { SkillMasterySection } from "@/components/SkillMastery";
+import { fetchStudentRequirements, fetchStudentSkillMastery, type ItemProgress } from "@/lib/api";
 import { TERM_STATUS_LABEL, canAct, statusText } from "@/lib/courses";
 
-/** One student's requirements in each of the instructor's courses, with ticking. */
+/** One student's requirements in each of the instructor's courses, with ticking, and their skill mastery. */
 export default function StudentRequirementsScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name?: string }>();
   const { Palette, Accent, Shadow, Type } = useTheme();
   const styles = useMemo(() => createStyles(Palette, Shadow), [Palette, Shadow]);
   const { data, loading, refreshing, error, refresh, reload } = useApiData(() => fetchStudentRequirements(id));
+  const mastery = useApiData(() => fetchStudentSkillMastery(id));
   const [overrides, setOverrides] = useState<Record<string, ItemProgress>>({});
   const studentName = name ?? "Student";
 
@@ -25,6 +27,7 @@ export default function StudentRequirementsScreen() {
   const onRefresh = () => {
     setOverrides({});
     refresh();
+    mastery.refresh();
   };
 
   return (
@@ -126,6 +129,13 @@ export default function StudentRequirementsScreen() {
             );
           })
         )}
+        <SkillMasterySection
+          skills={mastery.data}
+          loading={mastery.loading}
+          error={mastery.error}
+          intro="Bayesian Knowledge Tracing: the chance this student knows each skill, updated after every quiz answer. Weakest first. Retakes and practice runs give these skills more questions."
+          empty="No estimates yet. They start with this student's first quiz answer on a skill."
+        />
       </ScrollView>
       {sheet}
     </>
