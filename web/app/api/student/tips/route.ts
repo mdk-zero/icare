@@ -4,13 +4,17 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
 import { focusFingerprint, loadSkillFocus } from '@/app/lib/skill-focus';
 import { buildSkillTipsPrompt, sanitizeSkillTips } from '@/app/lib/skill-tips';
+import { loadSkillMastery } from '@/app/lib/skill-mastery';
+import { loadStudyProfile } from '@/app/lib/study-profile';
+import { visibleMaterialsForSkills } from '@/app/lib/library';
 import { getSkills } from '@/app/lib/taylor-skills';
 
 /**
- * Short AI study tips for the skills a student needs to improve on, shown in
- * the "Needs improvement" section of the mobile Library: one tip per skill,
- * grounded in the quiz scores and the Needs Practice ratings that flag it
- * (skill-focus.ts) and in Taylor's own goal for the skill.
+ * Short AI study tips for the mobile Library: an overall tip on what to study
+ * first (study-profile.ts), then one per skill that needs improvement
+ * (skill-focus.ts), pointing the student to that skill's Library materials,
+ * or failing those to Taylor's own goal for the skill. General: a tip never
+ * says which quiz, Patient Case or Return Demonstration showed the weakness.
  *
  * The Library reads this on every visit, so the result is cached in
  * student_ai_tips (migration 025) against a fingerprint of the focus list. A
@@ -27,7 +31,7 @@ import { getSkills } from '@/app/lib/taylor-skills';
 export const maxDuration = 30;
 
 const TTL_HOURS = 12;
-/** One tip per skill, for the most recently flagged ones. */
+/** One tip per skill, for the least mastered ones; the overall tip comes on top. */
 const MAX_TIPS = 4;
 
 export async function GET() {
@@ -44,7 +48,12 @@ export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
 
-    const skills = (await loadSkillFocus(supabase, session.uid)).slice(0, MAX_TIPS);
+    const mastery = (await loadSkillMastery(supabase, [session.uid])).get(session.uid) ?? [];
+    const [focus, overall] = await Promise.all([
+      loadSkillFocus(supabase, session.uid, mastery),
+      loadStudyProfile(supabase, mastery),
+    ]);
+    const skills = focus.slice(0, MAX_TIPS);
 
     // Nothing needs improvement: an AI call would only paraphrase "well done",
     // so answer directly rather than spending a request on it.
@@ -52,7 +61,10 @@ export async function GET() {
       return NextResponse.json({ tips: [], generated_at: null });
     }
 
-    const fingerprint = focusFingerprint(skills);
+    const materials = await visibleMaterialsForSkills(supabase, session, skills.map((s) => s.skill_id));
+    // The overall standing and the materials too, so tips are rewritten when
+    // either moves: a newly published material is worth pointing to.
+    const fingerprint = focusFingerprint(skills, overall, materials.map((m) => m.id));
     const { data: cacheRow } = await supabase
       .from('student_ai_tips')
       .select('tips, fingerprint, generated_at')
@@ -73,8 +85,8 @@ export async function GET() {
     );
     const goals = new Map(details.map((d) => [d.id, d.goal]));
 
-    const generated = await callAI(buildSkillTipsPrompt(skills, goals));
-    const tips = sanitizeSkillTips(generated, new Set(skills.map((s) => s.skill_id)), MAX_TIPS);
+    const generated = await callAI(buildSkillTipsPrompt(skills, goals, overall, materials));
+    const tips = sanitizeSkillTips(generated, new Set(skills.map((s) => s.skill_id)), MAX_TIPS + 1);
 
     if (tips.length === 0) {
       throw new Error('AI returned no usable tips');

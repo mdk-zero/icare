@@ -80,9 +80,10 @@ export async function assessmentPublishBlockers(
   if (Math.round(weightTotal * 100) / 100 !== REQUIRED_WEIGHT_TOTAL) {
     blockers.push({
       code: 'weights',
+      // Weights follow the questions (089), so this only shows before 089 is applied.
       message: `Criteria weights must total ${REQUIRED_WEIGHT_TOTAL}% (currently ${
         Math.round(weightTotal * 100) / 100
-      }%).`,
+      }%). They are worked out from the questions once migration 089 is applied.`,
     });
   }
 

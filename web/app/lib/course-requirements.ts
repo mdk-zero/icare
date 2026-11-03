@@ -343,6 +343,56 @@ export interface OfferingProgress {
 }
 
 /** One offering's checklist, judged for every student on its roster, or just `onlyStudentId`. */
+/**
+ * Who each activity item's activity is given to: requirement id -> the
+ * students assigned it (a Patient Case or Return Demonstration assignment, a
+ * Quiz assignment, a Case Presentation to write). Only activity items linked
+ * to an activity are in the map; anything else applies to everyone.
+ */
+async function loadActivityAssignees(
+  supabase: Supabase,
+  requirements: readonly RequirementRow[],
+  studentIds: string[],
+): Promise<Map<string, Set<string>>> {
+  const linked = requirements.filter(
+    (r) => r.kind === 'activity' && (r.scenario_id || r.assessment_id || r.presentation_id),
+  );
+  const out = new Map<string, Set<string>>();
+  if (linked.length === 0 || studentIds.length === 0) return out;
+
+  const ids = (key: 'scenario_id' | 'assessment_id' | 'presentation_id') =>
+    [...new Set(linked.map((r) => r[key]).filter((v): v is string => !!v))];
+  const read = async (table: string, column: string, activityIds: string[]) => {
+    if (activityIds.length === 0) return [] as Record<string, string>[];
+    return chunked(studentIds, async (part) => {
+      const res = await supabase.from(table).select(`student_id, ${column}`).in(column, activityIds).in('student_id', part);
+      if (res.error) {
+        // Before 056 there are no case presentations to be given.
+        if (table === 'case_submissions' && isMissingCaseTables(res.error)) return [];
+        throw res.error;
+      }
+      return (res.data ?? []) as unknown as Record<string, string>[];
+    });
+  };
+  const [cases, quizzes, presentations] = await Promise.all([
+    read('scenario_assignments', 'scenario_id', ids('scenario_id')),
+    read('assessment_assignments', 'assessment_id', ids('assessment_id')),
+    read('case_submissions', 'presentation_id', ids('presentation_id')),
+  ]);
+  const given = new Map<string, Set<string>>();
+  for (const [rows, column] of [[cases, 'scenario_id'], [quizzes, 'assessment_id'], [presentations, 'presentation_id']] as const) {
+    for (const row of rows) {
+      const set = given.get(row[column]) ?? new Set<string>();
+      set.add(row.student_id);
+      given.set(row[column], set);
+    }
+  }
+  for (const r of linked) {
+    out.set(r.id, given.get((r.scenario_id ?? r.assessment_id ?? r.presentation_id) as string) ?? new Set());
+  }
+  return out;
+}
+
 export async function loadOfferingProgress(
   supabase: Supabase,
   offering: OwnOffering,
@@ -356,8 +406,18 @@ export async function loadOfferingProgress(
   const roster = rosters.get(offering.id) ?? { students: [], sectionsWithoutGroup: [] };
   const students = onlyStudentId ? roster.students.filter((s) => s.id === onlyStudentId) : roster.students;
   const ids = students.map((s) => s.id);
-  const facts = await loadProgressFacts(supabase, requirements, offering.term, ids);
+  const [facts, assignees] = await Promise.all([
+    loadProgressFacts(supabase, requirements, offering.term, ids),
+    loadActivityAssignees(supabase, requirements, ids),
+  ]);
   const progress = evaluate(requirements, skills.get(offering.course.id) ?? [], offering.term, ids, facts);
+  // An activity a student was never given is N/A for them, not a missing grade.
+  for (const [requirementId, given] of assignees) {
+    for (const id of ids) {
+      const item = progress[id]?.[requirementId];
+      if (item) item.assigned = given.has(id);
+    }
+  }
   const totals = Object.fromEntries(
     requirements.map((r) => [r.id, ids.filter((id) => progress[id]?.[r.id]?.done).length]),
   );

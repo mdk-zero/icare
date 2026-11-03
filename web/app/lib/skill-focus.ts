@@ -126,10 +126,18 @@ export function checklistEvidence(
 }
 
 /** Identifies a focus list for caching what is derived from it (the AI tips). */
-export function focusFingerprint(skills: readonly FocusSkill[]): string {
+export function focusFingerprint(
+  skills: readonly FocusSkill[],
+  overall?: { mastery: number | null; chapters: readonly { chapter: number; mastery: number }[] },
+  materialIds: readonly string[] = [],
+): string {
   const parts = skills.map((s) =>
     [s.skill_id, ...s.evidence.map((e) => `${e.kind}:${e.at}:${e.score ?? e.needs_practice.join('/')}`)].join('|'),
   );
+  if (overall) {
+    parts.push([`overall:${overall.mastery ?? '-'}`, ...overall.chapters.map((c) => `${c.chapter}:${c.mastery}`)].join('|'));
+  }
+  if (materialIds.length) parts.push(`materials:${[...materialIds].sort().join(',')}`);
   return createHash('sha1').update(parts.join('#')).digest('hex');
 }
 
@@ -266,14 +274,19 @@ async function checklistResults(supabase: SupabaseClient, studentId: string, int
 }
 
 /** The student's skills that need improvement, least mastered first. */
-export async function loadSkillFocus(supabase: SupabaseClient, studentId: string): Promise<FocusSkill[]> {
+export async function loadSkillFocus(
+  supabase: SupabaseClient,
+  studentId: string,
+  /** The student's BKT estimates when the caller already has them (loadSkillMastery). */
+  known?: readonly SkillMastery[],
+): Promise<FocusSkill[]> {
   const evidence = new Map<string, SkillEvidence[]>();
   const [, , mastery] = await Promise.all([
     quizResults(supabase, studentId, evidence),
     checklistResults(supabase, studentId, evidence),
-    loadSkillMastery(supabase, [studentId]),
+    known ? Promise.resolve(known) : loadSkillMastery(supabase, [studentId]).then((m) => m.get(studentId) ?? []),
   ]);
-  const judged = rankByMastery(mastery.get(studentId) ?? [], evidence);
+  const judged = rankByMastery(mastery, evidence);
   if (judged.length === 0) return [];
 
   const weakIds = judged.map((j) => j.skillId);

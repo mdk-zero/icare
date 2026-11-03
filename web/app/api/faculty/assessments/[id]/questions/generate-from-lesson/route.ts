@@ -5,6 +5,7 @@ import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
 import { readLessonUpload } from '@/app/lib/ai/lesson';
 import { ACTIVE_SKILL_AREA_IDS } from '@/scripts/taylors-chapters';
 import { guardAssessmentEdit } from '@/app/lib/assessment-access';
+import { PROVISIONAL_CRITERION_WEIGHT } from '@/app/lib/criteria-weights';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -155,12 +156,9 @@ function sanitizeDrafts(
  * competency this assessment doesn't already have one for, and every
  * question is wired straight to it.
  *
- * Weights: an assessment starting from zero criteria gets a clean 100% split
- * across whatever's created here — nothing to disturb. One that already has
- * criteria keeps their weights untouched (rebalancing a faculty member's
- * existing weighting scheme without being asked is not this route's call);
- * new ones land at a modest default and the existing "weights must total
- * 100%" publish check surfaces the rebalance that's now needed.
+ * Weights take care of themselves: each criterion's is its share of the
+ * questions (089), so the new ones and the existing ones are rebalanced as the
+ * generated questions land.
  */
 async function ensureCriteriaForCompetencies(
   supabase: ReturnType<typeof getSupabaseAdmin>,
@@ -173,7 +171,7 @@ async function ensureCriteriaForCompetencies(
 
   const { data: existing, error } = await supabase
     .from('assessment_criteria')
-    .select('id, competency_id, weight, sort_order')
+    .select('id, competency_id, sort_order')
     .eq('assessment_id', assessmentId);
   if (error) {
     console.error('Failed to read existing criteria', error);
@@ -188,21 +186,12 @@ async function ensureCriteriaForCompetencies(
   const toCreate = Array.from(new Set(neededCompetencyIds)).filter((id) => !byCompetency.has(id));
   if (toCreate.length === 0) return byCompetency;
 
-  const startingFromZero = existingCriteria.length === 0;
-  const evenWeight = Math.floor(100 / toCreate.length);
-  const weightFor = (index: number) =>
-    startingFromZero
-      ? index === toCreate.length - 1
-        ? 100 - evenWeight * (toCreate.length - 1) // last one absorbs the rounding remainder
-        : evenWeight
-      : 10;
-
   const maxSortOrder = existingCriteria.reduce((max, c) => Math.max(max, c.sort_order ?? 0), -1);
 
   const rows = toCreate.map((competencyId, index) => ({
     assessment_id: assessmentId,
     name: competencyNameById.get(competencyId) ?? 'Generated criterion',
-    weight: weightFor(index),
+    weight: PROVISIONAL_CRITERION_WEIGHT,
     competency_id: competencyId,
     sort_order: maxSortOrder + 1 + index,
     min_questions: 1,

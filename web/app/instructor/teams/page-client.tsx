@@ -327,8 +327,7 @@ export default function TeamsClient() {
     }
     const scored = Number(predictions.result?.scored ?? 0);
     const atRisk = Number(predictions.result?.at_risk ?? 0);
-    const recs = Number(recommendations.result?.recommendations ?? 0);
-    toast(`Scored ${scored} of your students (${atRisk} low performing) and wrote ${plural(recs, "recommendation")}.`, "success", ML_TOAST_MS);
+    toast(`Scored ${scored} of your students (${atRisk} low performing).`, "success", ML_TOAST_MS);
     setMlRun(null);
     await refreshRoster();
   };
@@ -356,7 +355,7 @@ export default function TeamsClient() {
           disabled: runningMl || allStudents.length === 0,
           label: mlRun
             ? mlRunLabel(mlRun)
-            : "Run ML Jobs — score your students for risk and refresh their quiz recommendations",
+            : "Run ML Jobs — score your students for risk",
           below: mlRun && <MlRunProgress run={mlRun} />,
         }}
       />

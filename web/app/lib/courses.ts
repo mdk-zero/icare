@@ -880,15 +880,61 @@ export async function loadRequirementNames(supabase: Supabase, requirements: Req
   return { scenarios, quizzes, presentations, skills: Object.fromEntries(skills.map((s) => [s.id, s.title])) };
 }
 
+/**
+ * Each linked activity's number in its course, the way its own list page
+ * numbers it (numberWithinCourse: the course's activities of that kind, oldest
+ * first): activity id -> number. Patient Cases and Return Demonstrations are
+ * numbered apart, as their pages list them apart.
+ */
+async function loadActivityNumbers(supabase: Supabase, requirements: RequirementRow[]): Promise<Map<string, number>> {
+  const numbers = new Map<string, number>();
+  const offerings = [...new Set(requirements.filter((r) => r.scenario_id || r.assessment_id || r.presentation_id).map((r) => r.offering_id))];
+  if (offerings.length === 0) return numbers;
+  type Row = { id: string; offering_id: string; created_at: string; kind?: string | null };
+  const read = async (table: string, columns: string): Promise<Row[]> => {
+    const res = await supabase.from(table).select(columns).in('offering_id', offerings);
+    if (res.error) {
+      // Before 072 scenarios have no kind (all Patient Cases); before 056 no case presentations.
+      if (table === 'scenarios' && columns.includes('kind')) return read(table, 'id, offering_id, created_at');
+      if (table === 'case_presentations') return [];
+      throw res.error;
+    }
+    return (res.data ?? []) as unknown as Row[];
+  };
+  const [quizzes, scenarios, presentations] = await Promise.all([
+    read('assessments', 'id, offering_id, created_at'),
+    read('scenarios', 'id, offering_id, created_at, kind'),
+    read('case_presentations', 'id, offering_id, created_at'),
+  ]);
+  const groups = new Map<string, Row[]>();
+  const add = (family: string, rows: Row[]) => {
+    for (const row of rows) {
+      const key = `${family}:${row.kind === 'return_demo' ? 'demo' : 'case'}:${row.offering_id}`;
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    }
+  };
+  add('quiz', quizzes);
+  add('scenario', scenarios);
+  add('presentation', presentations);
+  for (const rows of groups.values()) {
+    // Same order as numberWithinCourse (course-groups.ts): oldest first, ties by id.
+    [...rows]
+      .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
+      .forEach((row, i) => numbers.set(row.id, i + 1));
+  }
+  return numbers;
+}
+
 /** Requirements with the text the checklist shows. */
 export async function labelRequirements(supabase: Supabase, requirements: RequirementRow[]) {
   // The skills each Return Demonstration (072) is made of, for the Skills tab's coverage.
   const demoIds = requirements.filter((r) => r.activity_type === 'return_demo' && r.scenario_id).map((r) => r.scenario_id as string);
-  const [names, demoTasks] = await Promise.all([
+  const [names, demoTasks, numbers] = await Promise.all([
     loadRequirementNames(supabase, requirements),
     demoIds.length
       ? supabase.from('scenario_tasks').select('scenario_id, skill_id, sort_order').in('scenario_id', demoIds).order('sort_order').then(must)
       : Promise.resolve([]),
+    loadActivityNumbers(supabase, requirements),
   ]);
   const skillsOf = new Map<string, string[]>();
   for (const t of (demoTasks ?? []) as { scenario_id: string; skill_id: string | null }[]) {
@@ -897,7 +943,14 @@ export async function labelRequirements(supabase: Supabase, requirements: Requir
   return requirements.map((r) => ({
     ...r,
     label: requirementLabel(r, names),
+    /** The linked Patient Case's, Return Demonstration's, Quiz's or Case Presentation's own title. */
+    activity_title:
+      (r.scenario_id && names.scenarios[r.scenario_id]) ||
+      (r.assessment_id && names.quizzes[r.assessment_id]) ||
+      (r.presentation_id && names.presentations[r.presentation_id]) ||
+      null,
     removed: isRemovedActivity(r),
+    activity_number: numbers.get((r.scenario_id ?? r.assessment_id ?? r.presentation_id) as string) ?? null,
     skill_ids: r.activity_type === 'return_demo' && r.scenario_id ? skillsOf.get(r.scenario_id) ?? [] : [],
   }));
 }

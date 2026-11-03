@@ -1765,51 +1765,6 @@ export async function fetchAllPredictions(): Promise<RiskPrediction[]> {
   }
 }
 
-export interface LearningRecommendation {
-  id: string;
-  assessment_id: string;
-  rank: number;
-  reason: string;
-  created_at: string;
-  assessments: {
-    id: string;
-    title: string;
-    description: string;
-    category: string;
-  } | null;
-  competency_areas: { name: string } | null;
-}
-
-export async function fetchMyRecommendations(): Promise<LearningRecommendation[]> {
-  try {
-    const res = await apiFetch('/api/student/recommendations', { credentials: 'include' });
-    if (!res.ok) {
-      console.error('fetchMyRecommendations() failed', res.status);
-      return [];
-    }
-    const json = (await res.json()) as { recommendations: LearningRecommendation[] };
-    return json.recommendations ?? [];
-  } catch (err) {
-    console.error('fetchMyRecommendations() failed', err);
-    return [];
-  }
-}
-
-export async function dismissRecommendation(id: string): Promise<boolean> {
-  try {
-    const res = await apiFetch('/api/student/recommendations', {
-      method: 'PATCH',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id }),
-    });
-    return res.ok;
-  } catch (err) {
-    console.error('dismissRecommendation() failed', err);
-    return false;
-  }
-}
-
 /** Fraction of an ML job done, 0 to 1, as the service reports its steps. */
 export type MlProgressHandler = (fraction: number) => void;
 
@@ -4479,6 +4434,10 @@ export interface CourseRequirement extends RequirementRow {
   label: string;
   /** The linked activity was deleted after the item was made. */
   removed: boolean;
+  /** The linked activity's own title; null on items with no activity. */
+  activity_title?: string | null;
+  /** Its number in the course, as its own list page numbers it ("Quiz #5"). */
+  activity_number?: number | null;
   /** A Return Demonstration's skills (072), for the Skills tab; empty on other items. */
   skill_ids?: string[];
 }

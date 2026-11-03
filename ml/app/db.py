@@ -115,3 +115,27 @@ class Db:
                 params.append((column, f"{op}.{value}"))
         response = self._client.delete(f"/{table}", params=params)
         response.raise_for_status()
+
+    # -----------------------------------------------------------------
+    # Storage: retrained model files (web migration 090's ml-models bucket),
+    # which outlive the service's own disk — a free host wipes it on restart.
+    # -----------------------------------------------------------------
+
+    def _storage_url(self, bucket: str, key: str) -> str:
+        settings = get_settings()
+        base = os.environ.get("SUPABASE_STORAGE_URL", f"{settings.supabase_url}/storage/v1")
+        return f"{base}/object/{bucket}/{key}"
+
+    def upload_object(self, bucket: str, key: str, data: bytes, content_type: str = "application/octet-stream") -> None:
+        response = self._client.post(
+            self._storage_url(bucket, key),
+            content=data,
+            headers={"Content-Type": content_type, "x-upsert": "true"},
+            timeout=120.0,
+        )
+        response.raise_for_status()
+
+    def download_object(self, bucket: str, key: str) -> bytes:
+        response = self._client.get(self._storage_url(bucket, key), timeout=120.0)
+        response.raise_for_status()
+        return response.content

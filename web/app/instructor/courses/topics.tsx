@@ -126,13 +126,20 @@ export interface TopicGroup<R> {
 
 /**
  * The checklist as sections, in TOPIC_ORDER, each item with its "Quiz #2"
- * name. Pass the checklist in its saved order: names number each topic in
- * that order.
+ * name. Pass the checklist in its saved order: items with no activity are
+ * numbered in that order. Within a section the items run by number, so
+ * "Quiz #1" comes before "Quiz #2" whatever order they were added in.
  */
-export function groupByTopic<R extends RequirementRow>(requirements: readonly R[]): TopicGroup<R>[] {
+export function groupByTopic<R extends RequirementRow & { activity_number?: number | null }>(
+  requirements: readonly R[],
+): TopicGroup<R>[] {
   const names = requirementNames(requirements);
+  const numberOf = (name: string) => Number(name.slice(name.lastIndexOf("#") + 1)) || 0;
   return TOPIC_ORDER.map((key) => ({
     topic: TOPICS[key],
-    items: requirements.map((requirement, i) => ({ requirement, name: names[i] })).filter(({ requirement }) => topicKey(requirement) === key),
+    items: requirements
+      .map((requirement, i) => ({ requirement, name: names[i] }))
+      .filter(({ requirement }) => topicKey(requirement) === key)
+      .sort((a, b) => numberOf(a.name) - numberOf(b.name)),
   })).filter((g) => g.items.length > 0);
 }

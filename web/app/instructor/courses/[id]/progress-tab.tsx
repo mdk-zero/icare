@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
+  faArrowUpRightFromSquare,
   faCircleInfo,
   faListCheck,
   faMagnifyingGlass,
@@ -16,7 +17,7 @@ import {
 import Avatar from "../../../components/Avatar";
 import { SkeletonProgressGrid } from "../../../components/skeletons";
 import { usePageData } from "../../../lib/use-page-data";
-import { fetchCourseProgress, removeCourseStudent, type CourseProgress } from "../../../lib/api";
+import { fetchCourseProgress, removeCourseStudent, type CourseProgress, type CourseRequirement } from "../../../lib/api";
 import ConfirmModal from "../../../components/ConfirmModal";
 import { toast } from "../../../components/Toast";
 import AddStudentModal from "./add-student-modal";
@@ -24,13 +25,27 @@ import {
   requirementDetail,
   type ItemProgress,
 } from "../../../lib/course-progress";
-import { computeGrades, formatGrade } from "../../../lib/course-grading";
+import { computeGrades, formatGrade, projectGrades } from "../../../lib/course-grading";
 import GradeBreakdown from "./grade-breakdown";
 import StickySectionGrid, { GROUP_ROW_ATTR } from "./sticky-section-grid";
 import { ItemStatus, canAct, statusText, useEntryDialog } from "../progress-ui";
 import { TopicIcon, groupByTopic } from "../topics";
 
 type Filter = "all" | "incomplete" | "complete";
+
+/**
+ * Where an activity item's column leads: a Quiz's results; a Patient Case,
+ * Return Demonstration or Case Presentation in its own list, searched for it
+ * (not its editor). Null on items with no activity.
+ */
+function activityHref(r: CourseRequirement): string | null {
+  if (r.kind !== "activity" || r.removed || !r.activity_title) return null;
+  const q = `?q=${encodeURIComponent(r.activity_title)}`;
+  if (r.assessment_id) return `/instructor/assessments/${r.assessment_id}/results`;
+  if (r.presentation_id) return `/instructor/cases${q}`;
+  if (r.scenario_id) return `/instructor/${r.activity_type === "return_demo" ? "return-demos" : "scenarios"}${q}`;
+  return null;
+}
 
 /**
  * Every student on the course's roster against every checklist item, with
@@ -78,6 +93,11 @@ export default function ProgressTab({
         progress?.requirements ?? [],
         progress?.progress ?? {},
       ),
+    [progress],
+  );
+  // Where each student's grade is heading: a least-squares trend over their scores.
+  const projected = useMemo(
+    () => projectGrades(progress?.grading ?? null, progress?.requirements ?? [], progress?.progress ?? {}),
     [progress],
   );
 
@@ -243,6 +263,9 @@ export default function ProgressTab({
   /** How many of these students completed the item. */
   const doneIn = (list: { id: string }[], requirementId: string) =>
     list.filter((x) => progress.progress[x.id]?.[requirementId]?.done).length;
+  /** How many of them were given it: an activity not assigned to a student is N/A for them. */
+  const givenIn = (list: { id: string }[], requirementId: string) =>
+    list.filter((x) => progress.progress[x.id]?.[requirementId]?.assigned !== false).length;
   const split = progress.grading && !graded.invalid ? progress.grading : null;
   const gradeStudent = split
     ? (progress.students.find((s) => s.id === gradeFocus) ?? null)
@@ -348,6 +371,13 @@ export default function ProgressTab({
               {graded.grades[gradeStudent.id].grade === null
                 ? "no scored work yet"
                 : `${formatGrade(graded.grades[gradeStudent.id].grade!)}${graded.grades[gradeStudent.id].scored_weight < 100 ? " so far" : ""}`}
+              {graded.grades[gradeStudent.id].scored_weight < 100 && projected[gradeStudent.id] != null && (
+                <span className="text-brand-700">
+                  {" "}
+                  · projected {formatGrade(projected[gradeStudent.id]!)} if their trend holds over the work still to be
+                  graded
+                </span>
+              )}
             </p>
             <GradeBreakdown
               split={split}
@@ -505,30 +535,49 @@ export default function ProgressTab({
                             on ? "bg-brand-600/10" : "bg-subtle"
                           } ${divider ? "border-l" : ""}`}
                         >
-                          <button
-                            type="button"
-                            onClick={() => setFocus(on ? null : r.id)}
-                            aria-pressed={on}
-                            title={`${requirementDetail(r)}\n${doneIn(roster, r.id)} of ${roster.length} students in this section completed it.`}
-                            className="group/col -mx-1 block w-[calc(100%+0.5rem)] rounded-lg px-1 py-1 text-left transition-colors hover:bg-brand-600/10"
-                          >
-                            <span
-                              className={`flex items-center gap-1 whitespace-nowrap text-xs font-medium ${
-                                on
-                                  ? "text-brand-800"
-                                  : "text-gray-700 group-hover/col:text-brand-700"
-                              }`}
-                            >
-                              {name}
-                              <FontAwesomeIcon
-                                icon={faCircleInfo}
-                                className={`h-2.5 w-2.5 ${on ? "text-brand-600" : "text-gray-300 group-hover/col:text-brand-600"}`}
-                              />
-                            </span>
-                            <span className="mt-1 block text-[11px] font-semibold text-brand-700">
-                              {doneIn(roster, r.id)}/{roster.length}
-                            </span>
-                          </button>
+                          {(() => {
+                            // An activity's column opens it in its own tab; any other
+                            // column shows what the item asks for above the grid.
+                            const href = activityHref(r);
+                            const title = `${requirementDetail(r)}\n${doneIn(roster, r.id)} of ${givenIn(roster, r.id)} students given it in this section completed it.${
+                              href ? `\nClick to open ${r.assessment_id ? "its results" : "it in its tab"}.` : ""
+                            }`;
+                            const body = (
+                              <>
+                                <span
+                                  className={`flex items-center gap-1 whitespace-nowrap text-xs font-medium ${
+                                    on ? "text-brand-800" : "text-gray-700 group-hover/col:text-brand-700"
+                                  }`}
+                                >
+                                  {name}
+                                  <FontAwesomeIcon
+                                    icon={href ? faArrowUpRightFromSquare : faCircleInfo}
+                                    className={`h-2.5 w-2.5 ${on ? "text-brand-600" : "text-gray-300 group-hover/col:text-brand-600"}`}
+                                  />
+                                </span>
+                                <span className="mt-1 block text-[11px] font-semibold text-brand-700">
+                                  {doneIn(roster, r.id)}/{givenIn(roster, r.id)}
+                                </span>
+                              </>
+                            );
+                            const className =
+                              "group/col -mx-1 block w-[calc(100%+0.5rem)] rounded-lg px-1 py-1 text-left transition-colors hover:bg-brand-600/10";
+                            return href ? (
+                              <Link href={href} title={title} className={className}>
+                                {body}
+                              </Link>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setFocus(on ? null : r.id)}
+                                aria-pressed={on}
+                                title={title}
+                                className={className}
+                              >
+                                {body}
+                              </button>
+                            );
+                          })()}
                         </th>
                       );
                     })}
@@ -657,6 +706,7 @@ export default function ProgressTab({
                         <td className="sticky right-0 z-10 border-b border-l border-hairline bg-surface px-3 py-2.5 group-hover:bg-subtle">
                           <GradeCell
                             grade={graded.grades[s.id]?.grade ?? null}
+                            projected={projected[s.id] ?? null}
                             scoredWeight={
                               graded.grades[s.id]?.scored_weight ?? 0
                             }
@@ -718,24 +768,31 @@ export default function ProgressTab({
 /** A student's weighted grade so far; opens the breakdown above the grid. */
 function GradeCell({
   grade,
+  projected,
   scoredWeight,
   open,
   label,
   onClick,
 }: {
   grade: number | null;
+  /** The projected final grade (projectGrades), shown while work is still to come. */
+  projected: number | null;
   scoredWeight: number;
   open: boolean;
   label: string;
   onClick: () => void;
 }) {
   const soFar = grade !== null && scoredWeight < 100;
+  const showProjection = soFar && projected !== null;
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={open}
-      aria-label={`${label}: grade ${grade === null ? "not yet scored" : `${formatGrade(grade)}${soFar ? " so far" : ""}`}`}
+      aria-label={`${label}: grade ${grade === null ? "not yet scored" : `${formatGrade(grade)}${soFar ? " so far" : ""}`}${
+        showProjection ? `, projected ${formatGrade(projected)}` : ""
+      }`}
+      title={showProjection ? "Projected final grade: the student's trend so far (linear regression), carried over the work still to be graded." : undefined}
       className={`-mx-1.5 block rounded-lg px-1.5 py-0.5 text-left transition-colors hover:bg-brand-600/10 ${open ? "bg-brand-600/10" : ""}`}
     >
       <span
@@ -747,6 +804,9 @@ function GradeCell({
         <span className="block text-[10px] font-medium uppercase tracking-wider text-gray-400">
           so far
         </span>
+      )}
+      {showProjection && (
+        <span className="mt-0.5 block text-[11px] tabular-nums text-brand-700">Projected {formatGrade(projected)}</span>
       )}
     </button>
   );

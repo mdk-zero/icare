@@ -175,7 +175,9 @@ async function* serviceEvents(
 /**
  * Re-score one student once the response has gone out: their at-risk
  * prediction (which notifies their instructors if they newly need
- * intervention), then their quiz recommendations. Called when a student hands
+ * intervention). Their skill mastery needs no call: the web traces it from
+ * their answers on every read, and only the nightly run refits BKT's
+ * parameters, from the whole cohort. Called when a student hands
  * in graded work and when an instructor finalizes a grade, so the ML keeps up
  * without anyone pressing Assess; the nightly run still covers everyone.
  *
@@ -189,8 +191,7 @@ export function refreshStudentInBackground(studentId: string): void {
   if (!serviceUrl || !serviceSecret || !studentId) return;
 
   after(async () => {
-    // In order: the recommender reads the fresh features the prediction used.
-    for (const action of ['predict', 'recommend'] as const) {
+    for (const action of ['predict'] as const) {
       try {
         const response = await fetch(`${serviceUrl.replace(/\/$/, '')}${ACTION_PATH[action]}`, {
           method: 'POST',

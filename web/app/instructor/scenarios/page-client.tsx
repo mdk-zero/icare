@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faRobot,
@@ -88,7 +88,9 @@ const NO_STUDENTS: FacultyStudent[] = [];
 export default function FacultyScenariosClient() {
   const router = useRouter();
 
-  const [searchQuery, setSearchQuery] = useState("");
+  // ?q= opens the list already searched: a column link on a course's Progress tab.
+  const searchParams = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") ?? "");
   // The Taylor's chapter a case's skills come from, and whether it is assigned.
   const [chapterFilter, setChapterFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "to_grade" | "assigned" | "unassigned">("all");
