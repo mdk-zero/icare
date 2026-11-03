@@ -22,7 +22,7 @@ const pillars = [
   },
   {
     title: "For Instructors",
-    text: "Objective scoring and AI-assisted patient case creation, without the grading backlog.",
+    text: "Shared skill checklists, automatically scored quizzes and AI-assisted patient case creation.",
   },
   {
     title: "For Deans & Program Chairs",
@@ -101,7 +101,7 @@ const comparison = [
   {
     dimension: "Scoring",
     traditional: "Competency scoring varies between evaluators, introducing bias.",
-    icare: "Machine learning provides consistent, bias-free scoring across every attempt.",
+    icare: "Every student is rated on the same skill checklists, and quizzes are scored automatically.",
     icon: ICONS.scale,
   },
   {
@@ -175,7 +175,7 @@ const faqs = [
 
 const mission = [
   { title: "Practice like it’s real", text: "Realistic patient cases, not static case studies." },
-  { title: "Score without bias", text: "Consistent evaluation, every student, every time." },
+  { title: "Score by one standard", text: "The same skill checklists, every student, every time." },
   {
     title: "Feedback that arrives in time",
     text: "Insight while it can still change the outcome.",
@@ -1139,7 +1139,7 @@ export default function LandingPage() {
                 </p>
                 <p className="mt-5 max-w-lg leading-relaxed text-white/70">
                   We set out to build something different — a platform that practices the way
-                  clinical work actually happens, scores fairly and consistently, and gives students
+                  clinical work actually happens, holds every student to the same checklists, and gives students
                   the instant, specific feedback they need to genuinely improve before they ever
                   step into a hospital ward.
                 </p>
