@@ -24,7 +24,7 @@ function chunks<T>(xs: readonly T[]): T[][] {
   return out;
 }
 
-async function readAll<T>(
+export async function readAll<T>(
   ids: readonly string[],
   read: (part: string[]) => PromiseLike<{ data: unknown; error: { message: string } | null }>,
 ): Promise<T[]> {
@@ -112,5 +112,88 @@ export async function loadGradedWork(
     add(a.student_id, kindOf(scenarioKind, a.scenario_id), a.score, a.submitted_at ?? a.completed_at);
   }
   for (const s of submissions) add(s.student_id, 'case_presentation', s.score, s.submitted_at ?? s.graded_at ?? s.updated_at);
+  return work;
+}
+
+/** One piece of work a student handed in; its score is null until it is graded. */
+export interface HandedInWork extends Omit<GradedWork, 'score'> {
+  /** The attempt, scenario assignment or case submission. */
+  id: string;
+  score: number | null;
+}
+
+export const isGraded = (w: HandedInWork): w is HandedInWork & GradedWork => w.score !== null;
+
+/**
+ * What these students handed in on these activities (id -> kind) from `from`
+ * through `to` (YYYY-MM-DD, inclusive): the rows of dw.fact_student_work
+ * (migration 085) for just those activities, for a view the warehouse can't
+ * filter down to.
+ */
+export async function loadItemWork(
+  supabase: Supabase,
+  studentIds: readonly string[],
+  items: ReadonlyMap<string, WorkKind>,
+  window: { from: string; to: string },
+): Promise<HandedInWork[]> {
+  const { from, to } = window;
+  if (studentIds.length === 0 || from > to) return [];
+  const students = new Set(studentIds);
+  const itemsOf = (...kinds: WorkKind[]) => [...items].filter(([, kind]) => kinds.includes(kind)).map(([id]) => id);
+
+  const [attempts, assignments, submissions] = await Promise.all([
+    readAll<{ id: string; student_id: string; status: string; score: number | null; submitted_at: string | null; created_at: string }>(
+      itemsOf('quiz'),
+      (part) =>
+        supabase
+          .from('assessment_attempts')
+          .select('id, student_id, status, score, submitted_at, created_at')
+          .in('assessment_id', part),
+    ),
+    readAll<{
+      id: string;
+      student_id: string;
+      scenario_id: string;
+      status: string;
+      score: number | null;
+      submitted_at: string | null;
+      completed_at: string | null;
+    }>(itemsOf('patient_case', 'return_demo'), (part) =>
+      supabase
+        .from('scenario_assignments')
+        .select('id, student_id, scenario_id, status, score, submitted_at, completed_at')
+        .in('scenario_id', part),
+    ),
+    readAll<{
+      id: string;
+      student_id: string;
+      status: string;
+      score: number | null;
+      submitted_at: string | null;
+      graded_at: string | null;
+      updated_at: string;
+    }>(itemsOf('case_presentation'), (part) =>
+      supabase
+        .from('case_submissions')
+        .select('id, student_id, status, score, submitted_at, graded_at, updated_at')
+        .in('presentation_id', part)
+        .in('status', ['submitted', 'graded']),
+    ),
+  ]);
+
+  const work: HandedInWork[] = [];
+  const add = (id: string, student_id: string, kind: WorkKind, score: number | null, graded: boolean, ts: string | null) => {
+    if (!ts || !students.has(student_id)) return;
+    const date = day(ts);
+    if (date < from || date > to) return;
+    work.push({ id, student_id, kind, date, score: graded && score !== null ? Number(score) : null });
+  };
+  for (const a of attempts) add(a.id, a.student_id, 'quiz', a.score, a.status === 'submitted', a.submitted_at ?? a.created_at);
+  for (const a of assignments) {
+    add(a.id, a.student_id, items.get(a.scenario_id) ?? 'patient_case', a.score, a.status === 'completed', a.submitted_at ?? a.completed_at);
+  }
+  for (const s of submissions) {
+    add(s.id, s.student_id, 'case_presentation', s.score, s.status === 'graded', s.submitted_at ?? s.graded_at ?? s.updated_at);
+  }
   return work;
 }

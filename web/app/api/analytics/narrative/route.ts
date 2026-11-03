@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
 import { callAnalytics, resolveSummaryArgs, type SummaryArgs } from '@/app/lib/analytics';
+import { courseArgs, courseFigures, loadCourseScope, type CourseScope } from '@/app/lib/analytics-course';
 import { WORK_KINDS, type WorkKind } from '@/app/lib/work-kinds';
 
 /**
@@ -44,7 +45,7 @@ const BUCKET_NOUN: Record<SummaryArgs['p_bucket'], string> = {
   year: 'year',
 };
 
-function buildPrompt(summary: WarehouseSummary, args: SummaryArgs): string {
+function buildPrompt(summary: WarehouseSummary, args: SummaryArgs, course: CourseScope | null): string {
   const cohort = summary.cohort ?? {};
   const trend = summary.weekly_trend ?? [];
   const competencies = summary.competency_detail ?? [];
@@ -116,7 +117,11 @@ ${kindBlock}`
 
 Scope: ${scope}
 Period: ${period}
-
+${
+  course
+    ? `Course: ${course.offering.course.code} ${course.offering.course.title}, ${course.offering.term.name}. The totals, trend and skill area scores count only this course's own work. The clinical training activity and the low-performance prediction are each student's overall record, not this course alone.\n`
+    : ''
+}
 Cohort totals for the period:
 ${cohortBlock}
 
@@ -168,10 +173,13 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
 
-    const args = await resolveSummaryArgs(request.nextUrl.searchParams, session, supabase);
-    if ('error' in args) {
-      return NextResponse.json({ error: args.error }, { status: 500 });
+    const resolved = await resolveSummaryArgs(request.nextUrl.searchParams, session, supabase);
+    if ('error' in resolved) {
+      return NextResponse.json({ error: resolved.error }, { status: 500 });
     }
+    const course = await loadCourseScope(supabase, session, request.nextUrl.searchParams);
+    if (course === 'not_found') return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+    const args = course ? courseArgs(resolved, course) : resolved;
 
     const { data, error } = await callAnalytics(supabase, 'dw_analytics_summary', { ...args });
     if (error) {
@@ -179,7 +187,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to read analytics' }, { status: 500 });
     }
 
-    const summary = (data ?? {}) as WarehouseSummary;
+    let summary = (data ?? {}) as WarehouseSummary;
+    if (course) summary = { ...summary, ...(await courseFigures(supabase, course, args)).figures };
 
     // Nothing in scope: an AI call would only produce a paraphrase of "no
     // data", so answer directly instead of spending a request on it.
@@ -197,7 +206,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const generated = await callAI(buildPrompt(summary, args));
+    const generated = await callAI(buildPrompt(summary, args, course));
 
     return NextResponse.json({
       narrative: {

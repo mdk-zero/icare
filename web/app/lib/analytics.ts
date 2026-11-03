@@ -122,6 +122,16 @@ export async function resolveSummaryArgs(
   };
 }
 
+/** The start of `date`'s bucket, as the warehouse's date_trunc would put it (weeks start Monday). */
+export function bucketStart(date: string, bucket: AnalyticsBucket): string {
+  if (bucket === 'year') return `${date.slice(0, 4)}-01-01`;
+  if (bucket === 'month') return `${date.slice(0, 7)}-01`;
+  if (bucket === 'day') return date;
+  const d = new Date(`${date}T00:00:00Z`);
+  const back = (d.getUTCDay() + 6) % 7;
+  return new Date(d.getTime() - back * DAY_MS).toISOString().slice(0, 10);
+}
+
 /** Ids per `in` filter — each is a URL-encoded query param, so keep it short. */
 const AVATAR_LOOKUP_CHUNK = 150;
 

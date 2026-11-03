@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft, faTrophy } from "@fortawesome/free-solid-svg-icons";
-import { fetchFacultySections, fetchStudentLeaderboard, Section } from "../../../lib/api";
+import { fetchFacultySections, fetchMyCourses, fetchStudentLeaderboard, Section } from "../../../lib/api";
 import PageHeader from "../../../components/PageHeader";
 import { usePageData } from "../../../lib/use-page-data";
 import { PodiumLeaderboard, PodiumLeaderboardSkeleton } from "../Leaderboard";
@@ -16,8 +16,8 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Every student in scope, ranked — the full list behind the analytics page's
- * top-5 card. The scope arrives in the URL (sections, from, to) from that
- * card's link, so this ranks exactly the students the card was drawn from;
+ * top-5 card. The scope arrives in the URL (course, sections, from, to) from
+ * that card's link, so this ranks exactly the students the card was drawn from;
  * opened bare, it ranks all of the caller's sections over all time. The Dean
  * reuses it from their own analytics page, scoped server-side to their sections.
  */
@@ -29,6 +29,7 @@ export default function LeaderboardClient({
   cacheScope?: string;
 }) {
   const params = useSearchParams();
+  const courseId = params.get("course");
   const sectionParam = params.get("sections") ?? "";
   const sectionIds = useMemo(() => sectionParam.split(",").filter(Boolean), [sectionParam]);
   // The server ignores a malformed date; only a well-formed pair is shown as the range.
@@ -36,20 +37,24 @@ export default function LeaderboardClient({
   const to = DAY.test(params.get("to") ?? "") ? params.get("to")! : undefined;
 
   const { data: sectionsData } = usePageData("faculty:sections", fetchFacultySections);
-  const sections = sectionsData ?? NO_SECTIONS;
+  const { data: coursesData } = usePageData(courseId ? "faculty:courses" : null, fetchMyCourses);
+  const course = coursesData?.data?.offerings.find((o) => o.id === courseId) ?? null;
+  const sections = course?.sections ?? sectionsData ?? NO_SECTIONS;
 
   const loader = useCallback(
-    () => fetchStudentLeaderboard({ sectionIds, from, to }),
-    [sectionIds, from, to],
+    () => fetchStudentLeaderboard({ courseId, sectionIds, from, to }),
+    [courseId, sectionIds, from, to],
   );
   const { data: students, loading, refresh } = usePageData(
-    `${cacheScope}:leaderboard:${[...sectionIds].sort().join(",")}:${from ?? ""}:${to ?? ""}`,
+    `${cacheScope}:leaderboard:${courseId ?? ""}:${[...sectionIds].sort().join(",")}:${from ?? ""}:${to ?? ""}`,
     loader,
   );
 
   const sectionLabel =
     sectionIds.length === 0
-      ? "All your sections"
+      ? courseId
+        ? "All sections"
+        : "All your sections"
       : sectionIds
           .map((id) => sections.find((s) => s.id === id)?.name)
           .filter(Boolean)
@@ -69,13 +74,14 @@ export default function LeaderboardClient({
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Link
-          href={backHref}
+          href={courseId ? `${backHref}?course=${courseId}` : backHref}
           className="inline-flex items-center gap-2 px-3 py-2 bg-surface border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all"
         >
           <FontAwesomeIcon icon={faArrowLeft} className="w-3.5 h-3.5" />
           Back to analytics
         </Link>
         <p className="text-sm text-gray-500">
+          {course && `${course.course.code} ${course.course.title} · `}
           {sectionLabel} · <span className="tabular-nums">{rangeLabel}</span>
         </p>
       </div>

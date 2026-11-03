@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { callAnalytics, resolveSummaryArgs, withStudentAvatars, type SummaryArgs } from '@/app/lib/analytics';
+import { bucketStart, callAnalytics, resolveSummaryArgs, withStudentAvatars, type SummaryArgs } from '@/app/lib/analytics';
+import { courseArgs, courseFigures, loadCourseScope, type CourseScope } from '@/app/lib/analytics-course';
 import { isMissingTeamTables, loadTeams, manageableSectionIds } from '@/app/lib/teams';
 import { viewerDeanId } from '@/app/lib/dean-scope';
-import { loadGradedWork } from '@/app/lib/graded-work';
+import { loadGradedWork, type GradedWork } from '@/app/lib/graded-work';
 import { WORK_KINDS, type WorkKind } from '@/app/lib/work-kinds';
 
 /**
@@ -16,7 +17,9 @@ import { WORK_KINDS, type WorkKind } from '@/app/lib/work-kinds';
  *
  * Query params (all optional): section_ids (csv), from, to — see
  * resolveSummaryArgs, which also confines faculty to their own sections.
- * group_trend=1 also attaches `group_trend` (see readGroupTrend).
+ * offering_id narrows the figures to one of an instructor's courses (see
+ * analytics-course.ts). group_trend=1 also attaches `group_trend` (see
+ * readGroupTrend).
  */
 const STALE_MS = 5 * 60 * 1000; // refresh the warehouse at most every 5 minutes
 
@@ -75,16 +78,6 @@ async function ownRoomUtilization(
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** The start of `date`'s bucket, as the warehouse's date_trunc would put it (weeks start Monday). */
-function bucketStart(date: string, bucket: SummaryArgs['p_bucket']): string {
-  if (bucket === 'year') return `${date.slice(0, 4)}-01-01`;
-  if (bucket === 'month') return `${date.slice(0, 7)}-01`;
-  if (bucket === 'day') return date;
-  const d = new Date(`${date}T00:00:00Z`);
-  const back = (d.getUTCDay() + 6) % 7;
-  return new Date(d.getTime() - back * DAY_MS).toISOString().slice(0, 10);
-}
-
 /**
  * The summary's grade trend split by group, for the performance chart: the
  * same graded work, bucket truncation and window as the warehouse's
@@ -97,12 +90,18 @@ function bucketStart(date: string, bucket: SummaryArgs['p_bucket']): string {
  * chart can give each one a colour that survives the section filter; `points`
  * only covers the sections in scope. Faculty see only the groups they
  * supervise. Null when the groups or the work couldn't be read.
+ *
+ * For one course, the work is the course's own, already read. Its roster can
+ * reach past the instructor's groups (a section it takes whole, a student added
+ * by hand), so those students chart under their section rather than going
+ * missing beside figures that count them.
  */
 async function readGroupTrend(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   session: { role: string; uid: string },
   args: SummaryArgs,
   kinds: readonly WorkKind[],
+  course: { scope: CourseScope; graded: GradedWork[] } | null,
 ) {
   try {
     const sectionIds = await manageableSectionIds(supabase, session.role, session.uid);
@@ -133,11 +132,19 @@ async function readGroupTrend(
     for (const t of inScope) {
       for (const m of t.members) if (!allowed || allowed.has(m.id)) groupOf.set(m.id, t.id);
     }
+    for (const s of course?.scope.students ?? []) {
+      if (groupOf.has(s.id)) continue;
+      const id = `section:${s.section_id}`;
+      groupOf.set(s.id, id);
+      if (!groups.some((g) => g.id === id)) {
+        groups.push({ id, name: course?.scope.sectionNames.get(s.section_id) ?? 'Other students', section_id: s.section_id });
+      }
+    }
     const students = [...groupOf.keys()];
     if (students.length === 0) return { groups, points: [] };
 
     const from = args.p_from ?? new Date(Date.now() - 56 * DAY_MS).toISOString().slice(0, 10);
-    const work = await loadGradedWork(supabase, students, { from, to: args.p_to, kinds });
+    const work = course ? course.graded : await loadGradedWork(supabase, students, { from, to: args.p_to, kinds });
 
     const acc = new Map<string, { group_id: string; week_start: string; sum: number; attempts: number }>();
     for (const row of work) {
@@ -198,10 +205,13 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
 
-    const args = await resolveSummaryArgs(request.nextUrl.searchParams, session, supabase);
-    if ('error' in args) {
+    const resolved = await resolveSummaryArgs(request.nextUrl.searchParams, session, supabase);
+    if ('error' in resolved) {
       return NextResponse.json({ error: 'Unable to fetch analytics' }, { status: 500 });
     }
+    const course = await loadCourseScope(supabase, session, request.nextUrl.searchParams);
+    if (course === 'not_found') return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+    const args = course ? courseArgs(resolved, course) : resolved;
 
     const { data, error } = await callAnalytics(supabase, 'dw_analytics_summary', { ...args });
 
@@ -223,18 +233,23 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Laid over the warehouse's figures; its ranked students bring their own avatars.
+    const own = course && summary ? await courseFigures(supabase, course, args) : null;
+    if (own) summary = { ...summary, ...own.figures };
+
     // Avatars and the per-group split don't depend on each other, so they
     // are read side by side. The split is opt-in: only the performance chart
     // needs it, not the previous-period comparison or the admin dashboard.
     const wantsTrend = !!summary && request.nextUrl.searchParams.get('group_trend') === '1';
     const [topStudents, groupTrend] = await Promise.all([
-      summary?.top_students?.length ? withStudentAvatars(supabase, summary.top_students) : null,
+      !own && summary?.top_students?.length ? withStudentAvatars(supabase, summary.top_students) : null,
       wantsTrend
         ? readGroupTrend(
             supabase,
             session,
             args,
             summary?.cohort?.graded === undefined ? ['quiz'] : WORK_KINDS.map((k) => k.kind),
+            course && own ? { scope: course, graded: own.graded } : null,
           )
         : null,
     ]);

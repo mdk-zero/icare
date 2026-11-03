@@ -206,6 +206,8 @@ const mean = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b
 export async function groupSummaries(
   supabase: Supabase,
   teams: TeamRow[],
+  /** Count only work on these activities (one course's); every activity when left out. */
+  items?: ReadonlySet<string>,
 ): Promise<{ groups: GroupSummary[]; error: { message?: string } | null }> {
   if (teams.length === 0) return { groups: [], error: null };
   const teamIds = new Set(teams.map((t) => t.id));
@@ -231,7 +233,7 @@ export async function groupSummaries(
     memberIds.length
       ? supabase
           .from('case_submissions')
-          .select('student_id, status, score')
+          .select('student_id, presentation_id, status, score')
           .in('status', ['submitted', 'graded'])
           .in('student_id', memberIds)
       : Promise.resolve({ data: [], error: null }),
@@ -242,13 +244,16 @@ export async function groupSummaries(
   const sectionName = new Map((sectionsRes.data ?? []).map((s) => [s.id as string, s.name as string]));
 
   // Patient Cases and Return Demonstrations (074) are averaged apart.
-  const scenarioRows = (scenariosRes.data ?? []) as {
-    student_id: string;
-    scenario_id: string;
-    team_id: string | null;
-    status: string;
-    score: number | null;
-  }[];
+  const counted = (id: string) => !items || items.has(id);
+  const scenarioRows = (
+    (scenariosRes.data ?? []) as {
+      student_id: string;
+      scenario_id: string;
+      team_id: string | null;
+      status: string;
+      score: number | null;
+    }[]
+  ).filter((a) => counted(a.scenario_id));
   const kinds = await scenarioKinds(supabase, [...new Set(scenarioRows.map((a) => a.scenario_id))]);
   type ScenarioWork = { student_id: string; scenario_id: string; status: string; score: number | null };
   const byTeam = (rows: typeof scenarioRows) => {
@@ -266,15 +271,15 @@ export async function groupSummaries(
     work.filter((a) => a.status === 'completed' && a.score !== null).map((a) => Number(a.score));
 
   const caseWork = new Map<string, { status: string; score: number | null }[]>();
-  for (const c of (casesRes.data ?? []) as { student_id: string; status: string; score: number | null }[]) {
-    const team = teamOf.get(c.student_id);
+  for (const c of (casesRes.data ?? []) as { student_id: string; presentation_id: string; status: string; score: number | null }[]) {
+    const team = counted(c.presentation_id) ? teamOf.get(c.student_id) : undefined;
     if (team) caseWork.set(team, [...(caseWork.get(team) ?? []), c]);
   }
 
   // Best score per (member, assessment), then grouped by the member's group.
   const best = new Map<string, { student_id: string; score: number }>();
   for (const a of (attemptsRes.data ?? []) as { student_id: string; assessment_id: string; score: number | null }[]) {
-    if (a.score === null) continue;
+    if (a.score === null || !counted(a.assessment_id)) continue;
     const key = `${a.student_id}:${a.assessment_id}`;
     const prev = best.get(key);
     if (!prev || a.score > prev.score) best.set(key, { student_id: a.student_id, score: a.score });

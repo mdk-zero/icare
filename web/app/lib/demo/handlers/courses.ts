@@ -497,6 +497,16 @@ function strip(r: RequirementRow & { created_at?: string }): RequirementRow {
  * a database: from a checklist item that linked it, or else from its maker
  * when they teach exactly one course in the term it was made in.
  */
+/** The Patient Cases, Return Demonstrations, Quizzes and Case Presentations made for this offering. */
+export function courseActivityIds(db: DemoDb, offeringId: string): Set<string> {
+  linkActivityCourses(db);
+  const ids = new Set<string>();
+  for (const list of [db.scenarios, db.quizzes, db.casePresentations] as { id: string; offering_id?: string | null }[][]) {
+    for (const a of list) if (a.offering_id === offeringId) ids.add(a.id);
+  }
+  return ids;
+}
+
 export function linkActivityCourses(db: DemoDb) {
   courseDb(db);
   type Activity = { id: string; created_by: string | null; created_at: string; offering_id?: string | null };
@@ -1021,8 +1031,10 @@ route("GET", "/api/analytics/courses", async (ctx) => {
   const wanted = new Set((ctx.query.get("section_ids") ?? "").split(",").filter(Boolean));
   const from = ctx.query.get("from");
   const to = ctx.query.get("to");
+  const offeringId = ctx.query.get("offering_id");
   const offerings = db.offerings.filter((o) => {
     if (deanCourses ? !deanCourses.has(o.course_id) || !o.faculty_id : o.faculty_id !== ctx.viewer.id) return false;
+    if (offeringId && o.id !== offeringId) return false;
     const term = termOf(db, o);
     return !from || !to || termsOverlap(term, { starts_on: from, ends_on: to });
   });

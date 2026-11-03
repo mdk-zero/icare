@@ -253,12 +253,15 @@ export default function CoursePerformance({
   courses,
   error,
   rangeLabel,
+  oneCourse = false,
   className = "",
 }: {
   courses: CourseRow[];
   error: string | null;
   /** "Jul 17 – Oct 17", for the empty state. */
   rangeLabel: string;
+  /** The page is filtered to one course, so this is its bar alone. */
+  oneCourse?: boolean;
   /** Its place in the page's grid. */
   className?: string;
 }) {
@@ -270,8 +273,10 @@ export default function CoursePerformance({
             <FontAwesomeIcon icon={faBookMedical} className="h-5 w-5 text-brand-600" />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">Performance per Course</h3>
-            <p className="text-xs text-gray-400">Class average grade, semesters in this range</p>
+            <h3 className="font-semibold text-gray-900">{oneCourse ? "Course Grade" : "Performance per Course"}</h3>
+            <p className="text-xs text-gray-400">
+              {oneCourse ? "Class average so far, across the whole term" : "Class average grade, semesters in this range"}
+            </p>
           </div>
         </div>
         {courses.length > 0 && (
@@ -287,7 +292,8 @@ export default function CoursePerformance({
           <p className="py-10 text-center text-sm text-gray-400">{error}</p>
         ) : courses.length === 0 ? (
           <p className="py-10 text-center text-sm text-gray-400">
-            None of your courses has students in these sections during {rangeLabel}.
+            {oneCourse ? "This course has" : "None of your courses has"} {oneCourse ? "no " : ""}students in these sections
+            during {rangeLabel}.
           </p>
         ) : (
           <CourseBarChart courses={courses} />

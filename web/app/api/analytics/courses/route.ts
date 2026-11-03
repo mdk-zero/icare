@@ -19,7 +19,8 @@ import { isIsoDate, termsOverlap } from '@/app/lib/course-progress';
  *
  * Query params (all optional): section_ids (csv) counts only the students of
  * those sections; from, to (YYYY-MM-DD) keep only the terms that overlap
- * them. A course with no students in scope is left out.
+ * them; offering_id keeps only that course assignment. A course with no
+ * students in scope is left out.
  */
 type OfferingRow = {
   id: string;
@@ -47,6 +48,7 @@ export async function GET(request: NextRequest) {
   const from = params.get('from');
   const to = params.get('to');
   const range = isIsoDate(from) && isIsoDate(to) ? { starts_on: from, ends_on: to } : null;
+  const offeringId = params.get('offering_id');
 
   try {
     const supabase = getSupabaseAdmin();
@@ -68,7 +70,9 @@ export async function GET(request: NextRequest) {
       rows = (must(await supabase.from('course_offerings').select(OFFERING_COLUMNS).eq('faculty_id', session.uid)) ??
         []) as unknown as OfferingRow[];
     }
-    const inRange = rows.filter((r) => !range || termsOverlap(r.academic_terms, range));
+    const inRange = rows.filter(
+      (r) => (!offeringId || r.id === offeringId) && (!range || termsOverlap(r.academic_terms, range)),
+    );
     const [sections, instructors] = await Promise.all([
       loadOfferingSections(supabase, inRange.map((r) => r.id)),
       dean && inRange.length

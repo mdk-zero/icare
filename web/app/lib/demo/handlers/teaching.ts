@@ -10,7 +10,7 @@ import { parseDeadline } from "@/app/lib/deadline-input";
 import { DAY_MS, hasWork, lastActivity, mean } from "./derive";
 import { listSkillSummaries } from "../fixtures/skills";
 import { byName, manageableSections, sectionName, userById, visibleSections, visibleStudents } from "./scope";
-import { linkActivityCourses } from "./courses";
+import { courseActivityIds, courseDb, linkActivityCourses, offeringRoster } from "./courses";
 import { CASES } from "../fixtures/cases-data";
 import type { WorkKind } from "@/app/lib/work-kinds";
 import caseTasks from "../fixtures/case-tasks.json";
@@ -489,6 +489,8 @@ interface Work {
   score: number;
   /** When it was handed in. */
   at: string;
+  /** The quiz, scenario or case presentation it was for. */
+  item: string;
 }
 
 /**
@@ -501,19 +503,19 @@ function gradedWork(db: Ctx["db"], ids: Set<string>): Work[] {
   const work: Work[] = [];
   for (const a of db.attempts) {
     if (ids.has(a.student_id) && a.status === "submitted" && a.score != null && a.submitted_at) {
-      work.push({ student_id: a.student_id, kind: "quiz", score: a.score, at: a.submitted_at });
+      work.push({ student_id: a.student_id, kind: "quiz", score: a.score, at: a.submitted_at, item: a.assessment_id });
     }
   }
   for (const a of db.assignments) {
     const at = a.submitted_at ?? a.completed_at;
     if (ids.has(a.student_id) && a.status === "completed" && a.score != null && at) {
-      work.push({ student_id: a.student_id, kind: kindOf.get(a.scenario_id) ?? "patient_case", score: a.score, at });
+      work.push({ student_id: a.student_id, kind: kindOf.get(a.scenario_id) ?? "patient_case", score: a.score, at, item: a.scenario_id });
     }
   }
   for (const c of db.caseSubmissions) {
     const at = c.submitted_at ?? c.graded_at;
     if (ids.has(c.student_id) && c.status === "graded" && c.score != null && at) {
-      work.push({ student_id: c.student_id, kind: "case_presentation", score: c.score, at });
+      work.push({ student_id: c.student_id, kind: "case_presentation", score: c.score, at, item: c.presentation_id });
     }
   }
   return work;
@@ -524,11 +526,21 @@ function analyticsScope(ctx: Ctx) {
   const { db, query } = ctx;
   const allowed = visibleSections(db, ctx.role, ctx.viewer.id).map((s) => s.id);
   const asked = (query.get("section_ids") ?? "").split(",").filter(Boolean);
-  const sectionIds = asked.length ? asked.filter((id) => allowed.includes(id)) : allowed;
-  const students = visibleStudents(db, ctx.role, ctx.viewer.id).filter((s) => s.section_id && sectionIds.includes(s.section_id));
+  // One of the instructor's courses: its roster and its work, inside its term.
+  const offeringId = query.get("offering_id");
+  const offering = offeringId ? courseDb(db).offerings.find((o) => o.id === offeringId && o.faculty_id === ctx.viewer.id) : null;
+  const term = offering ? db.terms.find((t) => t.id === offering.term_id) : null;
+  const items = offering ? courseActivityIds(db, offering.id) : null;
+  const choices = offering ? offering.section_ids : allowed;
+  const sectionIds = asked.length ? asked.filter((id) => choices.includes(id)) : choices;
+  const students = (offering ? offeringRoster(db, offering).students : visibleStudents(db, ctx.role, ctx.viewer.id)).filter(
+    (s) => s.section_id && sectionIds.includes(s.section_id),
+  );
   const ids = new Set(students.map((s) => s.id));
-  const from = query.get("from");
-  const to = query.get("to");
+  const askedFrom = query.get("from");
+  const askedTo = query.get("to");
+  const from = term && (!askedFrom || askedFrom < term.starts_on) ? term.starts_on : askedFrom;
+  const to = term && (!askedTo || askedTo > term.ends_on) ? term.ends_on : askedTo;
   const windowFrom = from ? Date.parse(from) : Date.now() - 8 * 7 * DAY_MS;
   const windowTo = to ? Date.parse(`${to}T23:59:59Z`) : Date.now();
   const inWindow = (iso: string) => {
@@ -537,10 +549,16 @@ function analyticsScope(ctx: Ctx) {
   };
   // The quiz attempts themselves, for the skill areas their questions test.
   const attempts = db.attempts.filter(
-    (a) => ids.has(a.student_id) && a.status === "submitted" && a.score != null && !!a.submitted_at && inWindow(a.submitted_at),
+    (a) =>
+      ids.has(a.student_id) &&
+      (!items || items.has(a.assessment_id)) &&
+      a.status === "submitted" &&
+      a.score != null &&
+      !!a.submitted_at &&
+      inWindow(a.submitted_at),
   );
-  const work = gradedWork(db, ids).filter((w) => inWindow(w.at));
-  return { sectionIds, students, attempts, work, bucket: deriveBucket(from, to) };
+  const work = gradedWork(db, ids).filter((w) => inWindow(w.at) && (!items || items.has(w.item)));
+  return { sectionIds, students, attempts, work, bucket: deriveBucket(from, to), oneCourse: !!offering };
 }
 
 function topStudents(ctx: Ctx, scope: ReturnType<typeof analyticsScope>) {
@@ -642,7 +660,9 @@ route("GET", "/api/analytics/summary", (ctx) => {
             return [kind, { average_score: mean(of.map((w) => w.score)) ?? 0, graded: of.length, students: new Set(of.map((w) => w.student_id)).size }];
           }),
         ),
-        active_students_30d: students.filter((s) => Date.parse(lastActivity(db, s.id) ?? "1970") > thirty).length,
+        active_students_30d: scope.oneCourse
+          ? new Set(work.map((w) => w.student_id)).size
+          : students.filter((s) => Date.parse(lastActivity(db, s.id) ?? "1970") > thirty).length,
       },
       weekly_trend,
       group_trend:

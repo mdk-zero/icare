@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { callAnalytics, resolveSummaryArgs, withStudentAvatars } from '@/app/lib/analytics';
+import { courseArgs, loadCourseScope, loadCourseWork, rankCourseStudents } from '@/app/lib/analytics-course';
+import { isGraded } from '@/app/lib/graded-work';
 
 /**
  * Every student in scope, ranked the way the analytics summary's
@@ -9,6 +11,7 @@ import { callAnalytics, resolveSummaryArgs, withStudentAvatars } from '@/app/lib
  * summary's section_ids/from/to params and scoping — a faculty member only
  * ever sees their own sections. Reads the warehouse as-is: the summary route
  * is what keeps it fresh, and this page is only reached from there.
+ * offering_id ranks one of an instructor's courses on its own work instead.
  */
 export async function GET(request: NextRequest) {
   const session = await readSession();
@@ -23,6 +26,13 @@ export async function GET(request: NextRequest) {
     const args = await resolveSummaryArgs(request.nextUrl.searchParams, session, supabase);
     if ('error' in args) {
       return NextResponse.json({ error: 'Unable to fetch leaderboard' }, { status: 500 });
+    }
+
+    const course = await loadCourseScope(supabase, session, request.nextUrl.searchParams);
+    if (course === 'not_found') return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+    if (course) {
+      const work = await loadCourseWork(supabase, course, courseArgs(args, course));
+      return NextResponse.json({ students: rankCourseStudents(course, work.filter(isGraded)) });
     }
 
     const { data, error } = await callAnalytics(supabase, 'dw_student_leaderboard', {

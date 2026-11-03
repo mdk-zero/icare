@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faChartBar,
@@ -20,10 +21,11 @@ import {
   fetchAnalyticsSummary,
   fetchCoursePerformance,
   fetchFacultySections,
-  fetchGroupSummaries,
+  fetchMyCourses,
   generateAnalyticsNarrative,
   AnalyticsNarrative,
   AnalyticsBucket,
+  FacultyCourseSummary,
   Section,
 } from "../../lib/api";
 import {
@@ -37,8 +39,9 @@ import { usePageData } from "../../lib/use-page-data";
 import { EcgLoader } from "../../components/EcgLoader";
 import AiThinking from "../../components/AiThinking";
 import { Leaderboard, LeaderboardSkeleton } from "./Leaderboard";
-import GroupPerformance from "./GroupPerformance";
+import GroupPerformance, { useGroupSummaries } from "./GroupPerformance";
 import CoursePerformance from "./CoursePerformance";
+import CourseFilter from "./CourseFilter";
 import ActivityBreakdown from "./ActivityBreakdown";
 import { parseDay, formatRange } from "./dates";
 import { buildTrendSeries, TrendLegend, TrendBarChart, TrendTable } from "./GroupTrendChart";
@@ -46,6 +49,7 @@ import { isActiveSkillArea } from "../../../scripts/taylors-chapters";
 
 /** Stable empty fallback, so nothing downstream sees a new array each render. */
 const NO_SECTIONS: Section[] = [];
+const NO_COURSES: FacultyCourseSummary[] = [];
 
 /**
  * Successful narratives survive a hard refresh (not just client-side nav) via
@@ -106,7 +110,10 @@ function isoDay(d: Date): string {
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
-type PresetId = "7d" | "30d" | "3m" | "12m" | "ytd" | "custom";
+type PresetId = "term" | "7d" | "30d" | "3m" | "12m" | "ytd" | "custom";
+
+/** Only with a course picked: it has a term to show the whole of. */
+const TERM_PRESET: { id: PresetId; label: string } = { id: "term", label: "Whole term" };
 
 const PRESETS: { id: PresetId; label: string }[] = [
   { id: "7d", label: "7 days" },
@@ -118,7 +125,7 @@ const PRESETS: { id: PresetId; label: string }[] = [
 ];
 
 /** Ranges are inclusive of both ends, matching the SQL `>= from and <= to`. */
-function rangeForPreset(preset: Exclude<PresetId, "custom">): {
+function rangeForPreset(preset: Exclude<PresetId, "custom" | "term">): {
   from: string;
   to: string;
 } {
@@ -142,6 +149,23 @@ function rangeForPreset(preset: Exclude<PresetId, "custom">): {
       break;
   }
   return { from: isoDay(from), to: isoDay(today) };
+}
+
+/**
+ * The range a course is read over: as far as the picked range reaches into its
+ * term, since nothing outside the term counts toward it. A range missing the
+ * term altogether stays as picked, so the empty panels name what was asked for.
+ */
+function courseRange(
+  preset: PresetId,
+  range: { from: string; to: string },
+  term: { starts_on: string; ends_on: string } | undefined,
+): { from: string; to: string } {
+  if (!term) return range;
+  if (preset === "term") return { from: term.starts_on, to: term.ends_on };
+  const from = range.from > term.starts_on ? range.from : term.starts_on;
+  const to = range.to < term.ends_on ? range.to : term.ends_on;
+  return from <= to ? { from, to } : range;
 }
 
 const BUCKET_LABEL: Record<AnalyticsBucket, string> = {
@@ -232,6 +256,8 @@ function SectionPicker({
         type="button"
         onClick={() => setOpen((v) => !v)}
         disabled={sections.length === 0}
+        aria-expanded={open}
+        aria-label={`Sections: ${summary}`}
         className="flex items-center gap-2 rounded-lg border border-hairline bg-surface px-3 py-1.5 text-sm text-gray-700 transition-colors hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <FontAwesomeIcon icon={faLayerGroup} className="w-3.5 h-3.5 text-brand-600" />
@@ -441,7 +467,7 @@ function NarrativeModal({
   generatedAt: string | null;
   loading: boolean;
   error: string | null;
-  /** The sections and range the summary reads, e.g. "All sections · Jun 1 – Sep 19". */
+  /** The course, sections and range the summary reads, e.g. "All sections · Jun 1 – Sep 19". */
   scope: string;
   onRetry: () => void;
   onClose: () => void;
@@ -588,8 +614,11 @@ function NarrativeModal({
 }
 
 export default function FacultyAnalyticsClient() {
+  // The course lives in the URL, so it can be linked to and survives a trip to
+  // the leaderboard. replaceState keeps useSearchParams in step without a navigation.
+  const courseParam = useSearchParams().get("course");
   const [sectionIds, setSectionIds] = useState<string[]>([]);
-  const [preset, setPreset] = useState<PresetId>("3m");
+  const [preset, setPreset] = useState<PresetId>(courseParam ? "term" : "3m");
   // Lazily initialised so `new Date()` never runs during a server render —
   // the first paint is the skeleton, so there is nothing to mismatch.
   const [range, setRange] = useState<{ from: string; to: string }>(() => rangeForPreset("3m"));
@@ -601,8 +630,20 @@ export default function FacultyAnalyticsClient() {
   const { data: sectionsData } = usePageData("faculty:sections", fetchFacultySections);
   const sections = sectionsData ?? NO_SECTIONS;
 
-  const { from, to } = range;
-  const sectionKey = [...sectionIds].sort().join(",");
+  const { data: coursesData, loading: coursesListLoading } = usePageData("faculty:courses", fetchMyCourses);
+  const offerings = coursesData?.data?.offerings ?? NO_COURSES;
+  // A link to a course they no longer teach shows every course instead.
+  const course = offerings.find((o) => o.id === courseParam) ?? null;
+  const courseId = course?.id ?? null;
+  // Its term sets the range, so a linked course waits for the list.
+  const awaitingCourse = !!courseParam && coursesListLoading;
+  const activePreset = preset === "term" && !course && !awaitingCourse ? "3m" : preset;
+  const hasCourseFilter = coursesListLoading || offerings.length > 0;
+  // A course offers its own sections, which can reach past the instructor's groups.
+  const sectionChoices: Section[] = course ? course.sections : sections;
+
+  const { from, to } = courseRange(activePreset, range, course?.term);
+  const sectionKey = [courseId ?? "", ...[...sectionIds].sort()].join(",");
 
   // One entry per filter combination. A late response lands on its own key
   // rather than on whatever the user has since selected, which is what the
@@ -613,8 +654,8 @@ export default function FacultyAnalyticsClient() {
     loading,
     revalidating: refreshing,
   } = usePageData(
-    `faculty:analytics:${sectionKey}:${from}:${to}`,
-    () => fetchAnalyticsSummary({ sectionIds, from, to, groupTrend: true }),
+    awaitingCourse ? null : `faculty:analytics:${sectionKey}:${from}:${to}`,
+    () => fetchAnalyticsSummary({ courseId, sectionIds, from, to, groupTrend: true }),
     { keepPreviousData: true },
   );
 
@@ -622,12 +663,17 @@ export default function FacultyAnalyticsClient() {
   const bucket = analytics?.bucket ?? "week";
 
   // A second, quieter fetch for the immediately preceding period of equal
-  // length, purely to power each KPI card's "vs last period" badge.
+  // length, purely to power each KPI card's "vs last period" badge. A whole
+  // term has none: the course's work starts with it.
+  const comparing = activePreset !== "term";
   const prevRangeValue = useMemo(() => previousRange(from, to), [from, to]);
   const { data: prevAnalytics, loading: prevLoading } = usePageData(
-    `faculty:analytics:prev:${sectionKey}:${prevRangeValue.from}:${prevRangeValue.to}`,
+    comparing && !awaitingCourse
+      ? `faculty:analytics:prev:${sectionKey}:${prevRangeValue.from}:${prevRangeValue.to}`
+      : null,
     () =>
       fetchAnalyticsSummary({
+        courseId,
         sectionIds,
         from: prevRangeValue.from,
         to: prevRangeValue.to,
@@ -638,10 +684,7 @@ export default function FacultyAnalyticsClient() {
 
   // Performance by Group reads the same cache entry, so this doesn't fetch it
   // twice; it's here so the first paint waits for the groups too.
-  const { data: groupData, loading: groupsLoading } = usePageData(
-    "faculty:group-summaries",
-    fetchGroupSummaries,
-  );
+  const { data: groupData, loading: groupsLoading } = useGroupSummaries(courseId);
   // Performance by Group hides itself with no groups in the sections picked
   // (the same filter it applies); its row then splits in two, not three.
   const hasGroups = (groupData?.groups ?? []).some(
@@ -655,23 +698,38 @@ export default function FacultyAnalyticsClient() {
     loading: coursesLoading,
     revalidating: coursesRefreshing,
   } = usePageData(
-    `faculty:analytics:courses:${sectionKey}:${from}:${to}`,
-    () => fetchCoursePerformance({ sectionIds, from, to }),
+    awaitingCourse ? null : `faculty:analytics:courses:${sectionKey}:${from}:${to}`,
+    () => fetchCoursePerformance({ courseId, sectionIds, from, to }),
     { keepPreviousData: true },
   );
 
   // Every panel appears at once: the skeleton stays until the summary, the
   // previous period behind the "vs" badges, the groups and the courses have
   // all arrived, rather than badges and charts popping in after the rest.
-  const firstLoad = loading || prevLoading || groupsLoading || coursesLoading;
+  const firstLoad = awaitingCourse || loading || prevLoading || groupsLoading || coursesLoading;
 
-  const applyPreset = useCallback((id: PresetId) => {
+  const applyPreset = (id: PresetId) => {
     setPreset(id);
-    if (id === "custom") return;
-    const next = rangeForPreset(id);
+    if (id === "term") return;
+    // Custom starts from the dates on show, which a whole term doesn't keep in `range`.
+    const next = id === "custom" ? { from, to } : rangeForPreset(id);
     setRange(next);
     setDraft(next);
-  }, []);
+  };
+
+  const selectCourse = (next: FacultyCourseSummary | null) => {
+    window.history.replaceState(
+      null,
+      "",
+      next ? `/instructor/analytics?course=${next.id}` : "/instructor/analytics",
+    );
+    // Narrowed, not cleared: a section the new scope still has stays picked.
+    const choices: Section[] = next ? next.sections : sections;
+    setSectionIds((ids) => ids.filter((id) => choices.some((s) => s.id === id)));
+    // A course opens on its whole term; leaving it, there is no term to show.
+    if (next) setPreset("term");
+    else if (preset === "term") applyPreset("3m");
+  };
 
   const setCustom = (edge: "from" | "to", value: string) => {
     const next = { ...draft, [edge]: value };
@@ -702,6 +760,7 @@ export default function FacultyAnalyticsClient() {
   // spending another (slow) AI call to describe data that hasn't moved.
   const dataSignature = summary
     ? JSON.stringify({
+        course: courseId,
         avg: summary.cohort.average_score,
         attempts: summary.cohort.submitted_attempts,
         graded: summary.cohort.graded,
@@ -723,6 +782,7 @@ export default function FacultyAnalyticsClient() {
   // while the popup is open can't quietly start (and pay for) a second call.
   const [narrativeRequest, setNarrativeRequest] = useState<{
     key: string;
+    courseId: string | null;
     sectionIds: string[];
     from: string;
     to: string;
@@ -765,7 +825,7 @@ export default function FacultyAnalyticsClient() {
       if (narrativeError && !narrativeBusy) void reloadNarrative();
       return;
     }
-    setNarrativeRequest({ key: narrativeKey, sectionIds, from, to });
+    setNarrativeRequest({ key: narrativeKey, courseId, sectionIds, from, to });
   };
 
   const closeNarrative = useCallback(() => setNarrativeOpen(false), []);
@@ -801,19 +861,21 @@ export default function FacultyAnalyticsClient() {
   // The card shows the podium and a little more; the full ranking opens on
   // its own page with the same scope, so it lists the same students in order.
   const leaderboardHref = `/instructor/analytics/leaderboard?${new URLSearchParams({
+    ...(courseId ? { course: courseId } : {}),
     ...(sectionIds.length > 0 ? { sections: sectionIds.join(",") } : {}),
     from,
     to,
   })}`;
   const prevAtRisk = prevSummary?.risk_distribution?.at_risk ?? null;
-  const comparisonLabel = `vs ${formatRange(prevRangeValue.from, prevRangeValue.to)}`;
+  const comparisonLabel = comparing ? `vs ${formatRange(prevRangeValue.from, prevRangeValue.to)}` : course?.term.name;
+  const narrativeCourse = offerings.find((o) => o.id === narrativeRequest?.courseId) ?? null;
 
   const statCards = [
     {
       icon: faChartBar,
       value: summary?.cohort.average_score != null ? `${summary.cohort.average_score}%` : "—",
       label: "Average Student Performance",
-      change: pctChange(summary?.cohort.average_score, prevSummary?.cohort.average_score),
+      change: comparing ? pctChange(summary?.cohort.average_score, prevSummary?.cohort.average_score) : undefined,
       comparisonLabel,
       goodDirection: "up" as const,
       iconBg: "bg-blue-50",
@@ -823,10 +885,9 @@ export default function FacultyAnalyticsClient() {
       icon: faUsers,
       value: `${summary?.cohort.active_students_30d ?? 0}/${summary?.cohort.total_students ?? 0}`,
       label: "Active Students",
-      change: pctChange(
-        summary?.cohort.active_students_30d,
-        prevSummary?.cohort.active_students_30d,
-      ),
+      change: comparing
+        ? pctChange(summary?.cohort.active_students_30d, prevSummary?.cohort.active_students_30d)
+        : undefined,
       comparisonLabel,
       goodDirection: "up" as const,
       iconBg: "bg-purple-50",
@@ -836,8 +897,10 @@ export default function FacultyAnalyticsClient() {
       icon: faExclamationTriangle,
       value: `${atRisk}`,
       label: "Low Performing Students",
-      change: pctChange(atRisk, prevAtRisk),
-      comparisonLabel,
+      // The model reads a student's whole record, so this doesn't move with a
+      // course or a date range, and a course's figure says as much.
+      change: course ? undefined : pctChange(atRisk, prevAtRisk),
+      comparisonLabel: course ? "From their overall record" : comparisonLabel,
       // Rising at-risk counts are the bad direction, unlike every other card.
       goodDirection: "down" as const,
       iconBg: "bg-amber-50",
@@ -859,28 +922,47 @@ export default function FacultyAnalyticsClient() {
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-stretch">
         <div className="min-w-0 flex-1 rounded-xl border border-hairline bg-surface shadow-tile">
           <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-3">
+            {hasCourseFilter && (
+              <>
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <CardLabel>Course</CardLabel>
+                  <CourseFilter
+                    offerings={offerings}
+                    value={courseId}
+                    loading={coursesListLoading}
+                    onChange={selectCourse}
+                  />
+                </div>
+
+                <span className="hidden h-6 w-px bg-hairline sm:block" />
+              </>
+            )}
+
             <div className="flex items-center gap-2.5">
               <CardLabel>Sections</CardLabel>
               <SectionPicker
-                sections={sections}
+                sections={sectionChoices}
                 selected={sectionIds}
                 counts={studentsBySection}
                 onChange={setSectionIds}
               />
             </div>
 
-            <span className="hidden h-6 w-px bg-hairline sm:block" />
+            {/* Three filters don't share a line, so the range always takes the
+                second: left to wrap, this divider would dangle at the first's end. */}
+            <span className={hasCourseFilter ? "hidden basis-full sm:block" : "hidden h-6 w-px bg-hairline sm:block"} />
 
             <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2.5">
               <CardLabel>Range</CardLabel>
               <div className="flex flex-wrap items-center gap-1">
-                {PRESETS.map((p) => (
+                {(course ? [TERM_PRESET, ...PRESETS] : PRESETS).map((p) => (
                   <button
                     key={p.id}
                     type="button"
                     onClick={() => applyPreset(p.id)}
+                    aria-pressed={activePreset === p.id}
                     className={`rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
-                      preset === p.id
+                      activePreset === p.id
                         ? "bg-brand-600 text-white"
                         : "text-gray-600 hover:bg-subtle hover:text-gray-900"
                     }`}
@@ -891,7 +973,7 @@ export default function FacultyAnalyticsClient() {
               </div>
             </div>
 
-            {preset === "custom" && (
+            {activePreset === "custom" && (
               <div className="flex flex-wrap items-center gap-2">
                 <input
                   type="date"
@@ -921,7 +1003,7 @@ export default function FacultyAnalyticsClient() {
             </div>
           </div>
 
-          {sections.length === 0 && (
+          {sectionChoices.length === 0 && !course && (
             <p className="border-t border-hairline px-4 py-2.5 text-xs text-amber-700">
               You don&apos;t manage any sections yet, so there is nothing to report on. Your Dean or
               Program Chair assigns sections from their Instructors page.
@@ -958,10 +1040,13 @@ export default function FacultyAnalyticsClient() {
           generatedAt={narrativeAt}
           loading={narrativeBusy}
           error={narrativeError}
-          scope={`${sectionScopeLabel(sections, narrativeRequest.sectionIds)} · ${formatRange(
-            narrativeRequest.from,
-            narrativeRequest.to,
-          )}`}
+          scope={[
+            narrativeCourse?.course.code,
+            sectionScopeLabel(narrativeCourse ? narrativeCourse.sections : sections, narrativeRequest.sectionIds),
+            formatRange(narrativeRequest.from, narrativeRequest.to),
+          ]
+            .filter(Boolean)
+            .join(" · ")}
           onRetry={() => void reloadNarrative()}
           onClose={closeNarrative}
         />
@@ -1142,7 +1227,7 @@ export default function FacultyAnalyticsClient() {
               hasGroups ? "xl:grid-cols-3" : ""
             }`}
           >
-            <GroupPerformance sectionIds={sectionIds} />
+            <GroupPerformance sectionIds={sectionIds} courseId={courseId} />
             <Card padding="md" className="flex flex-col">
               <div className="flex items-center gap-2.5 mb-5">
                 <div className="rounded-xl bg-brand-600/10 p-2.5">
@@ -1150,14 +1235,17 @@ export default function FacultyAnalyticsClient() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900">Performance per Skill Area</h3>
-                  <p className="text-xs text-gray-400">Average score by skill area</p>
+                  <p className="text-xs text-gray-400">
+                    {course ? "Average score by skill area, from this course's quizzes" : "Average score by skill area"}
+                  </p>
                 </div>
               </div>
               <div className="flex-1 flex flex-col justify-center">
                 {competencies.length === 0 ? (
                   <p className="text-gray-400 text-sm py-12 text-center">
-                    No validated skill area scores yet — record them from each student&apos;s
-                    profile.
+                    {course
+                      ? `No skill area scores from this course's quizzes in ${formatRange(from, to)}.`
+                      : "No validated skill area scores yet — record them from each student's profile."}
                   </p>
                 ) : (
                   <CompetencyBarChart
@@ -1174,6 +1262,7 @@ export default function FacultyAnalyticsClient() {
               courses={courseData?.data?.courses ?? []}
               error={courseData?.error ?? null}
               rangeLabel={formatRange(from, to)}
+              oneCourse={!!course}
               className={hasGroups ? "lg:col-span-2 xl:col-span-1" : ""}
             />
           </div>

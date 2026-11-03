@@ -4,7 +4,7 @@ import { json, ndjson, notFound, route, type DemoContext } from "../router";
 import { newId } from "../store";
 import type { DemoAssignment, DemoScenario } from "../fixtures/school";
 import { audit } from "./shared";
-import { linkActivityCourses } from "./courses";
+import { courseActivityIds, courseDb, linkActivityCourses } from "./courses";
 import { parseDeadline } from "@/app/lib/deadline-input";
 import { kindParam } from "@/app/lib/scenario-kind";
 import {
@@ -626,7 +626,14 @@ route("GET", "/api/faculty/teams/summary", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   const { db } = ctx;
   const sections = visibleSections(db, ctx.role, ctx.viewer.id);
-  const teams = ownTeams(db, ctx.role, ctx.viewer.id).filter((t) => sections.some((s) => s.id === t.section_id));
+  const offeringId = ctx.query.get("offering_id");
+  const offering = offeringId ? courseDb(db).offerings.find((o) => o.id === offeringId && o.faculty_id === ctx.viewer.id) : null;
+  if (offeringId && !offering) return json({ error: "Course not found" }, 404);
+  const items = offering ? courseActivityIds(db, offering.id) : null;
+  const counted = (id: string) => !items || items.has(id);
+  const teams = ownTeams(db, ctx.role, ctx.viewer.id).filter(
+    (t) => sections.some((s) => s.id === t.section_id) && (!offering || offering.section_ids.includes(t.section_id)),
+  );
   return {
     viewer_id: ctx.viewer.id,
     groups: teams.map((t) => {
@@ -634,14 +641,16 @@ route("GET", "/api/faculty/teams/summary", (ctx) => {
       const ids = new Set(members.map((m) => m.id));
       // Patient Cases and Return Demonstrations (072) are averaged apart.
       const isDemo = (scenarioId: string) => db.scenarios.find((s) => s.id === scenarioId)?.kind === "return_demo";
-      const mine = db.assignments.filter((a) => ids.has(a.student_id));
+      const mine = db.assignments.filter((a) => ids.has(a.student_id) && counted(a.scenario_id));
       const assigned = mine.filter((a) => !isDemo(a.scenario_id));
       const graded = assigned.filter((a) => a.status === "completed");
       const demos = mine.filter((a) => isDemo(a.scenario_id));
       const demosGraded = demos.filter((a) => a.status === "completed" && a.score != null);
-      const cases = db.caseSubmissions.filter((c) => ids.has(c.student_id) && (c.status === "submitted" || c.status === "graded"));
+      const cases = db.caseSubmissions.filter(
+        (c) => ids.has(c.student_id) && counted(c.presentation_id) && (c.status === "submitted" || c.status === "graded"),
+      );
       const casesGraded = cases.filter((c) => c.status === "graded" && c.score != null);
-      const attempts = db.attempts.filter((a) => ids.has(a.student_id) && a.status === "submitted");
+      const attempts = db.attempts.filter((a) => ids.has(a.student_id) && counted(a.assessment_id) && a.status === "submitted");
       return {
         team_id: t.id,
         name: t.name,

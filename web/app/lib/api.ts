@@ -1545,6 +1545,8 @@ export interface AnalyticsFilters {
   /** YYYY-MM-DD bounds. */
   from?: string;
   to?: string;
+  /** One of an instructor's course assignments: only its roster, its work and its term. */
+  courseId?: string | null;
   /** Summary only: also attach `group_trend`, one series per group. */
   groupTrend?: boolean;
 }
@@ -1557,6 +1559,7 @@ export async function fetchAnalyticsSummary(
   if (filters.sectionIds?.length) params.set('section_ids', filters.sectionIds.join(','));
   if (filters.from) params.set('from', filters.from);
   if (filters.to) params.set('to', filters.to);
+  if (filters.courseId) params.set('offering_id', filters.courseId);
   if (filters.groupTrend) params.set('group_trend', '1');
   const query = params.toString();
 
@@ -1592,6 +1595,7 @@ export async function fetchStudentLeaderboard(
   if (filters.sectionIds?.length) params.set('section_ids', filters.sectionIds.join(','));
   if (filters.from) params.set('from', filters.from);
   if (filters.to) params.set('to', filters.to);
+  if (filters.courseId) params.set('offering_id', filters.courseId);
   const query = params.toString();
 
   try {
@@ -1627,6 +1631,7 @@ export async function generateAnalyticsNarrative(
   if (filters.sectionIds?.length) params.set('section_ids', filters.sectionIds.join(','));
   if (filters.from) params.set('from', filters.from);
   if (filters.to) params.set('to', filters.to);
+  if (filters.courseId) params.set('offering_id', filters.courseId);
   const query = params.toString();
 
   try {
@@ -3814,9 +3819,12 @@ export interface GroupSummary {
   case_presentations?: { submitted: number; graded: number; average: number | null };
 }
 
-export async function fetchGroupSummaries(): Promise<{ viewer_id: string | null; groups: GroupSummary[] } | null> {
+export async function fetchGroupSummaries(
+  courseId?: string | null,
+): Promise<{ viewer_id: string | null; groups: GroupSummary[] } | null> {
   try {
-    const res = await apiFetch('/api/faculty/teams/summary', { credentials: 'include' });
+    const query = courseId ? `?offering_id=${courseId}` : '';
+    const res = await apiFetch(`/api/faculty/teams/summary${query}`, { credentials: 'include' });
     const json = (await res.json()) as { viewer_id?: string; groups?: GroupSummary[]; error?: string };
     if (!res.ok) {
       console.error('fetchGroupSummaries() failed', json.error);
@@ -4663,6 +4671,7 @@ export const fetchCoursePerformance = (filters: AnalyticsFilters = {}) => {
   if (filters.sectionIds?.length) params.set('section_ids', filters.sectionIds.join(','));
   if (filters.from) params.set('from', filters.from);
   if (filters.to) params.set('to', filters.to);
+  if (filters.courseId) params.set('offering_id', filters.courseId);
   const query = params.toString();
   return courseRequest<{ courses: CoursePerformance[] }>(`/api/analytics/courses${query ? `?${query}` : ''}`);
 };

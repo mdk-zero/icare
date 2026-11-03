@@ -10,6 +10,18 @@ import { usePageData } from "../../lib/use-page-data";
 
 const pct = (n: number | null) => (n === null ? "—" : `${n}%`);
 
+/**
+ * The groups' averages, across every course or in one. The page reads the same
+ * cache entry to lay out its row, so the two never fetch it twice.
+ */
+export function useGroupSummaries(courseId: string | null) {
+  return usePageData(
+    courseId ? `faculty:group-summaries:${courseId}` : "faculty:group-summaries",
+    () => fetchGroupSummaries(courseId),
+    { keepPreviousData: true },
+  );
+}
+
 const SCALE = [0, 25, 50, 75, 100];
 
 /** One averaged kind of graded work, drawn as a column per group. */
@@ -259,10 +271,11 @@ function GroupTable({ groups, measures }: { groups: GroupSummary[]; measures: Me
  * filter), with the mean of its members' individual grades per kind of work:
  * Patient Cases, quizzes, and case presentations and Return Demonstrations
  * once any are graded. Read live, not from the warehouse, and all-time rather
- * than the date range, so it says so. Hidden when there are no groups.
+ * than the date range, so it says so. For one course (`courseId`), only its
+ * groups and its own work. Hidden when there are no groups.
  */
-export default function GroupPerformance({ sectionIds }: { sectionIds: string[] }) {
-  const { data } = usePageData("faculty:group-summaries", fetchGroupSummaries);
+export default function GroupPerformance({ sectionIds, courseId }: { sectionIds: string[]; courseId: string | null }) {
+  const { data } = useGroupSummaries(courseId);
   const [view, setView] = useState<"chart" | "table">("chart");
   const groups = (data?.groups ?? []).filter(
     (g) => sectionIds.length === 0 || sectionIds.includes(g.section_id),
@@ -279,7 +292,9 @@ export default function GroupPerformance({ sectionIds }: { sectionIds: string[] 
           </div>
           <div>
             <h3 className="font-semibold text-gray-900">Performance by Group</h3>
-            <p className="text-xs text-gray-400">Averages of each member&apos;s own grades, all time</p>
+            <p className="text-xs text-gray-400">
+              Averages of each member&apos;s own grades, {courseId ? "in this course" : "all time"}
+            </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
