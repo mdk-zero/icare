@@ -18,6 +18,7 @@
 import { config } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import {
+  SelectionError,
   selectQuestionsForAttempt,
   distribute,
   type SelectionResult,
@@ -450,7 +451,7 @@ async function main() {
   );
   const { data: assessments } = await supabase
     .from('assessments')
-    .select('id, title, total_questions')
+    .select('id, title, total_questions, is_published')
     .order('title');
   const { data: student } = await supabase
     .from('users')
@@ -478,6 +479,12 @@ async function main() {
       check(`${a.title}: no duplicates`,
         new Set(r.questions.map((q) => q.id)).size === r.questions.length);
     } catch (err) {
+      // A draft with nothing in it yet isn't broken: no student can reach it,
+      // and publishing validates it first. A published one is a real failure.
+      if (err instanceof SelectionError && !a.is_published) {
+        console.log(`  ${a.title}: skipped, unpublished draft (${err.message})`);
+        continue;
+      }
       console.log(`  ${a.title}: ERROR ${(err as Error).message}`);
       failures++;
     }
