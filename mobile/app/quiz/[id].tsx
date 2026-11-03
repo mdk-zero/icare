@@ -605,7 +605,7 @@ export default function QuizInterfaceScreen() {
               onPress={openReview}
               disabled={missed.length === 0}
             />
-            <PrimaryButton title="Back to quizzes" onPress={() => router.back()} variant="outline" />
+            <PrimaryButton title="Return" onPress={() => router.back()} variant="outline" />
           </View>
         </Card>
 
