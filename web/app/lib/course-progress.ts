@@ -5,8 +5,8 @@
  * same way.
  */
 
-import { quizGrade } from './quiz-attempts';
-import { ratingForCredit, ratingLabel } from './task-ratings';
+import { quizGrade } from "./quiz-attempts";
+import { ratingForCredit, ratingLabel } from "./task-ratings";
 
 /** "2026-08-10": a calendar date, as Postgres `date` columns come back. */
 export type IsoDate = string;
@@ -16,20 +16,20 @@ export interface TermWindow {
   ends_on: IsoDate;
 }
 
-export type TermStatus = 'upcoming' | 'current' | 'ended';
+export type TermStatus = "upcoming" | "current" | "ended";
 
 /**
  * The school runs on Philippine time, and nothing else in the app sets a
  * timezone, so a term's dates are read as Manila (UTC+8) calendar days.
  */
-const MANILA_OFFSET = '+08:00';
+const MANILA_OFFSET = "+08:00";
 const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000;
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Whether the value is a real YYYY-MM-DD date (no 2026-02-30). */
 export function isIsoDate(value: unknown): value is IsoDate {
-  if (typeof value !== 'string' || !ISO_DATE.test(value)) return false;
+  if (typeof value !== "string" || !ISO_DATE.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
@@ -46,9 +46,9 @@ export function addDays(date: IsoDate, days: number): IsoDate {
 }
 
 export function termStatus(term: TermWindow, today: IsoDate = manilaToday()): TermStatus {
-  if (today < term.starts_on) return 'upcoming';
-  if (today > term.ends_on) return 'ended';
-  return 'current';
+  if (today < term.starts_on) return "upcoming";
+  if (today > term.ends_on) return "ended";
+  return "current";
 }
 
 /**
@@ -74,12 +74,16 @@ export function termsOverlap(a: TermWindow, b: TermWindow): boolean {
   return a.starts_on <= b.ends_on && b.starts_on <= a.ends_on;
 }
 
-const MONTH_DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-const MONTH_DAY_YEAR = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-  timeZone: 'UTC',
+const MONTH_DAY = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
+const MONTH_DAY_YEAR = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
 });
 
 /** "Aug 10 – Dec 18, 2026", or "Jan 5, 2026 – May 22, 2027" across years. */
@@ -91,16 +95,16 @@ export function formatTermDates(term: TermWindow): string {
 }
 
 export const TERM_STATUS_LABEL: Record<TermStatus, string> = {
-  upcoming: 'Upcoming',
-  current: 'Current',
-  ended: 'Ended',
+  upcoming: "Upcoming",
+  current: "Current",
+  ended: "Ended",
 };
 
 /** Field limits, matching the checks in migration 065. */
 export const COURSE_LIMITS = {
   termName: 80,
   courseCode: 20,
-  courseTitle: 120,
+  courseTitle: 1000,
   courseDescription: 2000,
 } as const;
 
@@ -108,15 +112,15 @@ export const COURSE_LIMITS = {
 // Requirements
 // ---------------------------------------------------------------------------
 
-export type RequirementKind = 'activity' | 'count' | 'skill' | 'manual';
+export type RequirementKind = "activity" | "count" | "skill" | "manual";
 /**
  * scenario = Patient Case, assessment = Quiz, return_demo = Return
  * Demonstration (a scenario of kind 'return_demo', 072: only ever an
  * automatic item, scored like a Patient Case).
  */
-export type ActivityType = 'scenario' | 'assessment' | 'case_presentation' | 'return_demo';
+export type ActivityType = "scenario" | "assessment" | "case_presentation" | "return_demo";
 /** A manual item scored by hand: hands-on lab work, or a written (paper) exam (067). */
-export type ManualType = 'lab' | 'exam';
+export type ManualType = "lab" | "exam";
 
 /** A course_requirements row. */
 export interface RequirementRow {
@@ -162,7 +166,7 @@ export interface RequirementScoreRow {
 }
 
 /** An entered score, as a cell carries it. */
-export type ScoreEntry = Pick<RequirementScoreRow, 'id' | 'score' | 'note' | 'entered_at'>;
+export type ScoreEntry = Pick<RequirementScoreRow, "id" | "score" | "note" | "entered_at">;
 
 // ---------------------------------------------------------------------------
 // Input
@@ -177,15 +181,19 @@ export interface TermInput {
 }
 
 export function parseTerm(body: Record<string, unknown>): Parsed<TermInput> {
-  const name = typeof body.name === 'string' ? body.name.trim() : '';
-  if (!name) return { ok: false, error: 'Semester name is required' };
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  if (!name) return { ok: false, error: "Semester name is required" };
   if (name.length > COURSE_LIMITS.termName) {
-    return { ok: false, error: `Semester name is too long (max ${COURSE_LIMITS.termName} characters)` };
+    return {
+      ok: false,
+      error: `Semester name is too long (max ${COURSE_LIMITS.termName} characters)`,
+    };
   }
   if (!isIsoDate(body.starts_on) || !isIsoDate(body.ends_on)) {
-    return { ok: false, error: 'Start and end dates are required' };
+    return { ok: false, error: "Start and end dates are required" };
   }
-  if (body.ends_on < body.starts_on) return { ok: false, error: 'The semester must end on or after its start date' };
+  if (body.ends_on < body.starts_on)
+    return { ok: false, error: "The semester must end on or after its start date" };
   return { ok: true, value: { name, starts_on: body.starts_on, ends_on: body.ends_on } };
 }
 
@@ -196,40 +204,50 @@ export interface CourseInput {
 }
 
 export function parseCourse(body: Record<string, unknown>): Parsed<CourseInput> {
-  const code = typeof body.code === 'string' ? body.code.trim().replace(/\s+/g, ' ') : '';
-  const title = typeof body.title === 'string' ? body.title.trim() : '';
-  const description = typeof body.description === 'string' ? body.description.trim() : '';
-  if (!code) return { ok: false, error: 'Course code is required' };
+  const code = typeof body.code === "string" ? body.code.trim().replace(/\s+/g, " ") : "";
+  const title = typeof body.title === "string" ? body.title.trim() : "";
+  const description = typeof body.description === "string" ? body.description.trim() : "";
+  if (!code) return { ok: false, error: "Course code is required" };
   if (code.length > COURSE_LIMITS.courseCode) {
-    return { ok: false, error: `Course code is too long (max ${COURSE_LIMITS.courseCode} characters)` };
+    return {
+      ok: false,
+      error: `Course code is too long (max ${COURSE_LIMITS.courseCode} characters)`,
+    };
   }
-  if (!title) return { ok: false, error: 'Course title is required' };
+  if (!title) return { ok: false, error: "Course title is required" };
   if (title.length > COURSE_LIMITS.courseTitle) {
-    return { ok: false, error: `Course title is too long (max ${COURSE_LIMITS.courseTitle} characters)` };
+    return {
+      ok: false,
+      error: `Course title is too long (max ${COURSE_LIMITS.courseTitle} characters)`,
+    };
   }
   if (description.length > COURSE_LIMITS.courseDescription) {
-    return { ok: false, error: `Description is too long (max ${COURSE_LIMITS.courseDescription} characters)` };
+    return {
+      ok: false,
+      error: `Description is too long (max ${COURSE_LIMITS.courseDescription} characters)`,
+    };
   }
   return { ok: true, value: { code, title, description } };
 }
 
 /** Fields an instructor sets on a checklist item. */
-export type RequirementInput = Omit<RequirementRow, 'id' | 'offering_id' | 'position'>;
+export type RequirementInput = Omit<RequirementRow, "id" | "offering_id" | "position">;
 
 export const MAX_REQUIREMENTS = 100;
 export const MAX_REQUIREMENT_TITLE = 200;
 export const MAX_TARGET_COUNT = 200;
 
 const ACTIVITY_LINK = {
-  scenario: 'scenario_id',
-  assessment: 'assessment_id',
-  case_presentation: 'presentation_id',
+  scenario: "scenario_id",
+  assessment: "assessment_id",
+  case_presentation: "presentation_id",
 } as const;
 
 function optionalScore(value: unknown): Parsed<number | null> {
-  if (value === null || value === undefined || value === '') return { ok: true, value: null };
-  const n = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(n) || n < 0 || n > 100) return { ok: false, error: 'Minimum score must be between 0 and 100' };
+  if (value === null || value === undefined || value === "") return { ok: true, value: null };
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || n < 0 || n > 100)
+    return { ok: false, error: "Minimum score must be between 0 and 100" };
   return { ok: true, value: Math.round(n * 100) / 100 };
 }
 
@@ -241,10 +259,10 @@ function optionalScore(value: unknown): Parsed<number | null> {
  */
 export function parseRequirement(body: Record<string, unknown>): Parsed<RequirementInput> {
   const kind = body.kind;
-  if (kind !== 'activity' && kind !== 'count' && kind !== 'skill' && kind !== 'manual') {
-    return { ok: false, error: 'Choose what kind of requirement this is' };
+  if (kind !== "activity" && kind !== "count" && kind !== "skill" && kind !== "manual") {
+    return { ok: false, error: "Choose what kind of requirement this is" };
   }
-  const title = typeof body.title === 'string' ? body.title.trim() : '';
+  const title = typeof body.title === "string" ? body.title.trim() : "";
   if (title.length > MAX_REQUIREMENT_TITLE) {
     return { ok: false, error: `Title is too long (max ${MAX_REQUIREMENT_TITLE} characters)` };
   }
@@ -262,37 +280,43 @@ export function parseRequirement(body: Record<string, unknown>): Parsed<Requirem
     skill_id: null,
     min_score: null,
     skills_only: false,
-    manual_type: 'lab',
+    manual_type: "lab",
   };
 
-  if (kind === 'manual') {
-    if (!title) return { ok: false, error: 'Describe the requirement' };
-    const type = body.manual_type ?? 'lab';
-    if (type !== 'lab' && type !== 'exam') return { ok: false, error: 'Choose Lab Activity or Written Exam' };
+  if (kind === "manual") {
+    if (!title) return { ok: false, error: "Describe the requirement" };
+    const type = body.manual_type ?? "lab";
+    if (type !== "lab" && type !== "exam")
+      return { ok: false, error: "Choose Lab Activity or Written Exam" };
     return { ok: true, value: { ...base, manual_type: type } };
   }
 
-  if (kind === 'skill') {
-    if (typeof body.skill_id !== 'string' || !body.skill_id) return { ok: false, error: 'Choose a skill' };
+  if (kind === "skill") {
+    if (typeof body.skill_id !== "string" || !body.skill_id)
+      return { ok: false, error: "Choose a skill" };
     return { ok: true, value: { ...base, skill_id: body.skill_id, min_score: score.value } };
   }
 
   const type = body.activity_type;
-  if (kind === 'activity') {
-    if (type !== 'scenario' && type !== 'assessment' && type !== 'case_presentation') {
-      return { ok: false, error: 'Choose a Patient Case, Quiz or Case Presentation' };
+  if (kind === "activity") {
+    if (type !== "scenario" && type !== "assessment" && type !== "case_presentation") {
+      return { ok: false, error: "Choose a Patient Case, Quiz or Case Presentation" };
     }
     const link = ACTIVITY_LINK[type];
     const id = body[link];
-    if (typeof id !== 'string' || !id) return { ok: false, error: 'Choose which one' };
-    return { ok: true, value: { ...base, activity_type: type, [link]: id, min_score: score.value } };
+    if (typeof id !== "string" || !id) return { ok: false, error: "Choose which one" };
+    return {
+      ok: true,
+      value: { ...base, activity_type: type, [link]: id, min_score: score.value },
+    };
   }
 
   // count
-  if (type !== 'scenario' && type !== 'assessment' && type !== 'case_presentation') {
-    return { ok: false, error: 'Choose what to count' };
+  if (type !== "scenario" && type !== "assessment" && type !== "case_presentation") {
+    return { ok: false, error: "Choose what to count" };
   }
-  const target = typeof body.target_count === 'number' ? body.target_count : Number(body.target_count);
+  const target =
+    typeof body.target_count === "number" ? body.target_count : Number(body.target_count);
   if (!Number.isInteger(target) || target < 1 || target > MAX_TARGET_COUNT) {
     return { ok: false, error: `The number must be a whole number from 1 to ${MAX_TARGET_COUNT}` };
   }
@@ -303,16 +327,16 @@ export function parseRequirement(body: Record<string, unknown>): Parsed<Requirem
       activity_type: type,
       target_count: target,
       min_score: score.value,
-      skills_only: (type === 'scenario' || type === 'assessment') && body.skills_only === true,
+      skills_only: (type === "scenario" || type === "assessment") && body.skills_only === true,
     },
   };
 }
 
 /** Score thresholds offered for skill items, matching the rating bands in task-ratings.ts. */
 export const SKILL_LEVELS: { value: number | null; label: string }[] = [
-  { value: null, label: 'Any graded work' },
-  { value: 50, label: 'Satisfactory or better' },
-  { value: 83, label: 'Excellent' },
+  { value: null, label: "Any graded work" },
+  { value: 50, label: "Satisfactory or better" },
+  { value: 83, label: "Excellent" },
 ];
 
 /** Titles of what checklist items link to, for their labels. */
@@ -324,19 +348,19 @@ export interface RequirementNames {
 }
 
 const COUNT_NOUN: Record<ActivityType, [string, string]> = {
-  scenario: ['Patient Case', 'Patient Cases'],
-  assessment: ['Quiz', 'Quizzes'],
-  case_presentation: ['Case Presentation', 'Case Presentations'],
-  return_demo: ['Return Demonstration', 'Return Demonstrations'],
+  scenario: ["Patient Case", "Patient Cases"],
+  assessment: ["Quiz", "Quizzes"],
+  case_presentation: ["Case Presentation", "Case Presentations"],
+  return_demo: ["Return Demonstration", "Return Demonstrations"],
 };
 
 function scoreSuffix(min: number | null): string {
-  return min === null ? '' : ` · ${Number(min)}%+`;
+  return min === null ? "" : ` · ${Number(min)}%+`;
 }
 
 /** Whether a linked activity was deleted after the item was made. */
 export function isRemovedActivity(req: RequirementRow): boolean {
-  return req.kind === 'activity' && !req.scenario_id && !req.assessment_id && !req.presentation_id;
+  return req.kind === "activity" && !req.scenario_id && !req.assessment_id && !req.presentation_id;
 }
 
 /**
@@ -346,31 +370,38 @@ export function isRemovedActivity(req: RequirementRow): boolean {
  */
 export function requirementLabel(req: RequirementRow, names: RequirementNames): string {
   switch (req.kind) {
-    case 'manual':
+    case "manual":
       return req.title;
-    case 'skill': {
-      const level = SKILL_LEVELS.find((l) => l.value === (req.min_score === null ? null : Number(req.min_score)));
+    case "skill": {
+      const level = SKILL_LEVELS.find(
+        (l) => l.value === (req.min_score === null ? null : Number(req.min_score)),
+      );
       const title = req.skill_id ? names.skills[req.skill_id] : null;
       const levelText = level ? level.label : `${Number(req.min_score)}%+`;
-      return `Skill ${req.skill_id}${title ? ` · ${title}` : ''} (${levelText.toLowerCase()})`;
+      return `Skill ${req.skill_id}${title ? ` · ${title}` : ""} (${levelText.toLowerCase()})`;
     }
-    case 'activity': {
-      if (isRemovedActivity(req)) return `Removed ${COUNT_NOUN[req.activity_type ?? 'scenario'][0]}`;
-      const [noun] = COUNT_NOUN[req.activity_type ?? 'scenario'];
+    case "activity": {
+      if (isRemovedActivity(req))
+        return `Removed ${COUNT_NOUN[req.activity_type ?? "scenario"][0]}`;
+      const [noun] = COUNT_NOUN[req.activity_type ?? "scenario"];
       const title =
         (req.scenario_id && names.scenarios[req.scenario_id]) ||
         (req.assessment_id && names.quizzes[req.assessment_id]) ||
         (req.presentation_id && names.presentations[req.presentation_id]) ||
-        'Untitled';
+        "Untitled";
       return `${noun}: ${title}${scoreSuffix(req.min_score)}`;
     }
-    case 'count': {
-      const type = req.activity_type ?? 'scenario';
+    case "count": {
+      const type = req.activity_type ?? "scenario";
       const n = req.target_count ?? 1;
       const noun = COUNT_NOUN[type][n === 1 ? 0 : 1];
-      const verb = type === 'assessment' ? (req.min_score === null ? 'completed' : 'passed') : 'graded';
-      const min = type === 'assessment' && req.min_score !== null ? ` at ${Number(req.min_score)}%+` : scoreSuffix(type === 'assessment' ? null : req.min_score);
-      return `${n} ${noun} ${verb}${min}${req.skills_only ? ' (course skills only)' : ''}`;
+      const verb =
+        type === "assessment" ? (req.min_score === null ? "completed" : "passed") : "graded";
+      const min =
+        type === "assessment" && req.min_score !== null
+          ? ` at ${Number(req.min_score)}%+`
+          : scoreSuffix(type === "assessment" ? null : req.min_score);
+      return `${n} ${noun} ${verb}${min}${req.skills_only ? " (course skills only)" : ""}`;
     }
   }
 }
@@ -379,29 +410,38 @@ export function requirementLabel(req: RequirementRow, names: RequirementNames): 
  * The kind of work an item is about, which names and groups it. Manual items
  * are hands-on lab work ('manual') or a written exam ('exam').
  */
-export type RequirementTopicKey = ActivityType | 'skill' | 'manual' | 'exam';
+export type RequirementTopicKey = ActivityType | "skill" | "manual" | "exam";
 
 /** What decides an item's topic. manual_type is optional: without it a manual item is a Lab Activity. */
-export type TopicFields = Pick<RequirementRow, 'kind' | 'activity_type'> & Partial<Pick<RequirementRow, 'manual_type'>>;
+export type TopicFields = Pick<RequirementRow, "kind" | "activity_type"> &
+  Partial<Pick<RequirementRow, "manual_type">>;
 
 /** The order the checklist is shown in: graded app work, written exams, skills, hands-on lab work. */
-export const TOPIC_ORDER: readonly RequirementTopicKey[] = ['scenario', 'assessment', 'exam', 'case_presentation', 'return_demo', 'skill', 'manual'];
+export const TOPIC_ORDER: readonly RequirementTopicKey[] = [
+  "scenario",
+  "assessment",
+  "exam",
+  "case_presentation",
+  "return_demo",
+  "skill",
+  "manual",
+];
 
 const TOPIC: Record<RequirementTopicKey, string> = {
-  scenario: 'Patient Case',
-  assessment: 'Quiz',
-  exam: 'Written Exam',
-  case_presentation: 'Case Presentation',
-  return_demo: 'Return Demonstration',
+  scenario: "Patient Case",
+  assessment: "Quiz",
+  exam: "Written Exam",
+  case_presentation: "Case Presentation",
+  return_demo: "Return Demonstration",
   // Pre-070 checklist items naming one skill; "Return Demonstration" is the activity now (072).
-  skill: 'Skill',
-  manual: 'Lab Activity',
+  skill: "Skill",
+  manual: "Lab Activity",
 };
 
 export function topicKey(req: TopicFields): RequirementTopicKey {
-  if (req.kind === 'manual') return req.manual_type === 'exam' ? 'exam' : 'manual';
-  if (req.kind === 'skill') return 'skill';
-  return req.activity_type ?? 'scenario';
+  if (req.kind === "manual") return req.manual_type === "exam" ? "exam" : "manual";
+  if (req.kind === "skill") return "skill";
+  return req.activity_type ?? "scenario";
 }
 
 export function requirementTopic(req: TopicFields): string {
@@ -411,7 +451,10 @@ export function requirementTopic(req: TopicFields): string {
 /** The checklist as it is shown: grouped by topic in TOPIC_ORDER, each group in checklist order. */
 export function inTopicOrder<R extends TopicFields>(requirements: readonly R[]): R[] {
   const rank = (r: R) => TOPIC_ORDER.indexOf(topicKey(r));
-  return requirements.map((r, i) => ({ r, i })).sort((a, b) => rank(a.r) - rank(b.r) || a.i - b.i).map(({ r }) => r);
+  return requirements
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => rank(a.r) - rank(b.r) || a.i - b.i)
+    .map(({ r }) => r);
 }
 
 /**
@@ -435,20 +478,34 @@ export function requirementNames(requirements: readonly TopicFields[]): string[]
  * pre-070 skill item covers its one skill.
  */
 export function skillCoverage(
-  requirements: readonly (TopicFields & { id: string; skill_id: string | null; skill_ids?: readonly string[] })[],
+  requirements: readonly (TopicFields & {
+    id: string;
+    skill_id: string | null;
+    skill_ids?: readonly string[];
+  })[],
 ): Map<string, { id: string; name: string }[]> {
   const names = requirementNames(requirements);
   const coverage = new Map<string, { id: string; name: string }[]>();
   requirements.forEach((r, i) => {
-    const skills = r.kind === 'skill' ? (r.skill_id ? [r.skill_id] : []) : r.activity_type === 'return_demo' ? r.skill_ids ?? [] : [];
-    for (const skill of new Set(skills)) coverage.set(skill, [...(coverage.get(skill) ?? []), { id: r.id, name: names[i] }]);
+    const skills =
+      r.kind === "skill"
+        ? r.skill_id
+          ? [r.skill_id]
+          : []
+        : r.activity_type === "return_demo"
+          ? (r.skill_ids ?? [])
+          : [];
+    for (const skill of new Set(skills))
+      coverage.set(skill, [...(coverage.get(skill) ?? []), { id: r.id, name: names[i] }]);
   });
   return coverage;
 }
 
 /** What an item asks for: the instructor's own label, if any, then requirementLabel(). */
-export function requirementDetail(req: Pick<RequirementRow, 'kind' | 'title'> & { label: string }): string {
-  return req.title && req.kind !== 'manual' ? `${req.title} — ${req.label}` : req.label;
+export function requirementDetail(
+  req: Pick<RequirementRow, "kind" | "title"> & { label: string },
+): string {
+  return req.title && req.kind !== "manual" ? `${req.title} — ${req.label}` : req.label;
 }
 
 // ---------------------------------------------------------------------------
@@ -492,12 +549,19 @@ export interface ProgressFacts {
   scores: RequirementScoreRow[];
 }
 
-export const NO_FACTS: ProgressFacts = { cases: [], attempts: [], quizSkills: {}, presentations: [], checks: [], scores: [] };
+export const NO_FACTS: ProgressFacts = {
+  cases: [],
+  attempts: [],
+  quizSkills: {},
+  presentations: [],
+  checks: [],
+  scores: [],
+};
 
 export interface ItemProgress {
   done: boolean;
   /** graded: met by graded work. instructor: met by a score you entered, or your tick or mark. */
-  source: 'graded' | 'instructor' | null;
+  source: "graded" | "instructor" | null;
   /** Count items: qualifying work so far. Others: 1 when met, else 0. */
   current: number;
   target: number;
@@ -532,19 +596,22 @@ export interface ItemProgress {
  * it is met.
  */
 export function scoreBlock(req: RequirementRow, item: ItemProgress | undefined): string | null {
-  if (isRemovedActivity(req)) return 'The linked activity was deleted';
-  if (req.kind === 'manual') return null;
-  if (req.kind === 'count') return item?.done ? 'Already met: no more scores are needed' : null;
-  return item?.has_grade ? 'The student already has a grade on this; change it by regrading their work' : null;
+  if (isRemovedActivity(req)) return "The linked activity was deleted";
+  if (req.kind === "manual") return null;
+  if (req.kind === "count") return item?.done ? "Already met: no more scores are needed" : null;
+  return item?.has_grade
+    ? "The student already has a grade on this; change it by regrading their work"
+    : null;
 }
 
-export const canEnterScore = (req: RequirementRow, item: ItemProgress | undefined) => scoreBlock(req, item) === null;
+export const canEnterScore = (req: RequirementRow, item: ItemProgress | undefined) =>
+  scoreBlock(req, item) === null;
 
 export const MAX_SCORE_NOTE = 500;
 
 /** An entered score: a number from 0 to 100, kept to two decimals, or null. */
 export function parseScore(value: unknown): number | null {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) return null;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100) return null;
   return Math.round(value * 100) / 100;
 }
 
@@ -553,8 +620,10 @@ export function scoreBand(score: number): string {
   return ratingLabel(ratingForCredit(score / 100));
 }
 
-const meets = (score: number | null, min: number | null) => min === null || (score !== null && score >= min);
-const earliest = (dates: string[]) => (dates.length ? dates.reduce((a, b) => (a < b ? a : b)) : null);
+const meets = (score: number | null, min: number | null) =>
+  min === null || (score !== null && score >= min);
+const earliest = (dates: string[]) =>
+  dates.length ? dates.reduce((a, b) => (a < b ? a : b)) : null;
 const max = (scores: (number | null)[]) => {
   const real = scores.filter((s): s is number => s !== null);
   return real.length ? Math.max(...real) : null;
@@ -583,7 +652,10 @@ function quizGrades(attempts: readonly QuizAttemptFact[]): QuizAttemptFact[] {
       score: quizGrade(rows.map((r) => r.score)),
       submitted_at: rows.map((r) => r.submitted_at).reduce((a, b) => (a > b ? a : b)),
       skill_scores: Object.fromEntries(
-        [...skills].map((skill) => [skill, quizGrade(rows.map((r) => r.skill_scores[skill] ?? r.score)) as number]),
+        [...skills].map((skill) => [
+          skill,
+          quizGrade(rows.map((r) => r.skill_scores[skill] ?? r.score)) as number,
+        ]),
       ),
     };
   });
@@ -604,16 +676,22 @@ export function evaluate(
   studentIds: readonly string[],
   facts: ProgressFacts,
 ): Record<string, Record<string, ItemProgress>> {
-  const inside = <T>(rows: T[], at: (row: T) => string | null) => rows.filter((r) => inTerm(at(r), term));
+  const inside = <T>(rows: T[], at: (row: T) => string | null) =>
+    rows.filter((r) => inTerm(at(r), term));
   const cases = inside(facts.cases, (c) => c.completed_at);
   const attempts = quizGrades(inside(facts.attempts, (a) => a.submitted_at));
   const presentations = inside(facts.presentations, (p) => p.graded_at);
   const courseSkills = new Set(courseSkillIds);
   const check = new Map(facts.checks.map((c) => [`${c.requirement_id}:${c.student_id}`, c]));
   const entered = new Map<string, ScoreEntry[]>();
-  for (const row of [...(facts.scores ?? [])].sort((a, b) => a.entered_at.localeCompare(b.entered_at))) {
+  for (const row of [...(facts.scores ?? [])].sort((a, b) =>
+    a.entered_at.localeCompare(b.entered_at),
+  )) {
     const key = `${row.requirement_id}:${row.student_id}`;
-    entered.set(key, [...(entered.get(key) ?? []), { id: row.id, score: Number(row.score), note: row.note, entered_at: row.entered_at }]);
+    entered.set(key, [
+      ...(entered.get(key) ?? []),
+      { id: row.id, score: Number(row.score), note: row.note, entered_at: row.entered_at },
+    ]);
   }
 
   const result: Record<string, Record<string, ItemProgress>> = {};
@@ -632,7 +710,7 @@ export function evaluate(
       if (auto.done) {
         row[req.id] = { ...base, source: by };
       } else if (tick) {
-        row[req.id] = { ...base, done: true, source: 'instructor', done_at: tick.checked_at };
+        row[req.id] = { ...base, done: true, source: "instructor", done_at: tick.checked_at };
       } else {
         row[req.id] = { ...base, source: null };
       }
@@ -642,13 +720,19 @@ export function evaluate(
   return result;
 }
 
-type Judged = Omit<ItemProgress, 'source' | 'note' | 'entries' | 'marked'> & { by: ItemProgress['source'] };
+type Judged = Omit<ItemProgress, "source" | "note" | "entries" | "marked"> & {
+  by: ItemProgress["source"];
+};
 
 type Evidence = { at: string; score: number | null };
 
 function judge(
   req: RequirementRow,
-  own: { cases: GradedCaseFact[]; attempts: QuizAttemptFact[]; presentations: GradedPresentationFact[] },
+  own: {
+    cases: GradedCaseFact[];
+    attempts: QuizAttemptFact[];
+    presentations: GradedPresentationFact[];
+  },
   quizSkills: Record<string, string[]>,
   courseSkills: Set<string>,
   entries: ScoreEntry[],
@@ -656,14 +740,17 @@ function judge(
   const min = req.min_score;
   const enteredEvidence: Evidence[] = entries.map((e) => ({ at: e.entered_at, score: e.score }));
   // Met by graded work if it can be, else by an entered score.
-  const once = (graded: Evidence[], level: (best: number | null) => string | null = () => null): Judged => {
+  const once = (
+    graded: Evidence[],
+    level: (best: number | null) => string | null = () => null,
+  ): Judged => {
     const gradedAt = earliest(graded.filter((g) => meets(g.score, min)).map((g) => g.at));
     const enteredAt = earliest(enteredEvidence.filter((e) => meets(e.score, min)).map((e) => e.at));
     const doneAt = gradedAt ?? enteredAt;
     const best = max([...graded, ...enteredEvidence].map((e) => e.score));
     return {
       done: doneAt !== null,
-      by: gradedAt ? 'graded' : enteredAt ? 'instructor' : null,
+      by: gradedAt ? "graded" : enteredAt ? "instructor" : null,
       current: doneAt ? 1 : 0,
       target: 1,
       done_at: doneAt,
@@ -675,46 +762,69 @@ function judge(
   };
 
   switch (req.kind) {
-    case 'manual':
+    case "manual":
       // No minimum: any score the instructor enters meets it.
       return once([]);
 
-    case 'activity': {
+    case "activity": {
       if (req.scenario_id) {
-        return once(own.cases.filter((c) => c.scenario_id === req.scenario_id).map((c) => ({ at: c.completed_at, score: c.score })));
+        return once(
+          own.cases
+            .filter((c) => c.scenario_id === req.scenario_id)
+            .map((c) => ({ at: c.completed_at, score: c.score })),
+        );
       }
       if (req.assessment_id) {
-        return once(own.attempts.filter((a) => a.assessment_id === req.assessment_id).map((a) => ({ at: a.submitted_at, score: a.score })));
+        return once(
+          own.attempts
+            .filter((a) => a.assessment_id === req.assessment_id)
+            .map((a) => ({ at: a.submitted_at, score: a.score })),
+        );
       }
       if (req.presentation_id) {
-        return once(own.presentations.filter((p) => p.presentation_id === req.presentation_id).map((p) => ({ at: p.graded_at, score: p.score })));
+        return once(
+          own.presentations
+            .filter((p) => p.presentation_id === req.presentation_id)
+            .map((p) => ({ at: p.graded_at, score: p.score })),
+        );
       }
       // The linked activity was deleted.
-      return { done: false, by: null, current: 0, target: 1, done_at: null, best_score: null, avg_score: null, level: null, has_grade: false };
+      return {
+        done: false,
+        by: null,
+        current: 0,
+        target: 1,
+        done_at: null,
+        best_score: null,
+        avg_score: null,
+        level: null,
+        has_grade: false,
+      };
     }
 
-    case 'count': {
+    case "count": {
       const target = req.target_count ?? 1;
-      const covers = (skills: string[]) => !req.skills_only || skills.some((s) => courseSkills.has(s));
+      const covers = (skills: string[]) =>
+        !req.skills_only || skills.some((s) => courseSkills.has(s));
       let dates: string[];
       // Every graded score of the kind, met or not, for the average.
       let scores: (number | null)[] = [];
       switch (req.activity_type) {
-        case 'scenario':
-        case 'return_demo': {
+        case "scenario":
+        case "return_demo": {
           const mine = own.cases.filter((c) => covers(c.skills.map((s) => s.skill_id)));
           dates = mine.filter((c) => meets(c.score, min)).map((c) => c.completed_at);
           scores = mine.map((c) => c.score);
           break;
         }
-        case 'assessment': {
+        case "assessment": {
           // Each Quiz counts once, at its grade.
           const mine = own.attempts.filter((a) => covers(quizSkills[a.assessment_id] ?? []));
           dates = mine.filter((a) => meets(a.score, min)).map((a) => a.submitted_at);
           scores = mine.map((a) => a.score);
           break;
         }
-        case 'case_presentation':
+        case "case_presentation":
           dates = own.presentations.filter((p) => meets(p.score, min)).map((p) => p.graded_at);
           scores = own.presentations.map((p) => p.score);
           break;
@@ -724,12 +834,15 @@ function judge(
       const hasGrade = dates.length > 0 || scores.length > 0;
       const graded = [...dates].sort();
       // Each entered score is one more piece of work.
-      const all = [...graded, ...entries.filter((e) => meets(e.score, min)).map((e) => e.entered_at)].sort();
+      const all = [
+        ...graded,
+        ...entries.filter((e) => meets(e.score, min)).map((e) => e.entered_at),
+      ].sort();
       const done = all.length >= target;
       const byGrades = graded.length >= target;
       return {
         done,
-        by: byGrades ? 'graded' : done ? 'instructor' : null,
+        by: byGrades ? "graded" : done ? "instructor" : null,
         current: all.length,
         target,
         done_at: byGrades ? graded[target - 1] : done ? all[target - 1] : null,
@@ -740,14 +853,15 @@ function judge(
       };
     }
 
-    case 'skill': {
+    case "skill": {
       const skill = req.skill_id;
       if (!skill) return once([]);
       const evidence: Evidence[] = [];
       for (const c of own.cases) {
         for (const s of c.skills) {
           // A task the student did not perform earns no credit and is no evidence.
-          if (s.skill_id === skill && s.credit > 0) evidence.push({ at: c.completed_at, score: Math.round(s.credit * 100) });
+          if (s.skill_id === skill && s.credit > 0)
+            evidence.push({ at: c.completed_at, score: Math.round(s.credit * 100) });
         }
       }
       for (const a of own.attempts) {
@@ -777,17 +891,23 @@ export function offeringSummary(
   students: readonly { id: string; done: number; total: number }[],
   progress: Record<string, Record<string, ItemProgress>>,
 ): OfferingSummary {
-  const labs = requirements.filter((r) => r.kind === 'manual');
+  const labs = requirements.filter((r) => r.kind === "manual");
   return {
     students: students.length,
     complete: students.filter((s) => s.total > 0 && s.done === s.total).length,
     in_progress: students.filter((s) => s.done > 0 && s.done < s.total).length,
-    to_score: students.reduce((n, s) => n + labs.filter((r) => !progress[s.id]?.[r.id]?.done).length, 0),
+    to_score: students.reduce(
+      (n, s) => n + labs.filter((r) => !progress[s.id]?.[r.id]?.done).length,
+      0,
+    ),
   };
 }
 
 /** How many of the checklist's items a student has met. */
-export function summarize(row: Record<string, ItemProgress> | undefined, requirements: readonly RequirementRow[]) {
+export function summarize(
+  row: Record<string, ItemProgress> | undefined,
+  requirements: readonly RequirementRow[],
+) {
   return { done: requirements.filter((r) => row?.[r.id]?.done).length, total: requirements.length };
 }
 
@@ -822,25 +942,34 @@ export function studentChecklist(
     if (isRemovedActivity(req)) return [];
     const item = row?.[req.id];
     const done = !!item?.done;
-    return [{ id: req.id, name: names[i], detail: requirementDetail(req), done, status: done ? null : missingStatus(req, item) }];
+    return [
+      {
+        id: req.id,
+        name: names[i],
+        detail: requirementDetail(req),
+        done,
+        status: done ? null : missingStatus(req, item),
+      },
+    ];
   });
 }
 
 /** Where a student stands on an item they haven't met, in words. */
 function missingStatus(req: RequirementRow, item: ItemProgress | undefined): string {
   switch (req.kind) {
-    case 'manual':
-      return 'Not scored yet';
-    case 'count':
+    case "manual":
+      return "Not scored yet";
+    case "count":
       return `${item?.current ?? 0} of ${req.target_count ?? 1} so far`;
-    case 'skill':
-      return item?.level ? `Best so far: ${item.level}` : 'No graded work yet';
-    case 'activity': {
+    case "skill":
+      return item?.level ? `Best so far: ${item.level}` : "No graded work yet";
+    case "activity": {
       // Any graded work meets an item with no minimum, so a score here fell short of one.
       const best = item?.best_score ?? null;
-      const label = req.activity_type === 'assessment' ? 'Average' : 'Best';
-      if (best !== null && req.min_score !== null) return `${label} ${Math.round(best)}%, needs ${Number(req.min_score)}%`;
-      return req.activity_type === 'assessment' ? 'Not taken yet' : 'Not graded yet';
+      const label = req.activity_type === "assessment" ? "Average" : "Best";
+      if (best !== null && req.min_score !== null)
+        return `${label} ${Math.round(best)}%, needs ${Number(req.min_score)}%`;
+      return req.activity_type === "assessment" ? "Not taken yet" : "Not graded yet";
     }
   }
 }
