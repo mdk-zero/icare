@@ -77,7 +77,7 @@ const TOUR = [
       "An intelligent recommendation engine suggests personalised learning paths based on each student’s performance history. Instructors receive actionable insights to target remediation where it matters most.",
     capabilities: [
       "Personalized learning paths based on performance data",
-      "Suggested patient cases and quizzes to address weak areas",
+      "Suggested quizzes to address weak areas",
       "Spaced repetition scheduling for knowledge retention",
       "Instructor insights for targeted remediation",
     ],

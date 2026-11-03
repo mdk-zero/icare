@@ -265,7 +265,7 @@ export default function LoginPage() {
               {[
                 {
                   title: "Adaptive learning paths",
-                  description: "Patient cases that adjust to each student's performance",
+                  description: "Quizzes that adjust to each student's performance",
                   delay: "400ms",
                   icon: faBolt,
                 },

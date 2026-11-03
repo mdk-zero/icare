@@ -95,7 +95,7 @@ const comparison = [
     dimension: "Learning path",
     traditional: "All students follow the same curriculum regardless of existing skill gaps.",
     icare:
-      "ML points each student to the patient cases and quizzes that target their weak areas.",
+      "ML points each student to the quizzes that target their weak areas.",
     icon: ICONS.bolt,
   },
   {
