@@ -598,6 +598,7 @@ export default function StudentDetailClient() {
 
             <div className="grid flex-1 grid-cols-1 sm:grid-cols-2 gap-3">
               <StatTile
+                fitValue
                 icon={faChartLine}
                 iconBg="bg-brand-600/10"
                 iconColor="text-brand-600"
@@ -605,6 +606,7 @@ export default function StudentDetailClient() {
                 label="Avg Score"
               />
               <StatTile
+                fitValue
                 icon={faClipboardList}
                 iconBg="bg-purple-50"
                 iconColor="text-purple-600"
@@ -612,6 +614,7 @@ export default function StudentDetailClient() {
                 label="Quizzes"
               />
               <StatTile
+                fitValue
                 icon={faClock}
                 iconBg="bg-amber-50"
                 iconColor="text-amber-600"
@@ -626,6 +629,7 @@ export default function StudentDetailClient() {
                 label="Last Active"
               />
               <StatTile
+                fitValue
                 icon={
                   !riskPrediction
                     ? faShieldHalved

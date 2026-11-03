@@ -228,15 +228,17 @@ export default function StudentDetailClient() {
               <SendAppLinkButton student={student} />
             </div>
 
-            <div className="grid flex-1 grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid flex-1 grid-cols-1 sm:grid-cols-2 gap-3">
               <StatTile
+                fitValue
                 icon={faChartLine}
                 value={student.average_score !== null ? `${student.average_score}%` : "—"}
                 label="Avg Score"
               />
-              <StatTile icon={faClipboardList} value={student.quizzes_completed} label="Quizzes" />
-              <StatTile icon={faClock} value={formatLastActive(student.last_login_at)} label="Last Active" />
+              <StatTile fitValue icon={faClipboardList} value={student.quizzes_completed} label="Quizzes" />
+              <StatTile fitValue icon={faClock} value={formatLastActive(student.last_login_at)} label="Last Active" />
               <StatTile
+                fitValue
                 icon={riskLevel === "high" ? faTriangleExclamation : faShieldHalved}
                 value={riskLevel ? (riskLevel === "high" ? "Low Performing" : "On Track") : "Not scored yet"}
                 valueColor={
