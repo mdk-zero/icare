@@ -6,7 +6,7 @@ import type { DemoUser } from "../fixtures/people";
 import type { DemoTestRun } from "../fixtures/system";
 import { audit } from "./shared";
 import { auditTrail } from "./admin";
-import { DAY_MS } from "./derive";
+import { DAY_MS, checklistAnswers } from "./derive";
 import { sectionName, userById } from "./scope";
 
 /** The Admin portal: accounts, sign-up requests, system metrics and test results. */
@@ -388,7 +388,11 @@ route("GET", "/api/super-admin/overview", (ctx) => {
 
 route("GET", "/api/super-admin/ml-status", (ctx) => {
   if (!adminOnly(ctx)) return forbidden();
-  const skills = new Set(ctx.db.criteria.map((c) => c.name.split(" · ")[0])).size;
+  const checklist = checklistAnswers(ctx.db);
+  const skills = new Set([
+    ...ctx.db.criteria.map((c) => c.name.split(" · ")[0].replace(/^Skill /, "")),
+    ...checklist.map((a) => a.skill_id),
+  ]).size;
   return {
     models: [
       { kind: "knowledge_tracing", name: "Bayesian Knowledge Tracing", version: "1.0.0", is_baseline: false },
@@ -401,7 +405,7 @@ route("GET", "/api/super-admin/ml-status", (ctx) => {
       fitted: skills,
       chapter: 0,
       default: 0,
-      answers: ctx.db.attempts.reduce((sum, a) => sum + (a.status === "submitted" ? a.total_questions : 0), 0),
+      answers: ctx.db.attempts.reduce((sum, a) => sum + (a.status === "submitted" ? a.total_questions : 0), checklist.length),
       fitted_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
     },
   };

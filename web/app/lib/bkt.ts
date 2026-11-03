@@ -1,11 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { ChecklistRating } from './task-ratings';
 
 /**
  * Bayesian Knowledge Tracing: a student's probability of knowing a skill,
- * traced over their answers on it. The ML service fits the four parameters
- * per Taylor's skill (ml/app/bkt.py, migration 084); this file applies the
- * same update rules, so a review quiz can estimate mastery from the answers up
- * to this moment, including a review finished a minute ago.
+ * traced over their answers on it. An answer is a quiz answer, or a skill's
+ * rating on a finished Patient Case or Return Demonstration (ratingAsAnswer).
+ * The ML service fits the four parameters per Taylor's skill (ml/app/bkt.py,
+ * migration 084); this file applies the same update rules, so a review quiz can
+ * estimate mastery from the answers up to this moment, including a review
+ * finished a minute ago.
  *
  *   p_init   P(L0)  the student already knows the skill
  *   p_learn  P(T)   they learn it after an answer
@@ -49,9 +52,19 @@ export interface SkillMastery {
   title: string;
   /** P(known) after the student's last answer, 0 to 1. */
   mastery: number;
+  /** Quiz answers and rated Patient Case or Return Demonstration tasks on the skill. */
   answers: number;
+  /** Of those, the right answers and the Excellent or Satisfactory ratings. */
   correct: number;
   source: BktSource;
+}
+
+/** One answer on a skill, placed on the timeline the trace reads. */
+export interface SkillAnswer {
+  student_id: string;
+  skill_id: string;
+  at: string;
+  correct: boolean;
 }
 
 /** One skill across the students who have answered on it. */
@@ -132,6 +145,21 @@ export function updateMastery(pKnown: number, correct: boolean, params: BktParam
 /** P(known) after the answers, oldest first; p_init when there are none. */
 export function traceMastery(params: BktParams, answers: readonly boolean[]): number {
   return answers.reduce((pKnown, correct) => updateMastery(pKnown, correct, params), params.p_init);
+}
+
+/**
+ * A skill's rating as an answer: Excellent and Satisfactory are right, Needs
+ * Practice is wrong. Null when it says nothing about the skill: N/A, or a
+ * check-off nobody rated. Keep in step with RATING_ANSWERS in ml/app/bkt.py.
+ */
+export function ratingAsAnswer(rating: ChecklistRating | 'absent' | null): boolean | null {
+  if (rating === 'excellent' || rating === 'satisfactory') return true;
+  return rating === 'needs_practice' ? false : null;
+}
+
+/** Quiz answers and ratings on one timeline; those of one moment keep their order, so a paper stays in paper order. */
+export function oldestFirst<T extends { at: string }>(answers: readonly T[]): T[] {
+  return [...answers].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }
 
 /** Oldest first: runs by when they were handed in, answers by their place on the paper. */

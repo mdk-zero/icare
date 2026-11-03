@@ -1154,7 +1154,7 @@ function MlSection() {
         ) : (
           <p className="text-sm text-gray-700">
             <span className="tabular-nums">
-              {bkt.skills} {bkt.skills === 1 ? "skill" : "skills"} with answers ({bkt.answers.toLocaleString()} in all):{" "}
+              {bkt.skills} {bkt.skills === 1 ? "skill" : "skills"} with results ({bkt.answers.toLocaleString()} in all):{" "}
               {bkt.fitted} fitted, {bkt.chapter} on a chapter&apos;s fit, {bkt.default} on the starting parameters
             </span>
             {bkt.fitted_at && <span className="text-gray-500"> · {new Date(bkt.fitted_at).toLocaleString()}</span>}
@@ -1162,8 +1162,8 @@ function MlSection() {
         )}
       </div>
       <p className="text-xs text-gray-400 mt-3">
-        A fixed offline snapshot from <code className="font-mono">ml/eval/bkt_eval.py</code>, on a public benchmark
-        because live quiz data is too small to score yet. The recommender has no figures here: its evaluation needs a
+        A fixed offline snapshot from <code className="font-mono">ml/eval/bkt_eval.py</code>, on a public benchmark of
+        quiz answers because live data is too small to score yet. The recommender has no figures here: its evaluation needs a
         faculty ground-truth list (<code className="font-mono">ml/eval/recsys_eval.py</code>).
       </p>
     </section>

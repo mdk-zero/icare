@@ -29,7 +29,9 @@ import {
 } from '../app/lib/assessment-selection';
 import { DEFAULT_ATTEMPTS, attemptLimit, quizGrade } from '../app/lib/quiz-attempts';
 import { isPracticeRun } from '../app/lib/quiz-practice';
-import { DEFAULT_BKT, predictCorrect, traceMastery, updateMastery } from '../app/lib/bkt';
+import { DEFAULT_BKT, oldestFirst, predictCorrect, ratingAsAnswer, traceMastery, updateMastery } from '../app/lib/bkt';
+import { loadChecklistAnswers } from '../app/lib/checklist-answers';
+import { loadSkillMastery } from '../app/lib/skill-mastery';
 
 config({ path: '.env.local' });
 
@@ -64,6 +66,7 @@ function fakeClient(tables: Record<string, Record<string, unknown>[]>) {
           return api;
         },
         limit: () => api,
+        range: () => api,
         order: (col: string) => {
           rows = [...rows].sort((a, b) => Number(a[col]) - Number(b[col]));
           return api;
@@ -449,6 +452,115 @@ async function main() {
     check('the skill missed on the other quiz has lower mastery', (b.mastery ?? 1) < (a.mastery ?? 0));
     check('and comes first in the review', r.questions[0].criteria_id === 'c1');
     check('the other quiz adds nothing to this review', r.questions.every((q) => q.id.startsWith('q')));
+  }
+
+  console.log('\n=== Patient Cases and Return Demonstrations count toward mastery ===');
+  {
+    check('Excellent and Satisfactory are right', ratingAsAnswer('excellent') === true && ratingAsAnswer('satisfactory') === true);
+    check('Needs Practice is wrong', ratingAsAnswer('needs_practice') === false);
+    check('N/A, an unrated check-off and "not performed" say nothing',
+      ratingAsAnswer('not_applicable') === null && ratingAsAnswer(null) === null && ratingAsAnswer('absent') === null);
+    check('answers of one moment keep their order',
+      oldestFirst([{ at: '2', n: 1 }, { at: '1', n: 2 }, { at: '2', n: 3 }]).map((a) => a.n).join() === '2,1,3');
+
+    const checklistTables = (): Record<string, Record<string, unknown>[]> => ({
+      scenario_assignments: [
+        { id: 'done', student_id: 'S', scenario_id: 'case', status: 'completed', completed_at: '2026-10-05T00:00:00Z' },
+        { id: 'early', student_id: 'S', scenario_id: 'demo', status: 'completed', completed_at: '2026-09-01T00:00:00Z' },
+        { id: 'open', student_id: 'S', scenario_id: 'case', status: 'in_progress', completed_at: null },
+        { id: 'theirs', student_id: 'T', scenario_id: 'case', status: 'completed', completed_at: '2026-10-05T00:00:00Z' },
+      ],
+      scenario_tasks: [
+        { id: 'needs', scenario_id: 'case', title: 'Assessing Pulse (Skill 1-4)', skill_id: '1-4', sort_order: 2 },
+        { id: 'good', scenario_id: 'case', title: 'Assessing Temperature (Skill 1-1)', skill_id: '1-1', sort_order: 1 },
+        { id: 'na', scenario_id: 'case', title: 'Using a Bidet (Skill 1-6)', skill_id: '1-6', sort_order: 3 },
+        { id: 'unrated', scenario_id: 'case', title: 'Assessing Respiration (Skill 1-7)', skill_id: '1-7', sort_order: 4 },
+        { id: 'starter', scenario_id: 'case', title: 'Develop Care Plan', skill_id: null, sort_order: 5 },
+        { id: 'titled', scenario_id: 'demo', title: 'Assessing Temperature (Skill 1-1)', skill_id: null, sort_order: 1 },
+      ],
+      scenario_task_completions: [
+        { assignment_id: 'done', task_id: 'needs', rating: 'needs_practice' },
+        { assignment_id: 'done', task_id: 'good', rating: 'excellent' },
+        { assignment_id: 'done', task_id: 'na', rating: 'not_applicable' },
+        { assignment_id: 'done', task_id: 'unrated', rating: null },
+        { assignment_id: 'done', task_id: 'starter', rating: 'excellent' },
+        { assignment_id: 'early', task_id: 'titled', rating: 'needs_practice' },
+        { assignment_id: 'open', task_id: 'needs', rating: 'needs_practice' },
+        { assignment_id: 'theirs', task_id: 'needs', rating: 'excellent' },
+      ],
+    });
+
+    const answers = await loadChecklistAnswers(fakeClient(checklistTables()), ['S']);
+    const seen = (at: string) => answers.filter((a) => a.at === at).map((a) => `${a.skill_id}:${a.correct}`).join();
+    check('a finished case gives one answer per rated skill, in checklist order', seen('2026-10-05T00:00:00Z') === '1-1:true,1-4:false', seen('2026-10-05T00:00:00Z'));
+    check('a task with no link falls back to the skill in its title', seen('2026-09-01T00:00:00Z') === '1-1:false');
+    check('an open case and another student add nothing', answers.length === 3 && answers.every((a) => a.student_id === 'S'));
+    check('no students reads nothing', (await loadChecklistAnswers(fakeClient(checklistTables()), [])).length === 0);
+
+    const mastery = (await loadSkillMastery(fakeClient(checklistTables()), ['S'])).get('S') ?? [];
+    const skill = (id: string) => mastery.find((m) => m.skill_id === id);
+    check('a student with no quizzes still gets estimates', mastery.length === 2);
+    check('ratings trace oldest first', Math.abs((skill('1-1')?.mastery ?? 0) - traceMastery(DEFAULT_BKT, [false, true])) < 1e-9);
+    check('and count as results', skill('1-1')?.answers === 2 && skill('1-1')?.correct === 1);
+    check('the weakest skill comes first', mastery[0]?.skill_id === '1-4');
+
+    // Quiz answers on 1-1 and 1-2 tie; only the ratings can separate them.
+    const { tables } = buildFixture({
+      totalQuestions: 4,
+      pools: [
+        { name: 'Skill 1-1', min: 1, count: 2, skill: '1-1' },
+        { name: 'Skill 1-2', min: 1, count: 2, skill: '1-2' },
+      ],
+      priorAttempt: {
+        seenQuestionIds: ['q0', 'q1', 'q2', 'q3'],
+        scores: [
+          { criteriaIndex: 0, score: 50, total: 2 },
+          { criteriaIndex: 1, score: 50, total: 2 },
+        ],
+      },
+    });
+    Object.assign(tables, {
+      scenario_assignments: [
+        { id: 'a1', student_id: 'S', scenario_id: 'case', status: 'completed', completed_at: '2026-10-01T00:00:00Z' },
+        { id: 'a2', student_id: 'S', scenario_id: 'demo', status: 'completed', completed_at: '2026-10-03T00:00:00Z' },
+      ],
+      scenario_tasks: [
+        { id: 't1', scenario_id: 'case', title: 'Skill 1-1', skill_id: '1-1', sort_order: 1 },
+        { id: 't2', scenario_id: 'demo', title: 'Skill 1-2', skill_id: '1-2', sort_order: 1 },
+      ],
+      scenario_task_completions: [
+        { assignment_id: 'a1', task_id: 't1', rating: 'excellent' },
+        { assignment_id: 'a2', task_id: 't2', rating: 'needs_practice' },
+      ],
+    });
+    const r = await selectQuestionsForAttempt(fakeClient(tables), {
+      assessmentId: 'A', studentId: 'S', practice: true, rng: seeded(5),
+    });
+    const [strong, weak] = r.allocations;
+    // Quiz paper at 10-02 holds right, wrong per skill; the ratings land either side of it.
+    check('a review hears the rating before the quiz',
+      Math.abs((strong.mastery ?? 0) - traceMastery(DEFAULT_BKT, [true, true, false])) < 1e-9);
+    check('and the one after it',
+      Math.abs((weak.mastery ?? 0) - traceMastery(DEFAULT_BKT, [true, false, false])) < 1e-9);
+    check('the skill rated Needs Practice comes first in the review', r.questions[0].criteria_id === 'c1');
+
+    const failing = fakeClient(tables);
+    const realFrom = failing.from;
+    failing.from = (table: string) => {
+      if (table === 'scenario_assignments') {
+        const api = realFrom(table);
+        api.then = (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
+          Promise.resolve({ data: null, error: { code: '500', message: 'down' } }).then(res, rej);
+        return api;
+      }
+      return realFrom(table);
+    };
+    const quietError = console.error;
+    console.error = () => {};
+    const quizOnly = await selectQuestionsForAttempt(failing, { assessmentId: 'A', studentId: 'S', practice: true, rng: seeded(5) });
+    console.error = quietError;
+    check('a failed ratings read still deals the review, from quiz answers alone',
+      quizOnly.questions.length > 0 && Math.abs((quizOnly.allocations[0].mastery ?? 0) - traceMastery(DEFAULT_BKT, [true, false])) < 1e-9);
   }
 
   console.log('\n=== an expired attempt is not history ===');

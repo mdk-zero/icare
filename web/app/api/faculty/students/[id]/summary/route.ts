@@ -73,10 +73,10 @@ function buildPrompt(input: {
 
   const masteryBlock = mastery.length > 0
     ? mastery
-        .map((s) => `- Skill ${s.skill_id} ${s.title}: ${Math.round(s.mastery * 100)}% (${s.correct} of ${s.answers} answers right)${s.mastery >= MASTERY_THRESHOLD ? ', mastered' : ''}`)
+        .map((s) => `- Skill ${s.skill_id} ${s.title}: ${Math.round(s.mastery * 100)}% (${s.correct} of ${s.answers} results good)${s.mastery >= MASTERY_THRESHOLD ? ', mastered' : ''}`)
         .join('\n') +
       (mastery.every((s) => s.source === 'default') ? '\nThese skills are still on starting parameters, so treat the percentages as rough estimates.' : '')
-    : '(no quiz answers on a skill yet)';
+    : '(no results on a skill yet)';
 
   return `You are a clinical nursing education expert. Write a concise performance summary of the nursing student "${name}" for their faculty instructor, based only on the data below.
 
@@ -92,7 +92,7 @@ ${competencyBlock}
 ML low-performance prediction (say "low performing", never "at risk"):
 ${predictionBlock}
 
-Skill mastery estimated by Bayesian Knowledge Tracing from every quiz answer (weakest first; ${Math.round(MASTERY_THRESHOLD * 100)}% counts as mastered):
+Skill mastery estimated by Bayesian Knowledge Tracing from every quiz answer and every skill rated on a finished Patient Case or Return Demonstration (weakest first; ${Math.round(MASTERY_THRESHOLD * 100)}% counts as mastered):
 ${masteryBlock}
 
 Return ONLY a valid JSON object with this exact structure (no markdown, no explanations):

@@ -1,3 +1,5 @@
+import { chunks } from './graded-work';
+
 /** PostgREST caps a response at 1000 rows; ask for pages of that size. */
 const PAGE = 1000;
 
@@ -18,4 +20,13 @@ export async function fetchAll<T>(
     rows.push(...((data ?? []) as T[]));
     if (!data || data.length < PAGE) return rows;
   }
+}
+
+/** Rows matching many ids: split to keep the URL short, paged past the row cap. */
+export async function readMatching<T>(
+  ids: readonly string[],
+  page: (part: string[], from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: unknown }>,
+): Promise<T[]> {
+  const parts = await Promise.all(chunks(ids).map((part) => fetchAll<T>((from, to) => page(part, from, to))));
+  return parts.flat();
 }

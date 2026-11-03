@@ -1010,13 +1010,13 @@ export default function AdminAnalyticsClient() {
             </Panel>
           </div>
 
-          {/* A student's whole quiz record, so the range doesn't move it. */}
+          {/* A student's whole record, so the range doesn't move it. */}
           <Panel className="mb-6">
             <CardHeading
               icon={faBrain}
               title="Skill Mastery (BKT)"
-              subtitle="Bayesian Knowledge Tracing: the average chance your students know each skill. Weakest first."
-              tag={<ScopeTag label="Whole quiz record" />}
+              subtitle="Bayesian Knowledge Tracing: the average chance your students know each skill, from quizzes, Patient Cases and Return Demonstrations. Weakest first."
+              tag={<ScopeTag label="Whole record" />}
             />
             <CohortMasteryBody data={mastery.data} loading={mastery.loading} />
           </Panel>

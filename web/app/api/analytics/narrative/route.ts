@@ -125,7 +125,7 @@ ${kindBlock}`
 
   const masteryBlock =
     mastery && mastery.skills.length > 0
-      ? `${mastery.students_traced} of ${mastery.total_students} students traced across ${mastery.answers} quiz answers. Weakest skills:\n` +
+      ? `${mastery.students_traced} of ${mastery.total_students} students traced across ${mastery.answers} results (quiz answers, and skills rated on finished Patient Cases and Return Demonstrations). Weakest skills:\n` +
         mastery.skills
           .slice(0, WEAKEST_SKILLS)
           .map(
@@ -136,7 +136,7 @@ ${kindBlock}`
         (mastery.skills.every((s) => s.source === 'default')
           ? '\nThese skills are still on starting parameters, so treat the percentages as rough estimates.'
           : '')
-      : '(no quiz answers on a skill yet)';
+      : '(no results on a skill yet)';
 
   return `You are a nursing education analyst briefing a faculty member on their cohort dashboard. Describe only the data below. Never invent a number, a student, or a trend that is not present.
 
@@ -162,7 +162,7 @@ ${activityBlock}
 Low-performance prediction (call these students "low performing", never "at risk"):
 ${riskBlock}
 
-Skill mastery estimated by Bayesian Knowledge Tracing, from each student's whole quiz record rather than this period (${Math.round(MASTERY_THRESHOLD * 100)}% counts as mastered):
+Skill mastery estimated by Bayesian Knowledge Tracing, from each student's whole record of quizzes, Patient Cases and Return Demonstrations rather than this period (${Math.round(MASTERY_THRESHOLD * 100)}% counts as mastered):
 ${masteryBlock}
 
 Return ONLY a valid JSON object with this exact structure (no markdown, no explanations):

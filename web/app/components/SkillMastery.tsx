@@ -18,8 +18,9 @@ import { usePageData } from "../lib/use-page-data";
 /**
  * Bayesian Knowledge Tracing on the portal's pages: one student's skills on
  * their profile, the class's skills on Analytics. The estimates come from
- * /api/analytics/skill-mastery, and they read a student's whole quiz record, so
- * a date range never changes them.
+ * /api/analytics/skill-mastery, and they read a student's whole record of
+ * quizzes, Patient Cases and Return Demonstrations, so a date range never
+ * changes them.
  */
 
 /** How many of the class's weakest skills show before "Show all". */
@@ -122,9 +123,9 @@ function MasteryKey() {
 /** Says how far to trust the numbers: a cold-start skill is a rough estimate. */
 function SourceNote({ skills }: { skills: readonly { source: BktSource }[] }) {
   const { fitted, chapter, default: cold } = countSources(skills);
-  const fit = `A skill gets its own fit at ${MIN_FIT_STUDENTS} students and ${MIN_FIT_ANSWERS} answers.`;
+  const fit = `A skill gets its own fit at ${MIN_FIT_STUDENTS} students and ${MIN_FIT_ANSWERS} results.`;
   const parts = [
-    fitted > 0 && `${fitted} ${fitted === 1 ? "skill" : "skills"} fitted on ${fitted === 1 ? "its" : "their"} own answers`,
+    fitted > 0 && `${fitted} ${fitted === 1 ? "skill" : "skills"} fitted on ${fitted === 1 ? "its" : "their"} own results`,
     chapter > 0 && `${chapter} on a chapter's fit`,
     cold > 0 && `${cold} on the starting parameters`,
   ].filter(Boolean);
@@ -160,8 +161,8 @@ export function StudentMasteryPanel({ skills, loading }: { skills: SkillMastery[
         <div className="min-w-0">
           <h3 className="font-semibold text-gray-900">Skill Mastery (BKT)</h3>
           <p className="text-xs text-gray-500">
-            Bayesian Knowledge Tracing: the chance this student knows each skill, updated after every quiz answer. Weakest
-            first, the order a review quiz follows.
+            Bayesian Knowledge Tracing: the chance this student knows each skill, updated after every quiz answer and
+            every finished Patient Case or Return Demonstration. Weakest first, the order a review quiz follows.
           </p>
         </div>
         {skills && skills.length > 0 && <MasteryKey />}
@@ -172,7 +173,7 @@ export function StudentMasteryPanel({ skills, loading }: { skills: SkillMastery[
         <p className="py-4 text-center text-sm text-gray-400">Skill mastery couldn&apos;t be loaded. Refresh to try again.</p>
       ) : skills.length === 0 ? (
         <p className="py-4 text-center text-sm text-gray-400">
-          No estimates yet. They start with this student&apos;s first quiz answer on a skill.
+          No estimates yet. They start with this student&apos;s first result on a skill.
         </p>
       ) : (
         <>
@@ -184,7 +185,7 @@ export function StudentMasteryPanel({ skills, loading }: { skills: SkillMastery[
                 title={s.title}
                 value={s.mastery}
                 mastered={s.mastery >= MASTERY_THRESHOLD}
-                detail={`${s.correct} of ${s.answers} ${s.answers === 1 ? "answer" : "answers"} right`}
+                detail={`${s.correct} of ${s.answers} ${s.answers === 1 ? "result" : "results"} good`}
               />
             ))}
           </Grid>
@@ -231,7 +232,7 @@ export function CohortMasteryBody({ data, loading }: { data: CohortMastery | nul
   if (data.skills.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-gray-400">
-        No estimates yet. They start with the first quiz answer on a skill.
+        No estimates yet. They start with the first result on a skill.
       </p>
     );
   }
@@ -245,7 +246,7 @@ export function CohortMasteryBody({ data, loading }: { data: CohortMastery | nul
           </span>{" "}
           {data.total_students === 1 ? "student" : "students"} traced, across{" "}
           <span className="font-semibold tabular-nums text-gray-900">{data.answers.toLocaleString()}</span>{" "}
-          quiz {data.answers === 1 ? "answer" : "answers"}
+          {data.answers === 1 ? "result" : "results"}
         </p>
         <MasteryKey />
       </div>
@@ -257,7 +258,7 @@ export function CohortMasteryBody({ data, loading }: { data: CohortMastery | nul
             title={s.title}
             value={s.average_mastery}
             mastered={s.mastered === s.students}
-            detail={`${s.mastered} of ${s.students} ${s.students === 1 ? "student" : "students"} mastered · ${s.answers} ${s.answers === 1 ? "answer" : "answers"}`}
+            detail={`${s.mastered} of ${s.students} ${s.students === 1 ? "student" : "students"} mastered · ${s.answers} ${s.answers === 1 ? "result" : "results"}`}
           />
         ))}
       </Grid>

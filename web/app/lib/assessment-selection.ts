@@ -1,7 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { SHORT_ANSWER } from './short-answer';
 import { scoredStatuses } from './quiz-practice';
-import { DEFAULT_BKT, answersInOrder, loadBktParameters, traceMastery } from './bkt';
+import { DEFAULT_BKT, answersInOrder, loadBktParameters, oldestFirst, traceMastery } from './bkt';
+import { loadChecklistAnswers } from './checklist-answers';
 import { isMissingSkillColumn, skillIdFromTitle } from './taylor-skills';
 
 /**
@@ -31,7 +32,8 @@ import { isMissingSkillColumn, skillIdFromTitle } from './taylor-skills';
  * used up. It holds only the questions the student got wrong the last time they
  * answered them, whatever size the instructor set, so it shrinks as they get
  * them right. Each criterion's Taylor's skill gets a mastery estimate from
- * Bayesian Knowledge Tracing — the student's every quiz answer on that skill,
+ * Bayesian Knowledge Tracing — the student's every quiz answer on that skill
+ * and every rating on it from a finished Patient Case or Return Demonstration,
  * in order, through the update rules in bkt.ts with the parameters the ML
  * service fitted (084) — and the questions come grouped by skill, least
  * mastered first.
@@ -426,7 +428,7 @@ export async function selectQuestionsForAttempt(
   const priorIds = attempts.filter((a) => a.assessment_id === assessmentId).map((a) => a.id);
 
   if (practice) {
-    const review = await dealReview(supabase, { assessmentId, buckets, attempts, rng });
+    const review = await dealReview(supabase, { assessmentId, studentId, buckets, attempts, rng });
     return {
       ...review,
       attemptNumber: priorIds.length + 1,
@@ -513,12 +515,13 @@ async function dealReview(
   supabase: SupabaseClient,
   options: {
     assessmentId: string;
+    studentId: string;
     buckets: { id: string | null; name: string; min: number; skill: string | null; kc: string; pool: QuestionRow[] }[];
     attempts: { id: string; assessment_id: string; submitted_at: string | null }[];
     rng: Rng;
   },
 ): Promise<Pick<SelectionResult, 'questions' | 'allocations'>> {
-  const { assessmentId, buckets, attempts, rng } = options;
+  const { assessmentId, studentId, buckets, attempts, rng } = options;
   const attemptIds = attempts.map((a) => a.id);
   const [servedRes, answersRes] = await Promise.all([
     supabase.from('attempt_questions').select('attempt_id, question_id, position').in('attempt_id', attemptIds),
@@ -548,7 +551,8 @@ async function dealReview(
   }
 
   const ordered = answersInOrder(answers, attempts, served);
-  const sequences = new Map<string, boolean[]>();
+  const submittedAt = new Map(attempts.map((a) => [a.id, a.submitted_at ?? '']));
+  const timeline: { kc: string; at: string; correct: boolean }[] = [];
   for (const answer of ordered) {
     const meta = questionMeta.get(answer.question_id);
     if (!meta) continue;
@@ -557,8 +561,17 @@ async function dealReview(
       meta.criteria_id,
       meta.assessment_id,
     );
-    sequences.set(kc, [...(sequences.get(kc) ?? []), Boolean(answer.is_correct)]);
+    timeline.push({ kc, at: submittedAt.get(answer.attempt_id) ?? '', correct: Boolean(answer.is_correct) });
   }
+  // The student is waiting on this paper, so a failed read only costs the order.
+  const checklist = await loadChecklistAnswers(supabase, [studentId]).catch((err) => {
+    console.error('Failed to read checklist ratings for the review; using quiz answers alone', err);
+    return [];
+  });
+  for (const answer of checklist) timeline.push({ kc: answer.skill_id, at: answer.at, correct: answer.correct });
+
+  const sequences = new Map<string, boolean[]>();
+  for (const { kc, correct } of oldestFirst(timeline)) sequences.set(kc, [...(sequences.get(kc) ?? []), correct]);
   const missed = wrongLastTime(ordered.filter((a) => questionMeta.get(a.question_id)?.assessment_id === assessmentId));
 
   const params = await loadBktParameters(

@@ -2,19 +2,28 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { SummaryArgs } from './analytics';
 import type { CourseScope } from './analytics-course';
 import { criterionSkill } from './assessment-selection';
-import { DEFAULT_BKT, answersInOrder, loadBktParameters, traceMastery, type SkillMastery } from './bkt';
-import { fetchAll } from './fetch-all';
-import { chunks } from './graded-work';
+import {
+  DEFAULT_BKT,
+  answersInOrder,
+  loadBktParameters,
+  oldestFirst,
+  traceMastery,
+  type SkillAnswer,
+  type SkillMastery,
+} from './bkt';
+import { loadChecklistAnswers } from './checklist-answers';
+import { fetchAll, readMatching } from './fetch-all';
 import { scoredStatuses } from './quiz-practice';
 import { isMissingSkillColumn, listSkills } from './taylor-skills';
 
 /**
  * Bayesian Knowledge Tracing as the portal shows it: what each student's quiz
- * answers say about each Taylor's skill, through the same update rules and
- * fitted parameters as the adaptive review (bkt.ts, assessment-selection.ts).
- * Worked out on request rather than stored, so an estimate is current as soon
- * as a quiz is handed in. Only answers on a question whose criterion names a
- * skill count, as in the ML service's fit (ml/app/bkt.py).
+ * answers and finished Patient Case and Return Demonstration ratings say about
+ * each Taylor's skill, through the same update rules and fitted parameters as
+ * the adaptive review (bkt.ts, assessment-selection.ts). Worked out on request
+ * rather than stored, so an estimate is current as soon as a quiz is handed in
+ * or a grade finished. Only answers on a question whose criterion names a skill
+ * count, as in the ML service's fit (ml/app/bkt.py).
  */
 
 interface AttemptRow {
@@ -33,15 +42,6 @@ interface ServedRow {
   attempt_id: string;
   question_id: string;
   position: number;
-}
-
-/** Rows matching many ids: split to keep the URL short, paged past the row cap. */
-async function readMatching<T>(
-  ids: readonly string[],
-  page: (part: string[], from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: unknown }>,
-): Promise<T[]> {
-  const parts = await Promise.all(chunks(ids).map((part) => fetchAll<T>((from, to) => page(part, from, to))));
-  return parts.flat();
 }
 
 /** Question id -> the skill its criterion names, for the questions that have one. */
@@ -69,14 +69,8 @@ async function loadQuestionSkills(supabase: SupabaseClient, questionIds: readonl
   return skills;
 }
 
-/** Each student's estimate per skill they have answered on, weakest first. */
-export async function loadSkillMastery(
-  supabase: SupabaseClient,
-  studentIds: readonly string[],
-): Promise<Map<string, SkillMastery[]>> {
-  const out = new Map<string, SkillMastery[]>();
-  if (studentIds.length === 0) return out;
-
+/** The students' answers on a skill across their finished quiz runs, in order. */
+async function loadQuizAnswers(supabase: SupabaseClient, studentIds: readonly string[]): Promise<SkillAnswer[]> {
   const statuses = await scoredStatuses(supabase);
   const attempts = await readMatching<AttemptRow>(studentIds, (part, from, to) =>
     supabase
@@ -87,7 +81,7 @@ export async function loadSkillMastery(
       .order('id')
       .range(from, to),
   );
-  if (attempts.length === 0) return out;
+  if (attempts.length === 0) return [];
 
   const attemptIds = attempts.map((a) => a.id);
   const [answers, served] = await Promise.all([
@@ -109,21 +103,46 @@ export async function loadSkillMastery(
         .range(from, to),
     ),
   ]);
-  if (answers.length === 0) return out;
+  if (answers.length === 0) return [];
 
   const skillOfQuestion = await loadQuestionSkills(supabase, [...new Set(answers.map((a) => a.question_id))]);
-  const studentOfAttempt = new Map(attempts.map((a) => [a.id, a.student_id]));
+  const attemptById = new Map(attempts.map((a) => [a.id, a]));
+  return answersInOrder(answers, attempts, served).flatMap((answer) => {
+    const skill = skillOfQuestion.get(answer.question_id);
+    const attempt = attemptById.get(answer.attempt_id);
+    if (!skill || !attempt) return [];
+    return [
+      {
+        student_id: attempt.student_id,
+        skill_id: skill,
+        at: attempt.submitted_at ?? '',
+        correct: Boolean(answer.is_correct),
+      },
+    ];
+  });
+}
+
+/** Each student's estimate per skill they have an answer on, weakest first. */
+export async function loadSkillMastery(
+  supabase: SupabaseClient,
+  studentIds: readonly string[],
+): Promise<Map<string, SkillMastery[]>> {
+  const out = new Map<string, SkillMastery[]>();
+  if (studentIds.length === 0) return out;
+
+  const [quiz, checklist] = await Promise.all([
+    loadQuizAnswers(supabase, studentIds),
+    loadChecklistAnswers(supabase, studentIds),
+  ]);
 
   // student -> skill -> answers, oldest first
   const sequences = new Map<string, Map<string, boolean[]>>();
-  for (const answer of answersInOrder(answers, attempts, served)) {
-    const skill = skillOfQuestion.get(answer.question_id);
-    const student = studentOfAttempt.get(answer.attempt_id);
-    if (!skill || !student) continue;
+  for (const { student_id: student, skill_id: skill, correct } of oldestFirst([...quiz, ...checklist])) {
     const perSkill = sequences.get(student) ?? new Map<string, boolean[]>();
-    perSkill.set(skill, [...(perSkill.get(skill) ?? []), Boolean(answer.is_correct)]);
+    perSkill.set(skill, [...(perSkill.get(skill) ?? []), correct]);
     sequences.set(student, perSkill);
   }
+  if (sequences.size === 0) return out;
 
   const skillIds = [...new Set([...sequences.values()].flatMap((perSkill) => [...perSkill.keys()]))];
   const [fits, catalog] = await Promise.all([loadBktParameters(supabase, skillIds), listSkills(supabase)]);

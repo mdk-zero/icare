@@ -1270,7 +1270,7 @@ export default function FacultyAnalyticsClient() {
             />
           </div>
 
-          {/* A student's whole quiz record, so the range doesn't move it. */}
+          {/* A student's whole record, so the range doesn't move it. */}
           <Card padding="md" className="mb-4">
             <div className="mb-5 flex items-center gap-2.5">
               <div className="rounded-xl bg-brand-600/10 p-2.5">
@@ -1280,8 +1280,8 @@ export default function FacultyAnalyticsClient() {
                 <h3 className="font-semibold text-gray-900">Skill Mastery (BKT)</h3>
                 <p className="text-xs text-gray-400">
                   {course
-                    ? "Bayesian Knowledge Tracing for this course's roster, from each student's whole quiz record. Weakest skills first."
-                    : "Bayesian Knowledge Tracing: the average chance your students know each skill, from their whole quiz record. Weakest first."}
+                    ? "Bayesian Knowledge Tracing for this course's roster, from each student's whole record of quizzes, Patient Cases and Return Demonstrations. Weakest skills first."
+                    : "Bayesian Knowledge Tracing: the average chance your students know each skill, from their whole record of quizzes, Patient Cases and Return Demonstrations. Weakest first."}
                 </p>
               </div>
             </div>

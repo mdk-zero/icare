@@ -2,7 +2,7 @@ import type { DemoDb } from "../store";
 import type { DemoUser } from "../fixtures/people";
 import type { DemoAssignment } from "../fixtures/school";
 import { MAX_RATING_POINTS, NOT_APPLICABLE, type ChecklistRating, type TaskRating } from "@/app/lib/task-ratings";
-import { DEFAULT_BKT, traceMastery, type SkillMastery } from "@/app/lib/bkt";
+import { DEFAULT_BKT, oldestFirst, ratingAsAnswer, traceMastery, type SkillMastery } from "@/app/lib/bkt";
 import { sectionName, teamLabel } from "./scope";
 
 /**
@@ -188,6 +188,24 @@ export function caseAverage(db: DemoDb, studentId: string): number | null {
   );
 }
 
+/** Rated skills on finished Patient Cases and Return Demonstrations, as loadChecklistAnswers reads them. */
+export function checklistAnswers(db: DemoDb, studentId?: string) {
+  const ratingOf = new Map(db.completions.map((c) => [`${c.assignment_id}:${c.task_id}`, c.rating]));
+  return db.assignments
+    .filter((a) => a.status === "completed" && a.completed_at && (!studentId || a.student_id === studentId))
+    .flatMap((a) =>
+      db.tasks
+        .filter((t) => t.scenario_id === a.scenario_id && t.skill_id)
+        .sort((x, y) => x.sort_order - y.sort_order)
+        .flatMap((t) => {
+          const correct = ratingAsAnswer(ratingOf.get(`${a.id}:${t.id}`) ?? null);
+          if (correct === null) return [];
+          const title = t.title.replace(/ \(Skill [^)]+\)$/, "");
+          return [{ skill_id: t.skill_id as string, title, at: a.completed_at as string, correct }];
+        }),
+    );
+}
+
 /**
  * A student's BKT estimates, as /api/analytics/skill-mastery gives them. The
  * fixtures keep each attempt's score rather than its answers, so the right
@@ -195,7 +213,7 @@ export function caseAverage(db: DemoDb, studentId: string): number | null {
  * skills in turn. Reads as a school with enough answers for its own fits.
  */
 export function skillMastery(db: DemoDb, studentId: string): SkillMastery[] {
-  const sequences = new Map<string, { title: string; answers: boolean[] }>();
+  const timeline: { skill_id: string; title: string; at: string; correct: boolean }[] = [];
   const attempts = db.attempts
     .filter((a) => a.student_id === studentId && a.status === "submitted")
     .sort((a, b) => (a.submitted_at ?? "").localeCompare(b.submitted_at ?? ""));
@@ -209,10 +227,14 @@ export function skillMastery(db: DemoDb, studentId: string): SkillMastery[] {
     for (let i = 0; i < attempt.total_questions; i++) {
       const [, id, title] = skills[i % skills.length];
       const correct = Math.floor(((i + 1) * right) / attempt.total_questions) > Math.floor((i * right) / attempt.total_questions);
-      const row = sequences.get(id) ?? { title, answers: [] };
-      row.answers.push(correct);
-      sequences.set(id, row);
+      timeline.push({ skill_id: id, title, at: attempt.submitted_at ?? "", correct });
     }
+  }
+  const sequences = new Map<string, { title: string; answers: boolean[] }>();
+  for (const { skill_id, title, correct } of oldestFirst([...timeline, ...checklistAnswers(db, studentId)])) {
+    const row = sequences.get(skill_id) ?? { title, answers: [] };
+    row.answers.push(correct);
+    sequences.set(skill_id, row);
   }
   return [...sequences]
     .map(([skill_id, { title, answers }]) => ({

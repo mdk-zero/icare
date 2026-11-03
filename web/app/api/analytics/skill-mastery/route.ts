@@ -11,7 +11,7 @@ import { analyticsStudentIds, loadSkillMastery } from '@/app/lib/skill-mastery';
  * Bayesian Knowledge Tracing estimates of skill mastery (see skill-mastery.ts).
  * ?student_id=... returns that student's skills. Without it, the skills rolled
  * up for the analytics filter: section_ids, or offering_id for an instructor's
- * course roster. No date range: mastery reads a student's whole quiz record.
+ * course roster. No date range: mastery reads a student's whole record.
  */
 export async function GET(request: NextRequest) {
   const session = await readSession();
