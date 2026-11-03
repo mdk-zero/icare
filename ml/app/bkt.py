@@ -1,8 +1,10 @@
 """Bayesian Knowledge Tracing (Corbett & Anderson, 1995) per Taylor's skill.
 
 Each skill is a two-state hidden Markov model: the student either knows it
-or doesn't, and each quiz answer on it is a noisy observation of that state.
-Four parameters per skill:
+or doesn't, and each answer on it is a noisy observation of that state. An
+answer is a quiz answer, or the rating a skill got on a finished Patient Case
+or Return Demonstration (RATING_ANSWERS). Four parameters per skill, shared by
+both kinds of answer:
 
     p_init   P(L0)  the student already knows the skill before any answer
     p_learn  P(T)   they move from not knowing to knowing after an answer
@@ -18,7 +20,8 @@ dependency. Guess and slip are capped below 0.5 (Baker, Corbett & Aleven,
 Cold start: a skill with too few answers to fit takes its chapter's pooled
 fit, and failing that the defaults, and is refit on every run as answers
 accumulate. The web app applies the same update rules (web/app/lib/bkt.ts)
-with these parameters when it deals an adaptive quiz review.
+with these parameters when it shows an estimate or deals an adaptive quiz
+review.
 """
 
 from __future__ import annotations
@@ -53,6 +56,11 @@ EM_MAX_ITERATIONS = 200
 EM_TOLERANCE = 1e-7
 
 SKILL_IN_NAME = re.compile(r"\bSkills? (\d{1,2}-\d{1,2})\b")
+
+# A skill's rating as an answer. Any other value says nothing about the skill:
+# N/A, or a check-off nobody rated. Keep in step with ratingAsAnswer in
+# web/app/lib/bkt.ts.
+RATING_ANSWERS = {"excellent": True, "satisfactory": True, "needs_practice": False}
 
 
 @dataclass(frozen=True)
@@ -255,11 +263,50 @@ def fit(sequences: list[list[bool]]) -> tuple[BktParams, float]:
 # Data
 # ---------------------------------------------------------------
 
+def _named_skill(skill_id: str | None, name: str | None) -> str | None:
+    """A row's skill: its skill_id, else the one its name cites."""
+    if skill_id:
+        return skill_id
+    match = SKILL_IN_NAME.search(name or "")
+    return match.group(1) if match else None
+
+
+def _checklist_rows(db: Db, skill_chapter: dict[str, str]) -> list[tuple[str, str, str, str, int, bool]]:
+    """One answer per rated skill on a finished Patient Case or Return
+    Demonstration, dated when the grade was finished. The same rules as
+    loadChecklistAnswers in web/app/lib/checklist-answers.ts: a task is one
+    performance, so its sub-tasks aren't answers of their own, and until an
+    assignment is completed a half-rated task's level isn't settled."""
+    assignments = {
+        a["id"]: a
+        for a in db.select("scenario_assignments", "id,student_id,completed_at", [("status", "eq", "completed")])
+        if a.get("completed_at")
+    }
+    tasks = {t["id"]: t for t in db.select("scenario_tasks", "id,title,skill_id,sort_order")}
+
+    rows = []
+    for completion in db.select("scenario_task_completions", "assignment_id,task_id,rating"):
+        assignment = assignments.get(completion["assignment_id"])
+        task = tasks.get(completion["task_id"])
+        correct = RATING_ANSWERS.get(completion.get("rating"))
+        if assignment is None or task is None or correct is None:
+            continue
+        skill = _named_skill(task.get("skill_id"), task.get("title"))
+        # bkt_parameters only takes skills in the catalog; a typed title may cite anything.
+        if skill not in skill_chapter:
+            continue
+        rows.append((assignment["student_id"], skill, assignment["completed_at"], assignment["id"],
+                     task.get("sort_order") or 0, correct))
+    return rows
+
+
 def load_sequences(db: Db) -> tuple[Sequences, dict[str, str]]:
-    """Every student's quiz answers per skill, oldest first: attempts by the
-    time they were handed in, answers within one by their place on the
-    paper. Graded attempts and practice runs both count — BKT models learning
-    across practice. Also returns skill -> chapter (competency) id."""
+    """Every student's answers per skill, oldest first: quiz attempts by the
+    time they were handed in, answers within one by their place on the paper,
+    and finished Patient Cases and Return Demonstrations among them by the time
+    the grade was finished. Graded attempts and practice runs both count — BKT
+    models learning across practice. Also returns skill -> chapter (competency)
+    id."""
     skill_chapter = {s["id"]: s["chapter_id"] for s in db.select("taylor_skills", "id,chapter_id")}
     # Filtered here rather than in the query: before web migration 083 the
     # 'practiced' status doesn't exist, and naming it would fail the read.
@@ -279,10 +326,7 @@ def load_sequences(db: Db) -> tuple[Sequences, dict[str, str]]:
     criteria_of = {q["id"]: q.get("criteria_id") for q in questions}
     skill_of_criterion: dict[str, str] = {}
     for c in criteria:
-        skill = c.get("skill_id")
-        if not skill:
-            match = SKILL_IN_NAME.search(c.get("name") or "")
-            skill = match.group(1) if match else None
+        skill = _named_skill(c.get("skill_id"), c.get("name"))
         if skill:
             skill_of_criterion[c["id"]] = skill
 
@@ -295,6 +339,7 @@ def load_sequences(db: Db) -> tuple[Sequences, dict[str, str]]:
         slot = position.get((ans["attempt_id"], ans["question_id"]), question_position.get(ans["question_id"], 0))
         ordered.append((attempt["student_id"], skill, attempt["submitted_at"], ans["attempt_id"], slot,
                         bool(ans["is_correct"])))
+    ordered.extend(_checklist_rows(db, skill_chapter))
     ordered.sort(key=lambda row: (row[2], row[3], row[4]))
 
     sequences: Sequences = {}
