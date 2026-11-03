@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { guardAssessmentEdit, quizInDeanScope } from '@/app/lib/assessment-access';
 import { isSkillId } from '@/app/lib/taylor-skills';
+import { PROVISIONAL_CRITERION_WEIGHT } from '@/app/lib/criteria-weights';
 
 export async function GET(
   _request: NextRequest,
@@ -58,11 +59,11 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { name, weight, competency_id, skill_id, sort_order, min_questions } = body as {
+  // No weight: it is the criterion's share of the questions (089).
+  const { name, competency_id, skill_id, sort_order, min_questions } = body as {
     name?: unknown;
     /** The skill area under the chapter (049); none scores the whole chapter. */
     skill_id?: unknown;
-    weight?: unknown;
     competency_id?: unknown;
     sort_order?: unknown;
     min_questions?: unknown;
@@ -70,10 +71,6 @@ export async function POST(
 
   if (typeof name !== 'string' || name.trim().length === 0) {
     return NextResponse.json({ error: 'Criteria name is required' }, { status: 400 });
-  }
-
-  if (typeof weight !== 'number' || weight <= 0 || weight > 100) {
-    return NextResponse.json({ error: 'Weight must be a number between 1 and 100' }, { status: 400 });
   }
 
   if (typeof competency_id !== 'string' || competency_id.trim().length === 0) {
@@ -111,7 +108,7 @@ export async function POST(
       .insert({
         assessment_id: id,
         name: name.trim(),
-        weight,
+        weight: PROVISIONAL_CRITERION_WEIGHT,
         competency_id,
         skill_id: isSkillId(skill_id) ? skill_id : null,
         sort_order: sortOrder,

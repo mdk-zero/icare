@@ -22,9 +22,9 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { name, weight, competency_id, sort_order, min_questions } = body as {
+  // No weight: it is the criterion's share of the questions (089).
+  const { name, competency_id, sort_order, min_questions } = body as {
     name?: unknown;
-    weight?: unknown;
     competency_id?: unknown;
     sort_order?: unknown;
     min_questions?: unknown;
@@ -37,13 +37,6 @@ export async function PATCH(
       return NextResponse.json({ error: 'Criteria name cannot be empty' }, { status: 400 });
     }
     update.name = name.trim();
-  }
-
-  if (weight !== undefined) {
-    if (typeof weight !== 'number' || weight <= 0 || weight > 100) {
-      return NextResponse.json({ error: 'Weight must be between 1 and 100' }, { status: 400 });
-    }
-    update.weight = weight;
   }
 
   if (competency_id !== undefined) {
