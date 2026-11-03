@@ -232,7 +232,7 @@ export const PRIVACY: LegalDoc = {
             'To record and grade your work and show you and your clinical instructors your progress in each RLE course.',
             'To notify you about new cases, grades, deadlines and messages, if you turn notifications on.',
             'To help clinical instructors see which students may need extra support, from predictions based on performance. A prediction only informs the instructor; it never decides a grade.',
-            'To estimate how well you know each skill from your quiz answers, including practice runs. You, your clinical instructors and the Dean can see these estimates, and they decide which skills get more questions when you retake or practice a quiz. An estimate is not a grade: your score still comes only from your answers.',
+            'To estimate how well you know each skill from your quiz answers, including review quizzes. You, your clinical instructors and the Dean can see these estimates, and they decide which skills come first in your review quiz. An estimate is not a grade: your score still comes only from your answers.',
             'To keep the system secure, investigate misuse and fix problems.',
           ],
         },

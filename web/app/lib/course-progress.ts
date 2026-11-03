@@ -5,6 +5,7 @@
  * same way.
  */
 
+import { quizGrade } from './quiz-attempts';
 import { ratingForCredit, ratingLabel } from './task-ratings';
 
 /** "2026-08-10": a calendar date, as Postgres `date` columns come back. */
@@ -502,12 +503,14 @@ export interface ItemProgress {
   target: number;
   /** When it was first met. */
   done_at: string | null;
-  /** The best score seen, graded or entered, for activity, skill and manual items. */
+  /**
+   * The best score seen, graded or entered, for activity, skill and manual
+   * items. A Quiz is one score here: its grade, the average of its graded tries.
+   */
   best_score: number | null;
   /**
    * Count items over scored work: the mean of every score of that kind in the
-   * term, met or not (each Quiz at its best attempt), entered scores
-   * included.
+   * term, met or not (each Quiz at its grade), entered scores included.
    */
   avg_score: number | null;
   /** Skill items: the band of the best evidence ("Satisfactory"), or null with none. */
@@ -562,6 +565,31 @@ const mean = (scores: (number | null)[]) => {
 };
 
 /**
+ * One fact per student per Quiz: its grade, the average of the graded tries
+ * given, dated by the latest of them. So a later low try can undo a minimum
+ * that an earlier one met, and each skill it covers averages the same way.
+ */
+function quizGrades(attempts: readonly QuizAttemptFact[]): QuizAttemptFact[] {
+  const tries = new Map<string, QuizAttemptFact[]>();
+  for (const a of attempts) {
+    const key = `${a.student_id}:${a.assessment_id}`;
+    tries.set(key, [...(tries.get(key) ?? []), a]);
+  }
+  return [...tries.values()].map((rows) => {
+    const skills = new Set(rows.flatMap((r) => Object.keys(r.skill_scores)));
+    return {
+      student_id: rows[0].student_id,
+      assessment_id: rows[0].assessment_id,
+      score: quizGrade(rows.map((r) => r.score)),
+      submitted_at: rows.map((r) => r.submitted_at).reduce((a, b) => (a > b ? a : b)),
+      skill_scores: Object.fromEntries(
+        [...skills].map((skill) => [skill, quizGrade(rows.map((r) => r.skill_scores[skill] ?? r.score)) as number]),
+      ),
+    };
+  });
+}
+
+/**
  * Judge every student against every checklist item, from graded work inside
  * the term and the scores the instructor entered. Nothing automatic is
  * stored: this runs on every read, so a grade given a minute ago shows
@@ -578,7 +606,7 @@ export function evaluate(
 ): Record<string, Record<string, ItemProgress>> {
   const inside = <T>(rows: T[], at: (row: T) => string | null) => rows.filter((r) => inTerm(at(r), term));
   const cases = inside(facts.cases, (c) => c.completed_at);
-  const attempts = inside(facts.attempts, (a) => a.submitted_at);
+  const attempts = quizGrades(inside(facts.attempts, (a) => a.submitted_at));
   const presentations = inside(facts.presentations, (p) => p.graded_at);
   const courseSkills = new Set(courseSkillIds);
   const check = new Map(facts.checks.map((c) => [`${c.requirement_id}:${c.student_id}`, c]));
@@ -680,19 +708,10 @@ function judge(
           break;
         }
         case 'assessment': {
-          // Each Quiz counts once, from its first qualifying attempt, and
-          // averages in at its best attempt.
-          const first = new Map<string, string>();
-          const best = new Map<string, number | null>();
-          for (const a of own.attempts) {
-            if (!covers(quizSkills[a.assessment_id] ?? [])) continue;
-            best.set(a.assessment_id, max([best.get(a.assessment_id) ?? null, a.score]));
-            if (!meets(a.score, min)) continue;
-            const seen = first.get(a.assessment_id);
-            if (!seen || a.submitted_at < seen) first.set(a.assessment_id, a.submitted_at);
-          }
-          dates = [...first.values()];
-          scores = [...best.values()];
+          // Each Quiz counts once, at its grade.
+          const mine = own.attempts.filter((a) => covers(quizSkills[a.assessment_id] ?? []));
+          dates = mine.filter((a) => meets(a.score, min)).map((a) => a.submitted_at);
+          scores = mine.map((a) => a.score);
           break;
         }
         case 'case_presentation':
@@ -817,9 +836,10 @@ function missingStatus(req: RequirementRow, item: ItemProgress | undefined): str
     case 'skill':
       return item?.level ? `Best so far: ${item.level}` : 'No graded work yet';
     case 'activity': {
-      // Any graded work meets an item with no minimum, so a best score here fell short of one.
+      // Any graded work meets an item with no minimum, so a score here fell short of one.
       const best = item?.best_score ?? null;
-      if (best !== null && req.min_score !== null) return `Best ${Math.round(best)}%, needs ${Number(req.min_score)}%`;
+      const label = req.activity_type === 'assessment' ? 'Average' : 'Best';
+      if (best !== null && req.min_score !== null) return `${label} ${Math.round(best)}%, needs ${Number(req.min_score)}%`;
       return req.activity_type === 'assessment' ? 'Not taken yet' : 'Not graded yet';
     }
   }

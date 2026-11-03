@@ -19,6 +19,7 @@ import {
   faChartSimple,
   faChevronDown,
 } from "@fortawesome/free-solid-svg-icons";
+import { attemptLimit } from "@/app/lib/quiz-attempts";
 import PageHeader from "../../components/PageHeader";
 import { SkeletonAssessmentCard, SkeletonStatTile } from "../../components/skeletons";
 import StatTile from "../../components/StatTile";
@@ -66,7 +67,7 @@ interface Assessment {
   question_count: number;
   /** How many of the bank one attempt serves; null serves all of it. */
   total_questions: number | null;
-  /** Tries a student gets; null is unlimited. */
+  /** Graded tries a student gets; null (an older quiz) is the standard. */
   max_attempts: number | null;
   student_count: number;
   /** Who has it, by group, with their deadline. */
@@ -554,9 +555,7 @@ export default function FacultyAssessmentsClient() {
                         <span className="text-xs">{describeTimeLimit(a.time_limit_seconds)}</span>
                       )}
                       <span className="text-xs">
-                        {a.max_attempts === null
-                          ? "Unlimited tries"
-                          : `${a.max_attempts} ${a.max_attempts === 1 ? "try" : "tries"}`}
+                        {`${attemptLimit(null, a.max_attempts)} graded ${attemptLimit(null, a.max_attempts) === 1 ? "try" : "tries"}`}
                       </span>
                     </div>
                   </div>

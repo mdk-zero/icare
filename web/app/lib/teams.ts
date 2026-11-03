@@ -1,6 +1,7 @@
 import type { getSupabaseAdmin } from './supabase/server';
 import { getFacultySectionIds } from './roster';
 import { getAdminScope } from './admin-scope';
+import { quizGrade } from './quiz-attempts';
 import { ofKind, scenarioKinds } from './scenario-kind';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
@@ -276,18 +277,19 @@ export async function groupSummaries(
     if (team) caseWork.set(team, [...(caseWork.get(team) ?? []), c]);
   }
 
-  // Best score per (member, assessment), then grouped by the member's group.
-  const best = new Map<string, { student_id: string; score: number }>();
+  // Each member's grade per assessment, then grouped by the member's group.
+  const tries = new Map<string, { student_id: string; scores: number[] }>();
   for (const a of (attemptsRes.data ?? []) as { student_id: string; assessment_id: string; score: number | null }[]) {
     if (a.score === null || !counted(a.assessment_id)) continue;
     const key = `${a.student_id}:${a.assessment_id}`;
-    const prev = best.get(key);
-    if (!prev || a.score > prev.score) best.set(key, { student_id: a.student_id, score: a.score });
+    const entry = tries.get(key) ?? { student_id: a.student_id, scores: [] };
+    entry.scores.push(a.score);
+    tries.set(key, entry);
   }
   const assessmentScores = new Map<string, number[]>();
-  for (const { student_id, score } of best.values()) {
+  for (const { student_id, scores } of tries.values()) {
     const team = teamOf.get(student_id);
-    if (team) assessmentScores.set(team, [...(assessmentScores.get(team) ?? []), score]);
+    if (team) assessmentScores.set(team, [...(assessmentScores.get(team) ?? []), quizGrade(scores) as number]);
   }
 
   const groups = teams.map((t) => {

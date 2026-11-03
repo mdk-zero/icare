@@ -6,6 +6,7 @@ import { getScopedStudentIds } from '@/app/lib/admin-scope';
 import { isMissingTeamTables } from '@/app/lib/teams';
 import { isLateSubmission } from '@/app/lib/assessment-timing';
 import { PRACTICE_STATUS } from '@/app/lib/quiz-practice';
+import { quizGrade } from '@/app/lib/quiz-attempts';
 import { quizInDeanScope } from '@/app/lib/assessment-access';
 
 type Status = 'submitted' | 'in_progress' | 'not_started';
@@ -154,7 +155,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     const results = inScopeStudents.map((student) => {
       const all = attemptsByStudent.get(student.id) ?? [];
-      // Practice runs past the limit (083) never touch the grade; they are
+      // Review quizzes past the limit (083) never touch the grade; they are
       // only counted, so an instructor can see who kept going.
       const attempts = all.filter((a) => a.status !== PRACTICE_STATUS);
       const practiceCount = all.length - attempts.length;
@@ -186,7 +187,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         attempt_count: attempts.length,
         submitted_count: submitted.length,
         practice_count: practiceCount,
-        best_score: scores.length > 0 ? Math.max(...scores) : null,
+        grade: quizGrade(scores),
         latest_score: latest?.score ?? null,
         latest_submitted_at: latest?.submitted_at ?? null,
         latest_time_taken_seconds: latest?.time_taken_seconds ?? null,
@@ -194,7 +195,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       };
     });
 
-    const graded = results.map((r) => r.best_score).filter((s): s is number => s !== null);
+    const graded = results.map((r) => r.grade).filter((s): s is number => s !== null);
 
     const average = (scores: number[]) =>
       scores.length > 0 ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) : null;
@@ -211,7 +212,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         label: g.label,
         members: g.rows.length,
         submitted: g.rows.filter((r) => r.status === 'submitted').length,
-        average_score: average(g.rows.map((r) => r.best_score).filter((s): s is number => s !== null)),
+        average_score: average(g.rows.map((r) => r.grade).filter((s): s is number => s !== null)),
       }))
       .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
 
@@ -226,7 +227,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         submitted: results.filter((r) => r.status === 'submitted').length,
         in_progress: results.filter((r) => r.status === 'in_progress').length,
         not_started: results.filter((r) => r.status === 'not_started').length,
-        // Averaged over best scores, matching what the table ranks on.
+        // Averaged over grades, matching what the table ranks on.
         average_score:
           graded.length > 0
             ? Math.round(graded.reduce((sum, s) => sum + s, 0) / graded.length)

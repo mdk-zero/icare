@@ -21,7 +21,7 @@ const TOUR = [
     number: "02",
     title: "ML-Powered Adaptive Assessments",
     description:
-      "Bayesian Knowledge Tracing estimates each student's mastery of every skill from their quiz answers, so retakes spend their questions where the knowledge gap is. Prediction models flag who may need help, and a recommender points each student to what to practice next.",
+      "Bayesian Knowledge Tracing estimates each student's mastery of every skill from their quiz answers, so each review quiz brings back what they got wrong, weakest skills first. Prediction models flag who may need help, and a recommender points each student to what to practice next.",
     capabilities: [
       "Skill mastery that updates with every quiz answer",
       "Recommendations that follow each student's performance",

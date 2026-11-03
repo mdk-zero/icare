@@ -4,9 +4,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  * Bayesian Knowledge Tracing: a student's probability of knowing a skill,
  * traced over their answers on it. The ML service fits the four parameters
  * per Taylor's skill (ml/app/bkt.py, migration 084); this file applies the
- * same update rules, so the adaptive quiz review can estimate mastery from
- * the answers up to this moment, including a practice run finished a minute
- * ago.
+ * same update rules, so a review quiz can estimate mastery from the answers up
+ * to this moment, including a review finished a minute ago.
  *
  *   p_init   P(L0)  the student already knows the skill
  *   p_learn  P(T)   they learn it after an answer

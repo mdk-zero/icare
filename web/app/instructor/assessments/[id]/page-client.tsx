@@ -1,6 +1,6 @@
 "use client";
 
-import { DEFAULT_ATTEMPTS, MIN_ATTEMPTS } from "@/app/lib/quiz-attempts";
+import { DEFAULT_ATTEMPTS, MIN_ATTEMPTS, attemptLimit } from "@/app/lib/quiz-attempts";
 import { acceptedAnswers } from "@/app/lib/short-answer";
 import { describeTimeLimit, formatTimeLimit, parseTimeLimit } from "@/app/lib/time-limit";
 import TimeLimitInput from "../time-limit-input";
@@ -83,7 +83,7 @@ interface AssessmentDetail {
   question_count: number;
   /** How many questions one attempt serves; null serves the whole bank. */
   total_questions: number | null;
-  /** Retakes allowed; null is unlimited. */
+  /** Graded tries allowed; null (an older quiz) is the standard. */
   max_attempts: number | null;
   /** Section names this is published to; null/empty reaches every section. */
   target_sections: string[] | null;
@@ -336,7 +336,7 @@ export default function AssessmentQuestionsClient({
           description: a.description ?? "",
           category: a.category,
           time_limit: formatTimeLimit(a.time_limit_seconds),
-          // Older quizzes may still be unlimited (null); editing gives them the standard.
+          // Older quizzes may still hold null, which already counts as the standard.
           max_attempts: String(a.max_attempts ?? DEFAULT_ATTEMPTS),
           target_sections: a.target_sections ?? [],
           offering_id: a.offering_id ?? "",
@@ -1388,7 +1388,7 @@ export default function AssessmentQuestionsClient({
                 </div>
               </div>
               <p className="text-xs text-gray-500">
-                {`Students get ${DEFAULT_ATTEMPTS} graded attempt${DEFAULT_ATTEMPTS === 1 ? "" : "s"} as standard, and their best graded attempt counts. After that they can keep practicing: practice runs focus on what they missed and never change the grade.`}
+                {`Students get ${DEFAULT_ATTEMPTS} graded attempt${DEFAULT_ATTEMPTS === 1 ? "" : "s"} as standard, and their grade is the average of their graded attempts. After that they get a review quiz of the questions they got wrong, weakest skills first. It never changes the grade.`}
               </p>
                 <div>
                   <p className={underlineLabel}>Published to sections</p>
@@ -1506,11 +1506,9 @@ export default function AssessmentQuestionsClient({
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <FontAwesomeIcon icon={faRotateRight} className="h-3 w-3 text-gray-400" />
-                  {assessment.max_attempts
-                    ? assessment.max_attempts === 1
-                      ? "1 attempt per student"
-                      : `Up to ${assessment.max_attempts} attempts per student`
-                    : "Unlimited retakes"}
+                  {attemptLimit(null, assessment.max_attempts) === 1
+                    ? "1 graded attempt per student"
+                    : `${attemptLimit(null, assessment.max_attempts)} graded attempts per student`}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <FontAwesomeIcon icon={faUsers} className="h-3 w-3 text-gray-400" />

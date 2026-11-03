@@ -161,7 +161,7 @@ export function StudentMasteryPanel({ skills, loading }: { skills: SkillMastery[
           <h3 className="font-semibold text-gray-900">Skill Mastery (BKT)</h3>
           <p className="text-xs text-gray-500">
             Bayesian Knowledge Tracing: the chance this student knows each skill, updated after every quiz answer. Weakest
-            first; retakes and practice runs give these skills more questions.
+            first, the order a review quiz follows.
           </p>
         </div>
         {skills && skills.length > 0 && <MasteryKey />}

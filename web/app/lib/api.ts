@@ -143,15 +143,16 @@ export interface StudentAssessment {
     deadline: string | null;
     required: boolean;
   } | null;
-  best_score: number | null;
+  /** The quiz's grade: the average of the graded tries. */
+  grade: number | null;
   attempt_count: number;
   last_submitted_at: string | null;
-  /** Tries allowed; null is unlimited. */
-  max_attempts: number | null;
+  /** Graded tries allowed. */
+  max_attempts: number;
   /** Attempts that have run their course — submitted or expired. */
   attempts_used: number;
-  /** null when unlimited; 0 means the quiz can no longer be started. */
-  attempts_remaining: number | null;
+  /** 0 means the graded tries are used up. */
+  attempts_remaining: number;
 }
 
 export interface AttemptQuestion {

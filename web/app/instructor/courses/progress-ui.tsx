@@ -29,16 +29,19 @@ const pct = (score: number) => `${Math.round(score * 100) / 100}%`;
 /** A cached response from before entered scores (066) has no entries. */
 const entriesOf = (item: ItemProgress | undefined): ScoreEntry[] => item?.entries ?? [];
 
-/** The score a cell shows: the activity's or skill's best, or a count's average. */
+/** The score a cell shows: the activity's or skill's best, a Quiz's grade, or a count's average. */
 function itemScore(item: ItemProgress | undefined): number | null {
   return item ? (item.best_score ?? item.avg_score) : null;
 }
+
+/** A Quiz item's score is its grade, the average of its graded tries, not a best. */
+const isQuizItem = (requirement: CourseRequirement) => requirement.kind === "activity" && requirement.activity_type === "assessment";
 
 /** "best 86% (Satisfactory)", "average 78%", or a Lab Activity's "88%", for the hover text. */
 function scorePhrase(requirement: CourseRequirement, item: ItemProgress): string {
   const score = itemScore(item);
   if (score === null) return "";
-  const kind = requirement.kind === "manual" ? "" : item.best_score !== null ? "best " : "average ";
+  const kind = requirement.kind === "manual" ? "" : item.best_score !== null && !isQuizItem(requirement) ? "best " : "average ";
   return `${kind}${Math.round(score)}%${item.level ? ` (${item.level})` : ""}`;
 }
 
@@ -48,7 +51,7 @@ export function statusText(requirement: CourseRequirement, item: ItemProgress | 
   const parts: string[] = [];
   if (item.done) parts.push(`Met on ${when(item.done_at)}`);
   else if (requirement.kind === "count") parts.push(`${item.current} of ${item.target} so far`);
-  else if (item.best_score !== null) parts.push(`Best so far: ${Math.round(item.best_score)}%${item.level ? ` (${item.level})` : ""}, below the minimum`);
+  else if (item.best_score !== null) parts.push(`${isQuizItem(requirement) ? "Average" : "Best"} so far: ${Math.round(item.best_score)}%${item.level ? ` (${item.level})` : ""}, below the minimum`);
   else parts.push(requirement.kind === "manual" ? "No score yet" : "Not met yet");
   if (item.done || requirement.kind === "count") {
     const score = scorePhrase(requirement, item);

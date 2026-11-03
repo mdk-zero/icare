@@ -8,6 +8,7 @@ import { audit } from "./shared";
 import { courseDb, linkActivityCourses } from "./courses";
 import { listSkillSummaries } from "../fixtures/skills";
 import { parseDeadline } from "@/app/lib/deadline-input";
+import { quizGrade } from "@/app/lib/quiz-attempts";
 import { byName, manageableSections, sectionName, teamLabel, visibleSections, visibleStudents } from "./scope";
 
 /** Quizzes (skill assessments): the builder, publishing, assigning and results. */
@@ -565,7 +566,7 @@ route("GET", "/api/faculty/assessments/:id/results", (ctx) => {
       status: submitted.length ? "submitted" : attempts.some((a) => a.status === "in_progress") ? "in_progress" : "not_started",
       attempt_count: attempts.length,
       submitted_count: submitted.length,
-      best_score: scores.length ? Math.max(...scores) : null,
+      grade: quizGrade(scores),
       latest_score: latest?.score ?? null,
       latest_submitted_at: latest?.submitted_at ?? null,
       latest_time_taken_seconds: latest?.time_taken_seconds ?? null,
@@ -575,7 +576,7 @@ route("GET", "/api/faculty/assessments/:id/results", (ctx) => {
   const average = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
   const groups = new Map<string, typeof results>();
   for (const r of results) if (r.team_id) groups.set(r.team_id, [...(groups.get(r.team_id) ?? []), r]);
-  const graded = results.map((r) => r.best_score).filter((x): x is number => x !== null);
+  const graded = results.map((r) => r.grade).filter((x): x is number => x !== null);
   return {
     assessment: {
       id: quiz.id,
@@ -601,7 +602,7 @@ route("GET", "/api/faculty/assessments/:id/results", (ctx) => {
         label: rows[0].team_label ?? "Group",
         members: rows.length,
         submitted: rows.filter((r) => r.status === "submitted").length,
-        average_score: average(rows.map((r) => r.best_score).filter((x): x is number => x !== null)),
+        average_score: average(rows.map((r) => r.grade).filter((x): x is number => x !== null)),
       }))
       .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true })),
   };

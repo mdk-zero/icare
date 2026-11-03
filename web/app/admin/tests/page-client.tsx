@@ -985,7 +985,7 @@ function SuiteSection({
 const ML_MODELS = [
   { kind: "random_forest", name: "Random Forest", job: "Who needs intervention: the low-performing flag" },
   { kind: "logistic_regression", name: "Logistic Regression", job: "Who needs intervention: the comparison baseline" },
-  { kind: "knowledge_tracing", name: "Bayesian Knowledge Tracing", job: "What to practice: mastery per skill, which steers quiz retakes" },
+  { kind: "knowledge_tracing", name: "Bayesian Knowledge Tracing", job: "What to practice: mastery per skill, which orders the review quiz" },
   { kind: "recommender", name: "Content-based recommender (TF-IDF)", job: "What to practice: other quizzes on the weakest skill areas" },
 ];
 

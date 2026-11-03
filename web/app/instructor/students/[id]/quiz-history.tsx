@@ -4,6 +4,7 @@ import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronDown, faCircleCheck, faClock, faFileLines } from "@fortawesome/free-solid-svg-icons";
 import type { StudentQuizAttempt } from "../../../lib/api";
+import { quizGrade } from "../../../lib/quiz-attempts";
 import { scoreDescriptor } from "../../../lib/task-ratings";
 import { Sparkline } from "./skill-area-trend";
 
@@ -132,7 +133,7 @@ function QuizGroupRow({ group }: { group: QuizGroup }) {
   const scored = [...group.attempts].reverse().filter((a): a is StudentQuizAttempt & { score: number } => a.score !== null);
   const first = scored[0]?.score ?? null;
   const change = first !== null && latest.score !== null ? latest.score - first : null;
-  const best = scored.length > 0 ? Math.max(...scored.map((a) => a.score)) : null;
+  const grade = quizGrade(scored.map((a) => a.score));
   const panelId = `quiz-log-${group.key}`;
 
   return (
@@ -151,7 +152,7 @@ function QuizGroupRow({ group }: { group: QuizGroup }) {
             {group.attempts.length} attempts · last {formatDateTime(latest.submitted_at)}
           </p>
           <p className="mt-1 text-xs text-gray-400">
-            {best !== null && <>Best {best}%</>}
+            {grade !== null && <>Average {Math.round(grade)}%</>}
             {change !== null && scored.length > 1 && (
               <span
                 className={`ml-2 font-semibold ${
