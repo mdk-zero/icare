@@ -8,7 +8,6 @@ import {
   faChevronLeft,
   faClipboardCheck,
   faCircleCheck,
-  faHourglassHalf,
   faCircleMinus,
   faSearch,
   faDownload,
@@ -19,6 +18,8 @@ import StatTile from "../../../../components/StatTile";
 import Avatar from "../../../../components/Avatar";
 import { SkeletonTable } from "../../../../components/skeletons";
 import { usePageData } from "../../../../lib/use-page-data";
+import { fetchReport, saveBlob } from "../../../../lib/reports/client";
+import { loadingToast } from "../../../../components/Toast";
 
 type Status = "submitted" | "in_progress" | "not_started";
 
@@ -177,9 +178,10 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
       if (q && !r.name.toLowerCase().includes(q) && !r.email.toLowerCase().includes(q)) {
         return false;
       }
-      if (statusFilter !== "all" && r.status !== statusFilter) return false;
+      // Someone mid-quiz hasn't completed it: they file under Not started.
+      if (statusFilter !== "all" && (r.status === "in_progress" ? "not_started" : r.status) !== statusFilter) return false;
 
-      if (groupFilter !== "all" && (groupFilter === "__none__" ? r.team_id !== null : r.team_id !== groupFilter)) {
+      if (groupFilter !== "all" && r.team_id !== groupFilter) {
         return false;
       }
       if (sectionFilter !== "all") {
@@ -217,32 +219,19 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
     setScoreFilter("all");
   };
 
-  /** Exports what is on screen, so a filtered view exports the filtered rows. */
-  const exportCsv = () => {
-    const header = "student,email,section,group,status,grade,attempts,review_quizzes,last_submitted,time_taken";
-    const rows = filtered.map((r) =>
-      [
-        r.name,
-        r.email,
-        r.section ?? "",
-        r.team_label ?? "",
-        STATUS_LABEL[r.status],
-        r.grade ?? "",
-        r.attempt_count,
-        r.practice_count ?? 0,
-        r.latest_submitted_at ?? "",
-        r.latest_time_taken_seconds ?? "",
-      ]
-        .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
-        .join(","),
-    );
-    const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${assessment?.title ?? "assessment"}-results.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+  /**
+   * The Quiz Results report as a PDF: the whole class, section by section and
+   * group by group, whatever the filters on screen show.
+   */
+  const [exporting, setExporting] = useState(false);
+  const exportReport = async () => {
+    setExporting(true);
+    const progress = loadingToast("Building the results report…");
+    const report = await fetchReport("/api/faculty/reports", "assessment", assessmentId);
+    setExporting(false);
+    if ("error" in report) return progress.error(report.error);
+    saveBlob(report.blob, report.filename);
+    progress.success("Results report downloaded");
   };
 
   return (
@@ -258,11 +247,11 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <button
-          onClick={() => router.push(`/instructor/assessments/${assessmentId}`)}
+          onClick={() => router.push("/instructor/assessments")}
           className="flex items-center gap-2 rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
         >
           <FontAwesomeIcon icon={faChevronLeft} className="h-3.5 w-3.5" />
-          Back to assessment
+          Back to Quizzes
         </button>
         {assessment && !assessment.is_published && (
           <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
@@ -270,12 +259,12 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
           </span>
         )}
         <button
-          onClick={exportCsv}
-          disabled={filtered.length === 0}
+          onClick={exportReport}
+          disabled={exporting || results.length === 0}
           className="ml-auto flex items-center gap-2 rounded-lg border border-gray-200 bg-surface px-3 py-2 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50 disabled:opacity-40"
         >
           <FontAwesomeIcon icon={faDownload} className="h-3.5 w-3.5" />
-          Export CSV
+          {exporting ? "Building report…" : "Export report"}
         </button>
       </div>
 
@@ -285,7 +274,7 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
         </div>
       ) : (
         <>
-          <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <StatTile
               icon={faCircleCheck}
               value={summary?.submitted ?? 0}
@@ -295,14 +284,6 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
               } student${summary?.total === 1 ? "" : "s"}`}
               iconBg="bg-emerald-50"
               iconColor="text-emerald-600"
-            />
-            <StatTile
-              icon={faHourglassHalf}
-              value={summary?.in_progress ?? 0}
-              label="In Progress"
-              caption="Started, not submitted"
-              iconBg="bg-amber-50"
-              iconColor="text-amber-600"
             />
             <StatTile
               icon={faCircleMinus}
@@ -373,7 +354,6 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
             >
               <option value="all">All statuses</option>
               <option value="submitted">Completed</option>
-              <option value="in_progress">In progress</option>
               <option value="not_started">Not started</option>
             </select>
             {/* Hidden on a single-section roster, where it can only ever be a
@@ -410,7 +390,6 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
                     {g.label}
                   </option>
                 ))}
-                <option value="__none__">No group</option>
               </select>
             )}
             <select
@@ -463,11 +442,7 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
                   </thead>
                   <tbody className="divide-y divide-hairline">
                     {filtered.map((r) => (
-                      <tr
-                        key={r.student_id}
-                        onClick={() => router.push(`/instructor/students/${r.student_id}`)}
-                        className="cursor-pointer transition-colors hover:bg-subtle"
-                      >
+                      <tr key={r.student_id}>
                         <td className="px-4 py-4 sm:px-6">
                           <div className="flex items-center gap-3">
                             <Avatar

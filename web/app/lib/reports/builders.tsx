@@ -1,7 +1,7 @@
 import { Text, View } from '@react-pdf/renderer';
 import type { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getFacultyStudentIds } from '@/app/lib/roster';
-import { CourseCriteria, ReportShell, StatGrid, Table, styles, type ReportMeta, type ReportDocument } from './kit';
+import { CourseCriteria, ReportShell, StatGrid, TEAL, Table, scoreColor, styles, type ReportMeta, type ReportDocument } from './kit';
 import {
   CASE_STATUS_LABEL,
   NEEDS_PRACTICE_BELOW,
@@ -453,9 +453,13 @@ export async function buildScenarioReport(
 // ---------------------------------------------------------------------------
 
 /**
- * One row per student who was given the assessment (assessment_assignments)
- * or sat it anyway: target_sections only makes it visible, so it is not who
- * was given it.
+ * A quiz's results as a report for the whole class: the summary, how the
+ * class did on each scoring criterion (each Taylor's skill or chapter), then
+ * every section, group by group, with each student's grade. A student counts
+ * when they were given the quiz (assessment_assignments) or sat it anyway:
+ * target_sections only makes it visible, so it is not who was given it.
+ * A student has completed it once a graded try is handed in; until then they
+ * have not started it, as the results page shows them.
  */
 export async function buildAssessmentReport(
   supabase: Supabase,
@@ -465,55 +469,83 @@ export async function buildAssessmentReport(
 ): Promise<BuildResult> {
   const { data: assessment } = await supabase
     .from('assessments')
-    .select('id, title, is_published, time_limit_seconds')
+    .select('id, title, is_published, time_limit_seconds, max_attempts')
     .eq('id', assessmentId)
     .maybeSingle();
   if (!assessment) return { error: 'Assessment not found', status: 404 };
 
-  const [{ data: assigned }, { data: allAttempts }] = await Promise.all([
+  const [{ data: assigned }, { data: allAttempts }, { data: criteria }] = await Promise.all([
     supabase
       .from('assessment_assignments')
       .select('student_id, deadline, users!assessment_assignments_student_id_fkey(name)')
       .eq('assessment_id', assessmentId),
     supabase
       .from('assessment_attempts')
-      .select('student_id, status, score, submitted_at, time_taken_seconds, users(name)')
+      .select('id, student_id, status, score, submitted_at, time_taken_seconds, users(name)')
       .eq('assessment_id', assessmentId),
+    supabase
+      .from('assessment_criteria')
+      .select('id, name, weight, sort_order')
+      .eq('assessment_id', assessmentId)
+      .order('sort_order', { ascending: true }),
   ]);
 
-  const students = new Map<string, { name: string; assigned: boolean; attempts: NonNullable<typeof allAttempts> }>();
+  const students = new Map<string, { name: string; attempts: NonNullable<typeof allAttempts> }>();
   for (const a of assigned ?? []) {
     const name = (a as unknown as { users: { name: string } | null }).users?.name ?? 'Unknown student';
-    students.set(a.student_id as string, { name, assigned: true, attempts: [] });
+    students.set(a.student_id as string, { name, attempts: [] });
   }
   for (const a of allAttempts ?? []) {
     const id = a.student_id as string;
     const name = (a as unknown as { users: { name: string } | null }).users?.name ?? 'Unknown student';
-    const e = students.get(id) ?? { name, assigned: false, attempts: [] };
+    const e = students.get(id) ?? { name, attempts: [] };
     e.attempts.push(a);
     students.set(id, e);
   }
   const inScope = [...students.entries()].filter(([id]) => !scope || scope.includes(id));
-  const groups = await groupNames(supabase, inScope.map(([id]) => id));
+  const ids = inScope.map(([id]) => id);
 
-  const rows = inScope
-    .map(([id, s]) => {
-      const submitted = s.attempts.filter((a) => a.status === 'submitted' && a.score !== null);
-      const average = quizGrade(submitted.map((a) => Number(a.score)));
-      const grade = average === null ? null : Math.round(average);
-      const latest = submitted.map((a) => a.submitted_at as string).sort().at(-1) ?? null;
-      const late = submitted.some((a) => isLateAttempt(a.time_taken_seconds, assessment.time_limit_seconds));
-      const status = submitted.length
-        ? 'Submitted'
-        : s.attempts.some((a) => a.status === 'in_progress')
-          ? 'In progress'
-          : 'Not started';
-      return { name: s.name, group: groups.get(id) ?? '—', status, attempts: submitted.length, grade, latest, late };
-    })
-    .sort((a, b) => a.name.localeCompare(b.name));
+  // Each student's section, for the section-by-section listing.
+  const { data: people } = ids.length
+    ? await supabase.from('users').select('id, section_id').in('id', ids)
+    : { data: [] as { id: string; section_id: string | null }[] };
+  const sectionIds = [
+    ...new Set((people ?? []).map((p) => p.section_id as string | null).filter((v): v is string => !!v)),
+  ];
+  const [groups, { data: sectionRows }] = await Promise.all([
+    groupNames(supabase, ids),
+    sectionIds.length
+      ? supabase.from('sections').select('id, name').in('id', sectionIds)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+  ]);
+  const sectionName = new Map((sectionRows ?? []).map((s) => [s.id as string, s.name as string]));
+  const sectionOf = new Map(
+    (people ?? []).map((p) => [p.id as string, p.section_id ? sectionName.get(p.section_id as string) : undefined]),
+  );
+
+  const rows = inScope.map(([id, s]) => {
+    const submitted = s.attempts.filter((a) => a.status === 'submitted' && a.score !== null);
+    const average = quizGrade(submitted.map((a) => Number(a.score)));
+    const grade = average === null ? null : Math.round(average);
+    const latest = submitted.map((a) => a.submitted_at as string).sort().at(-1) ?? null;
+    const late = submitted.some((a) => isLateAttempt(a.time_taken_seconds, assessment.time_limit_seconds));
+    return {
+      id,
+      name: s.name,
+      section: sectionOf.get(id) ?? 'No section',
+      group: groups.get(id) ?? null,
+      tries: submitted.length,
+      grade,
+      latest,
+      late,
+      attemptIds: submitted.map((a) => a.id as string),
+    };
+  });
+  type Row = (typeof rows)[number];
 
   const grades = rows.flatMap((r) => (r.grade === null ? [] : [r.grade]));
-  const passRate = grades.length ? Math.round((grades.filter((s) => s >= PASSING_SCORE).length / grades.length) * 100) : null;
+  const passed = grades.filter((g) => g >= PASSING_SCORE).length;
+  const passRate = grades.length ? Math.round((passed / grades.length) * 100) : null;
   const bands = [
     { label: '90-100', test: (s: number) => s >= 90 },
     { label: `${PASSING_SCORE}-89`, test: (s: number) => s >= PASSING_SCORE && s < 90 },
@@ -521,50 +553,163 @@ export async function buildAssessmentReport(
     { label: 'Below 60', test: (s: number) => s < 60 },
   ].map((b) => [b.label, grades.filter(b.test).length]);
 
+  // The class on each criterion: questions answered right out of those served, over every graded try.
+  const attemptIds = rows.flatMap((r) => r.attemptIds);
+  const { data: criterionScores } = attemptIds.length
+    ? await supabase.from('attempt_criteria_scores').select('criteria_id, correct, total').in('attempt_id', attemptIds)
+    : { data: [] as { criteria_id: string; correct: number; total: number }[] };
+  const answered = new Map<string, { correct: number; total: number }>();
+  for (const c of criterionScores ?? []) {
+    const t = answered.get(c.criteria_id as string) ?? { correct: 0, total: 0 };
+    t.correct += Number(c.correct ?? 0);
+    t.total += Number(c.total ?? 0);
+    answered.set(c.criteria_id as string, t);
+  }
+  const criteriaRows = (criteria ?? []).map((c) => {
+    const t = answered.get(c.id as string);
+    return {
+      name: c.name as string,
+      weight: Number(c.weight),
+      score: t && t.total > 0 ? Math.round((t.correct / t.total) * 100) : null,
+    };
+  });
+
+  // Section, then group, in order; the students not in a group close their section.
+  const bySection = new Map<string, Row[]>();
+  for (const r of rows) bySection.set(r.section, [...(bySection.get(r.section) ?? []), r]);
+  const sections = [...bySection.entries()]
+    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+    .map(([section, list]) => {
+      const byGroup = new Map<string, Row[]>();
+      for (const r of list) byGroup.set(r.group ?? '', [...(byGroup.get(r.group ?? '') ?? []), r]);
+      const groupList = [...byGroup.entries()]
+        .sort(([a], [b]) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b, undefined, { numeric: true })))
+        .map(([group, members]) => ({ group, members: [...members].sort((x, y) => x.name.localeCompare(y.name)) }));
+      return { section, list, groups: groupList };
+    });
+
+  const summaryLine = (list: Row[]) => {
+    const g = list.flatMap((r) => (r.grade === null ? [] : [r.grade]));
+    return `${g.length} of ${list.length} completed, average ${pct(avg(g))}, ${g.filter((x) => x >= PASSING_SCORE).length} passed`;
+  };
+  const remark = (g: number | null) => (g === null ? 'Not taken' : g >= PASSING_SCORE ? 'Passed' : 'Below passing');
+
   const pdf = (
     <ReportShell
-      title={`Assessment Report - ${assessment.title}`}
-      heading="Quiz Report"
+      title={`Quiz Results - ${assessment.title}`}
+      heading="Quiz Results Report"
       meta={meta}
       metaRows={[
-        { label: 'Assessment', value: assessment.title },
+        { label: 'Quiz', value: assessment.title },
         { label: 'Status', value: assessment.is_published ? 'Published' : 'Draft' },
         {
           label: 'Time limit',
           value: assessment.time_limit_seconds ? `${Math.round(assessment.time_limit_seconds / 60)} min` : 'None',
         },
+        { label: 'Graded tries allowed', value: String(assessment.max_attempts ?? 1) },
+        { label: 'Passing grade', value: `${PASSING_SCORE}%` },
       ]}
     >
       <Text style={styles.sectionTitle}>Summary</Text>
       <StatGrid
         items={[
-          { label: 'Students', value: rows.length },
-          { label: 'Submitted', value: grades.length },
-          { label: 'Average grade', value: pct(avg(grades)) },
-          { label: `Pass rate (${PASSING_SCORE}% and up)`, value: pct(passRate) },
+          { label: 'Given the quiz', value: rows.length },
+          { label: 'Completed', value: grades.length },
+          { label: 'Not started', value: rows.length - grades.length },
+          { label: 'Class average', value: pct(avg(grades)) },
+          { label: `Passed (${PASSING_SCORE}% and up)`, value: grades.length ? `${passed} (${pct(passRate)})` : '—' },
         ]}
       />
 
-      <Text style={styles.sectionTitle}>Grade distribution (average of graded tries)</Text>
-      <Table head={['Band', 'Students']} rows={bands} emptyText="No submitted attempts yet." />
+      <Text style={styles.sectionTitle}>Results by criterion</Text>
+      {criteriaRows.length === 0 ? (
+        <Text style={styles.empty}>This quiz has no scoring criteria.</Text>
+      ) : (
+        <View>
+          <View style={[styles.row, styles.headRow]}>
+            <Text style={styles.cellWide}>Criterion</Text>
+            <Text style={[styles.cell, { flex: 0.7 }]}>Weight</Text>
+            <Text style={[styles.cell, { flex: 2.6 }]}>Class score</Text>
+          </View>
+          {criteriaRows.map((c) => (
+            <View key={c.name} style={[styles.row, { alignItems: 'center' }]} wrap={false}>
+              <Text style={styles.cellWide}>{c.name}</Text>
+              <Text style={[styles.cell, { flex: 0.7, color: '#6b7280' }]}>{`${c.weight}%`}</Text>
+              <View style={styles.barTrack}>
+                {c.score !== null && (
+                  <View
+                    style={{
+                      width: `${Math.max(c.score, 2)}%`,
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: scoreColor(c.score),
+                    }}
+                  />
+                )}
+              </View>
+              <Text
+                style={[
+                  styles.cell,
+                  {
+                    flex: 0.6,
+                    fontFamily: 'Helvetica-Bold',
+                    color: c.score === null ? '#9ca3af' : scoreColor(c.score),
+                  },
+                ]}
+              >
+                {c.score === null ? '—' : `${c.score}%`}
+              </Text>
+            </View>
+          ))}
+          <Text style={note}>
+            The share of each criterion&apos;s questions the class answered right, over every graded try. The
+            shortest bars are the skills to review with the class.
+          </Text>
+        </View>
+      )}
 
-      <Text style={styles.sectionTitle}>Students</Text>
-      <Table
-        head={['Student', 'Group', 'Status', 'Attempts', 'Last submitted', 'Grade']}
-        widths={[2.4, 1, 1.2, 1, 1.6, 0.8]}
-        rows={rows.map((r) => [
-          r.name,
-          r.group,
-          r.status,
-          r.attempts,
-          r.latest ? `${date(r.latest)}${r.late ? ' (late)' : ''}` : '—',
-          pct(r.grade),
-        ])}
-        emptyText="This assessment has not been given to anyone yet."
-      />
+      <Text style={styles.sectionTitle}>Grade distribution</Text>
+      <Table head={['Grade', 'Students']} rows={bands} emptyText="No one has completed the quiz yet." />
+
+      {sections.length === 0 ? (
+        <>
+          <Text style={styles.sectionTitle}>Students</Text>
+          <Text style={styles.empty}>This quiz has not been given to anyone yet.</Text>
+        </>
+      ) : (
+        sections.map((sec) => (
+          <View key={sec.section}>
+            <Text style={styles.sectionTitle}>{`Section ${sec.section}`}</Text>
+            <Text style={styles.courseSub}>{summaryLine(sec.list)}</Text>
+            {sec.groups.map(({ group, members }) => (
+              // A group stays on one page, its heading with its students.
+              <View key={group || 'none'} style={{ marginBottom: 8 }} wrap={false}>
+                <View
+                  style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, marginBottom: 3 }}
+                  wrap={false}
+                >
+                  <Text style={{ fontFamily: 'Helvetica-Bold', color: TEAL }}>{group || 'Students not in a group'}</Text>
+                  <Text style={{ fontSize: 8, color: '#6b7280' }}>{summaryLine(members)}</Text>
+                </View>
+                <Table
+                  head={['Student', 'Tries', 'Last submitted', 'Grade', 'Remarks']}
+                  widths={[2.6, 0.6, 1.6, 0.7, 1.1]}
+                  rows={members.map((r) => [
+                    r.name,
+                    r.tries || '—',
+                    r.latest ? `${date(r.latest)}${r.late ? ' (late)' : ''}` : '—',
+                    pct(r.grade),
+                    remark(r.grade),
+                  ])}
+                />
+              </View>
+            ))}
+          </View>
+        ))
+      )}
       <Text style={note}>
-        Late marks an attempt handed in more than a minute past the time limit. It is still graded and
-        counted.
+        A grade is the average of the student&apos;s graded tries; review quizzes don&apos;t count. Late marks a try
+        handed in more than a minute past the time limit; it is still graded and counted.
       </Text>
     </ReportShell>
   );
