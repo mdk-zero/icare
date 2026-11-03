@@ -100,12 +100,12 @@ export const TERM_STATUS_LABEL: Record<TermStatus, string> = {
   ended: "Ended",
 };
 
-/** Field limits, matching the checks in migration 065. */
+/** Field limits, matching the checks in migration 088. */
 export const COURSE_LIMITS = {
-  termName: 80,
-  courseCode: 20,
+  termName: 150,
+  courseCode: 50,
   courseTitle: 1000,
-  courseDescription: 2000,
+  courseDescription: 5000,
 } as const;
 
 // ---------------------------------------------------------------------------

@@ -59,6 +59,12 @@ export async function requireRole(
   return { session };
 }
 
+/** Before migration 088 the database still holds these fields to 065's shorter limits. */
+function isOldCourseLimit(err: unknown): boolean {
+  const { code, message } = (err ?? {}) as { code?: string; message?: string };
+  return code === '23514' && /(courses_(code|title|description)|academic_terms_name)_check/.test(message ?? '');
+}
+
 /** The 503 before migration 065 (or a later one a feature needs), otherwise a logged 500. */
 export function courseFailure(err: unknown, message: string): NextResponse {
   if (err instanceof MigrationNeeded) {
@@ -66,6 +72,12 @@ export function courseFailure(err: unknown, message: string): NextResponse {
   }
   if (isMissingCourseSchema(err)) {
     return NextResponse.json({ error: COURSES_NEED_MIGRATION }, { status: 503 });
+  }
+  if (isOldCourseLimit(err)) {
+    return NextResponse.json(
+      { error: 'Course details this long need database migration 088 (longer course fields) applied first.' },
+      { status: 503 },
+    );
   }
   console.error(message, err);
   return NextResponse.json({ error: message }, { status: 500 });
