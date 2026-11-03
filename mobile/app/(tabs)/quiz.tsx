@@ -72,8 +72,8 @@ function QuizRow({
         </View>
       </View>
 
-      {done && quiz.best_score !== null ? (
-        <ScoreRing score={quiz.best_score} size={50} stroke={5} color={accuracyAccent(Accent, quiz.best_score).fg} />
+      {done && quiz.grade !== null ? (
+        <ScoreRing score={quiz.grade} size={50} stroke={5} color={accuracyAccent(Accent, quiz.grade).fg} />
       ) : (
         <Ionicons name="chevron-forward" size={18} color={Palette.textFaint} />
       )}
@@ -172,7 +172,7 @@ export default function QuizScreen() {
               ? completed.length > 0
                 ? 'All caught up — check back when your instructor publishes a new quiz.'
                 : 'No quizzes yet — check back once your instructor publishes one.'
-              : 'Quizzes you finish land here, with your best score and flashcards to study.'
+              : 'Quizzes you finish land here, with your grade and flashcards to study.'
           }
         />
       ) : (

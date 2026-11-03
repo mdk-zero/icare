@@ -295,8 +295,10 @@ function QuizRow({
       ? 'Take quiz'
       : quiz.attempts_remaining === 0
         ? quiz.practice_available
-          ? 'Practice again'
-          : 'No tries left'
+          ? 'Take review quiz'
+          : quiz.attempt_count > 0
+            ? 'Nothing to review'
+            : 'No tries left'
         : 'Take it again';
   return (
     <Pressable style={({ pressed }) => [styles.row, pressed && styles.pressed]} onPress={onPress} accessibilityRole="button">
@@ -308,7 +310,7 @@ function QuizRow({
           {quiz.title}
         </Text>
         <Text style={styles.rowMeta}>
-          {quiz.best_score !== null ? `Best ${Math.round(quiz.best_score)}% · ` : ''}
+          {quiz.grade !== null ? `Grade ${Math.round(quiz.grade)}% · ` : ''}
           {action}
         </Text>
       </View>

@@ -268,7 +268,8 @@ export interface StudentAssessment {
     deadline: string | null;
     required: boolean;
   } | null;
-  best_score: number | null;
+  /** The quiz's grade: the average of the graded tries. */
+  grade: number | null;
   attempt_count: number;
   last_submitted_at: string | null;
   /** Tries allowed; null is unlimited. */
@@ -277,9 +278,11 @@ export interface StudentAssessment {
   attempts_used: number;
   /** null when unlimited; 0 means the graded tries are used up. */
   attempts_remaining: number | null;
-  /** Graded tries used up, but the quiz can still be taken as ungraded practice. */
+  /** Graded tries used up, and there are wrong answers for an ungraded review quiz. */
   practice_available?: boolean;
-  /** Practice runs finished; they never change best_score. */
+  /** How many questions that review quiz holds: the ones last answered wrong. */
+  review_question_count?: number;
+  /** Review quizzes finished; they never change the grade. */
   practice_count?: number;
   last_practice_score?: number | null;
 }
@@ -327,7 +330,7 @@ export interface StartedAttempt {
   attempts_remaining?: number | null;
   /** The last attempt was left open past its time limit and was closed; this one is new. */
   previous_expired?: boolean;
-  /** An ungraded practice run past the attempt limit; numbered on its own. */
+  /** An ungraded review quiz past the attempt limit; numbered on its own. */
   practice?: boolean;
   practice_number?: number;
 }
@@ -1137,6 +1140,7 @@ export interface CourseRequirement {
   label: string;
   /** The linked activity was deleted. */
   removed: boolean;
+  activity_type?: string | null;
   target_count: number | null;
   min_score: number | null;
 }

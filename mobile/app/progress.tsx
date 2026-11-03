@@ -61,7 +61,7 @@ function QuizHistoryRow({
   const latest = group.attempts[0];
   const retaken = group.attempts.length > 1;
   const scores = group.attempts.map((a) => a.score).filter((s): s is number => s !== null);
-  const best = scores.length > 0 ? Math.max(...scores) : null;
+  const average = scores.length > 0 ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) : null;
 
   return (
     <View style={bordered && styles.rowBorder}>
@@ -78,7 +78,7 @@ function QuizHistoryRow({
           </Text>
           <Text style={styles.activityDateText}>
             {retaken
-              ? `${group.attempts.length} attempts${best !== null ? ` · best ${best}%` : ''}`
+              ? `${group.attempts.length} attempts${average !== null ? ` · average ${average}%` : ''}`
               : formatDate(latest.submitted_at)}
           </Text>
         </View>
@@ -217,7 +217,7 @@ export default function ProgressScreen() {
         skills={mastery.data}
         loading={mastery.loading}
         error={mastery.error}
-        intro="Bayesian Knowledge Tracing: how likely it is that you know each skill, updated after every quiz answer. Weakest first. Retakes and practice runs give these skills more questions."
+        intro="Bayesian Knowledge Tracing: how likely it is that you know each skill, updated after every quiz answer. Weakest first, the order a review quiz follows."
         empty="No estimates yet. They start with your first quiz answer on a skill."
         style={styles.section}
       />

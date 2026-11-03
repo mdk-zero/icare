@@ -32,10 +32,12 @@ export function statusText(requirement: CourseRequirement, item: ItemProgress | 
     const verb = requirement.kind === 'manual' ? 'Ticked' : 'Marked done';
     return `${verb} by you on ${when(item.done_at)}${item.note ? `: ${item.note}` : ''}`;
   }
-  if (item.done) return `Met on ${when(item.done_at)}${item.best_score !== null ? ` · best ${Math.round(item.best_score)}%` : ''}`;
+  // A Quiz item's score is its grade, the average of its graded tries, not a best.
+  const isQuiz = requirement.kind === 'activity' && requirement.activity_type === 'assessment';
+  if (item.done) return `Met on ${when(item.done_at)}${item.best_score !== null ? ` · ${isQuiz ? 'average' : 'best'} ${Math.round(item.best_score)}%` : ''}`;
   if (requirement.kind === 'count') return `${item.current} of ${item.target} so far`;
   if (requirement.kind === 'skill' && item.level) return `Best so far: ${item.level}`;
-  if (item.best_score !== null) return `Best so far: ${Math.round(item.best_score)}%, below the minimum`;
+  if (item.best_score !== null) return `${isQuiz ? 'Average' : 'Best'} so far: ${Math.round(item.best_score)}%, below the minimum`;
   return requirement.kind === 'manual' ? 'Not ticked' : 'Not met yet';
 }
 

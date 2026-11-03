@@ -133,7 +133,7 @@ export default function StudentRequirementsScreen() {
           skills={mastery.data}
           loading={mastery.loading}
           error={mastery.error}
-          intro="Bayesian Knowledge Tracing: the chance this student knows each skill, updated after every quiz answer. Weakest first. Retakes and practice runs give these skills more questions."
+          intro="Bayesian Knowledge Tracing: the chance this student knows each skill, updated after every quiz answer. Weakest first, the order a review quiz follows."
           empty="No estimates yet. They start with this student's first quiz answer on a skill."
         />
       </ScrollView>
