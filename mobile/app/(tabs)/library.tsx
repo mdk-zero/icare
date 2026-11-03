@@ -8,9 +8,7 @@ import { ScreenHeader, SkeletonBlock, EmptyState } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import {
   fetchAiTips,
-  fetchAssessments,
   fetchLibrary,
-  fetchRecommendations,
   fetchSkillFocus,
   type LibraryItem,
   type LibraryKind,
@@ -38,39 +36,31 @@ export default function LibraryScreen() {
   const { Palette, Accent, Shadow, Type } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette, Shadow, Type), [Palette, Shadow, Type]);
   const { data, loading, refreshing, error, refresh, reload } = useApiData(fetchLibrary);
-  // What needs improvement, and what goes with it, in a closed panel above the
+  // What needs improvement, and what goes with it, in a panel below the
   // materials. Separate calls: a slow AI tip must never hold up the materials.
   const focus = useApiData(fetchSkillFocus);
   const tips = useApiData(fetchAiTips);
-  const quizzes = useApiData(fetchAssessments);
-  const recommendations = useApiData(fetchRecommendations);
   const [filter, setFilter] = React.useState<Filter>('all');
   const [collapsed, setCollapsed] = React.useState<Set<number>>(new Set());
 
   // "New" dots clear after a material is opened; a grade given in the
   // meantime can add or clear a skill that needs improvement.
   const reloadFocus = focus.reload;
-  const reloadQuizzes = quizzes.reload;
   useFocusEffect(
     React.useCallback(() => {
       if (data) reload();
       reloadFocus();
-      reloadQuizzes();
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [reload, reloadFocus, reloadQuizzes]),
+    }, [reload, reloadFocus]),
   );
 
   const refreshFocus = focus.refresh;
   const refreshTips = tips.refresh;
-  const refreshQuizzes = quizzes.refresh;
-  const refreshRecommendations = recommendations.refresh;
   const refreshAll = React.useCallback(() => {
     refresh();
     refreshFocus();
     refreshTips();
-    refreshQuizzes();
-    refreshRecommendations();
-  }, [refresh, refreshFocus, refreshTips, refreshQuizzes, refreshRecommendations]);
+  }, [refresh, refreshFocus, refreshTips]);
 
   const pending = loading && !data;
 
@@ -92,7 +82,7 @@ export default function LibraryScreen() {
     for (const c of data?.chapters ?? []) for (const s of c.skills) map.set(s.id, s.materials);
     return map;
   }, [data]);
-  const focusSkills = focus.data ?? [];
+  const focusSkills = focus.data?.skills ?? [];
 
   return (
     <ScrollView
@@ -113,17 +103,6 @@ export default function LibraryScreen() {
         }
         icon="library-outline"
         accent="teal"
-      />
-
-      <FocusSection
-        skills={focusSkills}
-        loading={focus.loading}
-        tips={tips.data?.tips ?? []}
-        tipsLoading={tips.loading}
-        quizzes={quizzes.data ?? []}
-        recommendations={recommendations.data ?? []}
-        materialsBySkill={materialsBySkill}
-        renderMaterial={(m) => <MaterialRow item={m} onPress={() => open(m)} styles={styles} Accent={Accent} Palette={Palette} />}
       />
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
@@ -221,6 +200,18 @@ export default function LibraryScreen() {
           </View>
         );
       })}
+
+      {/* After the materials: what to study next, from the student's whole standing. */}
+      <FocusSection
+        skills={focusSkills}
+        overall={focus.data?.overall ?? null}
+        loading={focus.loading}
+        tips={tips.data?.tips ?? []}
+        tipsLoading={tips.loading}
+        atRisk={focus.data?.at_risk ?? false}
+        materialsBySkill={materialsBySkill}
+        renderMaterial={(m) => <MaterialRow item={m} onPress={() => open(m)} styles={styles} Accent={Accent} Palette={Palette} />}
+      />
     </ScrollView>
   );
 }

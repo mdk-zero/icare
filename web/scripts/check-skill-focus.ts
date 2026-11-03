@@ -100,6 +100,18 @@ async function main() {
     );
     check('keeps one tip per flagged skill, drops invented and empty ones', tips.map((t) => t.skill_id).join() === '1-7,4-1');
     check('a non-array answer gives no tips', sanitizeSkillTips({ tips: 'none' }, weak, 4).length === 0);
+    const withOverall = sanitizeSkillTips(
+      {
+        tips: [
+          { title: 'Practise checklists first', tip: 'Your Return Demos trail your quizzes.', skill_id: 'overall' },
+          { title: 'Again', tip: 'A second overall tip.', skill_id: 'overall' },
+          { title: 'Deflate the cuff slowly', tip: 'Release 2-3 mmHg per second.', skill_id: '1-7' },
+        ],
+      },
+      weak,
+      5,
+    );
+    check('one overall tip is kept alongside the skill tips', withOverall.map((t) => t.skill_id).join() === 'overall,1-7');
     const prompt = buildSkillTipsPrompt(
       [
         {
@@ -113,8 +125,17 @@ async function main() {
         },
       ],
       new Map([['1-7', 'Accurate blood pressure.']]),
+      undefined,
+      [
+        { id: 'm1', skill_id: '1-7', kind: 'video', title: 'Taking a Blood Pressure', description: 'Cuff size and deflation.' },
+        { id: 'm2', skill_id: '9-9', kind: 'note', title: 'Another skill', description: '' },
+      ],
     );
-    check('the prompt names the steps and the quiz score', prompt.includes('"Step 1"') && prompt.includes('67%'));
+    check('the prompt lists the skill’s own materials only', prompt.includes('"Taking a Blood Pressure"') && !prompt.includes('Another skill'));
+    check(
+      'the prompt is general: no quiz, case or step it came from',
+      !prompt.includes('"Step 1"') && !prompt.includes('67%') && !prompt.includes('Quiz "'),
+    );
   }
 
   // ---------- against the real database ----------

@@ -1,69 +1,79 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, LayoutAnimation } from 'react-native';
-import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SkeletonBlock } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
-import type { AiTip, FocusSkill, LibraryItem, Recommendation, SkillEvidence, StudentAssessment } from '@/lib/api';
+import type { AiTip, FocusSkill, LibraryItem, LibraryKind, StudyProfile } from '@/lib/api';
 
-/** Skills shown before "Show more": the newest-flagged ones. */
+/** Skills shown before "Show more": the least mastered ones. */
 const FIRST_SKILLS = 3;
-/** Per skill, so one card never outgrows the screen. */
+/** Per skill, so one card never outgrows the screen; a student flagged at risk gets more. */
 const MAX_MATERIALS = 3;
-const MAX_STEPS = 3;
-/** ML quiz picks, after the ones already listed under a skill. */
-const MAX_SUGGESTIONS = 3;
+const MAX_MATERIALS_AT_RISK = 5;
+/** Below this mastery a skill is new ground: demonstrations before reference material. */
+const FOUNDATION_BELOW = 0.5;
+const FOUNDATION_ORDER: readonly LibraryKind[] = ['video', 'slides', 'note', 'pdf', 'link'];
+const REFINE_ORDER: readonly LibraryKind[] = ['note', 'pdf', 'slides', 'video', 'link'];
 
-const KIND_LABEL: Record<SkillEvidence['kind'], string> = {
-  quiz: 'Quiz',
-  patient_case: 'Patient Case',
-  return_demo: 'Return Demo',
-};
+/**
+ * A skill's materials in the order BKT suggests: on a skill the student barely
+ * knows, the demonstrations first (videos, then slides); on one they are
+ * close to mastering, the reference material first (notes, PDFs) to sharpen
+ * the details. Within a kind, what they haven't opened yet comes first.
+ */
+export function orderMaterials(items: readonly LibraryItem[], mastery: number | undefined): LibraryItem[] {
+  const order = (mastery ?? 0) < FOUNDATION_BELOW ? FOUNDATION_ORDER : REFINE_ORDER;
+  const rank = (k: LibraryKind) => {
+    const i = order.indexOf(k);
+    return i === -1 ? order.length : i;
+  };
+  return [...items].sort((a, b) => rank(a.kind) - rank(b.kind) || Number(a.seen) - Number(b.seen));
+}
 
 type Theme = ReturnType<typeof useTheme>;
 
 /**
- * A closed panel at the top of the Library, so the materials come first: its
- * header says how many skills need improvement and how many quizzes the ML
- * suggests, and opening it shows each skill BKT says isn't mastered yet (least
- * mastered first), with its mastery, its latest results, an AI study tip and
- * its Library materials (or a note that it has none yet); then the ML
- * service's quiz picks. Hidden when nothing needs improvement and the ML has
- * nothing to suggest.
+ * A panel below the Library's materials: its header gives the student's
+ * overall mastery and how many skills need improvement, and opening it shows
+ * their overall standing, then each skill BKT says isn't mastered yet (least
+ * mastered first) with its mastery, an AI study tip from its materials, and
+ * those materials in the order BKT suggests (orderMaterials), or a note that
+ * it has none yet. Open from the start, with more materials per skill, for a
+ * student flagged at risk. Hidden when there is nothing to show.
  */
 export function FocusSection({
   skills,
+  overall,
   loading,
   tips,
   tipsLoading,
-  quizzes,
-  recommendations,
+  atRisk,
   materialsBySkill,
   renderMaterial,
 }: {
   skills: FocusSkill[];
+  /** The student's whole standing; null before the server sends it. */
+  overall: StudyProfile | null;
   loading: boolean;
   tips: AiTip[];
   tipsLoading: boolean;
-  quizzes: StudentAssessment[];
-  recommendations: Recommendation[];
+  /** Their latest at-risk prediction flags them: the panel starts open, with more to study. */
+  atRisk: boolean;
   materialsBySkill: Map<string, LibraryItem[]>;
   renderMaterial: (item: LibraryItem) => React.ReactNode;
 }) {
   const theme = useTheme();
   const { Palette, Accent } = theme;
   const styles = React.useMemo(() => createStyles(theme), [theme]);
-  const router = useRouter();
-  const [open, setOpen] = React.useState(false);
+  // Open for a student flagged at risk, closed otherwise, until they tap it.
+  const [chosen, setChosen] = React.useState<boolean | null>(null);
+  const open = chosen ?? atRisk;
   const [showAll, setShowAll] = React.useState(false);
 
-  const quizById = new Map(quizzes.map((q) => [q.id, q]));
   const tipBySkill = new Map(tips.filter((t) => t.skill_id).map((t) => [t.skill_id as string, t]));
-  // Suggestions for quizzes the student can open.
-  const suggestions = recommendations
-    .filter((r) => r.assessments && quizById.has(r.assessment_id))
-    .slice(0, MAX_SUGGESTIONS);
+  const overallTip = tipBySkill.get('overall');
+  const hasOverall = !!overall && overall.skills > 0;
 
   const icon = (
     <View style={[styles.icon, { backgroundColor: Accent.blue.bg }]}>
@@ -85,17 +95,16 @@ export function FocusSection({
       </View>
     );
   }
-  if (skills.length === 0 && suggestions.length === 0) return null;
+  if (skills.length === 0 && !hasOverall) return null;
 
   const shown = showAll ? skills : skills.slice(0, FIRST_SKILLS);
-  const openQuiz = (id: string) => router.push(`/quiz-info/${id}`);
   const toggle = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setOpen((v) => !v);
+    setChosen(!open);
   };
   const summary = [
+    hasOverall && overall.mastery !== null ? `${Math.round(overall.mastery * 100)}% overall mastery` : null,
     skills.length > 0 ? `${skills.length} ${skills.length === 1 ? 'skill' : 'skills'} to improve` : null,
-    suggestions.length > 0 ? `${suggestions.length} suggested ${suggestions.length === 1 ? 'quiz' : 'quizzes'}` : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -119,6 +128,10 @@ export function FocusSection({
         <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={18} color={Palette.textMuted} />
       </Pressable>
 
+      {open && hasOverall ? (
+        <OverallBlock profile={overall} tip={overallTip} tipsLoading={tipsLoading} styles={styles} theme={theme} />
+      ) : null}
+
       {open && skills.length > 0 ? (
         <>
           <View style={styles.block}>
@@ -127,14 +140,16 @@ export function FocusSection({
               <Text style={styles.heading}>Needs improvement</Text>
             </View>
             <Text style={styles.subheading}>
-              Your weakest skills first, estimated from your quizzes, Patient Cases and Return Demos. Study these
-              materials first.
+              The skills you haven&apos;t mastered yet, weakest first. Start with these materials.
             </Text>
           </View>
 
           {shown.map((skill) => {
             const tip = tipBySkill.get(skill.skill_id);
-            const materials = (materialsBySkill.get(skill.skill_id) ?? []).slice(0, MAX_MATERIALS);
+            const materials = orderMaterials(materialsBySkill.get(skill.skill_id) ?? [], skill.mastery).slice(
+              0,
+              atRisk ? MAX_MATERIALS_AT_RISK : MAX_MATERIALS,
+            );
             return (
               <View key={skill.skill_id} style={styles.block}>
                 <Text style={styles.eyebrow}>
@@ -146,9 +161,6 @@ export function FocusSection({
                 </Text>
                 {skill.mastery !== undefined ? <MasteryBar mastery={skill.mastery} styles={styles} theme={theme} /> : null}
 
-                {skill.evidence.slice(0, 2).map((e, i) => (
-                  <EvidenceLine key={`${e.kind}-${e.at}-${i}`} evidence={e} styles={styles} theme={theme} />
-                ))}
 
                 {tip ? (
                   <View style={[styles.tip, { backgroundColor: Accent.blue.bg, borderColor: Accent.blue.border }]}>
@@ -195,34 +207,59 @@ export function FocusSection({
         </>
       ) : null}
 
-      {open && suggestions.length > 0 ? (
-        <View style={styles.block}>
-          <View style={styles.headingRow}>
-            <Ionicons name="sparkles" size={14} color={Accent.violet.fg} />
-            <Text style={styles.heading}>Suggested quizzes</Text>
+    </View>
+  );
+}
+
+/**
+ * The student's whole standing, so what follows reads against it: overall
+ * mastery across every skill, the weakest chapter, and the AI's overall
+ * study tip.
+ */
+function OverallBlock({
+  profile,
+  tip,
+  tipsLoading,
+  styles,
+  theme,
+}: {
+  profile: StudyProfile;
+  tip: AiTip | undefined;
+  tipsLoading: boolean;
+  styles: ReturnType<typeof createStyles>;
+  theme: Theme;
+}) {
+  const { Accent, Palette } = theme;
+  const weakest = profile.chapters[0];
+  return (
+    <View style={styles.block}>
+      <View style={styles.headingRow}>
+        <Ionicons name="analytics" size={14} color={Accent.teal.fg} />
+        <Text style={styles.heading}>Your overall standing</Text>
+      </View>
+      <Text style={styles.subheading}>
+        {`${profile.mastered} of ${profile.skills} skills mastered so far.`}
+      </Text>
+      {profile.mastery !== null ? <MasteryBar mastery={profile.mastery} styles={styles} theme={theme} /> : null}
+      {weakest ? (
+        <Text style={styles.weakest}>
+          {`Weakest area: Chapter ${weakest.chapter} ${weakest.area}, ${Math.round(weakest.mastery * 100)}% mastered`}
+        </Text>
+      ) : null}
+      {tip ? (
+        <View style={[styles.tip, { backgroundColor: Accent.blue.bg, borderColor: Accent.blue.border }]}>
+          <Ionicons name="bulb" size={14} color={Accent.blue.fg} style={{ marginTop: 1 }} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.tipTitle, { color: Accent.blue.fg }]}>{tip.title}</Text>
+            <Text style={styles.tipText}>{tip.tip}</Text>
           </View>
-          <Text style={styles.subheading}>Picked by the iCARE AI from your quiz scores and checklist ratings.</Text>
-          {suggestions.map((r) => (
-            <Pressable
-              key={r.id}
-              style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-              onPress={() => openQuiz(r.assessment_id)}
-              accessibilityRole="button"
-            >
-              <View style={[styles.rowIcon, { backgroundColor: Accent.violet.bg }]}>
-                <Ionicons name="help-circle" size={18} color={Accent.violet.fg} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.rowTitle} numberOfLines={2}>
-                  {r.assessments?.title}
-                </Text>
-                <Text style={styles.rowMeta} numberOfLines={2}>
-                  {r.reason}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={Palette.textFaint} />
-            </Pressable>
-          ))}
+        </View>
+      ) : tipsLoading ? (
+        <View style={[styles.tip, { borderColor: Palette.border }]}>
+          <View style={{ flex: 1 }}>
+            <SkeletonBlock width="45%" height={11} />
+            <SkeletonBlock width="95%" height={10} style={{ marginTop: 6 }} />
+          </View>
         </View>
       ) : null}
     </View>
@@ -259,43 +296,6 @@ function MasteryBar({
   );
 }
 
-function EvidenceLine({
-  evidence: e,
-  styles,
-  theme,
-}: {
-  evidence: SkillEvidence;
-  styles: ReturnType<typeof createStyles>;
-  theme: Theme;
-}) {
-  const { Accent } = theme;
-  const when = new Date(e.at).toLocaleDateString([], { month: 'short', day: 'numeric' });
-  const verdict =
-    e.kind === 'quiz'
-      ? `${Math.round(e.score ?? 0)}% on this skill`
-      : e.weak
-        ? `Needs Practice on ${e.needs_practice.length} ${e.needs_practice.length === 1 ? 'step' : 'steps'}`
-        : 'Satisfactory or better';
-  return (
-    <View style={styles.evidence}>
-      <Text style={styles.evidenceLine} numberOfLines={2}>
-        <Text style={styles.evidenceKind}>{KIND_LABEL[e.kind]} · </Text>
-        {e.title}
-        <Text style={{ color: e.weak ? Accent.red.fg : Accent.green.fg, fontWeight: '700' }}> · {verdict}</Text>
-        <Text style={styles.evidenceWhen}> · {when}</Text>
-      </Text>
-      {e.needs_practice.slice(0, MAX_STEPS).map((step) => (
-        <Text key={step} style={styles.step} numberOfLines={2}>
-          • {step}
-        </Text>
-      ))}
-      {e.needs_practice.length > MAX_STEPS ? (
-        <Text style={styles.step}>+ {e.needs_practice.length - MAX_STEPS} more</Text>
-      ) : null}
-    </View>
-  );
-}
-
 function createStyles({ Palette, Shadow, Type }: Theme) {
   return StyleSheet.create({
     panel: {
@@ -325,14 +325,10 @@ function createStyles({ Palette, Shadow, Type }: Theme) {
     skillTitle: { ...Type.itemTitle, marginTop: 2 },
     skillId: { color: Palette.primary, fontWeight: '700' },
     mastery: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
+    weakest: { ...Type.caption, marginTop: 10 },
     masteryTrack: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden' },
     masteryFill: { height: '100%', borderRadius: 3 },
     masteryText: { ...Type.micro, fontWeight: '700' },
-    evidence: { marginTop: 6 },
-    evidenceLine: { ...Type.caption, lineHeight: 17 },
-    evidenceKind: { fontWeight: '700', color: Palette.text },
-    evidenceWhen: { color: Palette.textMuted },
-    step: { ...Type.micro, marginLeft: 8, marginTop: 2, lineHeight: 15 },
     tip: {
       flexDirection: 'row',
       gap: 8,

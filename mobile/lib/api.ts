@@ -509,7 +509,7 @@ export async function submitScenarioAssignment(
 export interface AiTip {
   title: string;
   tip: string;
-  /** The Taylor's skill this tip is about. */
+  /** The Taylor's skill this tip is about, or "overall" for the tip on their whole standing. */
   skill_id?: string;
 }
 
@@ -566,32 +566,6 @@ export async function markAllNotificationsRead(): Promise<void> {
 }
 
 // ---------------------------------------------------------------
-// Recommendations (ML service output, Phase 3)
-// ---------------------------------------------------------------
-
-export interface Recommendation {
-  id: string;
-  assessment_id: string;
-  rank: number;
-  reason: string;
-  created_at: string;
-  assessments: {
-    id: string;
-    title: string;
-    description: string;
-    category: string;
-  } | null;
-  competency_areas: { name: string } | null;
-}
-
-export async function fetchRecommendations(): Promise<CachedResult<Recommendation[]>> {
-  const result = await cachedGet<{ recommendations: Recommendation[] }>(
-    '/api/student/recommendations',
-  );
-  return { ...result, data: result.data.recommendations ?? [] };
-}
-
-// ---------------------------------------------------------------
 // Skills that need improvement (the top of the Library)
 // ---------------------------------------------------------------
 
@@ -627,9 +601,32 @@ export interface FocusSkill {
  * least mastered first, from their quiz answers and Patient Case / Return
  * Demonstration checklist ratings.
  */
-export async function fetchSkillFocus(): Promise<CachedResult<FocusSkill[]>> {
-  const result = await cachedGet<{ skills: FocusSkill[] }>('/api/student/library/focus');
-  return { ...result, data: result.data.skills ?? [] };
+/** The student's whole standing, from BKT and their graded work (web study-profile.ts). */
+export interface StudyProfile {
+  /** Mean BKT mastery over every skill with results, 0-1; null with none. */
+  mastery: number | null;
+  skills: number;
+  mastered: number;
+  /** Weakest first. */
+  chapters: { chapter: number; area: string; mastery: number; skills: number }[];
+}
+
+export interface SkillFocus {
+  skills: FocusSkill[];
+  /** Absent from a server, or a cached read, from before it was sent. */
+  overall: StudyProfile | null;
+  /** The student's latest at-risk prediction flags them. */
+  at_risk: boolean;
+}
+
+export async function fetchSkillFocus(): Promise<CachedResult<SkillFocus>> {
+  const result = await cachedGet<{ skills: FocusSkill[]; overall?: StudyProfile; at_risk?: boolean }>(
+    '/api/student/library/focus',
+  );
+  return {
+    ...result,
+    data: { skills: result.data.skills ?? [], overall: result.data.overall ?? null, at_risk: !!result.data.at_risk },
+  };
 }
 
 // ---------------------------------------------------------------
