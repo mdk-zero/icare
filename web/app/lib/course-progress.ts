@@ -414,7 +414,13 @@ export type RequirementTopicKey = ActivityType | "skill" | "manual" | "exam";
 
 /** What decides an item's topic. manual_type is optional: without it a manual item is a Lab Activity. */
 export type TopicFields = Pick<RequirementRow, "kind" | "activity_type"> &
-  Partial<Pick<RequirementRow, "manual_type">>;
+  Partial<Pick<RequirementRow, "manual_type">> & {
+    /**
+     * The linked activity's number in its course, as its own list page numbers
+     * it (numberWithinCourse: oldest first). From labelRequirements.
+     */
+    activity_number?: number | null;
+  };
 
 /** The order the checklist is shown in: graded app work, written exams, skills, hands-on lab work. */
 export const TOPIC_ORDER: readonly RequirementTopicKey[] = [
@@ -458,14 +464,24 @@ export function inTopicOrder<R extends TopicFields>(requirements: readonly R[]):
 }
 
 /**
- * What the course pages call each item, numbered within its topic in
- * checklist order: "Quiz #1", "Return Demonstration #2", "Patient Case #1". Pass the whole
- * checklist, sorted, since positions keep gaps after a removal.
+ * What the course pages call each item: "Quiz #5", "Return Demonstration #2",
+ * "Patient Case #1". An item linked to an activity takes that activity's own
+ * number, so "Quiz #5" here is "Quiz #5" on the Quizzes page. Any other item
+ * is numbered within its topic in checklist order, after the activities'
+ * numbers so the two never share one. Pass the whole checklist, sorted, since
+ * positions keep gaps after a removal.
  */
 export function requirementNames(requirements: readonly TopicFields[]): string[] {
   const seen = new Map<string, number>();
+  for (const r of requirements) {
+    if (r.activity_number) {
+      const topic = requirementTopic(r);
+      seen.set(topic, Math.max(seen.get(topic) ?? 0, r.activity_number));
+    }
+  }
   return requirements.map((r) => {
     const topic = requirementTopic(r);
+    if (r.activity_number) return `${topic} #${r.activity_number}`;
     const n = (seen.get(topic) ?? 0) + 1;
     seen.set(topic, n);
     return `${topic} #${n}`;
@@ -585,6 +601,12 @@ export interface ItemProgress {
   entries: ScoreEntry[];
   /** A tick or mark-done without a score: from the mobile app, or from before 066. */
   marked: boolean;
+  /**
+   * Activity items linked to an activity: false when it isn't given to this
+   * student (N/A), so it counts for nothing in their items and grade. Absent
+   * on every other item, which applies to everyone.
+   */
+  assigned?: boolean;
   /** The note on that tick or mark. */
   note: string | null;
 }
@@ -908,7 +930,9 @@ export function summarize(
   row: Record<string, ItemProgress> | undefined,
   requirements: readonly RequirementRow[],
 ) {
-  return { done: requirements.filter((r) => row?.[r.id]?.done).length, total: requirements.length };
+  // Items not given to the student (N/A) count for nothing either way.
+  const theirs = requirements.filter((r) => row?.[r.id]?.assigned !== false);
+  return { done: theirs.filter((r) => row?.[r.id]?.done).length, total: theirs.length };
 }
 
 // ---------------------------------------------------------------------------

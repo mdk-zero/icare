@@ -20,8 +20,11 @@ export interface CourseGroup<T> {
   items: T[];
 }
 
+// Activities made in one go (a seed, an import) share a created_at; the id
+// breaks the tie, the same way loadActivityNumbers (courses.ts) does, so a
+// course's Progress tab and the activity's own page give it one number.
 const oldestFirst = <T extends CourseActivity>(list: T[]) =>
-  [...list].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  [...list].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
 
 /**
  * Activities grouped by the course they were made for: the running term's

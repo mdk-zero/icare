@@ -108,7 +108,8 @@ export const GRADING_CHANGED = 'The grading split changed since you opened it. R
 
 /** The score an item adds to its component: a count's average, otherwise the best score. */
 export function itemScore(req: RequirementRow, item: ItemProgress | undefined): number | null {
-  if (!item) return null;
+  // Not given to the student (N/A): no score, so it drops out of their grade.
+  if (!item || item.assigned === false) return null;
   return req.kind === 'count' ? item.avg_score : item.best_score;
 }
 
@@ -394,9 +395,11 @@ function autoGrades(
     for (const p of split.parts) parts[p.id] = mean(p.items.filter((id) => byId.has(id)).map(score));
     const scores = ids.map(score);
     const scored = scores.filter((s) => s !== null).length;
+    // Out of the items given to them: N/A ones aren't work still to do.
+    const theirs = ids.filter((id) => row[id]?.assigned !== false).length;
     grades[studentId] = {
       grade: mean(scores),
-      scored_weight: ids.length ? Math.round((scored / ids.length) * 10000) / 100 : 0,
+      scored_weight: theirs ? Math.round((scored / theirs) * 10000) / 100 : 0,
       parts,
       components: {},
     };
@@ -634,4 +637,85 @@ export function parseGradeLeaf(value: unknown): Parsed<string | null | undefined
 /** "82.3%": a grade to one decimal at most. */
 export function formatGrade(n: number): string {
   return `${Math.round(n * 10) / 10}%`;
+}
+
+// ---------------------------------------------------------------------------
+// Projected grade
+// ---------------------------------------------------------------------------
+
+/** Fewest scores a student's trend is fitted on; with fewer there is nothing to project from. */
+export const MIN_SCORES_TO_PROJECT = 3;
+
+/** The least-squares line through (1, ys[0]), (2, ys[1]), ... */
+export function leastSquares(ys: readonly number[]): { slope: number; intercept: number } {
+  const n = ys.length;
+  const meanX = (n + 1) / 2;
+  const meanY = ys.reduce((a, b) => a + b, 0) / n;
+  let sxy = 0;
+  let sxx = 0;
+  ys.forEach((y, i) => {
+    sxy += (i + 1 - meanX) * (y - meanY);
+    sxx += (i + 1 - meanX) ** 2;
+  });
+  const slope = sxx === 0 ? 0 : sxy / sxx;
+  return { slope, intercept: meanY - slope * meanX };
+}
+
+/**
+ * Each student's projected final grade: a linear regression (least squares)
+ * through their scored items in the order they were met (then checklist
+ * order), extended over the items they haven't been scored on yet, and the
+ * course's own split run over actual and projected scores together. Items not
+ * assigned to them (N/A) stay out, as they do from the grade so far. Null
+ * with fewer than MIN_SCORES_TO_PROJECT scores; the grade so far when nothing
+ * is left to score. Projections are clamped to 0-100.
+ */
+export function projectGrades(
+  split: GradingSplit | null,
+  requirements: readonly RequirementRow[],
+  progress: Record<string, Record<string, ItemProgress>>,
+): Record<string, number | null> {
+  const out: Record<string, number | null> = {};
+  if (!split || splitProblem(split)) return out;
+  const inSplit = new Set(leavesOf(split).flatMap((l) => l.items));
+  const items = requirements.filter((r) => inSplit.has(r.id));
+
+  for (const [studentId, row] of Object.entries(progress)) {
+    const theirs = items.filter((r) => row[r.id]?.assigned !== false);
+    const scored = theirs
+      .map((r) => ({ r, score: itemScore(r, row[r.id]), at: row[r.id]?.done_at ?? '' }))
+      .filter((x): x is { r: RequirementRow; score: number; at: string } => x.score !== null)
+      .sort((a, b) => (a.at && b.at ? a.at.localeCompare(b.at) : 0) || a.r.position - b.r.position);
+    if (scored.length < MIN_SCORES_TO_PROJECT) {
+      out[studentId] = null;
+      continue;
+    }
+    const { slope, intercept } = leastSquares(scored.map((x) => x.score));
+    const pending = theirs.filter((r) => itemScore(r, row[r.id]) === null).sort((a, b) => a.position - b.position);
+    const filled: Record<string, ItemProgress> = { ...row };
+    pending.forEach((r, k) => {
+      const predicted = Math.min(100, Math.max(0, intercept + slope * (scored.length + k + 1)));
+      const base = row[r.id] ?? emptyItem();
+      filled[r.id] = { ...base, assigned: true, best_score: predicted, avg_score: predicted };
+    });
+    out[studentId] = computeGrades(split, requirements, { [studentId]: filled }).grades[studentId]?.grade ?? null;
+  }
+  return out;
+}
+
+function emptyItem(): ItemProgress {
+  return {
+    done: false,
+    source: null,
+    current: 0,
+    target: 1,
+    done_at: null,
+    best_score: null,
+    avg_score: null,
+    level: null,
+    has_grade: false,
+    entries: [],
+    marked: false,
+    note: null,
+  };
 }
