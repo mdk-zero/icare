@@ -268,7 +268,8 @@ export interface StudentAssessment {
     deadline: string | null;
     required: boolean;
   } | null;
-  best_score: number | null;
+  /** The quiz's grade: the average of the graded tries. */
+  grade: number | null;
   attempt_count: number;
   last_submitted_at: string | null;
   /** Tries allowed; null is unlimited. */
@@ -277,9 +278,11 @@ export interface StudentAssessment {
   attempts_used: number;
   /** null when unlimited; 0 means the graded tries are used up. */
   attempts_remaining: number | null;
-  /** Graded tries used up, but the quiz can still be taken as ungraded practice. */
+  /** Graded tries used up, and there are wrong answers for an ungraded review quiz. */
   practice_available?: boolean;
-  /** Practice runs finished; they never change best_score. */
+  /** How many questions that review quiz holds: the ones last answered wrong. */
+  review_question_count?: number;
+  /** Review quizzes finished; they never change the grade. */
   practice_count?: number;
   last_practice_score?: number | null;
 }
@@ -327,7 +330,7 @@ export interface StartedAttempt {
   attempts_remaining?: number | null;
   /** The last attempt was left open past its time limit and was closed; this one is new. */
   previous_expired?: boolean;
-  /** An ungraded practice run past the attempt limit; numbered on its own. */
+  /** An ungraded review quiz past the attempt limit; numbered on its own. */
   practice?: boolean;
   practice_number?: number;
 }
@@ -626,6 +629,37 @@ export interface FocusSkill {
  */
 export async function fetchSkillFocus(): Promise<CachedResult<FocusSkill[]>> {
   const result = await cachedGet<{ skills: FocusSkill[] }>('/api/student/library/focus');
+  return { ...result, data: result.data.skills ?? [] };
+}
+
+// ---------------------------------------------------------------
+// Skill mastery (Bayesian Knowledge Tracing over quiz answers and checklist ratings)
+// ---------------------------------------------------------------
+
+export interface SkillMastery {
+  skill_id: string;
+  title: string;
+  /** The chance the student knows the skill after their last answer, 0 to 1. */
+  mastery: number;
+  /** Quiz answers and rated Patient Case or Return Demonstration tasks on the skill. */
+  answers: number;
+  /** Of those, the right answers and the Excellent or Satisfactory ratings. */
+  correct: number;
+  /** Where the skill's parameters came from: its own fit, its chapter's, or the cold start. */
+  source: 'fitted' | 'chapter' | 'default';
+}
+
+/** The signed-in student's own estimates, weakest first. */
+export async function fetchMySkillMastery(): Promise<CachedResult<SkillMastery[]>> {
+  const result = await cachedGet<{ skills: SkillMastery[] }>('/api/student/skill-mastery');
+  return { ...result, data: result.data.skills ?? [] };
+}
+
+/** A student's estimates for their instructor, weakest first. */
+export async function fetchStudentSkillMastery(studentId: string): Promise<CachedResult<SkillMastery[]>> {
+  const result = await cachedGet<{ skills: SkillMastery[] }>(
+    `/api/analytics/skill-mastery?student_id=${encodeURIComponent(studentId)}`,
+  );
   return { ...result, data: result.data.skills ?? [] };
 }
 
@@ -1111,6 +1145,7 @@ export interface CourseRequirement {
   label: string;
   /** The linked activity was deleted. */
   removed: boolean;
+  activity_type?: string | null;
   target_count: number | null;
   min_score: number | null;
 }

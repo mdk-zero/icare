@@ -26,7 +26,8 @@
  *
  * It fills the calendar. The history is a term of TERM_DAYS ending today: each
  * section works through its cases in back-to-back blocks, and each block's
- * quiz stays open for the whole block and is sat again as practice. Sittings
+ * quiz stays open for the whole block and is sat again: past the quiz's graded
+ * tries as a review quiz, as in the app. Sittings
  * are planned per section, one a day, so every section has attempts on every
  * day of the term — the analytics trend has a point in every daily, weekly
  * and monthly bucket back to the term's start, up to today. Dates are
@@ -60,7 +61,8 @@
 
 import { config } from 'dotenv';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { selectQuestionsForAttempt } from '../app/lib/assessment-selection';
+import { SelectionError, selectQuestionsForAttempt, type SelectionResult } from '../app/lib/assessment-selection';
+import { attemptLimit } from '../app/lib/quiz-attempts';
 import { deriveCompetencyScoresForAttempt } from '../app/lib/competency';
 import { scoreAssignment } from '../app/lib/scenario-tasks';
 import { ratingForCredit, TASK_RATINGS, type TaskRating } from '../app/lib/task-ratings';
@@ -584,11 +586,12 @@ async function main() {
     .eq('role', 'student');
 
   const { data: scenarios } = await supabase.from('scenarios').select('id, title');
-  const { data: assessments } = await supabase.from('assessments').select('id, title');
+  const { data: assessments } = await supabase.from('assessments').select('id, title, max_attempts');
   const { data: competencies } = await supabase.from('competency_areas').select('id, name');
 
   const scenarioByTitle = new Map((scenarios ?? []).map((s) => [s.title, s.id]));
   const assessmentByTitle = new Map((assessments ?? []).map((a) => [a.title, a.id]));
+  const limitOfAssessment = new Map((assessments ?? []).map((a) => [a.id, attemptLimit(null, a.max_attempts)]));
   const competencyName = new Map((competencies ?? []).map((c) => [c.id, c.name]));
 
   // Strengths and weaknesses are matched to question tags by name, so a name
@@ -655,6 +658,7 @@ async function main() {
 
   let scenarioCount = 0;
   let attemptCount = 0;
+  let reviewCount = 0;
   let taskCount = 0;
   let stepRatingCount = 0;
   const keptScenarios = new Set<string>();
@@ -948,13 +952,22 @@ async function main() {
 
       const rng = seeded(hash(`${member.profile.email}|${item.quiz}|${sitting}`));
 
-      // The real selector, so a practice sitting is served the way the
-      // student app would serve it.
-      const selection = await selectQuestionsForAttempt(supabase, {
-        assessmentId,
-        studentId: member.studentId,
-        rng,
-      });
+      // The real selector, so a sitting is served the way the student app
+      // would serve it: past the graded tries, a review of what this student
+      // still has wrong, and nothing once that runs out.
+      const review = sitting >= (limitOfAssessment.get(assessmentId) ?? 1);
+      let selection: SelectionResult;
+      try {
+        selection = await selectQuestionsForAttempt(supabase, {
+          assessmentId,
+          studentId: member.studentId,
+          practice: review,
+          rng,
+        });
+      } catch (err) {
+        if (review && err instanceof SelectionError) continue;
+        throw err;
+      }
 
       const startedAt = new Date(planned.at);
       const { data: attempt, error: atErr } = await supabase
@@ -1022,23 +1035,25 @@ async function main() {
         .eq('assessment_id', assessmentId)
         .order('sort_order', { ascending: true });
 
-      const breakdown = (criteria ?? []).map((c) => {
-        const mine = selection.questions.filter((q) => q.criteria_id === c.id);
-        const total = mine.length;
-        const correct = mine.filter((q) => correctByQuestion.get(q.id)).length;
-        const pct = total > 0 ? Math.round((correct / total) * 10000) / 100 : 0;
-        return {
-          attempt_id: attempt.id,
-          criteria_id: c.id,
-          competency_id: c.competency_id,
-          criteria_name: c.name,
-          weight: c.weight,
-          correct,
-          total,
-          score: pct,
-          weighted_score: Math.round(pct * (Number(c.weight) / 100) * 100) / 100,
-        };
-      });
+      const breakdown = (criteria ?? [])
+        .map((c) => {
+          const mine = selection.questions.filter((q) => q.criteria_id === c.id);
+          const total = mine.length;
+          const correct = mine.filter((q) => correctByQuestion.get(q.id)).length;
+          const pct = total > 0 ? Math.round((correct / total) * 10000) / 100 : 0;
+          return {
+            attempt_id: attempt.id,
+            criteria_id: c.id,
+            competency_id: c.competency_id,
+            criteria_name: c.name,
+            weight: c.weight,
+            correct,
+            total,
+            score: pct,
+            weighted_score: Math.round(pct * (Number(c.weight) / 100) * 100) / 100,
+          };
+        })
+        .filter((b) => !review || b.total > 0);
       if (breakdown.length > 0) {
         await supabase.from('attempt_criteria_scores').insert(breakdown);
       }
@@ -1048,12 +1063,18 @@ async function main() {
       await supabase
         .from('assessment_attempts')
         .update({
-          status: 'submitted',
+          status: review ? 'practiced' : 'submitted',
           submitted_at: new Date(submittedAt).toISOString(),
           score,
           time_taken_seconds: timeTaken,
         })
         .eq('id', attempt.id);
+
+      // A review grades nothing, and the warehouse doesn't date anything by it.
+      if (review) {
+        reviewCount += 1;
+        continue;
+      }
 
       // The app's own roll-up, so competency standing matches what a real
       // submission would have produced.
@@ -1083,7 +1104,7 @@ async function main() {
   console.log(
     `\nScenarios: ${scenarioCount} completed (${taskCount} rated tasks, ${stepRatingCount} rated sub-tasks), ` +
       `${skippedScenarios} left outstanding.\n` +
-      `Quizzes: ${attemptCount} attempts submitted, ${skippedQuizzes} assignments never sat.\n`,
+      `Quizzes: ${attemptCount} graded attempts, ${reviewCount} review quizzes, ${skippedQuizzes} assignments never sat.\n`,
   );
   console.log('Sittings per section, against the days and weeks of the term:');
   for (const line of coverage.sort()) console.log(line);

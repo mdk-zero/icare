@@ -2,8 +2,9 @@
  * Behavioural checks for app/lib/assessment-selection.ts.
  *
  * The allocation is the subtlest logic in the assessment stack — guaranteed
- * minimums, largest-remainder distribution under capacity limits, weakness
- * weighting, unseen-first picking, and an even interleave — and a mistake in
+ * minimums, largest-remainder distribution under capacity limits, unseen-first
+ * picking, an even interleave, and a review quiz of only the wrong answers with
+ * the weakest skills first — and a mistake in
  * it produces a paper that still looks plausible. There is no test runner in
  * this repo, so this is the safety net: synthetic fixtures through a stub
  * client for the cases real data doesn't cover, then every real assessment for
@@ -18,11 +19,19 @@
 import { config } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import {
+  NOTHING_TO_REVIEW,
+  SelectionError,
+  gradedPaperSize,
+  loadMissedQuestions,
   selectQuestionsForAttempt,
   distribute,
   type SelectionResult,
 } from '../app/lib/assessment-selection';
-import { DEFAULT_BKT, predictCorrect, traceMastery, updateMastery } from '../app/lib/bkt';
+import { DEFAULT_ATTEMPTS, attemptLimit, quizGrade } from '../app/lib/quiz-attempts';
+import { isPracticeRun } from '../app/lib/quiz-practice';
+import { DEFAULT_BKT, oldestFirst, predictCorrect, ratingAsAnswer, traceMastery, updateMastery } from '../app/lib/bkt';
+import { loadChecklistAnswers } from '../app/lib/checklist-answers';
+import { loadSkillMastery } from '../app/lib/skill-mastery';
 
 config({ path: '.env.local' });
 
@@ -57,6 +66,7 @@ function fakeClient(tables: Record<string, Record<string, unknown>[]>) {
           return api;
         },
         limit: () => api,
+        range: () => api,
         order: (col: string) => {
           rows = [...rows].sort((a, b) => Number(a[col]) - Number(b[col]));
           return api;
@@ -75,7 +85,7 @@ function buildFixture(opts: {
   totalQuestions: number | null;
   pools: { name: string; min: number; count: number; skill?: string }[];
   priorAttempt?: {
-    /** 'practiced' is a practice run past the attempt limit (083). */
+    /** 'practiced' is a review quiz past the attempt limit (083). */
     status?: string;
     seenQuestionIds: string[];
     /** Per criterion, the share of its seen questions answered right (the first ones). */
@@ -230,7 +240,7 @@ async function main() {
     check('interleaved, not grouped', longestRun(r) <= 2, `longest run ${longestRun(r)}`);
   }
 
-  console.log('\n=== retake: weak criterion should gain, unseen preferred ===');
+  console.log('\n=== graded retake: same mix of skills as the first try, unseen preferred ===');
   {
     const { tables } = buildFixture({
       totalQuestions: 8,
@@ -254,53 +264,132 @@ async function main() {
     });
     invariants(r, 8, 'retake');
     check('attemptNumber is 2', r.attemptNumber === 2);
-    const strong = r.allocations[0];
-    const weak = r.allocations[1];
-    console.log(
-      `   Strong: ${strong.allocated} (weakness ${strong.weakness}), Weak: ${weak.allocated} (weakness ${weak.weakness})`,
-    );
-    check('weak criterion is weighted higher', (weak.weakness ?? 0) > (strong.weakness ?? 0));
-    check('weakness is 1 - BKT mastery', Math.abs((weak.weakness ?? 0) - (1 - (weak.mastery ?? 0))) < 1e-9);
-    check('weak criterion gets more questions', weak.allocated > strong.allocated);
-    // Unseen is preferred *within* a criterion, but allocation wins: Strong is
-    // capped at 2 despite having 3 unseen, because the retake is meant to
-    // concentrate on the weak criterion, not to maximise novelty.
-    const unseenPool = { Strong: 3, Weak: 3 } as Record<string, number>;
-    const perCriterion = r.allocations.every(
-      (a) => a.unseen_used === Math.min(a.allocated, unseenPool[a.name]),
-    );
-    check('each criterion exhausts its unseen before repeating', perCriterion,
+    const [strong, weak] = r.allocations;
+    check('a graded try has no mastery signal', r.allocations.every((a) => a.mastery === null && a.weakness === null));
+    check('a weak score does not change the mix', strong.allocated === 4 && weak.allocated === 4,
+      `Strong ${strong.allocated}, Weak ${weak.allocated}`);
+    check('each criterion uses its unseen before repeating',
+      r.allocations.every((a) => a.unseen_used === Math.min(a.allocated, 3)),
       r.allocations.map((a) => `${a.name} ${a.unseen_used} unseen of ${a.allocated}`).join(', '));
     const seen = new Set(['q0', 'q1', 'q2', 'q6', 'q7', 'q8']);
     const repeats = r.questions.filter((q) => seen.has(q.id)).length;
-    check('repeats only appear once the unseen pool is dry', repeats === 3, `${repeats} repeats`);
+    check('repeats only appear once the unseen pool is dry', repeats === 2, `${repeats} repeats`);
   }
 
-  console.log('\n=== practice run past the limit steers the next paper ===');
+  console.log('\n=== review quiz: only the wrong answers, weakest skills first ===');
   {
+    const review = (tables: Record<string, Record<string, unknown>[]>, seed = 7) =>
+      selectQuestionsForAttempt(fakeClient(tables), { assessmentId: 'A', studentId: 'S', practice: true, rng: seeded(seed) });
     const { tables } = buildFixture({
       totalQuestions: 8,
       pools: [
-        { name: 'Strong', min: 1, count: 6 },
-        { name: 'Weak', min: 1, count: 6 },
+        { name: 'Skill 1-1', min: 2, count: 4, skill: '1-1' },
+        { name: 'Skill 14-1', min: 2, count: 4, skill: '14-1' },
+        { name: 'Skill 15-1', min: 2, count: 4, skill: '15-1' },
       ],
       priorAttempt: {
-        status: 'practiced',
-        seenQuestionIds: ['q0', 'q1', 'q2', 'q6', 'q7', 'q8'],
+        seenQuestionIds: ['q0', 'q1', 'q2', 'q4', 'q5', 'q6', 'q8', 'q9', 'q10'],
+        // Skill 1-1: one wrong of three. Skill 14-1: all three wrong. Skill 15-1: all right.
         scores: [
-          { criteriaIndex: 0, score: 100, total: 3 },
+          { criteriaIndex: 0, score: 67, total: 3 },
           { criteriaIndex: 1, score: 0, total: 3 },
+          { criteriaIndex: 2, score: 100, total: 3 },
         ],
       },
     });
-    const r = await selectQuestionsForAttempt(fakeClient(tables), {
-      assessmentId: 'A',
-      studentId: 'S',
-      rng: seeded(7),
+    const r = await review(tables);
+    const ids = r.questions.map((q) => q.id);
+    check('serves exactly the questions answered wrong', [...ids].sort().join() === ['q2', 'q4', 'q5', 'q6'].sort().join(), ids.join());
+    check('its length ignores the size the instructor set', ids.length === 4);
+    check('the weakest skill comes first', ids.slice(0, 3).every((id) => ['q4', 'q5', 'q6'].includes(id)), ids.join());
+    check('then the next weakest', ids[3] === 'q2', ids.join());
+    check('positions are 0..n-1', r.questions.every((q, i) => q.position === i));
+    const [s1, s14, s15] = r.allocations;
+    check('mastery ranks the skills', (s14.mastery ?? 1) < (s1.mastery ?? 0) && (s1.mastery ?? 1) < (s15.mastery ?? 0));
+    check('weakness is 1 - BKT mastery', Math.abs((s14.weakness ?? 0) - (1 - (s14.mastery ?? 0))) < 1e-9);
+    check('a skill with nothing wrong gets no questions', s15.allocated === 0, `${s15.allocated}`);
+    const orders = new Set<string>();
+    for (const seed of [1, 2, 3, 5, 7, 11, 13, 29]) {
+      orders.add((await review(tables, seed)).questions.slice(0, 3).map((q) => q.id).join());
+    }
+    check('shuffled within a skill, not a fixed order', orders.size > 1, `${orders.size} orders`);
+
+    const missed = await loadMissedQuestions(fakeClient(tables), 'S', ['A']);
+    check('the quiz list counts the same questions', [...(missed.get('A') ?? [])].sort().join() === [...ids].sort().join());
+    check('a quiz not asked about is left out', (await loadMissedQuestions(fakeClient(tables), 'S', [])).size === 0);
+  }
+
+  console.log('\n=== review quiz: a question answered right drops out ===');
+  {
+    const { tables } = buildFixture({
+      totalQuestions: 4,
+      pools: [{ name: 'Only', min: 1, count: 4 }],
+      priorAttempt: {
+        seenQuestionIds: ['q0', 'q1', 'q2', 'q3'],
+        scores: [{ criteriaIndex: 0, score: 50, total: 4 }],
+      },
     });
-    invariants(r, 8, 'after practice');
-    check('a practice run counts as history', r.attemptNumber === 2);
-    check('weak criterion gets more questions', r.allocations[1].allocated > r.allocations[0].allocated);
+    const dealt = async () =>
+      (await selectQuestionsForAttempt(fakeClient(tables), { assessmentId: 'A', studentId: 'S', practice: true, rng: seeded(3) }))
+        .questions.map((q) => q.id).sort().join();
+    check('the first review holds both wrong answers', (await dealt()) === 'q2,q3', await dealt());
+
+    // The review: q2 right this time, q3 wrong again.
+    tables.assessment_attempts.push({ id: 'REVIEW', assessment_id: 'A', student_id: 'S', status: 'practiced', submitted_at: '2026-10-03T00:00:00Z' });
+    tables.attempt_questions.push({ attempt_id: 'REVIEW', question_id: 'q2', position: 0 }, { attempt_id: 'REVIEW', question_id: 'q3', position: 1 });
+    tables.attempt_answers.push({ attempt_id: 'REVIEW', question_id: 'q2', is_correct: true }, { attempt_id: 'REVIEW', question_id: 'q3', is_correct: false });
+    check('the next review holds only what is still wrong', (await dealt()) === 'q3', await dealt());
+
+    // q3 right too: nothing left.
+    tables.attempt_answers = tables.attempt_answers.map((a) => (a.attempt_id === 'REVIEW' ? { ...a, is_correct: true } : a));
+    let refused: unknown = null;
+    await dealt().catch((err) => {
+      refused = err;
+    });
+    check('with none left it refuses, with a 409 and the reason',
+      refused instanceof SelectionError && refused.status === 409 && refused.message === NOTHING_TO_REVIEW);
+    check('and the quiz list has nothing to offer', ((await loadMissedQuestions(fakeClient(tables), 'S', ['A'])).get('A')?.size ?? 0) === 0);
+  }
+
+  console.log('\n=== review quiz: a question no longer on the quiz is not offered ===');
+  {
+    const { tables } = buildFixture({
+      totalQuestions: 2,
+      pools: [{ name: 'Only', min: 1, count: 2 }],
+      priorAttempt: { seenQuestionIds: ['q0', 'q1'], scores: [{ criteriaIndex: 0, score: 0, total: 2 }] },
+    });
+    tables.questions = tables.questions.filter((q) => q.id !== 'q1');
+    const r = await selectQuestionsForAttempt(fakeClient(tables), { assessmentId: 'A', studentId: 'S', practice: true, rng: seeded(3) });
+    check('only the question still there is served', r.questions.map((q) => q.id).join() === 'q0');
+    check('the quiz list agrees', [...((await loadMissedQuestions(fakeClient(tables), 'S', ['A'])).get('A') ?? [])].join() === 'q0');
+  }
+
+  console.log('\n=== a quiz grade is the average of its graded tries ===');
+  {
+    check('5, 6 and 4 average to 5', quizGrade([5, 6, 4]) === 5);
+    check('kept to two decimals', quizGrade([60, 80, 50]) === 63.33);
+    check('a try with no score stays out', quizGrade([80, null, undefined]) === 80);
+    check('no scored tries is no grade', quizGrade([]) === null && quizGrade([null]) === null);
+  }
+
+  console.log('\n=== every quiz has a limit, so every quiz reaches its review ===');
+  {
+    check('a student override wins', attemptLimit(3, 2) === 3);
+    check('then the quiz', attemptLimit(null, 2) === 2);
+    check('a quiz with none gets the standard', attemptLimit(null, null) === DEFAULT_ATTEMPTS);
+    check('a try left is graded', !isPracticeRun(1, 2));
+    check('with the tries used up, the next run is a review', isPracticeRun(2, 2));
+    check('and on a quiz with no limit set, after the standard tries',
+      isPracticeRun(DEFAULT_ATTEMPTS, attemptLimit(null, null)));
+  }
+
+  console.log('\n=== the size a graded paper holds, which a review is measured against ===');
+  {
+    const sized = (totalQuestions: number | null, count: number) =>
+      buildFixture({ totalQuestions, pools: [{ name: 'Only', min: 1, count }] }).tables;
+    check('the instructor\'s size', (await gradedPaperSize(fakeClient(sized(3, 5)), 'A')) === 3);
+    check('never more than the bank holds', (await gradedPaperSize(fakeClient(sized(8, 5)), 'A')) === 5);
+    check('the whole bank when no size is set', (await gradedPaperSize(fakeClient(sized(null, 5)), 'A')) === 5);
   }
 
   console.log('\n=== BKT update rules match ml/app/bkt.py ===');
@@ -313,7 +402,7 @@ async function main() {
     check('no answers leaves P(L0)', traceMastery(DEFAULT_BKT, []) === DEFAULT_BKT.p_init);
   }
 
-  console.log('\n=== practice re-asks what was missed; a graded retake prefers unseen ===');
+  console.log('\n=== a review serves what was missed; a graded retake prefers unseen ===');
   {
     const fixture = () =>
       buildFixture({
@@ -332,8 +421,8 @@ async function main() {
       assessmentId: 'A', studentId: 'S', rng: seeded(3),
     });
     const ids = (r: SelectionResult) => new Set(r.questions.map((q) => q.id));
-    check('practice serves both missed questions', ids(practice).has('q1') && ids(practice).has('q2'));
-    check('practice fills up with unseen ones', ids(practice).has('q4') && ids(practice).has('q5'));
+    check('a review serves both missed questions and no others',
+      ids(practice).size === 2 && ids(practice).has('q1') && ids(practice).has('q2'));
     check('a graded retake serves both unseen questions', ids(graded).has('q4') && ids(graded).has('q5'));
   }
 
@@ -346,20 +435,132 @@ async function main() {
         { name: 'Skill 1-2', min: 1, count: 6, skill: '1-2' },
       ],
       priorAttempt: {
-        // all right on this quiz, on both skills
+        // one wrong on this quiz, on each skill
         seenQuestionIds: ['q0', 'q1', 'q6', 'q7'],
         scores: [
-          { criteriaIndex: 0, score: 100, total: 2 },
-          { criteriaIndex: 1, score: 100, total: 2 },
+          { criteriaIndex: 0, score: 50, total: 2 },
+          { criteriaIndex: 1, score: 50, total: 2 },
         ],
       },
       otherQuiz: { '1-1': [true, true, true], '1-2': [false, false, false] },
     });
-    const r = await selectQuestionsForAttempt(fakeClient(tables), { assessmentId: 'A', studentId: 'S', rng: seeded(5) });
+    const r = await selectQuestionsForAttempt(fakeClient(tables), {
+      assessmentId: 'A', studentId: 'S', practice: true, rng: seeded(5),
+    });
     const [a, b] = r.allocations;
-    console.log(`   1-1 mastery ${a.mastery?.toFixed(3)} → ${a.allocated}, 1-2 mastery ${b.mastery?.toFixed(3)} → ${b.allocated}`);
+    console.log(`   1-1 mastery ${a.mastery?.toFixed(3)}, 1-2 mastery ${b.mastery?.toFixed(3)}, paper ${r.questions.map((q) => q.id).join()}`);
     check('the skill missed on the other quiz has lower mastery', (b.mastery ?? 1) < (a.mastery ?? 0));
-    check('and gets more of the paper', b.allocated > a.allocated);
+    check('and comes first in the review', r.questions[0].criteria_id === 'c1');
+    check('the other quiz adds nothing to this review', r.questions.every((q) => q.id.startsWith('q')));
+  }
+
+  console.log('\n=== Patient Cases and Return Demonstrations count toward mastery ===');
+  {
+    check('Excellent and Satisfactory are right', ratingAsAnswer('excellent') === true && ratingAsAnswer('satisfactory') === true);
+    check('Needs Practice is wrong', ratingAsAnswer('needs_practice') === false);
+    check('N/A, an unrated check-off and "not performed" say nothing',
+      ratingAsAnswer('not_applicable') === null && ratingAsAnswer(null) === null && ratingAsAnswer('absent') === null);
+    check('answers of one moment keep their order',
+      oldestFirst([{ at: '2', n: 1 }, { at: '1', n: 2 }, { at: '2', n: 3 }]).map((a) => a.n).join() === '2,1,3');
+
+    const checklistTables = (): Record<string, Record<string, unknown>[]> => ({
+      scenario_assignments: [
+        { id: 'done', student_id: 'S', scenario_id: 'case', status: 'completed', completed_at: '2026-10-05T00:00:00Z' },
+        { id: 'early', student_id: 'S', scenario_id: 'demo', status: 'completed', completed_at: '2026-09-01T00:00:00Z' },
+        { id: 'open', student_id: 'S', scenario_id: 'case', status: 'in_progress', completed_at: null },
+        { id: 'theirs', student_id: 'T', scenario_id: 'case', status: 'completed', completed_at: '2026-10-05T00:00:00Z' },
+      ],
+      scenario_tasks: [
+        { id: 'needs', scenario_id: 'case', title: 'Assessing Pulse (Skill 1-4)', skill_id: '1-4', sort_order: 2 },
+        { id: 'good', scenario_id: 'case', title: 'Assessing Temperature (Skill 1-1)', skill_id: '1-1', sort_order: 1 },
+        { id: 'na', scenario_id: 'case', title: 'Using a Bidet (Skill 1-6)', skill_id: '1-6', sort_order: 3 },
+        { id: 'unrated', scenario_id: 'case', title: 'Assessing Respiration (Skill 1-7)', skill_id: '1-7', sort_order: 4 },
+        { id: 'starter', scenario_id: 'case', title: 'Develop Care Plan', skill_id: null, sort_order: 5 },
+        { id: 'titled', scenario_id: 'demo', title: 'Assessing Temperature (Skill 1-1)', skill_id: null, sort_order: 1 },
+      ],
+      scenario_task_completions: [
+        { assignment_id: 'done', task_id: 'needs', rating: 'needs_practice' },
+        { assignment_id: 'done', task_id: 'good', rating: 'excellent' },
+        { assignment_id: 'done', task_id: 'na', rating: 'not_applicable' },
+        { assignment_id: 'done', task_id: 'unrated', rating: null },
+        { assignment_id: 'done', task_id: 'starter', rating: 'excellent' },
+        { assignment_id: 'early', task_id: 'titled', rating: 'needs_practice' },
+        { assignment_id: 'open', task_id: 'needs', rating: 'needs_practice' },
+        { assignment_id: 'theirs', task_id: 'needs', rating: 'excellent' },
+      ],
+    });
+
+    const answers = await loadChecklistAnswers(fakeClient(checklistTables()), ['S']);
+    const seen = (at: string) => answers.filter((a) => a.at === at).map((a) => `${a.skill_id}:${a.correct}`).join();
+    check('a finished case gives one answer per rated skill, in checklist order', seen('2026-10-05T00:00:00Z') === '1-1:true,1-4:false', seen('2026-10-05T00:00:00Z'));
+    check('a task with no link falls back to the skill in its title', seen('2026-09-01T00:00:00Z') === '1-1:false');
+    check('an open case and another student add nothing', answers.length === 3 && answers.every((a) => a.student_id === 'S'));
+    check('no students reads nothing', (await loadChecklistAnswers(fakeClient(checklistTables()), [])).length === 0);
+
+    const mastery = (await loadSkillMastery(fakeClient(checklistTables()), ['S'])).get('S') ?? [];
+    const skill = (id: string) => mastery.find((m) => m.skill_id === id);
+    check('a student with no quizzes still gets estimates', mastery.length === 2);
+    check('ratings trace oldest first', Math.abs((skill('1-1')?.mastery ?? 0) - traceMastery(DEFAULT_BKT, [false, true])) < 1e-9);
+    check('and count as results', skill('1-1')?.answers === 2 && skill('1-1')?.correct === 1);
+    check('the weakest skill comes first', mastery[0]?.skill_id === '1-4');
+
+    // Quiz answers on 1-1 and 1-2 tie; only the ratings can separate them.
+    const { tables } = buildFixture({
+      totalQuestions: 4,
+      pools: [
+        { name: 'Skill 1-1', min: 1, count: 2, skill: '1-1' },
+        { name: 'Skill 1-2', min: 1, count: 2, skill: '1-2' },
+      ],
+      priorAttempt: {
+        seenQuestionIds: ['q0', 'q1', 'q2', 'q3'],
+        scores: [
+          { criteriaIndex: 0, score: 50, total: 2 },
+          { criteriaIndex: 1, score: 50, total: 2 },
+        ],
+      },
+    });
+    Object.assign(tables, {
+      scenario_assignments: [
+        { id: 'a1', student_id: 'S', scenario_id: 'case', status: 'completed', completed_at: '2026-10-01T00:00:00Z' },
+        { id: 'a2', student_id: 'S', scenario_id: 'demo', status: 'completed', completed_at: '2026-10-03T00:00:00Z' },
+      ],
+      scenario_tasks: [
+        { id: 't1', scenario_id: 'case', title: 'Skill 1-1', skill_id: '1-1', sort_order: 1 },
+        { id: 't2', scenario_id: 'demo', title: 'Skill 1-2', skill_id: '1-2', sort_order: 1 },
+      ],
+      scenario_task_completions: [
+        { assignment_id: 'a1', task_id: 't1', rating: 'excellent' },
+        { assignment_id: 'a2', task_id: 't2', rating: 'needs_practice' },
+      ],
+    });
+    const r = await selectQuestionsForAttempt(fakeClient(tables), {
+      assessmentId: 'A', studentId: 'S', practice: true, rng: seeded(5),
+    });
+    const [strong, weak] = r.allocations;
+    // Quiz paper at 10-02 holds right, wrong per skill; the ratings land either side of it.
+    check('a review hears the rating before the quiz',
+      Math.abs((strong.mastery ?? 0) - traceMastery(DEFAULT_BKT, [true, true, false])) < 1e-9);
+    check('and the one after it',
+      Math.abs((weak.mastery ?? 0) - traceMastery(DEFAULT_BKT, [true, false, false])) < 1e-9);
+    check('the skill rated Needs Practice comes first in the review', r.questions[0].criteria_id === 'c1');
+
+    const failing = fakeClient(tables);
+    const realFrom = failing.from;
+    failing.from = (table: string) => {
+      if (table === 'scenario_assignments') {
+        const api = realFrom(table);
+        api.then = (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
+          Promise.resolve({ data: null, error: { code: '500', message: 'down' } }).then(res, rej);
+        return api;
+      }
+      return realFrom(table);
+    };
+    const quietError = console.error;
+    console.error = () => {};
+    const quizOnly = await selectQuestionsForAttempt(failing, { assessmentId: 'A', studentId: 'S', practice: true, rng: seeded(5) });
+    console.error = quietError;
+    check('a failed ratings read still deals the review, from quiz answers alone',
+      quizOnly.questions.length > 0 && Math.abs((quizOnly.allocations[0].mastery ?? 0) - traceMastery(DEFAULT_BKT, [true, false])) < 1e-9);
   }
 
   console.log('\n=== an expired attempt is not history ===');
@@ -450,7 +651,7 @@ async function main() {
   );
   const { data: assessments } = await supabase
     .from('assessments')
-    .select('id, title, total_questions')
+    .select('id, title, total_questions, is_published')
     .order('title');
   const { data: student } = await supabase
     .from('users')
@@ -478,6 +679,12 @@ async function main() {
       check(`${a.title}: no duplicates`,
         new Set(r.questions.map((q) => q.id)).size === r.questions.length);
     } catch (err) {
+      // A draft with nothing in it yet isn't broken: no student can reach it,
+      // and publishing validates it first. A published one is a real failure.
+      if (err instanceof SelectionError && !a.is_published) {
+        console.log(`  ${a.title}: skipped, unpublished draft (${err.message})`);
+        continue;
+      }
       console.log(`  ${a.title}: ERROR ${(err as Error).message}`);
       failures++;
     }

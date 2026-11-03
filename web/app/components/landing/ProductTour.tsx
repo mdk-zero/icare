@@ -21,8 +21,9 @@ const TOUR = [
     number: "02",
     title: "ML-Powered Adaptive Assessments",
     description:
-      "Machine learning algorithms analyze every student response in real time, recommending the quizzes and patient cases that target individual knowledge gaps. Each assessment delivers a precise competency profile.",
+      "Bayesian Knowledge Tracing estimates each student's mastery of every skill from their quiz answers and instructor-rated Patient Cases and Return Demonstrations, so each review quiz brings back what they got wrong, weakest skills first. Prediction models flag who may need help, and a recommender points each student to what to practice next.",
     capabilities: [
+      "Skill mastery that updates with every quiz answer and graded case",
       "Recommendations that follow each student's performance",
       "Instant competency scoring with detailed breakdowns",
       "Multiple formats: quizzes, OSCEs, case studies",
@@ -76,7 +77,7 @@ const TOUR = [
       "An intelligent recommendation engine suggests personalised learning paths based on each student’s performance history. Instructors receive actionable insights to target remediation where it matters most.",
     capabilities: [
       "Personalized learning paths based on performance data",
-      "Suggested patient cases and quizzes to address weak areas",
+      "Suggested quizzes to address weak areas",
       "Spaced repetition scheduling for knowledge retention",
       "Instructor insights for targeted remediation",
     ],

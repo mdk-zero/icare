@@ -5,6 +5,8 @@ import { canSeeStudent } from '@/app/lib/admin-scope';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
 import { isActiveSkillArea } from '@/scripts/taylors-chapters';
 import { getStudentsWithWork } from '@/app/lib/faculty-dashboard';
+import { MASTERY_THRESHOLD, type SkillMastery } from '@/app/lib/bkt';
+import { loadSkillMastery } from '@/app/lib/skill-mastery';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -43,8 +45,9 @@ function buildPrompt(input: {
   scenarios: ScenarioRecord[];
   competencies: CompetencyRecord[];
   prediction: PredictionRecord | null;
+  mastery: SkillMastery[];
 }): string {
-  const { name, quizAttempts, scenarios, competencies, prediction } = input;
+  const { name, quizAttempts, scenarios, competencies, prediction, mastery } = input;
 
   const quizBlock = quizAttempts.length > 0
     ? quizAttempts
@@ -68,6 +71,13 @@ function buildPrompt(input: {
     ? `Classification: ${prediction.risk === 'at_risk' ? 'LOW PERFORMING' : 'ON TRACK'}${prediction.probability != null ? ` (risk probability ${Math.round(prediction.probability * 100)}%)` : ''}, predicted ${prediction.predicted_at.slice(0, 10)}.\nTop factors: ${JSON.stringify(prediction.explanations)}`
     : '(no ML risk prediction yet)';
 
+  const masteryBlock = mastery.length > 0
+    ? mastery
+        .map((s) => `- Skill ${s.skill_id} ${s.title}: ${Math.round(s.mastery * 100)}% (${s.correct} of ${s.answers} results good)${s.mastery >= MASTERY_THRESHOLD ? ', mastered' : ''}`)
+        .join('\n') +
+      (mastery.every((s) => s.source === 'default') ? '\nThese skills are still on starting parameters, so treat the percentages as rough estimates.' : '')
+    : '(no results on a skill yet)';
+
   return `You are a clinical nursing education expert. Write a concise performance summary of the nursing student "${name}" for their faculty instructor, based only on the data below.
 
 Quiz attempts (newest first):
@@ -81,6 +91,9 @@ ${competencyBlock}
 
 ML low-performance prediction (say "low performing", never "at risk"):
 ${predictionBlock}
+
+Skill mastery estimated by Bayesian Knowledge Tracing from every quiz answer and every skill rated on a finished Patient Case or Return Demonstration (weakest first; ${Math.round(MASTERY_THRESHOLD * 100)}% counts as mastered):
+${masteryBlock}
 
 Return ONLY a valid JSON object with this exact structure (no markdown, no explanations):
 
@@ -225,8 +238,16 @@ export async function POST(_request: Request, { params }: RouteParams) {
         }
       : null;
 
+    // The summary reads fine without it, so a failure here doesn't cost the summary.
+    const mastery = await loadSkillMastery(supabase, [id])
+      .then((byStudent) => byStudent.get(id) ?? [])
+      .catch((err) => {
+        console.error('Failed to read skill mastery for the summary', err);
+        return [];
+      });
+
     const generated = await callAI(
-      buildPrompt({ name: student.name, quizAttempts, scenarios, competencies, prediction }),
+      buildPrompt({ name: student.name, quizAttempts, scenarios, competencies, prediction, mastery }),
     );
     const summary = sanitizeSummary(generated);
 

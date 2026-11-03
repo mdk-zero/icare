@@ -14,10 +14,10 @@ running it by hand.
 
 The two halves form one pipeline. The at-risk models decide **who** needs
 intervention. Knowledge tracing and the recommender decide **what** each
-student practises: BKT estimates mastery of every Taylor's skill, the web
-app's adaptive quiz review spends a retake or practice run on the
-least-mastered skills, and the recommender points to other quizzes on the
-weakest competencies.
+student practises: BKT estimates mastery of every Taylor's skill from quizzes,
+Patient Cases and Return Demonstrations, the web app's review quiz brings back the questions a student got wrong with the
+least-mastered skills first, and the recommender points to other quizzes on
+the weakest competencies.
 
 ## Run
 
@@ -125,30 +125,32 @@ app asks for the stream to show a percentage; the nightly workflow doesn't.
   (answer accuracy blended with faculty-validated scores; unexplored
   competencies get a neutral exploration weight). Computed live; registered in `ml_models` for auditability.
 - **Bayesian Knowledge Tracing** (`app/bkt.py`) — one two-state hidden
-  Markov model per Taylor's skill, over each student's results on it in the
-  order they happened: quiz answers (graded attempts and practice runs) and
-  Patient Case / Return Demonstration checklist ratings (each step rated
-  Excellent or Satisfactory is a right answer, Needs Practice a wrong one,
-  N/A nothing). Case Presentations have no checklist and are left out. EM (Baum-Welch, as in pyBKT) fits
+  Markov model per Taylor's skill, over each student's answers in time order.
+  An answer is a quiz answer (graded attempts and review quizzes) or a skill's
+  rating on a finished Patient Case or Return Demonstration: Excellent and
+  Satisfactory count as right, Needs Practice as wrong, and N/A or an unrated
+  check-off is skipped. A rated task is one answer however many sub-tasks it
+  has, because its sub-tasks are one performance rated in one sitting. Both
+  kinds share a skill's parameters. EM (Baum-Welch, as in pyBKT) fits
   P(L0), P(T), P(G), P(S) on every whole-cohort `/recommend/refresh` (nightly,
   or an admin's run; scoped runs leave it alone), with guess and slip
   capped below 0.5 to avoid degenerate fits. Cold start: a skill needs 5
   students and 40 answers for its own fit; below that it takes its chapter's
   pooled fit, then the defaults (0.3 / 0.1 / 0.2 / 0.1), and is refit as
   answers accumulate. The parameters go to `bkt_parameters` (web migration
-  084). The web app's adaptive review (`web/app/lib/bkt.ts`,
+  084). The web app's review quiz (`web/app/lib/bkt.ts`,
   `assessment-selection.ts`) applies the same update rules to the student's
-  answers at the moment it deals a paper. The surplus questions go to the
-  least-mastered skills, and on a practice run the questions last answered
-  wrong come first. The mobile Library's "Needs improvement" panel
-  (`web/app/lib/skill-focus.ts`) traces the same observations with the same
-  parameters and lists every skill under 95% mastery, least mastered first,
-  each with its Library materials.
+  answers at the moment it deals a paper. It holds only the questions last
+  answered wrong, grouped by skill with the least mastered first; graded tries
+  don't adapt. The portal shows the same estimates (`web/app/lib/skill-mastery.ts`):
+  per student on their profile, per skill on Analytics, and the benchmark and
+  live fit on System Tests.
 
   Benchmark (`eval/out/bkt_eval_as.md`): ASSISTments 2009-2010 skill-builder
   log, 446,844 answers from 4,151 students on 110 skills, 5-fold
   cross-validation by student, predicting each held-out answer before it is
-  seen.
+  seen. These are tutoring-system answers, so the benchmark checks the
+  implementation, not how well instructor ratings fit BKT.
 
   | Model | AUC | Accuracy | RMSE |
   |---|---|---|---|
@@ -174,8 +176,8 @@ soft launch and reports Precision@K, Recall@K, and Hit Rate@K.
 answer on a skill. It uses cross-validation by student, fitting on the other
 folds and predicting each held-out answer before seeing it. It reports AUC,
 accuracy and RMSE beside two baselines: the skill's average, and the
-student's own running average. On live data it needs real quiz traffic:
-until students have answered enough, every skill runs on the defaults and
-the numbers mean nothing. The ASSISTments 2009-2010 skill-builder log
+student's own running average. On live data, ratings count as answers, and
+it needs real traffic: until students have enough results, every skill runs
+on the defaults and the numbers mean nothing. The ASSISTments 2009-2010 skill-builder log
 (`as.csv` from CAHLR/pyBKT-examples) is the standard public benchmark for
 checking the implementation itself.

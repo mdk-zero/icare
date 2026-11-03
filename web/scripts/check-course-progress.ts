@@ -91,9 +91,17 @@ const retakes = facts({
   ],
 });
 const quiz = one(quizItem, retakes);
-eq('a passing retake meets it', quiz.done, true);
-eq('a later lower retake does not undo it', quiz.done_at, '2026-09-03T01:00:00Z');
-eq('best score is the highest attempt', quiz.best_score, 80);
+eq('the grade is the average of the graded tries', quiz.best_score, 63.33);
+eq('one passing try among low ones does not meet it', [quiz.done, quiz.done_at], [false, null]);
+const lifted = one(quizItem, facts({ attempts: retakes.attempts.slice(0, 2).map((a) => ({ ...a, score: a.score === 60 ? 70 : 80 })) }));
+eq('an average at the minimum meets it, on the latest try', [lifted.done, lifted.best_score, lifted.done_at], [true, 75, '2026-09-03T01:00:00Z']);
+const undone = one(quizItem, facts({ attempts: [retakes.attempts[1], retakes.attempts[2]] }));
+eq('a later low try can undo a minimum the first one met', [undone.done, undone.best_score], [false, 65]);
+eq(
+  'a try with no score stays out of the average',
+  one(quizItem, facts({ attempts: [retakes.attempts[1], { ...retakes.attempts[2], score: null }] })).best_score,
+  80,
+);
 
 console.log('count');
 const threeCases = req({ kind: 'count', activity_type: 'scenario', target_count: 3 });
@@ -111,7 +119,7 @@ eq('done on the date the third one was graded', counted.done_at, '2026-10-01T00:
 const onlySkills = req({ kind: 'count', activity_type: 'scenario', target_count: 1, skills_only: true });
 eq('skills_only counts cases covering a course skill', one(onlySkills, caseFacts, ['14-1']).current, 1);
 eq('skills_only with no matching skills counts none', one(onlySkills, caseFacts, ['5-1']).current, 0);
-const twoQuizzes = req({ kind: 'count', activity_type: 'assessment', target_count: 2, min_score: 75 });
+const twoQuizzes = req({ kind: 'count', activity_type: 'assessment', target_count: 2, min_score: 60 });
 eq('each Quiz counts once, however many attempts', one(twoQuizzes, retakes).current, 1);
 eq('the average is over cases inside the term', counted.avg_score, 80);
 eq('the average follows skills_only', one(onlySkills, caseFacts, ['14-1']).avg_score, 70);
@@ -121,7 +129,7 @@ const failedQuiz = facts({
     { student_id: S, assessment_id: 'q2', score: 40, submitted_at: '2026-09-04T01:00:00Z', skill_scores: {} },
   ],
 });
-eq('the average takes each Quiz at its best attempt, failed ones too', one(twoQuizzes, failedQuiz).avg_score, 60);
+eq('the average takes each Quiz at its grade, failed ones too', one(twoQuizzes, failedQuiz).avg_score, 51.665);
 console.log('skill');
 const skill = req({ kind: 'skill', skill_id: '1-7', min_score: 50 });
 const needsPractice = facts({
@@ -141,6 +149,11 @@ const quizSkill = facts({
 });
 const qs = one(skill, quizSkill);
 eq('a Quiz criterion on the skill is evidence, at its own score', [qs.done, qs.best_score, qs.level], [true, 90, 'Excellent']);
+const quizSkillTwice = facts({
+  quizSkills: { q9: ['1-7'] },
+  attempts: [...quizSkill.attempts, { student_id: S, assessment_id: 'q9', score: 40, submitted_at: '2026-09-03T00:00:00Z', skill_scores: { '1-7': 50 } }],
+});
+eq('its tries on the skill average like the grade does', one(skill, quizSkillTwice).best_score, 70);
 
 console.log('manual and overrides');
 const manual = req({ kind: 'manual', title: 'Return demo sheet' });
@@ -294,7 +307,7 @@ console.log("student's own view");
   eq('a met item has no status', [byId[pc1.id].done, byId[pc1.id].status], [true, null]);
   eq('an ungraded Patient Case', byId[pc3.id].status, 'Not graded yet');
   eq('a Quiz never taken', byId[quizNever.id].status, 'Not taken yet');
-  eq('a Quiz below its minimum', byId[quizLow.id].status, 'Best 60%, needs 75%');
+  eq('a Quiz below its minimum', byId[quizLow.id].status, 'Average 60%, needs 75%');
   eq('a count so far', byId[cases3.id].status, '1 of 3 so far');
   eq('a skill below its band', byId[skillNp.id].status, 'Best so far: Needs Practice');
   eq('a skill with no evidence', byId[skillNone.id].status, 'No graded work yet');

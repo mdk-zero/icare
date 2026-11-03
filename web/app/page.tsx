@@ -22,7 +22,7 @@ const pillars = [
   },
   {
     title: "For Instructors",
-    text: "Objective scoring and AI-assisted patient case creation, without the grading backlog.",
+    text: "Shared skill checklists, automatically scored quizzes and AI-assisted patient case creation.",
   },
   {
     title: "For Deans & Program Chairs",
@@ -95,13 +95,13 @@ const comparison = [
     dimension: "Learning path",
     traditional: "All students follow the same curriculum regardless of existing skill gaps.",
     icare:
-      "ML points each student to the patient cases and quizzes that target their weak areas.",
+      "ML points each student to the quizzes that target their weak areas.",
     icon: ICONS.bolt,
   },
   {
     dimension: "Scoring",
     traditional: "Competency scoring varies between evaluators, introducing bias.",
-    icare: "Machine learning provides consistent, bias-free scoring across every attempt.",
+    icare: "Every student is rated on the same skill checklists, and quizzes are scored automatically.",
     icon: ICONS.scale,
   },
   {
@@ -149,7 +149,7 @@ const faqs = [
   {
     question: "How does the ML-driven assessment work?",
     answer:
-      "The machine learning model analyzes every student response across patient cases, quizzes, and EHR entries to build a detailed competency profile. It identifies knowledge gaps and provides objective scoring that eliminates grading bias. Laboratory instructors get a clear picture of each student’s skill strengths and areas needing improvement.",
+      "Three kinds of model work together. Random Forest and Logistic Regression models flag the students who may need intervention. Bayesian Knowledge Tracing estimates how well each student knows every skill from their quiz answers and their instructors’ ratings on Patient Cases and Return Demonstrations, and each review quiz brings back the questions they got wrong, weakest skills first. A content-based recommender then points students to other quizzes on those skills. Laboratory instructors get a clear picture of each student’s skill strengths and areas needing improvement.",
   },
   {
     question: "Can a laboratory instructor create their own patient cases?",
@@ -175,7 +175,7 @@ const faqs = [
 
 const mission = [
   { title: "Practice like it’s real", text: "Realistic patient cases, not static case studies." },
-  { title: "Score without bias", text: "Consistent evaluation, every student, every time." },
+  { title: "Score by one standard", text: "The same skill checklists, every student, every time." },
   {
     title: "Feedback that arrives in time",
     text: "Insight while it can still change the outcome.",
@@ -1139,7 +1139,7 @@ export default function LandingPage() {
                 </p>
                 <p className="mt-5 max-w-lg leading-relaxed text-white/70">
                   We set out to build something different — a platform that practices the way
-                  clinical work actually happens, scores fairly and consistently, and gives students
+                  clinical work actually happens, holds every student to the same checklists, and gives students
                   the instant, specific feedback they need to genuinely improve before they ever
                   step into a hospital ward.
                 </p>

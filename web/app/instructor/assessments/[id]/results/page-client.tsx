@@ -35,9 +35,10 @@ interface StudentResult {
   status: Status;
   attempt_count: number;
   submitted_count: number;
-  /** Ungraded practice runs past the attempt limit (083); absent in demo data. */
+  /** Ungraded review quizzes past the attempt limit (083); absent in demo data. */
   practice_count?: number;
-  best_score: number | null;
+  /** The average of the student's graded tries. */
+  grade: number | null;
   latest_score: number | null;
   latest_submitted_at: string | null;
   latest_time_taken_seconds: number | null;
@@ -56,7 +57,7 @@ interface Summary {
   average_score: number | null;
 }
 
-/** One group's averages over its members' individual best scores. */
+/** One group's averages over its members' individual grades. */
 interface GroupResult {
   team_id: string;
   label: string;
@@ -186,14 +187,14 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
         if (section !== sectionFilter) return false;
       }
 
-      // Bands run off best_score, the column the table ranks on. "Ungraded"
+      // Bands run off the grade, the column the table ranks on. "Ungraded"
       // is its own band rather than a 0, so students who never submitted do
       // not silently count as failing.
-      if (scoreFilter === "ungraded" && r.best_score !== null) return false;
-      if (scoreFilter === "passing" && (r.best_score === null || r.best_score < PASS_MARK)) {
+      if (scoreFilter === "ungraded" && r.grade !== null) return false;
+      if (scoreFilter === "passing" && (r.grade === null || r.grade < PASS_MARK)) {
         return false;
       }
-      if (scoreFilter === "failing" && (r.best_score === null || r.best_score >= PASS_MARK)) {
+      if (scoreFilter === "failing" && (r.grade === null || r.grade >= PASS_MARK)) {
         return false;
       }
 
@@ -218,7 +219,7 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
 
   /** Exports what is on screen, so a filtered view exports the filtered rows. */
   const exportCsv = () => {
-    const header = "student,email,section,group,status,best_score,attempts,practice_runs,last_submitted,time_taken";
+    const header = "student,email,section,group,status,grade,attempts,review_quizzes,last_submitted,time_taken";
     const rows = filtered.map((r) =>
       [
         r.name,
@@ -226,7 +227,7 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
         r.section ?? "",
         r.team_label ?? "",
         STATUS_LABEL[r.status],
-        r.best_score ?? "",
+        r.grade ?? "",
         r.attempt_count,
         r.practice_count ?? 0,
         r.latest_submitted_at ?? "",
@@ -315,7 +316,7 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
               icon={faChartSimple}
               value={summary?.average_score === null ? "—" : `${summary?.average_score ?? 0}%`}
               label="Average Score"
-              caption="Best attempt per student"
+              caption="Average of graded tries per student"
               iconBg="bg-brand-600/10"
               iconColor="text-brand-600"
             />
@@ -448,7 +449,7 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
                 <table className="w-full">
                   <thead className="border-b border-gray-100 bg-subtle">
                     <tr>
-                      {["Student", "Section", "Status", "Best Score", "Attempts", "Submitted", "Time"].map(
+                      {["Student", "Section", "Status", "Grade", "Attempts", "Submitted", "Time"].map(
                         (h) => (
                           <th
                             key={h}
@@ -496,23 +497,23 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
                           </span>
                         </td>
                         <td className="px-4 py-4 sm:px-6">
-                          {r.best_score === null ? (
+                          {r.grade === null ? (
                             <span className="text-sm text-gray-400">—</span>
                           ) : (
                             <span
                               className={`text-sm font-semibold ${
-                                r.best_score >= 70 ? "text-brand-600" : "text-rose-600"
+                                r.grade >= 70 ? "text-brand-600" : "text-rose-600"
                               }`}
                             >
-                              {formatScore(r.best_score)}
+                              {formatScore(r.grade)}
                             </span>
                           )}
                         </td>
                         <td className="px-4 py-4 text-sm text-gray-600 sm:px-6">
                           {r.attempt_count === 0 ? "—" : r.attempt_count}
                           {r.practice_count ? (
-                            <span className="ml-1.5 text-xs text-gray-400" title="Ungraded practice runs after the last attempt">
-                              · +{r.practice_count} practice
+                            <span className="ml-1.5 text-xs text-gray-400" title="Ungraded review quizzes after the last attempt">
+                              · +{r.practice_count} review
                             </span>
                           ) : null}
                         </td>

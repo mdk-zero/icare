@@ -35,9 +35,10 @@ const EXPIRY_GRACE_MS = 2 * 60 * 1000;
  * for a quiz they never sat, so an unfinished attempt is handed back with the
  * exact paper it was already served rather than replaced.
  *
- * Past the limit the quiz no longer closes: the next run is practice (083),
- * dealt the same adaptive way but never graded. Before 083 is applied it
- * closes as it always did.
+ * Past the limit the quiz no longer closes: the next run is a review quiz (083)
+ * of the questions the student got wrong, weakest skills first, and it is never
+ * graded. With no wrong answers left there is nothing to serve. Before 083 is
+ * applied the quiz closes as it always did.
  *
  * Questions come back without correct_index or explanation — grading is
  * server-side, in the submit route.
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Assessment not available' }, { status: 404 });
     }
     let spent = limit.spent;
-    // Past the graded tries, and 083 applied: whatever runs next is practice.
+    // Past the graded tries, and 083 applied: whatever runs next is a review.
     const practiceNow = async () =>
       isPracticeRun(spent, maxAttempts) && (await practiceLive(supabase));
 
@@ -92,8 +93,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // An attempt left open past its time limit (the app was closed, the phone
     // died) has run out: handing it back would only put the student straight
     // into "time's up". Close it as expired — it counts as a try, like any
-    // attempt that ran its course — and deal a fresh one below. A practice run
-    // left that way is deleted instead, so it never spends a graded try.
+    // attempt that ran its course — and deal a fresh one below. A review left
+    // that way is deleted instead, so it never spends a graded try.
     let previousExpired = false;
     if (open && assessment.time_limit_seconds) {
       const elapsedMs = Date.now() - new Date(open.started_at).getTime();
@@ -135,10 +136,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const meta = {
       max_attempts: maxAttempts,
       attempts_used: spent,
-      attempts_remaining: maxAttempts === null ? null : Math.max(0, maxAttempts - spent),
+      attempts_remaining: Math.max(0, maxAttempts - spent),
       previous_expired: previousExpired,
       practice,
-      // A practice run is numbered on its own; "Attempt 3 of 2" would read wrong.
+      // A review is numbered on its own; "Attempt 3 of 2" would read wrong.
       ...(practice ? { practice_number: practiceNumber } : { attempt_number: spent + 1 }),
     };
 
@@ -169,7 +170,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // ---------- limit ----------
-    if (maxAttempts !== null && spent >= maxAttempts && !practice) {
+    if (spent >= maxAttempts && !practice) {
       return NextResponse.json(
         {
           error:

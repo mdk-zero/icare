@@ -3,7 +3,9 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { activityOfferings } from '@/app/lib/activity-course';
 import { viewerDeanId } from '@/app/lib/dean-scope';
+import { loadMissedQuestions } from '@/app/lib/assessment-selection';
 import { GRADED_SPENT_STATUSES, PRACTICE_STATUS, practiceLive } from '@/app/lib/quiz-practice';
+import { attemptLimit, quizGrade } from '@/app/lib/quiz-attempts';
 
 export async function GET() {
   const session = await readSession();
@@ -35,8 +37,8 @@ export async function GET() {
       .order('created_at', { ascending: false })
       .limit(200);
     if (deanId) publishedQuery = publishedQuery.eq('admin_id', deanId);
-    // Past the limit a quiz opens again as practice, once 083 is applied —
-    // and only then can 'practiced' be named in a filter.
+    // Past the limit a quiz opens again as a review, once 083 is applied — and
+    // only then can 'practiced' be named in a filter.
     const canPractice = await practiceLive(supabase);
     const [{ data: published, error: pubError }, { data: assignments, error: asgError }, { data: allAttempts, error: attError }] =
       await Promise.all([
@@ -47,7 +49,7 @@ export async function GET() {
           .eq('student_id', session.uid),
         // Expired attempts spend a retry the same way submitted ones do, but
         // they carry no score, so the two are counted separately below.
-        // Practice runs (083) spend nothing and grade nothing; they are only
+        // Review quizzes (083) spend nothing and grade nothing; they are only
         // counted for the student's own record.
         supabase
           .from('assessment_attempts')
@@ -91,7 +93,7 @@ export async function GET() {
     );
     // Every graded try that has run its course, which is what the limit counts.
     const spentByAssessment = new Map<string, number>();
-    // Newest first, so the first practice run seen per quiz is the latest.
+    // Newest first, so the first review seen per quiz is the latest.
     const practiceByAssessment = new Map<string, { count: number; last_score: number | null }>();
     for (const at of allAttempts ?? []) {
       if (at.status === PRACTICE_STATUS) {
@@ -103,33 +105,40 @@ export async function GET() {
       spentByAssessment.set(at.assessment_id, (spentByAssessment.get(at.assessment_id) ?? 0) + 1);
     }
 
-    const bestByAssessment = new Map<string, { score: number | null; submitted_at: string; attempts: number }>();
+    // Newest first, so the first graded try seen per quiz dates the record.
+    const gradedByAssessment = new Map<string, { scores: (number | null)[]; submitted_at: string }>();
     for (const at of attempts ?? []) {
-      const cur = bestByAssessment.get(at.assessment_id);
-      if (!cur) {
-        bestByAssessment.set(at.assessment_id, {
-          score: at.score,
-          submitted_at: at.submitted_at,
-          attempts: 1,
-        });
-      } else {
-        cur.attempts += 1;
-        if ((at.score ?? -1) > (cur.score ?? -1)) cur.score = at.score;
-      }
+      const cur = gradedByAssessment.get(at.assessment_id);
+      if (cur) cur.scores.push(at.score);
+      else gradedByAssessment.set(at.assessment_id, { scores: [at.score], submitted_at: at.submitted_at });
     }
+
+    // A per-student override beats the assessment default.
+    const limitOf = (a: { id: string; max_attempts?: number | null }) =>
+      attemptLimit(assignmentByAssessment.get(a.id)?.max_attempts, a.max_attempts);
+    const remainingOf = (a: { id: string; max_attempts?: number | null }) =>
+      Math.max(0, limitOf(a) - (spentByAssessment.get(a.id) ?? 0));
+    // With the graded tries used up, a review quiz holds what the student got wrong.
+    const missedByQuiz = canPractice
+      ? await loadMissedQuestions(
+          supabase,
+          session.uid,
+          filteredPublished.filter((a) => remainingOf(a) === 0).map((a) => a.id as string),
+        )
+      : new Map<string, Set<string>>();
 
     const assessments = filteredPublished.map((a) => {
       const assignment = assignmentByAssessment.get(a.id) ?? null;
-      const best = bestByAssessment.get(a.id) ?? null;
+      const graded = gradedByAssessment.get(a.id) ?? null;
+      const grade = quizGrade(graded?.scores ?? []);
       const bankSize = Number(
         (a as unknown as { questions: [{ count: number }] }).questions?.[0]?.count ?? 0,
       );
-      // A per-student override beats the assessment default; null at both
-      // levels is unlimited.
-      const maxAttempts = assignment?.max_attempts ?? a.max_attempts ?? null;
+      const maxAttempts = limitOf(a);
       const spent = spentByAssessment.get(a.id) ?? 0;
-      const attemptsRemaining = maxAttempts === null ? null : Math.max(0, maxAttempts - spent);
+      const attemptsRemaining = remainingOf(a);
       const practiceRuns = practiceByAssessment.get(a.id) ?? null;
+      const reviewCount = missedByQuiz.get(a.id)?.size ?? 0;
 
       return {
         id: a.id,
@@ -149,14 +158,18 @@ export async function GET() {
               required: assignment.required,
             }
           : null,
-        best_score: best?.score ?? null,
-        attempt_count: best?.attempts ?? 0,
-        last_submitted_at: best?.submitted_at ?? null,
+        grade,
+        // The old name for the grade, for installed apps that still read it.
+        best_score: grade,
+        attempt_count: graded?.scores.length ?? 0,
+        last_submitted_at: graded?.submitted_at ?? null,
         max_attempts: maxAttempts,
         attempts_used: spent,
         attempts_remaining: attemptsRemaining,
-        // With the graded tries used up, the quiz can still be taken as practice.
-        practice_available: attemptsRemaining === 0 && canPractice,
+        // With the graded tries used up, the quiz opens as a review while any
+        // wrong answers are left to work through.
+        practice_available: attemptsRemaining === 0 && canPractice && reviewCount > 0,
+        review_question_count: reviewCount,
         practice_count: practiceRuns?.count ?? 0,
         last_practice_score: practiceRuns?.last_score ?? null,
       };

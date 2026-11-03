@@ -21,10 +21,8 @@ import {
   loadSkillFocus,
   quizEvidence,
   rankByMastery,
-  ratingCorrect,
-  type SkillObservation,
 } from '../app/lib/skill-focus';
-import { DEFAULT_BKT, MASTERY_THRESHOLD, type BktParams } from '../app/lib/bkt';
+import { MASTERY_THRESHOLD } from '../app/lib/bkt';
 import { buildSkillTipsPrompt, sanitizeSkillTips } from '../app/lib/skill-tips';
 
 config({ path: '.env.local' });
@@ -59,42 +57,29 @@ async function main() {
     rated('2026-10-01', 'needs_practice', 'excellent', 'needs_practice')?.needs_practice.join() === 'Step 1,Step 3',
   );
 
-  console.log('\n=== checklist ratings as BKT observations ===');
-  check('Excellent and Satisfactory are right', ratingCorrect('excellent') === true && ratingCorrect('satisfactory') === true);
-  check('Needs Practice is wrong', ratingCorrect('needs_practice') === false);
-  check('N/A is no observation', ratingCorrect('not_applicable') === null);
-
   console.log('\n=== BKT mastery decides ===');
-  // Observations from strings like "1101": right, right, wrong, right.
-  const seq = (at: string, pattern: string): SkillObservation[] =>
-    [...pattern].map((c, i) => ({ at, group: at, slot: i, correct: c === '1' }));
-  const rank = (entries: Record<string, SkillObservation[]>, params = new Map<string, BktParams>()) =>
-    rankByMastery(new Map(Object.entries(entries)), new Map(), params);
+  const m = (skill_id: string, mastery: number) => ({ skill_id, mastery });
   {
-    const r = rank({ '1-1': seq('2026-10-01', '11111') });
-    check(`five right answers reach mastery (${MASTERY_THRESHOLD})`, r.length === 0);
+    const r = rankByMastery([m('1-1', 0.6), m('2-3', 0.2), m('3-1', MASTERY_THRESHOLD)], new Map());
+    check(`least mastered first, mastered (${MASTERY_THRESHOLD}) left out`, r.map((s) => s.skillId).join() === '2-3,1-1');
   }
   {
-    const r = rank({ '1-1': seq('2026-10-01', '1') });
-    check('one right answer is not mastery yet', r.length === 1 && r[0].mastery > DEFAULT_BKT.p_init);
+    const r = rankByMastery([m('1-10', 0.4), m('1-2', 0.4)], new Map());
+    check('a tie goes by skill number', r.map((s) => s.skillId).join() === '1-2,1-10');
   }
   {
-    const r = rank({ '1-1': [...seq('2026-09-01', '11111'), ...seq('2026-10-01', '000')] });
-    check('later misses pull a mastered skill back into the list', r.length === 1);
+    const r = rankByMastery(
+      [m('1-1', 0.5)],
+      new Map([['1-1', [quiz('2026-09-01', 9, 10), rated('2026-10-03', 'needs_practice')!]]]),
+    );
+    check(
+      "a skill's results come newest first, good ones too",
+      r[0]?.evidence.map((e) => e.at).join() === '2026-10-03,2026-09-01',
+    );
   }
   {
-    const r = rank({ '1-1': [...seq('2026-10-01', '000'), ...seq('2026-09-01', '11111')] });
-    // Given misses first, but they happened last: traced in time order they pull it down.
-    check('observations are traced in time order, not the order given', r.length === 1);
-  }
-  {
-    const r = rank({ '1-1': seq('2026-10-01', '10'), '2-3': seq('2026-10-01', '000'), '3-1': seq('2026-10-01', '111111') });
-    check('least mastered first, mastered skills left out', r.map((s) => s.skillId).join() === '2-3,1-1');
-  }
-  {
-    const easy: BktParams = { p_init: 0.9, p_learn: 0.3, p_guess: 0.2, p_slip: 0.1 };
-    const r = rank({ '1-1': seq('2026-10-01', '11') }, new Map([['1-1', easy]]));
-    check("a skill's fitted parameters are used over the defaults", r.length === 0);
+    const r = rankByMastery([m('1-1', 0.3)], new Map());
+    check('a skill with mastery but no shown results is still listed', r.length === 1 && r[0].evidence.length === 0);
   }
 
   console.log('\n=== AI tip guard ===');

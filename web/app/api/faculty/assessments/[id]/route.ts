@@ -189,8 +189,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     updates.target_sections = targetSectionNames;
   }
   // total_questions null serves the whole bank. max_attempts is always a
-  // number now, at least MIN_ATTEMPTS (older quizzes may still hold null,
-  // unlimited, until they are next edited).
+  // number now, at least MIN_ATTEMPTS (older quizzes may still hold null until
+  // they are next edited, which attemptLimit reads as the standard).
   if (total_questions !== undefined) {
     const n = total_questions === null ? null : Number(total_questions);
     if (n !== null && (!Number.isInteger(n) || n <= 0)) {

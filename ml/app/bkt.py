@@ -1,10 +1,10 @@
 """Bayesian Knowledge Tracing (Corbett & Anderson, 1995) per Taylor's skill.
 
 Each skill is a two-state hidden Markov model: the student either knows it
-or doesn't, and each result on it is a noisy observation of that state: a
-quiz answer, or a step on a Patient Case or Return Demonstration checklist
-rated Excellent / Satisfactory (right) or Needs Practice (wrong). Case
-Presentations have no checklist and are left out. Four parameters per skill:
+or doesn't, and each answer on it is a noisy observation of that state. An
+answer is a quiz answer, or the rating a skill got on a finished Patient Case
+or Return Demonstration (RATING_ANSWERS). Four parameters per skill, shared by
+both kinds of answer:
 
     p_init   P(L0)  the student already knows the skill before any answer
     p_learn  P(T)   they move from not knowing to knowing after an answer
@@ -20,7 +20,8 @@ dependency. Guess and slip are capped below 0.5 (Baker, Corbett & Aleven,
 Cold start: a skill with too few answers to fit takes its chapter's pooled
 fit, and failing that the defaults, and is refit on every run as answers
 accumulate. The web app applies the same update rules (web/app/lib/bkt.ts)
-with these parameters when it deals an adaptive quiz review.
+with these parameters when it shows an estimate or deals an adaptive quiz
+review.
 """
 
 from __future__ import annotations
@@ -55,6 +56,11 @@ EM_MAX_ITERATIONS = 200
 EM_TOLERANCE = 1e-7
 
 SKILL_IN_NAME = re.compile(r"\bSkills? (\d{1,2}-\d{1,2})\b")
+
+# A skill's rating as an answer. Any other value says nothing about the skill:
+# N/A, or a check-off nobody rated. Keep in step with ratingAsAnswer in
+# web/app/lib/bkt.ts.
+RATING_ANSWERS = {"excellent": True, "satisfactory": True, "needs_practice": False}
 
 
 @dataclass(frozen=True)
@@ -257,80 +263,50 @@ def fit(sequences: list[list[bool]]) -> tuple[BktParams, float]:
 # Data
 # ---------------------------------------------------------------
 
-# A checklist rating as an observation on its skill: done to standard or not.
-# N/A says nothing either way. The legacy five-level ratings map as the web
-# app's task-ratings.ts maps them.
-RATING_CORRECT = {
-    "excellent": True,
-    "satisfactory": True,
-    "very_good": True,
-    "good": True,
-    "needs_practice": False,
-    "fair": False,
-    "needs_improvement": False,
-}
-
-# One observation: (student, skill, when, group, place in group, correct).
-Observation = tuple[str, str, str, str, int, bool]
+def _named_skill(skill_id: str | None, name: str | None) -> str | None:
+    """A row's skill: its skill_id, else the one its name cites."""
+    if skill_id:
+        return skill_id
+    match = SKILL_IN_NAME.search(name or "")
+    return match.group(1) if match else None
 
 
-def _checklist_observations(db: Db) -> list[Observation]:
-    """Patient Case and Return Demonstration checklist ratings per skill, as
-    the student sees them: a task's ratings once it is graded, or once the
-    case is finalized (the web app's rule). Each rated step is one
-    observation; a task graded as a whole is one. Case Presentations are not
-    skills laboratory work and have no checklist, so they never appear."""
-    assignments = db.select("scenario_assignments", "id,student_id,scenario_id,status,assigned_at,completed_at")
-    if not assignments:
-        return []
-    tasks = db.select("scenario_tasks", "id,scenario_id,title,skill_id")
-    completions = db.select("scenario_task_completions", "assignment_id,task_id,rating,completed_at")
-    steps = db.select("scenario_task_steps", "id,task_id,sort_order")
-    step_ratings = db.select("scenario_task_step_ratings", "assignment_id,step_id,rating")
+def _checklist_rows(db: Db, skill_chapter: dict[str, str]) -> list[tuple[str, str, str, str, int, bool]]:
+    """One answer per rated skill on a finished Patient Case or Return
+    Demonstration, dated when the grade was finished. The same rules as
+    loadChecklistAnswers in web/app/lib/checklist-answers.ts: a task is one
+    performance, so its sub-tasks aren't answers of their own, and until an
+    assignment is completed a half-rated task's level isn't settled."""
+    assignments = {
+        a["id"]: a
+        for a in db.select("scenario_assignments", "id,student_id,completed_at", [("status", "eq", "completed")])
+        if a.get("completed_at")
+    }
+    tasks = {t["id"]: t for t in db.select("scenario_tasks", "id,title,skill_id,sort_order")}
 
-    tasks_by_scenario: dict[str, list[dict[str, Any]]] = {}
-    for t in tasks:
-        tasks_by_scenario.setdefault(t["scenario_id"], []).append(t)
-    steps_by_task: dict[str, list[dict[str, Any]]] = {}
-    for st in steps:
-        steps_by_task.setdefault(st["task_id"], []).append(st)
-    completion_of = {(c["assignment_id"], c["task_id"]): c for c in completions}
-    step_rating = {(r["assignment_id"], r["step_id"]): r["rating"] for r in step_ratings}
-
-    out: list[Observation] = []
-    for a in assignments:
-        finalized = a["status"] == "completed"
-        for task in tasks_by_scenario.get(a["scenario_id"], []):
-            skill = task.get("skill_id")
-            if not skill:
-                match = SKILL_IN_NAME.search(task.get("title") or "")
-                skill = match.group(1) if match else None
-            completion = completion_of.get((a["id"], task["id"]))
-            own = (completion or {}).get("rating")
-            if skill is None or not (finalized or own):
-                continue
-            at = (completion or {}).get("completed_at") or a.get("completed_at") or a.get("assigned_at")
-            if not at:
-                continue
-            group = f"{a['id']}:{task['id']}"
-            rated = [
-                (st.get("sort_order") or 0, step_rating[(a["id"], st["id"])])
-                for st in steps_by_task.get(task["id"], [])
-                if (a["id"], st["id"]) in step_rating
-            ] or ([(0, own)] if own else [])
-            for slot, rating in rated:
-                if rating in RATING_CORRECT:
-                    out.append((a["student_id"], skill, at, group, slot, RATING_CORRECT[rating]))
-    return out
+    rows = []
+    for completion in db.select("scenario_task_completions", "assignment_id,task_id,rating"):
+        assignment = assignments.get(completion["assignment_id"])
+        task = tasks.get(completion["task_id"])
+        correct = RATING_ANSWERS.get(completion.get("rating"))
+        if assignment is None or task is None or correct is None:
+            continue
+        skill = _named_skill(task.get("skill_id"), task.get("title"))
+        # bkt_parameters only takes skills in the catalog; a typed title may cite anything.
+        if skill not in skill_chapter:
+            continue
+        rows.append((assignment["student_id"], skill, assignment["completed_at"], assignment["id"],
+                     task.get("sort_order") or 0, correct))
+    return rows
 
 
 def load_sequences(db: Db) -> tuple[Sequences, dict[str, str]]:
-    """Every student's observations per skill, oldest first: quiz answers
-    (attempts by the time they were handed in, answers within one by their
-    place on the paper) and Patient Case / Return Demonstration checklist
-    ratings (by when the task was graded, steps in checklist order). Graded
-    attempts and practice runs both count — BKT models learning across
-    practice. Also returns skill -> chapter (competency) id."""
+    """Every student's answers per skill, oldest first: quiz attempts by the
+    time they were handed in, answers within one by their place on the paper,
+    and finished Patient Cases and Return Demonstrations among them by the time
+    the grade was finished. Graded attempts and practice runs both count — BKT
+    models learning across practice. Also returns skill -> chapter (competency)
+    id."""
     skill_chapter = {s["id"]: s["chapter_id"] for s in db.select("taylor_skills", "id,chapter_id")}
     # Filtered here rather than in the query: before web migration 083 the
     # 'practiced' status doesn't exist, and naming it would fail the read.
@@ -350,14 +326,11 @@ def load_sequences(db: Db) -> tuple[Sequences, dict[str, str]]:
     criteria_of = {q["id"]: q.get("criteria_id") for q in questions}
     skill_of_criterion: dict[str, str] = {}
     for c in criteria:
-        skill = c.get("skill_id")
-        if not skill:
-            match = SKILL_IN_NAME.search(c.get("name") or "")
-            skill = match.group(1) if match else None
+        skill = _named_skill(c.get("skill_id"), c.get("name"))
         if skill:
             skill_of_criterion[c["id"]] = skill
 
-    ordered: list[Observation] = []
+    ordered = []
     for ans in answers:
         attempt = attempt_by_id.get(ans["attempt_id"])
         skill = skill_of_criterion.get(criteria_of.get(ans["question_id"]) or "")
@@ -366,11 +339,7 @@ def load_sequences(db: Db) -> tuple[Sequences, dict[str, str]]:
         slot = position.get((ans["attempt_id"], ans["question_id"]), question_position.get(ans["question_id"], 0))
         ordered.append((attempt["student_id"], skill, attempt["submitted_at"], ans["attempt_id"], slot,
                         bool(ans["is_correct"])))
-    try:
-        ordered.extend(_checklist_observations(db))
-    except httpx.HTTPStatusError:
-        # Before the checklist tables exist, quiz answers alone.
-        pass
+    ordered.extend(_checklist_rows(db, skill_chapter))
     ordered.sort(key=lambda row: (row[2], row[3], row[4]))
 
     sequences: Sequences = {}

@@ -96,8 +96,8 @@ export async function GET() {
       is_published: a.is_published,
       is_ai_generated: a.is_ai_generated,
       target_sections: a.target_sections,
-      // null total_questions serves the whole bank; null max_attempts is
-      // unlimited retakes.
+      // null total_questions serves the whole bank; null max_attempts is the
+      // standard (attemptLimit).
       total_questions: a.total_questions,
       max_attempts: a.max_attempts,
       created_at: a.created_at,

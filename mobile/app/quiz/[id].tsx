@@ -524,7 +524,7 @@ export default function QuizInterfaceScreen() {
         }),
       },
       ...(started.practice && started.practice_number
-        ? [{ label: 'Attempt', value: `Practice ${started.practice_number}` }]
+        ? [{ label: 'Attempt', value: `Review ${started.practice_number}` }]
         : started.attempt_number
         ? [
             {
@@ -584,8 +584,8 @@ export default function QuizInterfaceScreen() {
               <Ionicons name="refresh-circle" size={14} color={Palette.primary} />
               <Text style={[styles.lateText, { color: Palette.primary }]}>
                 {result.graded_score != null
-                  ? `Practice run, not graded. Your graded score stays ${Math.round(result.graded_score)}%.`
-                  : 'Practice run, not graded. Your grade is unchanged.'}
+                  ? `Review quiz, not graded. Your grade stays ${Math.round(result.graded_score)}%.`
+                  : 'Review quiz, not graded. Your grade is unchanged.'}
               </Text>
             </View>
           ) : null}
@@ -609,7 +609,7 @@ export default function QuizInterfaceScreen() {
           </View>
         </Card>
 
-        {/* Reflections are on graded work; a practice run isn't one. */}
+        {/* Reflections are on graded work; a review quiz isn't one. */}
         {result.practice ? null : <ReflectionCard source="assessment" sourceId={started.attempt.id} />}
 
         {showReview && (
@@ -700,7 +700,7 @@ export default function QuizInterfaceScreen() {
         </Text>
         {started.practice ? (
           <View style={[styles.strictChip, { backgroundColor: Accent.violet.bg }]}>
-            <Text style={[styles.strictChipText, { color: Accent.violet.fg }]}>Practice · not graded</Text>
+            <Text style={[styles.strictChipText, { color: Accent.violet.fg }]}>Review · not graded</Text>
           </View>
         ) : null}
         <View style={[styles.strictChip, leaves > 0 && { backgroundColor: Accent.red.bg }]}>

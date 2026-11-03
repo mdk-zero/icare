@@ -29,6 +29,11 @@ interface StatTileProps {
    * the same lift and focus ring the clickable tile has.
    */
   href?: string;
+  /**
+   * Scales the value to the tile's own width rather than the screen's, for a
+   * word that can't wrap and may be wider than a narrow tile ("Yesterday").
+   */
+  fitValue?: boolean;
   className?: string;
 }
 
@@ -49,6 +54,7 @@ export default function StatTile({
   goodDirection = "up",
   onClick,
   href,
+  fitValue = false,
   className = "",
 }: StatTileProps) {
   // A zero reads as "nothing yet" on a KPI, so it shows the same dash as a
@@ -58,7 +64,7 @@ export default function StatTile({
   const isUp = (change ?? 0) >= 0;
   const isGood = goodDirection === "up" ? isUp : !isUp;
 
-  const classes = `group relative flex flex-col overflow-hidden rounded-2xl border border-hairline bg-surface p-4 text-left shadow-tile transition-all duration-200 sm:p-5 ${
+  const classes = `group relative flex flex-col overflow-hidden rounded-2xl border border-hairline bg-surface p-4 text-left shadow-tile transition-all duration-200 sm:p-5 ${fitValue ? "@container " : ""}${
     interactive
       ? "cursor-pointer hover:-translate-y-0.5 hover:shadow-tile-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2"
       : ""
@@ -85,7 +91,11 @@ export default function StatTile({
         </span>
       </span>
       <span
-        className={`relative mt-2 block font-display text-[2rem] font-bold leading-none tabular-nums sm:mt-3.5 sm:text-[2.75rem] ${valueColor}`}
+        className={`relative mt-2 block font-display font-bold leading-none tabular-nums sm:mt-3.5 ${
+          fitValue
+            ? "text-[length:clamp(1.5rem,14cqi,2rem)] sm:text-[length:clamp(1.5rem,14cqi,2.75rem)]"
+            : "text-[2rem] sm:text-[2.75rem]"
+        } ${valueColor}`}
       >
         {shown}
       </span>

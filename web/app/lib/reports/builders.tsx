@@ -20,6 +20,7 @@ import { ofKind, scenarioKinds } from '../scenario-kind';
 import { isActiveSkillArea } from '@/scripts/taylors-chapters';
 import { CASE_CRITERIA, isLateSubmission, type CaseObservations } from '../case-rubric';
 import { isLateSubmission as isLateAttempt } from '../assessment-timing';
+import { quizGrade } from '../quiz-attempts';
 import { ratingLabel, scoreDescriptor, type TaskRating } from '../task-ratings';
 import { loadStudentStandings, type StudentCourseStanding } from '../course-requirements';
 import { isMissingCourseSchema } from '../courses';
@@ -498,7 +499,8 @@ export async function buildAssessmentReport(
   const rows = inScope
     .map(([id, s]) => {
       const submitted = s.attempts.filter((a) => a.status === 'submitted' && a.score !== null);
-      const best = submitted.length ? Math.max(...submitted.map((a) => Math.round(Number(a.score)))) : null;
+      const average = quizGrade(submitted.map((a) => Number(a.score)));
+      const grade = average === null ? null : Math.round(average);
       const latest = submitted.map((a) => a.submitted_at as string).sort().at(-1) ?? null;
       const late = submitted.some((a) => isLateAttempt(a.time_taken_seconds, assessment.time_limit_seconds));
       const status = submitted.length
@@ -506,18 +508,18 @@ export async function buildAssessmentReport(
         : s.attempts.some((a) => a.status === 'in_progress')
           ? 'In progress'
           : 'Not started';
-      return { name: s.name, group: groups.get(id) ?? '—', status, attempts: submitted.length, best, latest, late };
+      return { name: s.name, group: groups.get(id) ?? '—', status, attempts: submitted.length, grade, latest, late };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const bests = rows.flatMap((r) => (r.best === null ? [] : [r.best]));
-  const passRate = bests.length ? Math.round((bests.filter((s) => s >= PASSING_SCORE).length / bests.length) * 100) : null;
+  const grades = rows.flatMap((r) => (r.grade === null ? [] : [r.grade]));
+  const passRate = grades.length ? Math.round((grades.filter((s) => s >= PASSING_SCORE).length / grades.length) * 100) : null;
   const bands = [
     { label: '90-100', test: (s: number) => s >= 90 },
     { label: `${PASSING_SCORE}-89`, test: (s: number) => s >= PASSING_SCORE && s < 90 },
     { label: `60-${PASSING_SCORE - 1}`, test: (s: number) => s >= 60 && s < PASSING_SCORE },
     { label: 'Below 60', test: (s: number) => s < 60 },
-  ].map((b) => [b.label, bests.filter(b.test).length]);
+  ].map((b) => [b.label, grades.filter(b.test).length]);
 
   const pdf = (
     <ReportShell
@@ -537,18 +539,18 @@ export async function buildAssessmentReport(
       <StatGrid
         items={[
           { label: 'Students', value: rows.length },
-          { label: 'Submitted', value: bests.length },
-          { label: 'Average best score', value: pct(avg(bests)) },
+          { label: 'Submitted', value: grades.length },
+          { label: 'Average grade', value: pct(avg(grades)) },
           { label: `Pass rate (${PASSING_SCORE}% and up)`, value: pct(passRate) },
         ]}
       />
 
-      <Text style={styles.sectionTitle}>Score distribution (best attempt)</Text>
+      <Text style={styles.sectionTitle}>Grade distribution (average of graded tries)</Text>
       <Table head={['Band', 'Students']} rows={bands} emptyText="No submitted attempts yet." />
 
       <Text style={styles.sectionTitle}>Students</Text>
       <Table
-        head={['Student', 'Group', 'Status', 'Attempts', 'Last submitted', 'Best']}
+        head={['Student', 'Group', 'Status', 'Attempts', 'Last submitted', 'Grade']}
         widths={[2.4, 1, 1.2, 1, 1.6, 0.8]}
         rows={rows.map((r) => [
           r.name,
@@ -556,7 +558,7 @@ export async function buildAssessmentReport(
           r.status,
           r.attempts,
           r.latest ? `${date(r.latest)}${r.late ? ' (late)' : ''}` : '—',
-          pct(r.best),
+          pct(r.grade),
         ])}
         emptyText="This assessment has not been given to anyone yet."
       />

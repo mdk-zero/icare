@@ -16,6 +16,7 @@ import {
   faTrophy,
   faXmark,
   faClipboardCheck,
+  faBrain,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchAnalyticsSummary,
@@ -38,6 +39,7 @@ import Card, { CardLabel } from "../../components/Card";
 import { usePageData } from "../../lib/use-page-data";
 import { EcgLoader } from "../../components/EcgLoader";
 import AiThinking from "../../components/AiThinking";
+import { CohortMasteryBody, useCohortMastery } from "../../components/SkillMastery";
 import { Leaderboard, LeaderboardSkeleton } from "./Leaderboard";
 import GroupPerformance, { useGroupSummaries } from "./GroupPerformance";
 import CoursePerformance from "./CoursePerformance";
@@ -830,6 +832,8 @@ export default function FacultyAnalyticsClient() {
 
   const closeNarrative = useCallback(() => setNarrativeOpen(false), []);
 
+  const mastery = useCohortMastery(sectionIds, courseId);
+
   const atRisk = summary?.risk_distribution?.at_risk ?? 0;
   // Every kind of graded work once the warehouse counts them all (085).
   const gradeNoun = summary?.cohort.graded === undefined ? "quiz score" : "grade";
@@ -1265,6 +1269,24 @@ export default function FacultyAnalyticsClient() {
               className={hasGroups ? "lg:col-span-2 xl:col-span-1" : ""}
             />
           </div>
+
+          {/* A student's whole record, so the range doesn't move it. */}
+          <Card padding="md" className="mb-4">
+            <div className="mb-5 flex items-center gap-2.5">
+              <div className="rounded-xl bg-brand-600/10 p-2.5">
+                <FontAwesomeIcon icon={faBrain} className="h-5 w-5 text-brand-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Skill Mastery (BKT)</h3>
+                <p className="text-xs text-gray-400">
+                  {course
+                    ? "Bayesian Knowledge Tracing for this course's roster, from each student's whole record of quizzes, Patient Cases and Return Demonstrations. Weakest skills first."
+                    : "Bayesian Knowledge Tracing: the average chance your students know each skill, from their whole record of quizzes, Patient Cases and Return Demonstrations. Weakest first."}
+                </p>
+              </div>
+            </div>
+            <CohortMasteryBody data={mastery.data} loading={mastery.loading} />
+          </Card>
         </div>
       )}
 

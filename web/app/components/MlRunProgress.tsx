@@ -16,9 +16,16 @@ export function mlRunFraction(run: MlRun): number {
   return ((run.job === "recommend" ? 1 : 0) + run.fraction) / 2;
 }
 
-/** The step in words, for the run button's tooltip and the bar's name. */
-export function mlRunLabel(run: MlRun): string {
-  if (run.job === "recommend") return "Step 2 of 2 · Refreshing quiz recommendations";
+/**
+ * The step in words, for the run button's tooltip and the bar's name. Only a
+ * whole-cohort run refits BKT; a run scoped to one instructor's students leaves it.
+ */
+export function mlRunLabel(run: MlRun, wholeCohort = false): string {
+  if (run.job === "recommend") {
+    return wholeCohort
+      ? "Step 2 of 2 · Refitting skill mastery (BKT) and refreshing quiz recommendations"
+      : "Step 2 of 2 · Refreshing quiz recommendations";
+  }
   // Nothing reported yet: the service is still starting, which on a sleeping
   // free instance can take most of a minute.
   if (run.fraction === 0) return "Step 1 of 2 · Starting the ML service…";
@@ -29,6 +36,6 @@ export function mlRunLabel(run: MlRun): string {
  * A thin bar for under the run button (faculty Students, admin Student
  * Management). The button carries the percentage; the step is the tooltip.
  */
-export default function MlRunProgress({ run }: { run: MlRun }) {
-  return <ProgressBar compact value={mlRunFraction(run)} label={mlRunLabel(run)} />;
+export default function MlRunProgress({ run, wholeCohort = false }: { run: MlRun; wholeCohort?: boolean }) {
+  return <ProgressBar compact value={mlRunFraction(run)} label={mlRunLabel(run, wholeCohort)} />;
 }

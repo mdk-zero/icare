@@ -12,7 +12,8 @@ over all held-out predictions, beside two baselines:
   - student running average: the student's own share so far on the skill,
     Laplace-smoothed ((right + 1) / (answered + 2))
 
-Reads the live answer history by default (needs SUPABASE_URL,
+Reads the live answer history by default, Patient Case and Return
+Demonstration ratings included (needs SUPABASE_URL,
 SUPABASE_SERVICE_ROLE_KEY and ML_SERVICE_SECRET in the environment) and
 writes nothing to the database. With --csv it reads an answer log instead:
 one row per answer, with student, skill, correct (0/1) and an ordering
@@ -154,7 +155,7 @@ def main() -> None:
             sequences, skill_chapter = load_sequences(db)
         finally:
             db.close()
-        source = args.label or "iCARE++ live quiz answers"
+        source = args.label or "iCARE++ live quiz answers and checklist ratings"
 
     students = {s for per in sequences.values() for s in per}
     answers = sum(len(seq) for per in sequences.values() for seq in per.values())

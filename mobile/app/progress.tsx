@@ -5,7 +5,8 @@ import { Card, StatCard, SectionHeader, SkeletonBlock } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useApiData } from '@/hooks/useApiData';
-import { fetchProgress, type ProgressAttempt } from '@/lib/api';
+import { SkillMasterySection } from '@/components/SkillMastery';
+import { fetchMySkillMastery, fetchProgress, type ProgressAttempt } from '@/lib/api';
 
 interface QuizGroup {
   key: string;
@@ -60,7 +61,7 @@ function QuizHistoryRow({
   const latest = group.attempts[0];
   const retaken = group.attempts.length > 1;
   const scores = group.attempts.map((a) => a.score).filter((s): s is number => s !== null);
-  const best = scores.length > 0 ? Math.max(...scores) : null;
+  const average = scores.length > 0 ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) : null;
 
   return (
     <View style={bordered && styles.rowBorder}>
@@ -77,7 +78,7 @@ function QuizHistoryRow({
           </Text>
           <Text style={styles.activityDateText}>
             {retaken
-              ? `${group.attempts.length} attempts${best !== null ? ` · best ${best}%` : ''}`
+              ? `${group.attempts.length} attempts${average !== null ? ` · average ${average}%` : ''}`
               : formatDate(latest.submitted_at)}
           </Text>
         </View>
@@ -115,6 +116,12 @@ function QuizHistoryRow({
 
 export default function ProgressScreen() {
   const { data, loading, refreshing, error, refresh } = useApiData(fetchProgress);
+  const mastery = useApiData(fetchMySkillMastery);
+  const refreshMastery = mastery.refresh;
+  const onRefresh = React.useCallback(() => {
+    refresh();
+    refreshMastery();
+  }, [refresh, refreshMastery]);
   const { Palette, Accent } = useTheme();
   const styles = React.useMemo(() => createStyles(Palette), [Palette]);
   const scoreColor = React.useMemo(() => makeScoreColor(Accent), [Accent]);
@@ -151,7 +158,7 @@ export default function ProgressScreen() {
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Palette.primary]} tintColor={Palette.primary} />
       }
     >
       <View style={styles.statsGrid}>
@@ -205,6 +212,15 @@ export default function ProgressScreen() {
           ))}
         </Card>
       </View>
+
+      <SkillMasterySection
+        skills={mastery.data}
+        loading={mastery.loading}
+        error={mastery.error}
+        intro="Bayesian Knowledge Tracing: how likely it is that you know each skill, updated after every quiz answer and every finished Patient Case or Return Demonstration. Weakest first, the order a review quiz follows."
+        empty="No estimates yet. They start with your first result on a skill."
+        style={styles.section}
+      />
 
       <View style={styles.section}>
         <SectionHeader title="Quiz History" count={quizzes.length || undefined} />

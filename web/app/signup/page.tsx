@@ -246,13 +246,13 @@ export default function ContactUsPage() {
               {[
                 {
                   title: "Adaptive learning paths",
-                  description: "Patient cases that adjust to each student's performance",
+                  description: "Quizzes that adjust to each student's performance",
                   delay: "400ms",
                   icon: faBolt,
                 },
                 {
                   title: "ML-driven assessment",
-                  description: "Objective, consistent competency scoring on every attempt",
+                  description: "Flags who may need help and tracks mastery of every skill",
                   delay: "500ms",
                   icon: faChartColumn,
                 },

@@ -17,6 +17,7 @@ import {
   faClipboardCheck,
   faUserGraduate,
   faBookMedical,
+  faBrain,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   apiFetch,
@@ -29,6 +30,7 @@ import type { Section } from "../../lib/api";
 import { usePageData } from "../../lib/use-page-data";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
+import { CohortMasteryBody, useCohortMastery } from "../../components/SkillMastery";
 import { PodiumLeaderboard } from "../../instructor/analytics/Leaderboard";
 import ActivityBreakdown from "../../instructor/analytics/ActivityBreakdown";
 import { CourseBarChart } from "../../instructor/analytics/CoursePerformance";
@@ -832,6 +834,8 @@ export default function AdminAnalyticsClient() {
     return { roleCounts, rooms };
   });
 
+  const mastery = useCohortMastery(sectionIds);
+
   const summary = analytics?.summary ?? null;
   const roleCounts = live?.roleCounts ?? { student: 0, faculty: 0, admin: 0 };
   const allRooms = live?.rooms;
@@ -1005,6 +1009,17 @@ export default function AdminAnalyticsClient() {
               )}
             </Panel>
           </div>
+
+          {/* A student's whole record, so the range doesn't move it. */}
+          <Panel className="mb-6">
+            <CardHeading
+              icon={faBrain}
+              title="Skill Mastery (BKT)"
+              subtitle="Bayesian Knowledge Tracing: the average chance your students know each skill, from quizzes, Patient Cases and Return Demonstrations. Weakest first."
+              tag={<ScopeTag label="Whole record" />}
+            />
+            <CohortMasteryBody data={mastery.data} loading={mastery.loading} />
+          </Panel>
 
           {/* Top students beside the room bed board; stacked below xl */}
           <div className="mb-6 grid grid-cols-1 gap-6 xl:grid-cols-2">

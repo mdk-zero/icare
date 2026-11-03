@@ -1,35 +1,39 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { attemptLimit } from './quiz-attempts';
 
 /**
- * Practice runs past a quiz's attempt limit (migration 083).
+ * Review quizzes past a quiz's attempt limit (migration 083). The code and the
+ * database call them practice runs; students and instructors see "review quiz".
  *
- * The instructor's limit buys graded tries; the best of those is the grade.
- * Once they are used up a student can keep taking the quiz as practice: the
- * paper is still dealt by the adaptive selection, and its results steer the
- * next one, but a finished practice run is stored as 'practiced' rather than
- * 'submitted'. Every grade, average, report and warehouse function reads
- * 'submitted' only, so practice never moves any of them.
+ * The instructor's limit buys graded tries; the average of those is the grade.
+ * Once they are used up the quiz opens as a review: only the questions the
+ * student got wrong the last time they answered them, weakest skills first by
+ * BKT mastery (assessment-selection.ts). A finished review is stored as
+ * 'practiced' rather than 'submitted'. Every grade, average, report and
+ * warehouse function reads 'submitted' only, so a review never moves any of
+ * them.
  *
- * Whether a run is practice is decided by the same rule when it is dealt and
- * again when it closes, so an instructor granting another try mid-run turns
- * that run into a graded one.
+ * Whether a run is a review is decided by the same rule when it is dealt and
+ * again when it closes, so an instructor granting another try mid-run turns a
+ * full paper into a graded one. A shorter review paper stays ungraded (the
+ * submit route), and the granted try applies to the next run.
  */
 
-/** A finished practice run. Graded readers never see it. */
+/** A finished review quiz. Graded readers never see it. */
 export const PRACTICE_STATUS = 'practiced';
 
 /** Graded tries that have run their course; the limit counts these. */
 export const GRADED_SPENT_STATUSES = ['submitted', 'expired'];
 
-/** With the graded tries used up, the next run is practice. Unlimited never is. */
-export function isPracticeRun(spent: number, maxAttempts: number | null): boolean {
-  return maxAttempts !== null && spent >= maxAttempts;
+/** With the graded tries used up, the next run is a review. */
+export function isPracticeRun(spent: number, maxAttempts: number): boolean {
+  return spent >= maxAttempts;
 }
 
 export interface AttemptLimit {
   assignment: { id: string; status: string; max_attempts: number | null } | null;
-  /** A per-student override beats the quiz default; null at both levels is unlimited. */
-  maxAttempts: number | null;
+  /** A per-student override beats the quiz default. */
+  maxAttempts: number;
   /** Graded tries used. */
   spent: number;
 }
@@ -66,7 +70,7 @@ export async function loadAttemptLimit(
 
   return {
     assignment: assignment ?? null,
-    maxAttempts: assignment?.max_attempts ?? quizMaxAttempts ?? null,
+    maxAttempts: attemptLimit(assignment?.max_attempts, quizMaxAttempts),
     spent: count ?? 0,
   };
 }

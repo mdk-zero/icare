@@ -21,8 +21,9 @@ function formatTimeLimit(seconds: number | null): string {
 
 /**
  * A quiz before it's opened: what it is, and what can be done with it. One
- * still to take offers Start quiz; one already taken shows the best score and
- * offers another try (while tries remain) and flashcards to study from.
+ * still to take offers Start quiz; one already taken shows the grade and offers
+ * another try (while tries remain), then a review quiz, and flashcards to study
+ * from.
  */
 export default function QuizInfoScreen() {
   const { id } = useLocalSearchParams();
@@ -97,20 +98,22 @@ export default function QuizInfoScreen() {
 
   const done = quiz.attempt_count > 0;
   const exhausted = quiz.attempts_remaining === 0;
-  // Graded tries used up: the quiz stays open as ungraded practice (when the
-  // server offers it), otherwise it is closed.
+  // Graded tries used up: the quiz stays open as an ungraded review of what the
+  // student got wrong (when the server offers it), otherwise it is closed.
   const canPractice = exhausted && !!quiz.practice_available;
   const blocked = exhausted && !canPractice;
   const practiceRuns = quiz.practice_count ?? 0;
+  const reviewCount = quiz.review_question_count ?? 0;
   const due = quiz.assignment?.deadline
     ? new Date(quiz.assignment.deadline).toLocaleDateString([], { month: 'short', day: 'numeric' })
     : null;
-  const score = quiz.best_score;
+  const score = quiz.grade;
   const passed = score !== null && score >= PASSING_SCORE;
   const practiceNote = canPractice ? (
     <Text style={styles.practiceNote}>
-      Your graded {quiz.max_attempts === 1 ? 'try is' : 'tries are'} used up. Practice runs focus on what you
-      missed and won&apos;t change {score !== null ? `your score of ${Math.round(score)}%` : 'your grade'}.
+      Your graded {quiz.max_attempts === 1 ? 'try is' : 'tries are'} used up. This review quiz has only the{' '}
+      {reviewCount === 1 ? 'question' : `${reviewCount} questions`} you got wrong, weakest skills first. It
+      won&apos;t change {score !== null ? `your grade of ${Math.round(score)}%` : 'your grade'}.
     </Text>
   ) : null;
 
@@ -127,7 +130,7 @@ export default function QuizInfoScreen() {
   );
 
   const stats = [
-    { label: 'Questions', value: String(quiz.question_count) },
+    { label: 'Questions', value: String(canPractice && reviewCount > 0 ? reviewCount : quiz.question_count) },
     { label: 'Time limit', value: formatTimeLimit(quiz.time_limit_seconds) },
     {
       label: quiz.max_attempts !== null ? 'Tries used' : 'Tries · no limit',
@@ -174,7 +177,7 @@ export default function QuizInfoScreen() {
         <View style={styles.card}>
           <View style={styles.scoreRow}>
             {score !== null ? (
-              <ScoreRing score={score} size={84} stroke={8} color={accuracyAccent(Accent, score).fg} label="best" />
+              <ScoreRing score={score} size={84} stroke={8} color={accuracyAccent(Accent, score).fg} label="grade" />
             ) : null}
             <View style={styles.scoreText}>
               <Text style={styles.scoreTitle}>
@@ -189,7 +192,7 @@ export default function QuizInfoScreen() {
                     })}`
                   : ''}
                 {practiceRuns > 0
-                  ? ` · ${practiceRuns} practice ${practiceRuns === 1 ? 'run' : 'runs'}${
+                  ? ` · ${practiceRuns} review ${practiceRuns === 1 ? 'quiz' : 'quizzes'}${
                       quiz.last_practice_score != null ? `, last ${Math.round(quiz.last_practice_score)}%` : ''
                     }`
                   : ''}
@@ -215,13 +218,15 @@ export default function QuizInfoScreen() {
 
           {strictRules}
           <PrimaryButton
-            title={blocked ? 'No tries left' : canPractice ? 'Practice again' : 'Take it again'}
+            title={blocked ? 'Nothing to review' : canPractice ? 'Take review quiz' : 'Take it again'}
             onPress={() => router.push(`/quiz/${quiz.id}`)}
             disabled={blocked}
             size="lg"
           />
           {blocked ? (
-            <Text style={styles.note}>Ask your instructor if you need another try.</Text>
+            <Text style={styles.note}>
+              You have no wrong answers left on this quiz. Ask your instructor if you need another try.
+            </Text>
           ) : null}
           {practiceNote}
         </View>
@@ -238,11 +243,14 @@ export default function QuizInfoScreen() {
           </View>
           {strictRules}
           <PrimaryButton
-            title={blocked ? 'No tries left' : canPractice ? 'Practice quiz' : 'Start quiz'}
+            title={blocked ? 'No tries left' : canPractice ? 'Take review quiz' : 'Start quiz'}
             onPress={() => router.push(`/quiz/${quiz.id}`)}
             disabled={blocked}
             size="lg"
           />
+          {blocked ? (
+            <Text style={styles.note}>Ask your instructor if you need another try.</Text>
+          ) : null}
           {practiceNote}
         </View>
       )}
