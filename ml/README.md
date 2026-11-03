@@ -1,23 +1,28 @@
 # iCARE++ ML service
 
 FastAPI service for **at-risk performance prediction** (Random Forest + Logistic
-Regression, Objective 2.1), **Bayesian Knowledge Tracing** for the adaptive
-quiz review, and the **content-based quiz recommender** (Objective 2.2). It reads the same Supabase project the web app uses (service
-role over PostgREST) and writes `performance_predictions`,
-`learning_recommendations`, `bkt_parameters`, `ml_models`, and `notifications`.
+Regression, Objective 2.1) and **Bayesian Knowledge Tracing** (Objective 2.2),
+which drives the adaptive quiz review and what the mobile Library puts in front
+of each student. It reads the same Supabase project the web app uses (service
+role over PostgREST) and writes `performance_predictions`, `bkt_parameters`,
+`ml_models`, and `notifications`.
 
-Besides the nightly whole-cohort run, the web app re-scores a single student
-in the background (`/predict/at-risk` then `/recommend/refresh`, scoped to
-them) whenever they hand in a graded quiz or a Patient Case / Return Demo, and
-whenever an instructor finalizes one of those grades. The Assess button is for
-running it by hand.
+Besides the nightly whole-cohort run, the web app re-scores a single student's
+risk in the background (`/predict/at-risk`, scoped to them) whenever they hand
+in a graded quiz or a Patient Case / Return Demo, and whenever an instructor
+finalizes one of those grades. The Assess button is for running it by hand.
 
 The two halves form one pipeline. The at-risk models decide **who** needs
-intervention. Knowledge tracing and the recommender decide **what** each
-student practises: BKT estimates mastery of every Taylor's skill from quizzes,
-Patient Cases and Return Demonstrations, the web app's review quiz brings back the questions a student got wrong with the
-least-mastered skills first, and the recommender points to other quizzes on
-the weakest competencies.
+intervention. Knowledge tracing decides **what** each student practises: BKT
+estimates mastery of every Taylor's skill from quizzes, Patient Cases and
+Return Demonstrations; the web app's review quiz brings back the questions a
+student got wrong with the least-mastered skills first, and the Library lists
+the skills under 95% mastery with their materials and study tips.
+
+The content-based (TF-IDF) quiz recommender this service used to run is gone:
+suggesting more quizzes is the adaptive review's job now, driven by the same
+mastery estimates. `learning_recommendations` keeps its old rows but is no
+longer written.
 
 ## Run
 
@@ -53,7 +58,7 @@ On startup the service seeds `ml_models` with the shipped OULAD baseline
 artifacts (`models/*-oulad.joblib`) as **active** models — the manuscript's
 pre-trained-baseline clause — so predictions work before any local training
 data exists. A nightly in-process scheduler (`ML_SCHEDULE_TIME`, default 03:00)
-runs batch predictions and refreshes recommendations.
+runs batch predictions, refits BKT and retrains on iCARE data when there is enough.
 
 ## API
 
@@ -65,9 +70,9 @@ All endpoints except `/health` require header `X-ICARE-ML-KEY: $ML_SERVICE_SECRE
 | `GET /health` | liveness |
 | `GET /models` | registry contents |
 | `POST /models/{id}/promote` | staging → active (retires the previous active of that kind) |
+| `POST /models/retrain` `{force?}` | retrain both at-risk models on iCARE data and register them as **staging** (artifacts in Supabase Storage, web migration 090); answers `{"skipped": ...}` until 30 labeled students, or when none were labeled since the last retrain |
 | `POST /predict/at-risk` `{student_ids?}` | batch-score cohort, write `performance_predictions`, notify roster faculty on new at-risk transitions |
-| `POST /recommend/refresh` `{student_ids?, k?}` | refit `bkt_parameters` (whole-cohort runs only), then recompute + persist `learning_recommendations` |
-| `GET /recommend/{student_id}?k=5` | ad-hoc ranking (not persisted) |
+| `POST /recommend/refresh` `{student_ids?}` | refit `bkt_parameters` (whole-cohort runs only; a scoped run is a no-op). The path is kept from the TF-IDF days so callers didn't change |
 
 Both `POST` jobs answer with plain JSON by default. With
 `Accept: application/x-ndjson` they stream progress instead: `{"done", "total"}`
@@ -115,15 +120,15 @@ app asks for the stream to show a percentage; the nightly workflow doesn't.
   holdout, so its metrics are stratified k-fold cross-validated (up to 5
   folds, out-of-fold predictions, `f1_fold_std` for the spread) and the
   shipped model is fit on every labeled student. Prefer the logistic
-  regression unless the forest's scores clearly beat it.
+  regression unless the forest's scores clearly beat it. The nightly run does
+  this on its own through `POST /models/retrain` once there are enough labeled
+  students, and again whenever more are labeled; the artifacts go to the
+  `ml-models` Storage bucket (the free host's disk doesn't survive a restart)
+  and stay `staging` until an admin promotes them.
 - **iCARE evaluation** — `python -m eval.icare_eval` scores the models
   against those same outcomes: raw, as deployed (participation-weighted),
   and the latest stored predictions faculty saw. Until real grades replace
   the seeded history, its numbers only show the pipeline works.
-- **Recommender (Phase 3.6)** — TF-IDF over each published assessment's
-  question-competency tags, matched against a per-student weakness profile
-  (answer accuracy blended with faculty-validated scores; unexplored
-  competencies get a neutral exploration weight). Computed live; registered in `ml_models` for auditability.
 - **Bayesian Knowledge Tracing** (`app/bkt.py`) — one two-state hidden
   Markov model per Taylor's skill, over each student's answers in time order.
   An answer is a quiz answer (graded attempts and review quizzes) or a skill's
@@ -162,15 +167,12 @@ app asks for the stream to show a percentage; the nightly workflow doesn't.
 
 ```bash
 python -m eval.predict_eval                 # Model Accuracy Report (holdout)
-python -m eval.recsys_eval --ground-truth faculty_truth.csv --k 5
 python -m eval.bkt_eval                     # BKT next-answer prediction, live answers
 python -m eval.bkt_eval --csv as.csv --student-col user_id --skill-col skill_name \
     --order-col order_id --label "ASSISTments 2009-2010"   # public benchmark
 ```
 
-All write JSON + Markdown tables to `eval/out/`. `recsys_eval` expects a
-faculty ground-truth CSV (`student_id,assessment_id`) collected during the
-soft launch and reports Precision@K, Recall@K, and Hit Rate@K.
+All write JSON + Markdown tables to `eval/out/`.
 
 `bkt_eval` judges knowledge tracing by how well it predicts a student's next
 answer on a skill. It uses cross-validation by student, fitting on the other

@@ -573,14 +573,13 @@ export default function StudentManagementClient() {
 
     const scored = Number(predictions.result?.scored ?? 0);
     const atRisk = Number(predictions.result?.at_risk ?? 0);
-    const recs = Number(recommendations.result?.recommendations ?? 0);
     const bkt = recommendations.result?.bkt as { written?: boolean; skills?: number } | undefined;
     const refit = bkt?.written
       ? `Refit skill mastery (BKT) on ${bkt.skills} skill${bkt.skills === 1 ? "" : "s"}. `
       : "";
     toast(
-      `Scored ${scored} student${scored === 1 ? "" : "s"} (${atRisk} low performing) and wrote ${recs} ` +
-        `recommendation${recs === 1 ? "" : "s"}. ${refit}Run Refresh Warehouse on Analytics to fold the ` +
+      `Scored ${scored} student${scored === 1 ? "" : "s"} (${atRisk} low performing). ` +
+        `${refit}Run Refresh Warehouse on Analytics to fold the ` +
         "new predictions into the charts.",
       "success",
       ML_TOAST_MS,
@@ -810,7 +809,7 @@ export default function StudentManagementClient() {
           disabled: runningMl,
           label: mlRun
             ? mlRunLabel(mlRun, true)
-            : "Run ML Jobs — score every student for risk, refit skill mastery (BKT) and refresh their quiz recommendations",
+            : "Run ML Jobs — score every student for risk and refit skill mastery (BKT)",
           below: mlRun && <MlRunProgress run={mlRun} wholeCohort />,
         }}
       />

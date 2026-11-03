@@ -1,7 +1,10 @@
 """Model registry (Phase 3.4): artifact loading, baseline seeding, promotion.
 
-Artifacts are joblib bundles stored under ml/models/ and referenced from
-public.ml_models.artifact_url as a path relative to the ml/ root. A bundle is:
+Artifacts are joblib bundles referenced from public.ml_models.artifact_url:
+either a path relative to the ml/ root (the shipped OULAD baselines, under
+ml/models/), or "storage:<bucket>/<key>" for a model retrained on iCARE data,
+kept in Supabase Storage because the host's own disk doesn't survive a
+restart. A storage artifact is downloaded once and cached. A bundle is:
 
     {
       "kind": "random_forest" | "logistic_regression",
@@ -16,6 +19,7 @@ public.ml_models.artifact_url as a path relative to the ml/ root. A bundle is:
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +31,24 @@ from .db import Db
 MODEL_KINDS = ("random_forest", "logistic_regression")
 
 
+STORAGE_PREFIX = "storage:"
+_CACHE_DIR = Path(tempfile.gettempdir()) / "icare-ml-models"
+
+
 def load_artifact(relative_path: str) -> dict[str, Any]:
+    if relative_path.startswith(STORAGE_PREFIX):
+        bucket, _, key = relative_path[len(STORAGE_PREFIX):].partition("/")
+        if not bucket or not key or ".." in key:
+            raise ValueError(f"bad storage artifact: {relative_path}")
+        cached = _CACHE_DIR / bucket / key
+        if not cached.exists():
+            cached.parent.mkdir(parents=True, exist_ok=True)
+            db = Db()
+            try:
+                cached.write_bytes(db.download_object(bucket, key))
+            finally:
+                db.close()
+        return joblib.load(cached)
     path = (ML_ROOT / relative_path).resolve()
     if not str(path).startswith(str(ML_ROOT)):
         raise ValueError(f"artifact path escapes ml root: {relative_path}")
@@ -108,29 +129,3 @@ def ensure_baselines_registered(db: Db) -> list[str]:
             )
         registered.append(kind)
     return registered
-
-
-def ensure_recommender_registered(db: Db) -> str:
-    """The content-based recommender has no fitted artifact (it is computed
-    from live data on every run) but still gets a registry row so
-    learning_recommendations.model_id stays auditable."""
-    rows = db.select(
-        "ml_models", "id",
-        [("kind", "eq", "recommender"), ("status", "eq", "active")],
-        limit=1,
-    )
-    if rows:
-        return rows[0]["id"]
-    created = db.insert(
-        "ml_models",
-        [{
-            "name": "Content-based quiz recommender (TF-IDF over competency tags)",
-            "kind": "recommender",
-            "version": "1.0.0",
-            "status": "active",
-            "metrics": {},
-            "is_baseline": False,
-        }],
-        returning=True,
-    )
-    return created[0]["id"]

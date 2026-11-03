@@ -1,7 +1,7 @@
 """Step counting for the batch jobs, so a caller can show how far a run has got.
 
 A job's work is partly fixed (the table loads every run makes) and partly per
-student (the recommender rewrites each student's list separately), and the
+student (predictions are written one student at a time), and the
 student count is only known once the roster has been read. `students()` adds
 that part before the first step is reported, so the total a caller sees never
 grows mid-run and the percentage it derives never runs backwards.

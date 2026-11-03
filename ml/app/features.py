@@ -1,7 +1,8 @@
 """Per-student feature extraction from the iCARE++ OLTP tables (Phase 3.2).
 
-Produces one row per student in the EXTENDED_FEATURES space plus side
-channels the recommender needs (per-competency accuracy, student level).
+Produces one row per student in the EXTENDED_FEATURES space, plus the side
+channels behind it (per-competency accuracy, which weakest_competency_accuracy
+is taken from; participation).
 Volumes are capstone-sized, so everything is fetched once and aggregated
 in memory rather than pushed into SQL.
 """

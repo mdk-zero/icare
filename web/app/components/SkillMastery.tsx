@@ -215,6 +215,34 @@ export function MasteryBrief({ skills, onOpen }: { skills: SkillMastery[] | null
   );
 }
 
+/** A class average under this reads as a skill to teach again. */
+const RETEACH_BELOW = 0.6;
+/** How many to name: the first few are where a lesson does the most. */
+const RETEACH_SHOWN = 3;
+
+/** The class's weakest skills, named so an instructor knows what to teach again. */
+function ReteachNote({ skills }: { skills: CohortMastery["skills"] }) {
+  const weak = [...skills]
+    .filter((s) => s.students > 1 && s.average_mastery < RETEACH_BELOW)
+    .sort((a, b) => a.average_mastery - b.average_mastery)
+    .slice(0, RETEACH_SHOWN);
+  if (weak.length === 0) return null;
+  return (
+    <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+      <p className="font-semibold">Re-teach first</p>
+      <ul className="mt-1 space-y-0.5">
+        {weak.map((s) => (
+          <li key={s.skill_id}>
+            <span className="tabular-nums text-amber-700">Skill {s.skill_id}</span> {s.title}: class average{" "}
+            <span className="font-semibold tabular-nums">{masteryPercent(s.average_mastery)}%</span>,{" "}
+            {s.mastered} of {s.students} mastered
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** The class's skills, weakest first, for inside a card on Analytics. */
 export function CohortMasteryBody({ data, loading }: { data: CohortMastery | null | undefined; loading: boolean }) {
   if (loading) return <SkillMasteryChartSkeleton rows={COHORT_ROWS} />;
@@ -241,6 +269,7 @@ export function CohortMasteryBody({ data, loading }: { data: CohortMastery | nul
         </p>
         <MasteryChartKey spread={hasSpread(data.skills)} />
       </div>
+      <ReteachNote skills={data.skills} />
       <SkillMasteryChart skills={data.skills} />
       <SourceNote skills={data.skills} />
     </>
