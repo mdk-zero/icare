@@ -1,0 +1,10 @@
+{
+  "name": "@faker-js/faker",
+  "version": "0.0.0-stub",
+  "private": true,
+  "description": "Stands in for faker under Newman. See locale/en.js.",
+  "exports": {
+    "./locale/en": "./locale/en.js",
+    "./package.json": "./package.json"
+  }
+}
