@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, type SelectHTMLAttributes } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPlus,
@@ -133,7 +133,9 @@ export default function FacultyAssessmentsClient() {
   const publishedCount = assessments.filter((a) => a.is_published).length;
   const bankSize = assessments.reduce((sum, a) => sum + a.question_count, 0);
   const [busy, setBusy] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  // ?q= opens the list already searched: a column link on a course's Progress tab.
+  const searchParams = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") ?? "");
   const [statusFilter, setStatusFilter] = useState<"all" | "published" | "draft">("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sectionFilter, setSectionFilter] = useState("all");

@@ -16,8 +16,7 @@ class Settings:
     risk_threshold: float
     primary_model_kind: str
     schedule_enabled: bool
-    schedule_time: str  # "HH:MM", 24h
-    recommend_k: int
+    schedule_time: str  # "HH:MM", 24h
     models_dir: Path
 
 
@@ -39,7 +38,6 @@ def get_settings() -> Settings:
         risk_threshold=float(os.environ.get("ML_RISK_THRESHOLD", "0.5")),
         primary_model_kind=os.environ.get("ML_PRIMARY_MODEL_KIND", "random_forest"),
         schedule_enabled=os.environ.get("ML_SCHEDULE_ENABLED", "true").lower() == "true",
-        schedule_time=os.environ.get("ML_SCHEDULE_TIME", "03:00"),
-        recommend_k=int(os.environ.get("ML_RECOMMEND_K", "5")),
+        schedule_time=os.environ.get("ML_SCHEDULE_TIME", "03:00"),
         models_dir=ML_ROOT / "models",
     )

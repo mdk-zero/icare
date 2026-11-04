@@ -9,6 +9,7 @@ import { courseDb, linkActivityCourses } from "./courses";
 import { listSkillSummaries } from "../fixtures/skills";
 import { parseDeadline } from "@/app/lib/deadline-input";
 import { quizGrade } from "@/app/lib/quiz-attempts";
+import { criteriaWeights, PROVISIONAL_CRITERION_WEIGHT } from "@/app/lib/criteria-weights";
 import { byName, manageableSections, sectionName, teamLabel, visibleSections, visibleStudents } from "./scope";
 
 /** Quizzes (skill assessments): the builder, publishing, assigning and results. */
@@ -35,6 +36,15 @@ const NOT_YOURS = () => json({ error: "Only the instructor who created this asse
 
 function questionsOf(ctx: Ctx, quizId: string) {
   return ctx.db.questions.filter((q) => q.assessment_id === quizId).sort((a, b) => a.position - b.position);
+}
+
+/** What migration 089's trigger does: each criterion's weight is its share of the questions. */
+function reweigh(ctx: Ctx, quizId: string) {
+  const criteria = ctx.db.criteria.filter((c) => c.assessment_id === quizId).sort((a, b) => a.sort_order - b.sort_order);
+  const weights = criteriaWeights(criteria.map((c) => ctx.db.questions.filter((q) => q.criteria_id === c.id).length));
+  criteria.forEach((c, i) => {
+    c.weight = weights[i];
+  });
 }
 
 /** lib/assessment-validation.ts assessmentPublishBlockers, over the demo tables. */
@@ -286,9 +296,6 @@ route("POST", "/api/faculty/assessments/:id/criteria", (ctx) => {
   if (!canEdit(ctx, quiz)) return NOT_YOURS();
   const name = typeof body?.name === "string" ? body.name.trim() : "";
   if (!name) return json({ error: "Criteria name is required" }, 400);
-  if (typeof body?.weight !== "number" || body.weight <= 0 || body.weight > 100) {
-    return json({ error: "Weight must be between 0 and 100" }, 400);
-  }
   if (typeof body?.competency_id !== "string" || !body.competency_id.trim()) {
     return json({ error: "A skill area is required" }, 400);
   }
@@ -297,7 +304,7 @@ route("POST", "/api/faculty/assessments/:id/criteria", (ctx) => {
     id: newId(),
     assessment_id: quiz.id,
     name,
-    weight: body.weight,
+    weight: PROVISIONAL_CRITERION_WEIGHT,
     competency_id: body.competency_id,
     skill_id: typeof body?.skill_id === "string" && body.skill_id ? body.skill_id : null,
     // After the last one, as the server does.
@@ -306,6 +313,7 @@ route("POST", "/api/faculty/assessments/:id/criteria", (ctx) => {
     created_at: new Date().toISOString(),
   };
   db.criteria.push(criterion);
+  reweigh(ctx, quiz.id);
   return json({ criteria: criterion }, 201);
 });
 
@@ -317,7 +325,6 @@ route("PATCH", "/api/faculty/assessment-criteria/:id", (ctx) => {
   const quiz = db.quizzes.find((q) => q.id === c.assessment_id);
   if (quiz && !canEdit(ctx, quiz)) return NOT_YOURS();
   if (typeof body?.name === "string" && body.name.trim()) c.name = body.name.trim();
-  if (typeof body?.weight === "number") c.weight = body.weight;
   if (typeof body?.competency_id === "string") c.competency_id = body.competency_id;
   if (typeof body?.sort_order === "number") c.sort_order = body.sort_order;
   if (body?.min_questions !== undefined) c.min_questions = Number(body.min_questions) || 0;
@@ -333,6 +340,7 @@ route("DELETE", "/api/faculty/assessment-criteria/:id", (ctx) => {
   if (quiz && !canEdit(ctx, quiz)) return NOT_YOURS();
   db.criteria = db.criteria.filter((x) => x.id !== c.id);
   for (const q of db.questions) if (q.criteria_id === c.id) q.criteria_id = null;
+  reweigh(ctx, c.assessment_id);
   return { success: true };
 });
 
@@ -380,6 +388,7 @@ route("POST", "/api/faculty/assessments/:id/questions", (ctx) => {
     ...parsed.question!,
   };
   db.questions.push(question);
+  reweigh(ctx, quiz.id);
   return json({ question }, 201);
 });
 
@@ -393,6 +402,7 @@ route("PATCH", "/api/faculty/questions/:id", (ctx) => {
   for (const key of ["content", "options", "correct_index", "question_type", "points", "explanation", "criteria_id", "competency_ids", "skill_id", "position"] as const) {
     if (body && key in body) (q as unknown as Record<string, unknown>)[key] = body[key];
   }
+  reweigh(ctx, q.assessment_id);
   return { ok: true };
 });
 
@@ -404,6 +414,7 @@ route("DELETE", "/api/faculty/questions/:id", (ctx) => {
   const quiz = db.quizzes.find((x) => x.id === q.assessment_id);
   if (quiz && !canEdit(ctx, quiz)) return NOT_YOURS();
   db.questions = db.questions.filter((x) => x.id !== q.id);
+  reweigh(ctx, q.assessment_id);
   return { ok: true };
 });
 
@@ -452,6 +463,7 @@ route("POST", "/api/faculty/assessments/:id/questions/generate-from-lesson", asy
       competency_ids: [],
     });
   });
+  reweigh(ctx, quiz.id);
   return { saved: count };
 });
 

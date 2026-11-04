@@ -36,6 +36,7 @@ import { fetchSections, getCurrentUser, type Section, apiFetch } from "../../../
 import { takeDrafts } from "../draft-handoff";
 import { EcgLoader } from "../../../components/EcgLoader";
 import LiveClock from "../../../components/LiveClock";
+import { criteriaWeights } from "../../../lib/criteria-weights";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -203,7 +204,6 @@ export default function AssessmentQuestionsClient({
   const [criteria, setCriteria] = useState<AssessmentCriteria[]>([]);
   const [competencyAreas, setCompetencyAreas] = useState<CompetencyArea[]>([]);
   const [showCriteriaEditor, setShowCriteriaEditor] = useState(false);
-  const [newCriterionWeight, setNewCriterionWeight] = useState("");
   /** The chapter the new criterion scores (its competency area id). */
   const [newCriterionCompetency, setNewCriterionCompetency] = useState("");
   /** Its skill area: a skill of that chapter, or "" for the whole chapter. */
@@ -768,18 +768,13 @@ export default function AssessmentQuestionsClient({
 
   const addCriteria = async () => {
     const chapter = chapters.find((c) => c.id === newCriterionCompetency);
-    if (!chapter || !newCriterionWeight) {
-      toast("Choose a chapter and its weight");
+    if (!chapter) {
+      toast("Choose a chapter");
       return;
     }
     const skill = chapter.skills.find((sk) => sk.id === newCriterionSkill) ?? null;
     if (criteria.some((c) => c.competency_id === chapter.id && (c.skill_id ?? null) === (skill?.id ?? null))) {
       toast(skill ? `Skill ${skill.id} already has a criterion` : "This chapter already has a whole-chapter criterion");
-      return;
-    }
-    const weight = Number(newCriterionWeight);
-    if (isNaN(weight) || weight <= 0 || weight > 100) {
-      toast("Weight must be between 1 and 100");
       return;
     }
     const progress = loadingToast("Adding the criterion…");
@@ -789,7 +784,6 @@ export default function AssessmentQuestionsClient({
       credentials: "include",
       body: JSON.stringify({
         name: skill ? `${chapterLabel(chapter)} · Skill ${skill.id}` : chapterLabel(chapter),
-        weight,
         competency_id: chapter.id,
         skill_id: skill?.id ?? null,
         sort_order: criteria.length,
@@ -804,7 +798,6 @@ export default function AssessmentQuestionsClient({
     const j = (await res.json()) as { criteria: AssessmentCriteria };
     progress.success(`${j.criteria.name} added`);
     setCriteria((prev) => [...prev, j.criteria]);
-    setNewCriterionWeight("");
     setNewCriterionSkill("");
     setNewCriterionCompetency("");
     setNewCriterionMin("1");
@@ -868,7 +861,6 @@ export default function AssessmentQuestionsClient({
     });
   };
 
-  const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0);
 
   /** Questions each criterion owns, plus the ones nothing owns. */
   const questionsByCriterion = useMemo(() => {
@@ -882,6 +874,12 @@ export default function AssessmentQuestionsClient({
     }
     return { map, unassigned };
   }, [criteria, questions]);
+
+  /** Each criterion's share of the questions, as the database keeps it (089). */
+  const autoWeights = useMemo(() => {
+    const weights = criteriaWeights(criteria.map((c) => questionsByCriterion.map.get(c.id)?.length ?? 0));
+    return new Map(criteria.map((c, i) => [c.id, weights[i]]));
+  }, [criteria, questionsByCriterion]);
 
   const servedTotal = assessment?.total_questions ?? null;
 
@@ -1587,7 +1585,9 @@ export default function AssessmentQuestionsClient({
                   <span className="w-64">Skill area</span>
                   <span className="w-20 text-right" title="Questions written for this criterion so far">Written</span>
                   <span className="w-24 text-right" title="Questions from this criterion every attempt must include">Min. questions</span>
-                  <span className="w-16 text-right">Weight</span>
+                  <span className="w-16 text-right" title="Its share of the questions written, worked out automatically">
+                    Weight
+                  </span>
                   <span className="w-6" />
                 </div>
                 {criteria.map((c, i) => {
@@ -1624,7 +1624,7 @@ export default function AssessmentQuestionsClient({
                         className="w-24 px-2 py-1 text-sm text-right border border-gray-300 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-600/30"
                       />
                       <span className="text-sm font-semibold text-brand-600 w-16 text-right">
-                        {c.weight}%
+                        {autoWeights.get(c.id) ?? 0}%
                       </span>
                       <button
                         onClick={() => deleteCriteria(c.id)}
@@ -1643,15 +1643,13 @@ export default function AssessmentQuestionsClient({
                   <span className={`w-24 text-right ${servedTotal !== null && criteria.reduce((s, c) => s + Math.min(c.min_questions, questionsByCriterion.map.get(c.id)?.length ?? 0), 0) > servedTotal ? "text-red-600" : ""}`}>
                     {criteria.reduce((s, c) => s + Math.min(c.min_questions, questionsByCriterion.map.get(c.id)?.length ?? 0), 0)}
                   </span>
-                  <span className={`w-16 text-right ${totalWeight === 100 ? "text-green-600" : "text-red-600"}`}>
-                    {totalWeight}%
-                  </span>
+                  <span className="w-16 text-right text-green-600">100%</span>
                   <span className="w-6" />
                 </div>
               </div>
             )}
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1.8fr)_minmax(0,0.8fr)_minmax(0,1fr)_auto] sm:items-end">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1.8fr)_minmax(0,1fr)_auto] sm:items-end">
               <label className="block min-w-0">
                 <span className="mb-1 block text-xs font-medium text-gray-600">Chapter</span>
                 <select
@@ -1701,18 +1699,6 @@ export default function AssessmentQuestionsClient({
                 </select>
               </label>
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-gray-600">Weight</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={newCriterionWeight}
-                  onChange={(e) => setNewCriterionWeight(e.target.value)}
-                  placeholder="Weight %"
-                  className={inputClassName}
-                />
-              </label>
-              <label className="block">
                 <span className="mb-1 block text-xs font-medium text-gray-600">Min. questions per criterion</span>
                 <input
                   type="number"
@@ -1735,14 +1721,10 @@ export default function AssessmentQuestionsClient({
               Each criterion is a chapter and one of its skill areas, or the whole chapter.{" "}
               <span className="font-medium text-gray-600">Written</span> is how many questions you have made for it;{" "}
               <span className="font-medium text-gray-600">Min. questions</span> is how many of them every student gets
-              in one attempt.
+              in one attempt. <span className="font-medium text-gray-600">Weight</span> is worked out for you: each
+              criterion&apos;s share of the questions written, so a criterion with more questions counts for more, and the
+              review quiz and skill mastery read the quiz the same way.
             </p>
-
-            {totalWeight !== 100 && criteria.length > 0 && (
-              <p className="text-xs text-red-600">
-                Weights total {totalWeight}% — they should sum to 100%
-              </p>
-            )}
           </fieldset>
         )}
       </div>
@@ -1797,7 +1779,7 @@ export default function AssessmentQuestionsClient({
                         </span>
                         <span className="mt-0.5 block text-xs text-gray-500">
                           {entry.count} question{entry.count === 1 ? "" : "s"}
-                          {c && `, at least ${min} per attempt, ${c.weight}% of the score`}
+                          {c && `, at least ${min} per attempt, ${autoWeights.get(c.id) ?? 0}% of the score`}
                         </span>
                         {short && (
                           <span className="mt-1 block text-xs font-medium text-red-600">

@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -36,7 +37,9 @@ export default function FacultyCasesClient() {
   });
   const presentations = data?.presentations ?? NO_PRESENTATIONS;
 
-  const [search, setSearch] = useState("");
+  // ?q= opens the list already searched: a column link on a course's Progress tab.
+  const searchParams = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

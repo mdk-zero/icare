@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCalendarDay,
@@ -48,7 +48,9 @@ const skillLabel = (s: { id: string; title: string }) =>
  */
 export default function ReturnDemosClient() {
   const router = useRouter();
-  const [search, setSearch] = useState("");
+  // ?q= opens the list already searched: a column link on a course's Progress tab.
+  const searchParams = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const [assignTarget, setAssignTarget] = useState<ReturnDemoSummary | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ReturnDemoSummary | null>(null);
   // The "Who has it" list for one, with each group's date of performance.

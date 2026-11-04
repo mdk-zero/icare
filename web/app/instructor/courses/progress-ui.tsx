@@ -48,6 +48,7 @@ function scorePhrase(requirement: CourseRequirement, item: ItemProgress): string
 /** What a cell says when hovered or read aloud. */
 export function statusText(requirement: CourseRequirement, item: ItemProgress | undefined): string {
   if (!item) return "Not started";
+  if (item.assigned === false) return "Not assigned to this student, so it doesn't count toward their grade";
   const parts: string[] = [];
   if (item.done) parts.push(`Met on ${when(item.done_at)}`);
   else if (requirement.kind === "count") parts.push(`${item.current} of ${item.target} so far`);
@@ -75,6 +76,15 @@ export function ItemStatus({ requirement, item }: { requirement: CourseRequireme
   const scoreText = score === null ? null : `${Math.round(score)}%`;
   // A count with no score to show says how many are done.
   const count = requirement.kind === "count" && item ? `${item.current}/${item.target}` : null;
+
+  // Not given to this student: N/A, not a missing grade.
+  if (item?.assigned === false) {
+    return (
+      <span className="inline-flex h-7 items-center justify-center px-1 text-[11px] font-semibold text-gray-400" aria-label="Not assigned">
+        N/A
+      </span>
+    );
+  }
 
   if (item?.done && item.source === "instructor") {
     return (
@@ -110,6 +120,7 @@ export function ItemStatus({ requirement, item }: { requirement: CourseRequireme
  * Graded work can't be changed here.
  */
 export function canAct(requirement: CourseRequirement, item: ItemProgress | undefined): boolean {
+  if (item?.assigned === false) return false;
   if (entriesOf(item).length > 0 || item?.marked) return true;
   return canEnterScore(requirement, item);
 }

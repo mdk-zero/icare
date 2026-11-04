@@ -56,11 +56,23 @@ jobs:
             -H "X-ICARE-ML-KEY: ${{ secrets.ML_SERVICE_SECRET }}" \
             -d '{}' | tee /dev/stderr
 
-      - name: Refresh recommendations
-        # Runs after prediction so the recommender sees the fresh risk scores.
+      - name: Refit skill mastery (BKT)
+        # The per-skill knowledge-tracing parameters the adaptive review quiz
+        # and the Library read. The path is kept from the TF-IDF days.
         run: |
           curl -sS --fail-with-body --max-time 600 \
             -X POST "${{ secrets.ML_SERVICE_URL }}/recommend/refresh" \
+            -H 'Content-Type: application/json' \
+            -H "X-ICARE-ML-KEY: ${{ secrets.ML_SERVICE_SECRET }}" \
+            -d '{}' | tee /dev/stderr
+
+      - name: Retrain on iCARE data when there is enough
+        # Registers new at-risk models as staging once 30+ students have
+        # finalized grades and some were graded since the last retrain;
+        # otherwise answers {"skipped": ...}. An admin still promotes them.
+        run: |
+          curl -sS --fail-with-body --max-time 600 \
+            -X POST "${{ secrets.ML_SERVICE_URL }}/models/retrain" \
             -H 'Content-Type: application/json' \
             -H "X-ICARE-ML-KEY: ${{ secrets.ML_SERVICE_SECRET }}" \
             -d '{}' | tee /dev/stderr

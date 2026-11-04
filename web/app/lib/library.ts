@@ -2,6 +2,8 @@
 import type { getSupabaseAdmin } from './supabase/server';
 import { getAdminScope } from './admin-scope';
 import { manageableSectionIds } from './teams';
+import { activityOfferings } from './activity-course';
+import { viewerDeanId } from './dean-scope';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -425,3 +427,59 @@ export async function parseMaterialInput(
 }
 
 export const LIBRARY_NEEDS_MIGRATION = 'The Library needs database migration 061. Ask an administrator to apply it.';
+
+/** A published material as the AI study tips describe it. */
+export interface MaterialBrief {
+  id: string;
+  skill_id: string;
+  kind: string;
+  title: string;
+  description: string;
+}
+
+/**
+ * The published materials a student can open on the given skills, by the
+ * same rules as their Library (/api/student/library): their own Dean's, and
+ * for their section or one of their courses. Newest first.
+ */
+export async function visibleMaterialsForSkills(
+  supabase: Supabase,
+  session: { uid: string; role: string },
+  skillIds: readonly string[],
+): Promise<MaterialBrief[]> {
+  if (skillIds.length === 0) return [];
+  const { data: me } = await supabase.from('users').select('section_id, sections!section_id(name)').eq('id', session.uid).single();
+  const section = (me?.sections as unknown as { name?: string } | null)?.name ?? null;
+  const offerings = await studentOfferings(supabase, session.uid, (me?.section_id as string | null) ?? null);
+
+  let query = supabase
+    .from('library_materials')
+    .select('id, skill_id, kind, title, description, target_sections')
+    .eq('status', 'published')
+    .in('skill_id', [...skillIds])
+    .order('published_at', { ascending: false })
+    .limit(200);
+  const deanId = await viewerDeanId(supabase, session);
+  if (deanId) query = query.eq('admin_id', deanId);
+  const { data, error } = await query;
+  if (error) {
+    if (isMissingLibrary(error)) return [];
+    throw error;
+  }
+  const rows = data ?? [];
+  const offeringOf = await activityOfferings(supabase, 'library_materials', rows.map((m) => m.id as string));
+  return rows
+    .filter((m) =>
+      visibleToStudent({ target_sections: m.target_sections as string[] | null }, offeringOf.get(m.id as string) ?? null, {
+        section,
+        offerings,
+      }),
+    )
+    .map((m) => ({
+      id: m.id as string,
+      skill_id: m.skill_id as string,
+      kind: m.kind as string,
+      title: m.title as string,
+      description: (m.description as string | null) ?? '',
+    }));
+}

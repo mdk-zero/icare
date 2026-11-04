@@ -7,11 +7,13 @@ import { ScoreRing } from '@/components/ScoreRing';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useApiData, allCached } from '@/hooks/useApiData';
-import { fetchScenarioAssignments, fetchScenarioTasks } from '@/lib/api';
+import { fetchMySkillMastery, fetchScenarioAssignments, fetchScenarioTasks } from '@/lib/api';
 import { TASK_RATING_BADGE, TASK_RATING_LABEL } from '@/lib/task-ratings';
 
 /** How often an open Return Demonstration re-checks for the instructor's grades. */
 const GRADE_POLL_MS = 8000;
+/** Below this BKT mastery a skill is worth reviewing before the demonstration. */
+const READY_AT = 0.7;
 
 /** "Assessing Body Temperature (Skill 1-1)" → ["Assessing Body Temperature", "Skill 1-1"] */
 function splitSkillTitle(title: string): [string, string | null] {
@@ -40,6 +42,17 @@ export default function ReturnDemoScreen() {
   const taskResult = data?.[1] ?? null;
   const tasks = useMemo(() => taskResult?.tasks ?? [], [taskResult]);
   const completed = (taskResult?.assignment.status ?? assignment?.status) === 'completed';
+  // Readiness: the student's own BKT estimates, read once; a failed read just hides the card.
+  const mastery = useApiData(fetchMySkillMastery);
+  const toReview = useMemo(() => {
+    const bySkill = new Map((mastery.data ?? []).map((m) => [m.skill_id, m.mastery]));
+    return tasks.flatMap((task) => {
+      const [title, skillNo] = splitSkillTitle(task.title);
+      const skillId = skillNo?.replace(/^Skill\s+/, '');
+      const known = skillId ? bySkill.get(skillId) : undefined;
+      return known !== undefined && known < READY_AT ? [{ skillId: skillId as string, title, mastery: known }] : [];
+    });
+  }, [mastery.data, tasks]);
 
   // Grades land as the instructor saves them: keep checking while it's open.
   useFocusEffect(
@@ -106,6 +119,28 @@ export default function ReturnDemoScreen() {
         </Card>
       )}
 
+      {!completed && toReview.length > 0 ? (
+        <Card style={styles.readyCard}>
+          <View style={styles.readyHeader}>
+            <Ionicons name="alert-circle-outline" size={18} color={Accent.amber.fg} />
+            <Text style={styles.readyTitle}>Before you demonstrate</Text>
+          </View>
+          {toReview.map((s) => (
+            <Text key={s.skillId} style={styles.readyLine}>
+              <Text style={styles.readySkill}>{`Skill ${s.skillId}`}</Text>
+              {` ${s.title} is ${Math.round(s.mastery * 100)}% mastered. Review it first.`}
+            </Text>
+          ))}
+          <PrimaryButton
+            title="Study it in the Library"
+            onPress={() => router.push('/library')}
+            size="sm"
+            variant="outline"
+            style={{ marginTop: Spacing.sm }}
+          />
+        </Card>
+      ) : null}
+
       {tasks.length === 0 ? (
         <EmptyState icon="list-outline" message="No skills have been set for this Return Demonstration yet." />
       ) : (
@@ -166,6 +201,11 @@ function createStyles(Palette: ReturnType<typeof useTheme>['Palette'], Type: Ret
     resultText: { flex: 1, fontSize: 13, color: Palette.textSecondary, lineHeight: 19 },
     prepareCard: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, marginBottom: Spacing.lg },
     prepareText: { flex: 1, fontSize: 13, color: Palette.text, lineHeight: 19 },
+    readyCard: { marginBottom: Spacing.lg },
+    readyHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.xs },
+    readyTitle: { fontSize: 15, fontWeight: '700', color: Palette.ink },
+    readyLine: { fontSize: 13, color: Palette.text, lineHeight: 19, marginTop: 4 },
+    readySkill: { fontWeight: '700' },
     skillCard: { marginBottom: Spacing.lg },
     skillHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, marginBottom: Spacing.sm },
     skillNumber: { fontSize: 13, fontWeight: '700', color: Palette.textFaint, fontVariant: ['tabular-nums'], marginTop: 2 },

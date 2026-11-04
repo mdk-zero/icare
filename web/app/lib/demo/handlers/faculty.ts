@@ -873,7 +873,6 @@ export function mlRun(ctx: Ctx, students: ReturnType<typeof myStudents>) {
   const result =
     action === "recommend"
       ? {
-          recommendations: scored.length * 2,
           // As the service does: only a whole-cohort run refits BKT.
           bkt:
             ctx.role === "admin"

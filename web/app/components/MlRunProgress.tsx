@@ -23,8 +23,8 @@ export function mlRunFraction(run: MlRun): number {
 export function mlRunLabel(run: MlRun, wholeCohort = false): string {
   if (run.job === "recommend") {
     return wholeCohort
-      ? "Step 2 of 2 · Refitting skill mastery (BKT) and refreshing quiz recommendations"
-      : "Step 2 of 2 · Refreshing quiz recommendations";
+      ? "Step 2 of 2 · Refitting skill mastery (BKT)"
+      : "Step 2 of 2 · Updating skill mastery";
   }
   // Nothing reported yet: the service is still starting, which on a sleeping
   // free instance can take most of a minute.
