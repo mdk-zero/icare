@@ -88,7 +88,7 @@ function hash(text: string): number {
   return h >>> 0;
 }
 
-interface Profile {
+export interface Profile {
   email: string;
   /** Used only when the student does not exist yet; existing rows are left alone. */
   name: string;
@@ -344,7 +344,7 @@ const PROFILES: Profile[] = [
   },
 ];
 
-interface WorkItem {
+export interface WorkItem {
   scenario: string;
   quiz: string;
 }
@@ -371,9 +371,6 @@ const SECTION_WORK: Record<string, WorkItem[]> = {
   'BSN 1101': [FEVER, DEHYDRATION, POST_OP, HYPERTENSION, ANAEMIA],
   'BSN 1102': [UTI, ASTHMA, CELLULITIS],
 };
-
-/** Every case this seed knows, for clearing old pairs. */
-const CATALOG: WorkItem[] = [FEVER, DEHYDRATION, POST_OP, HYPERTENSION, ANAEMIA, UTI, ASTHMA, CELLULITIS];
 
 /**
  * A group's cases: its section's cycle, started at the group's place among
@@ -517,7 +514,7 @@ const REMARKS: Record<TaskRating, string[]> = {
   needs_practice: ['Missed steps; review the checklist.', 'Needs supervised practice before the next case.'],
 };
 
-async function main() {
+export async function seedHistory(profiles: Profile[], sectionWork: Record<string, WorkItem[]>) {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
@@ -536,7 +533,7 @@ async function main() {
   const existing = new Set((before ?? []).map((r) => r.email));
   const credentials: string[] = [];
 
-  for (const profile of PROFILES) {
+  for (const profile of profiles) {
     if (existing.has(profile.email)) continue;
     const sectionId = sectionByName.get(profile.section);
     if (!sectionId) {
@@ -582,7 +579,7 @@ async function main() {
   // ---- Look up everything this seed refers to by name -------------------
   const { data: students } = await supabase
     .from('users')
-    .select('id, email, name, section_id, sections(name)')
+    .select('id, email, name, section_id, sections!section_id(name)')
     .eq('role', 'student');
 
   const { data: scenarios } = await supabase.from('scenarios').select('id, title');
@@ -597,7 +594,7 @@ async function main() {
   // Strengths and weaknesses are matched to question tags by name, so a name
   // that is not a competency area would silently change nothing.
   const areaNames = new Set(competencyName.values());
-  const unknown = PROFILES.flatMap((p) =>
+  const unknown = profiles.flatMap((p) =>
     [...p.weakAt, ...p.strongAt].filter((name) => !areaNames.has(name)).map((name) => `${p.email}: "${name}"`),
   );
   if (unknown.length > 0) {
@@ -689,7 +686,7 @@ async function main() {
     didCount: number;
   }
   const bySection = new Map<string, Member[]>();
-  for (const profile of PROFILES) {
+  for (const profile of profiles) {
     const student = (students ?? []).find((s) => s.email === profile.email);
     if (!student) {
       console.warn(`  skipped ${profile.email} — no such student`);
@@ -697,13 +694,13 @@ async function main() {
     }
     const sectionName =
       (student as unknown as { sections: { name: string } | null }).sections?.name ?? '';
-    const sectionWork = SECTION_WORK[sectionName];
-    if (!sectionWork) {
+    const ownWork = sectionWork[sectionName];
+    if (!ownWork) {
       console.warn(`  skipped ${profile.email} — section "${sectionName}" has no work defined`);
       continue;
     }
     const group = groupOf.get(student.id) ?? null;
-    const work = group ? groupWork(sectionWork, group.ordinal) : sectionWork;
+    const work = group ? groupWork(ownWork, group.ordinal) : ownWork;
     const members = bySection.get(sectionName) ?? [];
     members.push({
       profile,
@@ -720,7 +717,7 @@ async function main() {
   // Sections share no students and no rows, so they are built side by side —
   // one after another, the term's ~500 sittings take the better part of an hour.
   await Promise.all([...bySection].map(async ([sectionName, members]) => {
-    const work = SECTION_WORK[sectionName];
+    const work = sectionWork[sectionName];
     const blocks = termBlocks(work.length, termStart);
 
     // ---- Clear every catalog pair these students hold -------------------
@@ -732,8 +729,9 @@ async function main() {
     // still in progress (the seed only writes submitted ones). The seed rates
     // every sub-task at exactly the assignment's completed_at, so a rating at
     // any other moment was made in the app.
-    const catalogScenarios = CATALOG.map((i) => scenarioByTitle.get(i.scenario)).filter((x): x is string => !!x);
-    const catalogQuizzes = CATALOG.map((i) => assessmentByTitle.get(i.quiz)).filter((x): x is string => !!x);
+    const catalog = Object.values(sectionWork).flat();
+    const catalogScenarios = catalog.map((i) => scenarioByTitle.get(i.scenario)).filter((x): x is string => !!x);
+    const catalogQuizzes = catalog.map((i) => assessmentByTitle.get(i.quiz)).filter((x): x is string => !!x);
     for (const member of members) {
       const { data: held } = await supabase
         .from('scenario_assignments')
@@ -1110,7 +1108,10 @@ async function main() {
   for (const line of coverage.sort()) console.log(line);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// Run directly. seed-review-accounts.ts calls seedHistory for its own section.
+if (process.argv[1]?.endsWith('seed-student-history.ts')) {
+  seedHistory(PROFILES, SECTION_WORK).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

@@ -108,7 +108,7 @@ function must<T>(res: { data: T; error: { message: string } | null }, what: stri
   return res.data;
 }
 
-interface Teacher {
+export interface Teacher {
   id: string;
   name: string;
   deanId: string;
@@ -148,7 +148,7 @@ async function loadTeachers(): Promise<Teacher[]> {
     .filter((t) => t.sectionIds.length > 0 && deans.some((d) => d.id === t.deanId));
 }
 
-async function ensureTerm(deanId: string, term: (typeof TERMS)[number]): Promise<string> {
+export async function ensureTerm(deanId: string, term: (typeof TERMS)[number]): Promise<string> {
   const found = must(
     await supabase.from('academic_terms').select('id').eq('admin_id', deanId).eq('name', term.name).maybeSingle(),
     'read term',
@@ -337,6 +337,17 @@ async function remove(teachers: Teacher[]) {
   }
 }
 
+/** Both courses for this instructor's sections in this term, with their checklists and some ticks. */
+export async function assignCourses(teacher: Teacher, termId: string) {
+  for (const course of COURSES) {
+    const courseId = await ensureCourse(teacher.deanId, course);
+    const { id, created } = await ensureOffering(courseId, termId, teacher);
+    console.log(`  ${created ? '+' : '='} ${course.code} assigned to ${teacher.name} for ${teacher.sectionNames.join(', ')}`);
+    await seedChecklist(id, course, teacher);
+    await seedTicks(id, course, teacher);
+  }
+}
+
 async function main() {
   const teachers = await loadTeachers();
   if (teachers.length === 0) {
@@ -355,13 +366,7 @@ async function main() {
     const termIds = new Map<string, string>();
     for (const term of TERMS) termIds.set(term.name, await ensureTerm(teacher.deanId, term));
 
-    for (const course of COURSES) {
-      const courseId = await ensureCourse(teacher.deanId, course);
-      const { id, created } = await ensureOffering(courseId, termIds.get(TEACHING_TERM)!, teacher);
-      console.log(`  ${created ? '+' : '='} ${course.code} assigned to ${teacher.name} for ${teacher.sectionNames.join(', ')}`);
-      await seedChecklist(id, course, teacher);
-      await seedTicks(id, course, teacher);
-    }
+    await assignCourses(teacher, termIds.get(TEACHING_TERM)!);
 
     const offerings = must(
       await supabase
@@ -375,7 +380,10 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+// Run directly. seed-review-accounts.ts assigns its own instructor only.
+if (process.argv[1]?.endsWith('seed-courses.ts')) {
+  main().catch((err) => {
+    console.error(err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}

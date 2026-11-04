@@ -24,6 +24,7 @@
     "db:seed:clinical-records": "tsx scripts/seed-clinical-records.ts",
     "db:seed:discharged": "tsx scripts/seed-discharged-patients.ts",
     "db:seed:sections": "tsx scripts/seed-sections.ts",
+    "db:seed:review-accounts": "tsx scripts/seed-review-accounts.ts",
     "test:e2e": "playwright test",
     "test:e2e:report": "node tests/with-report.mjs npx playwright test",
     "test:api": "node tests/api/run.mjs",
