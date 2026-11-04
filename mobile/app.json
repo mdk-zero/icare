@@ -14,7 +14,7 @@
     "scheme": "icaremobile",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "dev.icare.mobile",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -39,7 +39,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/logo-pill.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
@@ -48,7 +48,12 @@
           }
         }
       ],
-      "expo-secure-store",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": false
+        }
+      ],
       "expo-font",
       "expo-image",
       "expo-status-bar",
@@ -62,8 +67,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "iCARE++ needs access to your photos so you can set a profile picture.",
-          "cameraPermission": "iCARE++ needs access to your camera so you can take a profile picture."
+          "photosPermission": "iCARE++ needs access to your photos so you can choose a profile picture or attach an image to a support request.",
+          "cameraPermission": "iCARE++ needs access to your camera so you can take a profile picture or a photo for a support request.",
+          "microphonePermission": false
         }
       ]
     ],
