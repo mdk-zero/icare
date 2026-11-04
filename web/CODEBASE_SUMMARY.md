@@ -135,6 +135,11 @@ The application uses a cohesive teal-based color scheme aligned with the brand c
 - A Dean's Program Chairs: add, edit, change email, delete
 - A Dean only: the page and `/api/admin/program-chairs` refuse a Program Chair (`lib/auth/dean.ts`)
 
+#### `/app/dean/curriculum/page.tsx`
+- The program of study: upload a PDF for AI to read (`lib/ai/curriculum.ts`), then edit its courses, units, pre-requisites and co-requisites
+- A Dean and their Program Chairs share one; the rules and checks are in `lib/curriculum.ts`, the server side in `lib/curriculum-server.ts`
+- Assign Course offers the lab courses (codes ending in L) of the curriculum in use
+
 #### `/app/dean/users/page.tsx`
 - User account management
 - Roles: student, faculty, administrator, super_admin

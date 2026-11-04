@@ -44,7 +44,7 @@ import {
   DeleteImpactModal,
   TermFormModal,
 } from "./modals";
-import { NO_DATA, NO_INSTRUCTORS, loadDeanCourses } from "./load";
+import { NO_DATA, NO_INSTRUCTORS, loadDeanCourses, pickerCatalog } from "./load";
 import CourseBrowser from "./course-browser";
 
 const STATUS_STYLE: Record<TermStatus, string> = {
@@ -90,6 +90,7 @@ export default function CoursesClient() {
 
   const { terms, courses, offerings } = data?.courses ?? NO_DATA;
   const instructors = data?.instructors ?? NO_INSTRUCTORS;
+  const catalog = pickerCatalog(data?.courses);
   const loadError = data?.error ?? null;
 
   const selectedTerm = termFilter ?? defaultTerm(terms);
@@ -225,7 +226,7 @@ export default function CoursesClient() {
       />
 
       {dialog?.kind === "course" && (
-        <CourseFormModal course={dialog.course} courses={courses} onClose={() => setDialog(null)} onSaved={closeAndReload} />
+        <CourseFormModal course={dialog.course} courses={courses} catalog={catalog} onClose={() => setDialog(null)} onSaved={closeAndReload} />
       )}
       {dialog?.kind === "skills" && (
         <CourseSkillsModal
@@ -287,6 +288,7 @@ export default function CoursesClient() {
           courses={courses}
           offerings={offerings}
           instructors={instructors}
+          catalog={catalog}
           onClose={() => setDialog(null)}
           onSaved={async (next) => {
             setWarnings(next);

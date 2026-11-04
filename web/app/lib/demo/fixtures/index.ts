@@ -6,6 +6,7 @@ import { seedWard } from "./ward";
 import { seedTeaching } from "./teaching";
 import { seedSystem } from "./system";
 import { seedCourses } from "./courses";
+import { seedCurriculum } from "./curriculum";
 import { seedReturnDemos } from "./return-demos";
 import { seedSupportRequests } from "./support";
 
@@ -26,6 +27,7 @@ export function seed() {
     ...seedWard(school.rooms, school.patients, people.users),
     ...teaching,
     ...seedCourses({ users: people.users, casePresentations: teaching.casePresentations }),
+    ...seedCurriculum(),
     testRuns: system.testRuns,
     notifications: [
       ...seedNotifications(people.users, school.assignments, school.scenarios),

@@ -1,8 +1,13 @@
 import { apiFetch, fetchDeanCourses, type DeanCourses } from "../../lib/api";
+import { NCM_LAB_COURSES } from "../../lib/bsn-curriculum";
 import type { InstructorOption } from "./modals";
 
 export const NO_DATA: DeanCourses = { terms: [], courses: [], offerings: [] };
 export const NO_INSTRUCTORS: InstructorOption[] = [];
+
+/** What the course pickers offer: the Dean's curriculum in use, or the built-in list. */
+export const pickerCatalog = (courses?: DeanCourses) =>
+  courses?.catalog?.length ? courses.catalog : NCM_LAB_COURSES;
 
 /** The dean's terms, courses and assignments, and the instructors to assign. Shared by the list and Assign Course. */
 export async function loadDeanCourses() {

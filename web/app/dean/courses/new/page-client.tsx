@@ -38,7 +38,7 @@ import {
   labelClass,
   startingTerm,
 } from "../modals";
-import { NO_DATA, NO_INSTRUCTORS, loadDeanCourses } from "../load";
+import { NO_DATA, NO_INSTRUCTORS, loadDeanCourses, pickerCatalog } from "../load";
 
 /**
  * Assign Course, as one top-to-bottom sheet: the term, the course and who
@@ -52,6 +52,8 @@ export default function AssignCourseClient() {
   const { data, loading } = usePageData("admin:courses", loadDeanCourses);
   const { terms, courses, offerings } = data?.courses ?? NO_DATA;
   const instructors = data?.instructors ?? NO_INSTRUCTORS;
+  const catalog = pickerCatalog(data?.courses);
+  const ownCatalog = catalog !== NCM_LAB_COURSES;
 
   // Starts on the current term once the data is in; until then, by today's date.
   const [picked, setPicked] = useState<{ semester: Semester; year: number } | null>(null);
@@ -69,7 +71,7 @@ export default function AssignCourseClient() {
   const name = termName(semester, year);
   const term = findTerm(terms, semester, year);
   const course = courses.find((c) => sameCode(c.code, code)) ?? null;
-  const fromCurriculum = NCM_LAB_COURSES.find((c) => sameCode(c.code, code)) ?? null;
+  const fromCurriculum = catalog.find((c) => sameCode(c.code, code)) ?? null;
   const instructor = instructors.find((f) => f.id === facultyId) ?? null;
   const datesValid = termDates.starts_on !== "" && termDates.ends_on !== "" && termDates.ends_on >= termDates.starts_on;
   const clash =
@@ -83,7 +85,7 @@ export default function AssignCourseClient() {
     setPicked(next);
     setDates(null);
     // The course list follows the semester: a course from the other one is cleared.
-    const inCurriculum = NCM_LAB_COURSES.find((c) => sameCode(c.code, code));
+    const inCurriculum = catalog.find((c) => sameCode(c.code, code));
     const semesterNo = next.semester === "first" ? 1 : next.semester === "second" ? 2 : null;
     if (inCurriculum && semesterNo !== null && inCurriculum.semester !== semesterNo) setCode("");
   };
@@ -185,8 +187,10 @@ export default function AssignCourseClient() {
                 tag={<span className="text-xs font-medium text-red-600">Required</span>}
                 hint={
                   semester === "midterm"
-                    ? "The NCM laboratory courses of the BSN curriculum."
-                    : `The NCM laboratory courses taught in the ${semester === "first" ? "first" : "second"} semester.`
+                    ? ownCatalog
+                      ? "The laboratory courses of your curriculum."
+                      : "The NCM laboratory courses of the BSN curriculum."
+                    : `The ${ownCatalog ? "laboratory courses of your curriculum" : "NCM laboratory courses"} taught in the ${semester === "first" ? "first" : "second"} semester.`
                 }
               >
                 <label htmlFor="assign-course" className="sr-only">
@@ -199,6 +203,7 @@ export default function AssignCourseClient() {
                   disabled={saving}
                   existing={courses}
                   semester={semester}
+                  catalog={catalog}
                 />
                 {code && !course && (
                   <div className="mt-3 space-y-2">

@@ -28,9 +28,11 @@ import {
   currentAcademicYear,
   curriculumGroups,
   defaultTermDates,
+  isLabCourse,
   parseTermName,
   sameCode,
   termName,
+  type CurriculumCourse,
   type Semester,
 } from "../../lib/bsn-curriculum";
 import { COURSE_LIMITS, formatTermDates, termsOverlap } from "../../lib/course-progress";
@@ -49,7 +51,7 @@ export const inputClass =
   "w-full rounded-xl border border-gray-300 bg-surface px-4 py-2.5 text-gray-900 transition-all placeholder:text-gray-400 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-60";
 export const labelClass = "mb-1.5 block text-sm font-semibold text-gray-700";
 
-function ModalFrame({
+export function ModalFrame({
   icon,
   tone = "brand",
   title,
@@ -109,7 +111,7 @@ function ModalFrame({
   );
 }
 
-function ModalActions({
+export function ModalActions({
   busy,
   onClose,
   submitLabel,
@@ -234,7 +236,7 @@ export function TermPicker({
   );
 }
 
-/** The curriculum's NCM lab courses, grouped by year level and semester. */
+/** The curriculum's courses, grouped by year level and semester. */
 export function CoursePicker({
   id,
   value,
@@ -243,6 +245,7 @@ export function CoursePicker({
   taken,
   existing,
   semester,
+  catalog = NCM_LAB_COURSES,
 }: {
   id: string;
   value: string;
@@ -250,17 +253,22 @@ export function CoursePicker({
   disabled?: boolean;
   /** Codes that can't be picked here, shown as already added. */
   taken?: (code: string) => boolean;
-  /** Courses already added that aren't in the curriculum list, so they can be picked too. */
+  /** Lab courses already added that aren't in the curriculum list, so they can be picked too. */
   existing?: { code: string; title: string }[];
   /** Only the curriculum's courses for this semester; all of them for Midterm or when left out. */
   semester?: Semester;
+  /** The Dean's curriculum in use (089); the built-in NCM lab courses without one. */
+  catalog?: readonly CurriculumCourse[];
 }) {
   const semesterNo = semester === "first" ? 1 : semester === "second" ? 2 : null;
-  const others = (existing ?? []).filter((c) => !NCM_LAB_COURSES.some((x) => sameCode(x.code, c.code)));
+  // The one already chosen stays listed, or a course opened from the list would look unpicked.
+  const others = (existing ?? []).filter(
+    (c) => !catalog.some((x) => sameCode(x.code, c.code)) && (isLabCourse(c.code) || sameCode(c.code, value)),
+  );
   return (
     <select id={id} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} className={inputClass}>
       <option value="">Choose a course</option>
-      {curriculumGroups()
+      {curriculumGroups(catalog)
         .map((g) => ({ ...g, courses: g.courses.filter((c) => semesterNo === null || c.semester === semesterNo) }))
         .filter((g) => g.courses.length > 0)
         .map((g) => (
@@ -357,17 +365,19 @@ export function TermDates({
 export function CourseFormModal({
   course,
   courses,
+  catalog = NCM_LAB_COURSES,
   onClose,
   onSaved,
 }: {
   course: CourseSummary | null;
   courses: CourseSummary[];
+  catalog?: readonly CurriculumCourse[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   // A new course is picked from the curriculum; an existing one keeps its code and title.
   const [code, setCode] = useState(course?.code ?? "");
-  const picked = NCM_LAB_COURSES.find((c) => sameCode(c.code, code));
+  const picked = catalog.find((c) => sameCode(c.code, code));
   const title = course?.title ?? picked?.title ?? "";
   const [description, setDescription] = useState(course?.description ?? "");
   const [saving, setSaving] = useState(false);
@@ -400,7 +410,7 @@ export function CourseFormModal({
     <ModalFrame
       icon={faBookMedical}
       title={course ? `Edit ${course.code}` : "New course"}
-      subtitle={course ? course.title : "A course from the BSN curriculum your instructors can teach"}
+      subtitle={course ? course.title : "A laboratory course from your curriculum that your instructors can teach"}
       busy={saving}
       onClose={onClose}
       wide
@@ -416,8 +426,10 @@ export function CourseFormModal({
             <label htmlFor="course-code" className={labelClass}>
               Course <span className="text-rose-500">*</span>
             </label>
-            <CoursePicker id="course-code" value={code} onChange={setCode} disabled={saving} taken={taken} />
-            <p className="mt-1.5 text-xs text-gray-500">The NCM laboratory courses of the BSN curriculum.</p>
+            <CoursePicker id="course-code" value={code} onChange={setCode} disabled={saving} taken={taken} catalog={catalog} />
+            <p className="mt-1.5 text-xs text-gray-500">
+              {catalog === NCM_LAB_COURSES ? "The NCM laboratory courses of the BSN curriculum." : "The laboratory courses of your curriculum."}
+            </p>
           </div>
         )}
         <div>
@@ -554,6 +566,7 @@ export function AssignmentModal({
   courses,
   offerings,
   instructors,
+  catalog = NCM_LAB_COURSES,
   onClose,
   onSaved,
 }: {
@@ -563,6 +576,7 @@ export function AssignmentModal({
   courses: CourseSummary[];
   offerings: CourseOfferingRow[];
   instructors: InstructorOption[];
+  catalog?: readonly CurriculumCourse[];
   onClose: () => void;
   onSaved: (warnings: string[]) => void;
 }) {
@@ -580,7 +594,7 @@ export function AssignmentModal({
   const editTerm = offering ? (terms.find((t) => t.id === offering.term_id) ?? null) : null;
   const term = editTerm ?? findTerm(terms, semester, year);
   const course = courses.find((c) => sameCode(c.code, code)) ?? null;
-  const fromCurriculum = NCM_LAB_COURSES.find((c) => sameCode(c.code, code)) ?? null;
+  const fromCurriculum = catalog.find((c) => sameCode(c.code, code)) ?? null;
   const instructor = instructors.find((f) => f.id === facultyId) ?? null;
   const datesValid = dates.starts_on !== "" && dates.ends_on !== "" && dates.ends_on >= dates.starts_on;
 
@@ -692,7 +706,7 @@ export function AssignmentModal({
               <label htmlFor="assign-course" className={labelClass}>
                 Course <span className="text-rose-500">*</span>
               </label>
-              <CoursePicker id="assign-course" value={code} onChange={setCode} disabled={saving} />
+              <CoursePicker id="assign-course" value={code} onChange={setCode} disabled={saving} catalog={catalog} />
               {code && !course && (
                 <p className="mt-1.5 text-xs text-gray-500">Not in your courses yet: it&apos;s added when you assign.</p>
               )}

@@ -8,6 +8,7 @@ import { endDemo, isDemo } from './demo/session';
 import { holdTabPresence, releaseTabPresence } from './tab-presence';
 import type { ItemProgress, OfferingSummary, RequirementInput, RequirementRow, TermStatus } from './course-progress';
 import type { GradingSplit } from './course-grading';
+import type { CatalogCourse, CurriculumAnalysis, CurriculumCourseInput, CurriculumCourseRow } from './curriculum';
 import type { ScenarioKind } from './scenario-kind';
 import type { WorkKind } from './work-kinds';
 import type { CohortMastery, SkillMastery } from './bkt';
@@ -4349,10 +4350,18 @@ export async function uploadLibraryFile(
   if (ticket.error !== undefined) return { error: ticket.error };
   const { kind, path, uploadUrl } = ticket.data;
 
+  const ok = await putToStorage(uploadUrl, file, onProgress);
+  if (!ok) return { error: 'The upload failed. Check your connection and try again.' };
+  onProgress(1);
+  return { data: { kind, file_path: path, file_name: file.name, file_size: file.size, mime_type: file.type } };
+}
+
+/** Sends a file to a signed Storage URL. XMLHttpRequest, since only it reports upload progress. */
+function putToStorage(uploadUrl: string, file: File, onProgress: (fraction: number) => void): Promise<boolean> {
   const form = new FormData();
   form.append('cacheControl', '3600');
   form.append('', file);
-  const ok = await new Promise<boolean>((resolve) => {
+  return new Promise<boolean>((resolve) => {
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', uploadUrl);
     xhr.setRequestHeader('x-upsert', 'false');
@@ -4363,9 +4372,6 @@ export async function uploadLibraryFile(
     xhr.onerror = () => resolve(false);
     xhr.send(form);
   });
-  if (!ok) return { error: 'The upload failed. Check your connection and try again.' };
-  onProgress(1);
-  return { data: { kind, file_path: path, file_name: file.name, file_size: file.size, mime_type: file.type } };
 }
 
 // ---------------------------------------------------------------------------
@@ -4406,9 +4412,124 @@ export interface DeanCourses {
   terms: AcademicTerm[];
   courses: CourseSummary[];
   offerings: CourseOfferingRow[];
+  /** The lab courses of the curriculum in use (089), which Assign Course offers; null with none. */
+  catalog?: CatalogCourse[] | null;
 }
 
 const courseRequest = caseRequest;
+
+// ---------------------------------------------------------------------------
+// The curriculum (migration 089)
+// ---------------------------------------------------------------------------
+
+export interface CurriculumSummary {
+  id: string;
+  name: string;
+  is_active: boolean;
+  source_name: string | null;
+  has_source: boolean;
+  created_at: string;
+  course_count: number;
+  total_units: number;
+}
+
+export interface CurriculumDetail {
+  curriculum: Omit<CurriculumSummary, 'course_count' | 'total_units'> & { analysis: CurriculumAnalysis };
+  courses: CurriculumCourseRow[];
+}
+
+export const fetchCurricula = () => caseRequest<{ curricula: CurriculumSummary[] }>('/api/admin/curricula');
+
+export const fetchCurriculum = (id: string) => caseRequest<CurriculumDetail>(`/api/admin/curricula/${id}`);
+
+export const createCurriculum = (name: string) =>
+  caseRequest<{ curriculum: { id: string; name: string } }>('/api/admin/curricula', { method: 'POST', body: { name } });
+
+export const updateCurriculum = (id: string, input: { name?: string; is_active?: boolean; dismiss_notes?: boolean }) =>
+  caseRequest<{ success: true }>(`/api/admin/curricula/${id}`, { method: 'PATCH', body: input });
+
+export const deleteCurriculum = (id: string) =>
+  caseRequest<{ success: true }>(`/api/admin/curricula/${id}`, { method: 'DELETE' });
+
+export const fetchCurriculumSourceUrl = (id: string) => caseRequest<{ url: string }>(`/api/admin/curricula/${id}/source`);
+
+export const addCurriculumCourse = (curriculumId: string, input: CurriculumCourseInput) =>
+  caseRequest<{ course: { id: string } }>(`/api/admin/curricula/${curriculumId}/courses`, { method: 'POST', body: input });
+
+export const updateCurriculumCourse = (curriculumId: string, courseId: string, input: CurriculumCourseInput) =>
+  caseRequest<{ success: true }>(`/api/admin/curricula/${curriculumId}/courses/${courseId}`, { method: 'PATCH', body: input });
+
+export const deleteCurriculumCourse = (curriculumId: string, courseId: string) =>
+  caseRequest<{ success: true }>(`/api/admin/curricula/${curriculumId}/courses/${courseId}`, { method: 'DELETE' });
+
+export type CurriculumImportStage = 'uploading' | 'reading' | 'analyzing' | 'saving';
+
+const IMPORT_PERCENT: Record<Exclude<CurriculumImportStage, 'uploading'>, number> = {
+  reading: 35,
+  analyzing: 40,
+  saving: 97,
+};
+
+export type CurriculumImportOutcome = { curriculum_id: string; name: string; course_count: number } | { error: string };
+
+/**
+ * Uploads a curriculum PDF straight to Storage (a request through the API can't
+ * carry a large scan), then asks the server to read it. Sending the file is the
+ * first 30%, by bytes. The answer streams a stage at a time and ends in one
+ * result or error; the wait on the AI has nothing to report, so the page eases
+ * the bar along meanwhile.
+ */
+export async function importCurriculum(
+  file: File,
+  onProgress: (progress: { stage: CurriculumImportStage; percent: number }) => void,
+): Promise<CurriculumImportOutcome> {
+  let path = 'demo';
+  // A demo has no Storage to upload to, and its route reads a sample instead.
+  if (!isDemo()) {
+    const ticket = await caseRequest<{ path: string; uploadUrl: string }>('/api/admin/curricula/upload-url', {
+      method: 'POST',
+      body: { fileName: file.name, size: file.size },
+    });
+    if (ticket.error !== undefined) return { error: ticket.error };
+    path = ticket.data.path;
+    onProgress({ stage: 'uploading', percent: 0 });
+    const ok = await putToStorage(ticket.data.uploadUrl, file, (fraction) =>
+      onProgress({ stage: 'uploading', percent: Math.round(fraction * 30) }),
+    );
+    if (!ok) return { error: 'The upload failed. Check your connection and try again.' };
+  }
+
+  try {
+    const res = await apiFetch('/api/admin/curricula/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ path, file_name: file.name }),
+    });
+    if (!res.ok || !res.body) {
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      return { error: json.error || `Request failed (${res.status})` };
+    }
+    let outcome: CurriculumImportOutcome = { error: 'That curriculum could not be read' };
+    for await (const line of readNdjson(res.body)) {
+      const event = line as
+        | { type: 'progress'; stage: keyof typeof IMPORT_PERCENT }
+        | { type: 'result'; curriculum_id: string; name: string; course_count: number }
+        | { type: 'error'; error: string };
+      if (event.type === 'progress') {
+        onProgress({ stage: event.stage, percent: IMPORT_PERCENT[event.stage] });
+      } else if (event.type === 'result') {
+        outcome = { curriculum_id: event.curriculum_id, name: event.name, course_count: event.course_count };
+      } else if (event.type === 'error') {
+        outcome = { error: event.error };
+      }
+    }
+    return outcome;
+  } catch (err) {
+    console.error('Curriculum import failed', err);
+    return { error: 'The connection dropped while reading that PDF. Check whether it was saved, then try again.' };
+  }
+}
 
 export const fetchDeanCourses = () => courseRequest<DeanCourses>('/api/admin/courses');
 

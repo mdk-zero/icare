@@ -1,5 +1,6 @@
 import { callAnthropic } from './anthropic';
 import { callOpenRouter } from './openrouter';
+import type { AiOptions } from './options';
 import { providerFetch } from './record';
 import { headers } from 'next/headers';
 import { readSession } from '../auth/session';
@@ -11,7 +12,7 @@ function sleep(ms: number): Promise<void> {
 
 export const geminiModel = () => process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
-async function callGemini(prompt: string, attempt = 1): Promise<Record<string, unknown>> {
+async function callGemini(prompt: string, options: AiOptions = {}, attempt = 1): Promise<Record<string, unknown>> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY is not configured');
@@ -19,16 +20,18 @@ async function callGemini(prompt: string, attempt = 1): Promise<Record<string, u
 
   const model = geminiModel();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const document = options.pdf ? [{ inline_data: { mime_type: 'application/pdf', data: options.pdf } }] : [];
 
   const res = await providerFetch('gemini', model, url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    signal: options.signal,
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
+      contents: [{ parts: [...document, { text: prompt }] }],
       generationConfig: {
         responseMimeType: 'application/json',
-        temperature: 0.7,
-        maxOutputTokens: 4096,
+        temperature: options.temperature ?? 0.7,
+        maxOutputTokens: options.maxTokens ?? 4096,
       },
     }),
   });
@@ -43,7 +46,7 @@ async function callGemini(prompt: string, attempt = 1): Promise<Record<string, u
       const delay = attempt * 1000;
       console.warn(`Gemini returned ${res.status}, retrying in ${delay}ms (attempt ${attempt})`);
       await sleep(delay);
-      return callGemini(prompt, attempt + 1);
+      return callGemini(prompt, options, attempt + 1);
     }
     throw new Error(`Gemini API error (${res.status}): ${text}`);
   }
@@ -72,7 +75,7 @@ async function callGemini(prompt: string, attempt = 1): Promise<Record<string, u
   } catch {
     if (attempt < 2) {
       // Retry once if the model produced malformed or truncated JSON.
-      return callGemini(prompt, attempt + 1);
+      return callGemini(prompt, options, attempt + 1);
     }
     throw new Error('Failed to parse Gemini response as JSON after retry');
   }
@@ -107,7 +110,7 @@ async function enforceAiBudget(): Promise<void> {
   if (!allowed) throw new AiRateLimitedError('AI is busy right now. Please try again later.');
 }
 
-const PROVIDERS: { name: string; call: (prompt: string) => Promise<Record<string, unknown>> }[] = [
+const PROVIDERS: { name: string; call: (prompt: string, options: AiOptions) => Promise<Record<string, unknown>> }[] = [
   { name: 'Claude', call: callAnthropic },
   { name: 'Gemini', call: callGemini },
   { name: 'OpenRouter', call: callOpenRouter },
@@ -118,12 +121,12 @@ const PROVIDERS: { name: string; call: (prompt: string) => Promise<Record<string
  * OpenRouter free-model chain. A provider without a key fails instantly, so
  * an unset ANTHROPIC_API_KEY just skips straight to Gemini.
  */
-export async function callAI(prompt: string): Promise<Record<string, unknown>> {
+export async function callAI(prompt: string, options: AiOptions = {}): Promise<Record<string, unknown>> {
   await enforceAiBudget();
   const errors: string[] = [];
   for (const [i, provider] of PROVIDERS.entries()) {
     try {
-      return await provider.call(prompt);
+      return await provider.call(prompt, options);
     } catch (err) {
       const message = err instanceof Error ? err.message : `${provider.name} failed`;
       errors.push(message);

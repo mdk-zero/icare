@@ -1,3 +1,4 @@
+import type { AiOptions } from './options';
 import { extractJson } from './openrouter';
 import { providerFetch } from './record';
 
@@ -10,13 +11,23 @@ const SYSTEM_PROMPT =
 
 export const anthropicModel = () => process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5';
 
-export async function callAnthropic(prompt: string, attempt = 1): Promise<Record<string, unknown>> {
+export async function callAnthropic(
+  prompt: string,
+  options: AiOptions = {},
+  attempt = 1,
+): Promise<Record<string, unknown>> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error('ANTHROPIC_API_KEY is not configured');
   }
 
-  const model = anthropicModel();
+  const model = options.claudeModel ?? anthropicModel();
+  const content = options.pdf
+    ? [
+        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: options.pdf } },
+        { type: 'text', text: prompt },
+      ]
+    : prompt;
 
   const res = await providerFetch('anthropic', model, 'https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -25,12 +36,14 @@ export async function callAnthropic(prompt: string, attempt = 1): Promise<Record
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
     },
+    signal: options.signal,
     body: JSON.stringify({
       model,
-      max_tokens: 4096,
-      temperature: 0.7,
+      max_tokens: options.maxTokens ?? 4096,
+      // A model named for the call may be one that refuses a non-default temperature, as the Claude 5 family does.
+      ...(options.claudeModel ? {} : { temperature: options.temperature ?? 0.7 }),
       system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{ role: 'user', content }],
     }),
   });
 
@@ -42,7 +55,7 @@ export async function callAnthropic(prompt: string, attempt = 1): Promise<Record
       const delay = attempt * 1000;
       console.warn(`Anthropic returned ${res.status}, retrying in ${delay}ms (attempt ${attempt})`);
       await sleep(delay);
-      return callAnthropic(prompt, attempt + 1);
+      return callAnthropic(prompt, options, attempt + 1);
     }
     throw new Error(`Anthropic API error (${res.status}): ${text}`);
   }
@@ -68,7 +81,7 @@ export async function callAnthropic(prompt: string, attempt = 1): Promise<Record
   } catch {
     if (attempt < 2) {
       // Retry once if the model produced malformed JSON.
-      return callAnthropic(prompt, attempt + 1);
+      return callAnthropic(prompt, options, attempt + 1);
     }
     throw new Error('Failed to parse Anthropic response as JSON after retry');
   }

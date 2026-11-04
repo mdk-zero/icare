@@ -26,6 +26,7 @@ const OWNED_TABLES = [
   'scenario_categories',
   'academic_terms',
   'courses',
+  'curricula',
 ];
 
 function programChairsOf(supabase: Supabase, deanId: string, columns: string) {

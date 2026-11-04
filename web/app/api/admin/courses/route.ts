@@ -12,11 +12,13 @@ import {
   readJson,
   requireRole,
 } from '@/app/lib/courses';
+import { loadActiveCatalog } from '@/app/lib/curriculum-server';
 
 /**
  * GET: everything the Dean's Courses page shows, in one call — their terms,
- * their courses with skills, and every assignment of those courses with its
- * instructor, sections and student count.
+ * their courses with skills, every assignment of those courses with its
+ * instructor, sections and student count, and the lab courses of the curriculum
+ * in use for Assign Course to offer.
  * POST { code, title, description? }: add a course.
  */
 export async function GET() {
@@ -62,7 +64,7 @@ export async function GET() {
 
     const facultyIds = [...new Set(offerings.map((o) => o.faculty_id).filter((id): id is string => !!id))];
     const sectionIds = [...new Set([...sectionsByOffering.values()].flat())];
-    const [facultyRows, sectionRows, rosters] = await Promise.all([
+    const [facultyRows, sectionRows, rosters, catalog] = await Promise.all([
       facultyIds.length
         ? supabase.from('users').select('id, name').in('id', facultyIds).then(must)
         : Promise.resolve([] as { id: string; name: string }[]),
@@ -73,6 +75,7 @@ export async function GET() {
         supabase,
         offerings.map((o) => ({ id: o.id, faculty_id: o.faculty_id, section_ids: sectionsByOffering.get(o.id) ?? [] })),
       ),
+      loadActiveCatalog(supabase, session),
     ]);
 
     const facultyName = new Map((facultyRows ?? []).map((f) => [f.id as string, f.name as string]));
@@ -84,6 +87,7 @@ export async function GET() {
     const countBy = (key: 'course_id' | 'term_id', id: string) => offerings.filter((o) => o[key] === id).length;
 
     return NextResponse.json({
+      catalog,
       terms: (terms ?? []).map((t) => ({ ...t, offering_count: countBy('term_id', t.id as string) })),
       courses: (courses ?? []).map((c) => ({
         ...c,

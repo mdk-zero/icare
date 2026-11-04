@@ -1,3 +1,4 @@
+import type { AiOptions } from './options';
 import { providerFetch } from './record';
 
 function sleep(ms: number): Promise<void> {
@@ -50,7 +51,7 @@ const MAX_RETRIES_PER_MODEL = 2;
 
 export async function callOpenRouter(
   prompt: string,
-  options: {
+  options: AiOptions & {
     models?: string[];
     modelIndex?: number;
     modelRetry?: number;
@@ -60,6 +61,9 @@ export async function callOpenRouter(
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error('OPENROUTER_API_KEY is not configured');
+  }
+  if (options.pdf) {
+    throw new Error('OpenRouter free models cannot read a PDF');
   }
 
   const models = options.models && options.models.length > 0
@@ -85,11 +89,12 @@ export async function callOpenRouter(
         'HTTP-Referer': process.env.OPENROUTER_HTTP_REFERER || 'http://localhost:3000',
         'X-Title': 'iCARE++ Scenario Generator',
       },
+      signal: options.signal,
       body: JSON.stringify({
         model,
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
-        max_tokens: 4096,
+        temperature: options.temperature ?? 0.7,
+        max_tokens: options.maxTokens ?? 4096,
       }),
     });
 

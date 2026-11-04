@@ -7,6 +7,7 @@ import {
   faBookMedical,
   faChartBar,
   faClockRotateLeft,
+  faDiagramProject,
   faFileLines,
   faHouse,
   faLifeRing,
@@ -44,6 +45,7 @@ const navItems: NavItem[] = [
   { id: "students", label: "Students", href: "/dean/student-management", icon: faUsers, section: "Management" },
   { id: "faculty", label: "Instructors", href: "/dean/instructors", icon: faUserTie, section: "Management" },
   { id: "program-chairs", label: "Program Chairs", href: PROGRAM_CHAIRS_HREF, icon: faSitemap, section: "Management" },
+  { id: "curriculum", label: "Curriculum", href: "/dean/curriculum", icon: faDiagramProject, section: "Management" },
   { id: "courses", label: "Courses", href: "/dean/courses", icon: faBookMedical, section: "Management" },
   // Patients and Rooms folded into one page, as on the faculty side. The
   // patient chart keeps its /dean/patients/[id] route, so it counts here too.

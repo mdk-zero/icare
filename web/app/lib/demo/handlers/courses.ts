@@ -36,6 +36,7 @@ import {
   type GradingSplit,
 } from "../../course-grading";
 import { seedCourses, type DemoCourseTables, type DemoOffering, type DemoRequirement } from "../fixtures/courses";
+import { demoCatalog } from "../fixtures/curriculum";
 import { audit } from "./shared";
 import { byName, sectionName, teamLabel } from "./scope";
 import { taskCredit } from "../../task-ratings";
@@ -154,6 +155,7 @@ route("GET", "/api/admin/courses", (ctx) => {
   const courseIds = new Set(courses.map((c) => c.id));
   const offerings = db.offerings.filter((o) => courseIds.has(o.course_id));
   return {
+    catalog: demoCatalog(db.curricula, ctx.viewer.id),
     terms: ownTerms(ctx)
       .sort((a, b) => b.starts_on.localeCompare(a.starts_on))
       .map((t) => ({

@@ -1,16 +1,18 @@
 /**
- * The courses a dean picks from, and how terms are named. The courses are
- * the NCM laboratory courses ("L": skills lab and RLE) of the Batangas State
- * University BSN program curriculum, where the skills iCARE tracks are done.
- * Lecture courses, GEd and the rest of the curriculum aren't here.
+ * The courses a dean picks from until they have a curriculum of their own in
+ * use (migration 089), and how terms are named. The courses are the NCM
+ * laboratory courses ("L": skills lab and RLE) of the Batangas State University
+ * BSN program curriculum, where the skills iCARE tracks are done. Lecture
+ * courses, GEd and the rest of the curriculum aren't here.
  */
 
 export interface CurriculumCourse {
   code: string;
   title: string;
-  /** 1 to 4. */
+  /** 1 to 4 here; a Dean's own curriculum can run to 6. */
   year: number;
-  semester: 1 | 2;
+  /** 1 or 2; 3 is midyear, which a Dean's own curriculum can have. */
+  semester: number;
 }
 
 export const NCM_LAB_COURSES: readonly CurriculumCourse[] = [
@@ -70,21 +72,30 @@ export const NCM_LAB_COURSES: readonly CurriculumCourse[] = [
   { code: "NCM 121L", title: "Disaster Nursing (Skills Lab)", year: 4, semester: 2 },
 ];
 
-const ORDINAL = ["First", "Second", "Third", "Fourth"];
+const ORDINAL = ["First", "Second", "Third", "Fourth", "Fifth", "Sixth"];
 
 /** "First Year · Second Semester", for grouping the course list. */
 export const curriculumGroup = (c: Pick<CurriculumCourse, "year" | "semester">) =>
-  `${ORDINAL[c.year - 1]} Year · ${ORDINAL[c.semester - 1]} Semester`;
+  `${ORDINAL[c.year - 1]} Year · ${c.semester === 3 ? "Midyear" : `${ORDINAL[c.semester - 1]} Semester`}`;
 
-/** The curriculum's courses, grouped in curriculum order. */
-export function curriculumGroups(): { label: string; courses: CurriculumCourse[] }[] {
+/** A curriculum's courses, grouped in curriculum order. */
+export function curriculumGroups(
+  catalog: readonly CurriculumCourse[] = NCM_LAB_COURSES,
+): { label: string; courses: CurriculumCourse[] }[] {
   const out = new Map<string, CurriculumCourse[]>();
-  for (const c of NCM_LAB_COURSES) out.set(curriculumGroup(c), [...(out.get(curriculumGroup(c)) ?? []), c]);
+  for (const c of catalog) out.set(curriculumGroup(c), [...(out.get(curriculumGroup(c)) ?? []), c]);
   return [...out].map(([label, courses]) => ({ label, courses }));
 }
 
 export const sameCode = (a: string, b: string) =>
   a.trim().replace(/\s+/g, " ").toLowerCase() === b.trim().replace(/\s+/g, " ").toLowerCase();
+
+/**
+ * Only laboratory courses are assigned, since that is where the skills iCARE
+ * tracks are done. One's code ends in L after its number: NCM 101L, but not
+ * NCM 101 or BIOL 101.
+ */
+export const isLabCourse = (code: string) => /\d\s*L$/i.test(code.trim());
 
 // ---------------------------------------------------------------------------
 // Terms
