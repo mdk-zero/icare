@@ -218,6 +218,24 @@ export function isMissingLibrary(error: { code?: string } | null | undefined): b
   return error?.code === '42P01' || error?.code === 'PGRST205';
 }
 
+/**
+ * Gives everything one author made to someone else, returning the ids moved.
+ * created_by cascades (061), so deleting an instructor without this would take
+ * what they published out of their students' Library.
+ */
+export async function handOverMaterials(supabase: Supabase, fromId: string, toId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('library_materials')
+    .update({ created_by: toId })
+    .eq('created_by', fromId)
+    .select('id');
+  if (error) {
+    if (isMissingLibrary(error)) return [];
+    throw error;
+  }
+  return (data ?? []).map((m) => m.id as string);
+}
+
 /** Notify the students a newly published material is for. Never fails the request. */
 /** A course offering's sections, by name (migration 075 files materials under courses). */
 export async function offeringSections(supabase: Supabase, offeringId: string): Promise<{ id: string; name: string }[]> {

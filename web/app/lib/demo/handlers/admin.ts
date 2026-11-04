@@ -124,6 +124,8 @@ route("GET", "/api/admin/faculty", (ctx) => {
           groups: own,
           sections: [...new Map(own.map((g) => [g.section_id, { id: g.section_id, name: g.section_name }])).values()],
           student_count: own.reduce((sum, g) => sum + g.member_count, 0),
+          course_count: ctx.db.offerings.filter((o) => o.faculty_id === f.id).length,
+          material_count: ctx.db.materials.filter((m) => m.created_by === f.id).length,
         };
       }),
   };
@@ -398,6 +400,8 @@ route("PATCH", "/api/admin/users/:id", (ctx) => {
   }
   if (body?.role === "student" || body?.role === "faculty") user.role = body.role;
   if (body?.sex === "male" || body?.sex === "female") user.sex = body.sex;
+  // An explicit empty clears it, as the real route does.
+  if (body?.sex === "" || body?.sex === null) user.sex = null;
   audit(db, viewer, "user.update", "users", { message: `Edited ${user.name}'s account` }, user.id);
   return { user: userRow(ctx, user) };
 });
@@ -410,6 +414,9 @@ route("DELETE", "/api/admin/users/:id", (ctx) => {
   if (user.id === viewer.id) return json({ error: "You cannot delete your own account" }, 400);
   db.users = db.users.filter((u) => u.id !== user.id);
   for (const t of db.teams) if (t.faculty_id === user.id) t.faculty_id = null;
+  for (const o of db.offerings) if (o.faculty_id === user.id) o.faculty_id = null;
+  // Their Library materials stay for students, under the Dean.
+  for (const m of db.materials) if (m.created_by === user.id) m.created_by = viewer.id;
   audit(db, viewer, "user.delete", "users", { message: `Deleted ${user.name}'s account` }, user.id);
   return { success: true };
 });

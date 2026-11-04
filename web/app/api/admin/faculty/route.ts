@@ -4,10 +4,18 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getAdminScope } from '@/app/lib/admin-scope';
 import { compareTeamNames, isMissingTeamTables, loadTeams, manageableSectionIds } from '@/app/lib/teams';
 
+function tally(ids: string[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
+  return counts;
+}
+
 /**
  * Faculty overview: the admin's own faculty, each with the groups they
  * supervise, those groups' sections, and the students in them; plus every
- * group in the admin's sections, for the assignment picker.
+ * group in the admin's sections, for the assignment picker. Each also says how
+ * many course assignments and Library materials they hold, which is what
+ * deleting them would change.
  */
 export async function GET() {
   const session = await readSession();
@@ -19,8 +27,8 @@ export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
     const scope = await getAdminScope(supabase, session.uid);
-    if (scope && scope.facultyIds.length === 0) return NextResponse.json({ faculty: [], groups: [] });
 
+    // With no instructors the groups still load, for the first one added.
     let facultyQuery = supabase
       .from('users')
       .select('id, email, name, picture_url, sex, created_at, last_login_at')
@@ -65,6 +73,14 @@ export async function GET() {
           compareTeamNames(a.name, b.name),
       );
 
+    const facultyIds = (facultyRes.data ?? []).map((f) => f.id as string);
+    const [offeringsRes, materialsRes] = await Promise.all([
+      supabase.from('course_offerings').select('faculty_id').in('faculty_id', facultyIds),
+      supabase.from('library_materials').select('created_by').in('created_by', facultyIds),
+    ]);
+    const offeringCount = tally((offeringsRes.data ?? []).map((o) => o.faculty_id as string));
+    const materialCount = tally((materialsRes.data ?? []).map((m) => m.created_by as string));
+
     // An instructor sees only the members of the groups they supervise, so
     // that is what their student count is.
     const faculty = (facultyRes.data ?? []).map((f) => {
@@ -75,6 +91,8 @@ export async function GET() {
         groups: own,
         sections,
         student_count: own.reduce((sum, g) => sum + g.member_count, 0),
+        course_count: offeringCount.get(f.id as string) ?? 0,
+        material_count: materialCount.get(f.id as string) ?? 0,
       };
     });
 

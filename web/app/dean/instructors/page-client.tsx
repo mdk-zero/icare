@@ -5,11 +5,13 @@ import { usePageData } from "@/app/lib/use-page-data";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faUsers, faPlus } from "@fortawesome/free-solid-svg-icons";
+import { faUsers, faPlus, faPenToSquare, faTrashCan, faLayerGroup } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 import FilterSelect from "../../components/FilterSelect";
 import Avatar from "../../components/Avatar";
 import StatTile from "../../components/StatTile";
+import ActionsMenu from "../../components/ActionsMenu";
+import ConfirmModal from "../../components/ConfirmModal";
 import ChangeEmailDialog from "../../components/ChangeEmailDialog";
 
 interface SectionRef {
@@ -38,12 +40,44 @@ interface Faculty {
   sections: SectionRef[];
   groups: GroupRef[];
   student_count: number;
+  course_count: number;
+  material_count: number;
 }
 
 // Stable empty fallbacks, so nothing downstream sees a new array each render.
 const NO_FACULTY: Faculty[] = [];
 const NO_SECTIONS: SectionRef[] = [];
 const NO_GROUPS: GroupRef[] = [];
+
+const SEX_OPTIONS = [
+  { value: "", label: "Not specified" },
+  { value: "female", label: "Female (Ms.)" },
+  { value: "male", label: "Male (Mr.)" },
+];
+
+function plural(count: number, word: string): string {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
+function GenderField({ id, value, onChange }: { id: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <div>
+      <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-2">
+        Gender <span className="font-normal text-gray-400">(optional)</span>
+      </label>
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full px-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-brand-600"
+      >
+        {SEX_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
 function formatDate(value: string | null): string {
   if (!value) return "Never";
@@ -61,12 +95,19 @@ export default function FacultyClient() {
   const [tempPassword, setTempPassword] = useState<{ email: string; password: string; warning?: string } | null>(null);
 
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newFaculty, setNewFaculty] = useState({ name: "", email: "" });
+  const [newFaculty, setNewFaculty] = useState({ name: "", email: "", sex: "" });
 
   const [selectedFaculty, setSelectedFaculty] = useState<Faculty | null>(null);
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [filterSection, setFilterSection] = useState("");
+
+  const [editing, setEditing] = useState<Faculty | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", sex: "" });
+  const [editError, setEditError] = useState<string | null>(null);
   const [changingEmail, setChangingEmail] = useState<Faculty | null>(null);
+
+  const [deleting, setDeleting] = useState<Faculty | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const { data, loading, refresh: loadData, setData } = usePageData(
     "admin:faculty",
@@ -115,7 +156,7 @@ export default function FacultyClient() {
     });
     setBusy(false);
     const json = (await res.json()) as {
-      user?: Omit<Faculty, "sections" | "groups" | "student_count">;
+      user?: Omit<Faculty, "sections" | "groups" | "student_count" | "course_count" | "material_count">;
       password?: string;
       warning?: string;
       error?: string;
@@ -127,13 +168,13 @@ export default function FacultyClient() {
     setData((previous) => ({
       faculty: [
         ...(previous?.faculty ?? []),
-        { ...json.user!, sections: [], groups: [], student_count: 0 },
+        { ...json.user!, sections: [], groups: [], student_count: 0, course_count: 0, material_count: 0 },
       ],
       sections: previous?.sections ?? NO_SECTIONS,
       groups: previous?.groups ?? NO_GROUPS,
     }));
     setShowAddModal(false);
-    setNewFaculty({ name: "", email: "" });
+    setNewFaculty({ name: "", email: "", sex: "" });
     // The password comes back only when the welcome email could not go out.
     if (json.password) {
       setTempPassword({ email: json.user.email, password: json.password, warning: json.warning });
@@ -173,6 +214,80 @@ export default function FacultyClient() {
     flash("Groups updated");
     // Reload: a moved group changes another instructor's row too.
     await loadData();
+  };
+
+  const openEdit = (member: Faculty) => {
+    setEditing(member);
+    setEditForm({ name: member.name, sex: member.sex ?? "" });
+    setEditError(null);
+  };
+
+  const handleSaveEdit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editing) return;
+    const name = editForm.name.trim();
+    if (!name) {
+      setEditError("Name is required");
+      return;
+    }
+    // Nothing to save, so nothing for the audit log to record.
+    if (name === editing.name && editForm.sex === (editing.sex ?? "")) {
+      setEditing(null);
+      return;
+    }
+    setBusy(true);
+    setEditError(null);
+    try {
+      const res = await apiFetch(`/api/admin/users/${editing.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name, sex: editForm.sex }),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        setEditError(json.error ?? "Unable to save these changes");
+        return;
+      }
+      setEditing(null);
+      flash("Instructor account updated");
+      // Reload: their name also shows on the groups they hold.
+      await loadData();
+    } catch {
+      setEditError("Something went wrong. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openDelete = (member: Faculty) => {
+    setDeleting(member);
+    setDeleteError(null);
+  };
+
+  const handleDelete = async () => {
+    if (!deleting) return;
+    setBusy(true);
+    setDeleteError(null);
+    try {
+      const res = await apiFetch(`/api/admin/users/${deleting.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        setDeleteError(json.error ?? "Unable to delete this account");
+        return;
+      }
+      setDeleting(null);
+      flash(`${deleting.name}'s account was deleted`);
+      // Reload: their groups are now free for anyone else to take.
+      await loadData();
+    } catch {
+      setDeleteError("Something went wrong. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const facultyWithoutGroups = faculty.filter((f) => f.groups.length === 0).length;
@@ -255,6 +370,9 @@ export default function FacultyClient() {
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Students</th>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Joined</th>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Last Login</th>
+                <th className="py-3 px-4">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-hairline">
@@ -285,11 +403,14 @@ export default function FacultyClient() {
                     <td className="py-3 px-4">
                       <div className="h-4 w-24 rounded bg-gray-100" />
                     </td>
+                    <td className="py-3 px-4">
+                      <div className="ml-auto h-8 w-8 rounded-lg bg-gray-100" />
+                    </td>
                   </tr>
                 ))
               ) : filteredFaculty.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-gray-400">
+                  <td colSpan={6} className="py-12 text-center text-gray-400">
                     {filterSection ? "No instructors match the selected filter" : "No instructor accounts yet — add one to get started"}
                   </td>
                 </tr>
@@ -336,6 +457,20 @@ export default function FacultyClient() {
                     </td>
                     <td className="py-3 px-4 text-gray-600">{formatDate(member.created_at)}</td>
                     <td className="py-3 px-4 text-gray-600">{formatDate(member.last_login_at)}</td>
+                    {/* The menu portals out, but its clicks still bubble here through React. */}
+                    <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex justify-end">
+                        <ActionsMenu
+                          variant="compact"
+                          label={`Actions for ${member.name}`}
+                          actions={[
+                            { label: "Edit Account", icon: faPenToSquare, onClick: () => openEdit(member) },
+                            { label: "Assign Groups", icon: faLayerGroup, onClick: () => openAssignModal(member) },
+                            { label: "Delete Account", icon: faTrashCan, danger: true, onClick: () => openDelete(member) },
+                          ]}
+                        />
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
@@ -359,6 +494,11 @@ export default function FacultyClient() {
                   placeholder="Dr. Juan dela Cruz"
                 />
               </div>
+              <GenderField
+                id="new-instructor-gender"
+                value={newFaculty.sex}
+                onChange={(sex) => setNewFaculty({ ...newFaculty, sex })}
+              />
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                 <input
@@ -402,16 +542,6 @@ export default function FacultyClient() {
               <p className="text-sm text-gray-500">
                 This instructor handles the students in the checked groups. A group has one
                 instructor, so checking another&apos;s group moves it here.
-              </p>
-              <p className="mt-2 flex flex-wrap items-center gap-x-3 text-sm text-gray-600">
-                <span className="truncate">{selectedFaculty.email}</span>
-                <button
-                  type="button"
-                  onClick={() => setChangingEmail(selectedFaculty)}
-                  className="font-medium text-brand-600 hover:text-brand-700"
-                >
-                  Change email
-                </button>
               </p>
             </div>
 
@@ -515,6 +645,68 @@ export default function FacultyClient() {
           </div>
         </div>
       )}
+      {editing && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <form
+            onSubmit={handleSaveEdit}
+            className="bg-surface rounded-xl p-4 w-full max-w-lg mx-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline"
+          >
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Instructor Account</h3>
+            <div className="space-y-2">
+              <div>
+                <label htmlFor="edit-instructor-name" className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
+                <input
+                  id="edit-instructor-name"
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-brand-600"
+                />
+              </div>
+              <GenderField
+                id="edit-instructor-gender"
+                value={editForm.sex}
+                onChange={(sex) => setEditForm({ ...editForm, sex })}
+              />
+              <div>
+                <p className="block text-sm font-medium text-gray-700 mb-2">Email</p>
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-subtle px-4 py-2.5">
+                  <span className="min-w-0 truncate text-gray-800">{editing.email}</span>
+                  <button
+                    type="button"
+                    onClick={() => setChangingEmail(editing)}
+                    className="shrink-0 text-sm font-medium text-brand-600 hover:text-brand-700"
+                  >
+                    Change Email
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">
+                  A code goes to the new address, and the change happens once it is entered.
+                </p>
+              </div>
+            </div>
+            {editError && (
+              <p className="mt-3 rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-700">{editError}</p>
+            )}
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => setEditing(null)}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={busy}
+                className="px-4 py-2 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 disabled:opacity-60 transition-all"
+              >
+                {busy ? "Saving…" : "Save Changes"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
       {changingEmail && (
         <ChangeEmailDialog
           userId={changingEmail.id}
@@ -524,9 +716,45 @@ export default function FacultyClient() {
           onChanged={(email) => {
             const id = changingEmail.id;
             void loadData();
-            setSelectedFaculty((prev) => (prev && prev.id === id ? { ...prev, email } : prev));
+            setEditing((prev) => (prev && prev.id === id ? { ...prev, email } : prev));
             setChangingEmail(null);
             flash(`Email changed to ${email}. The old address was notified.`);
+          }}
+        />
+      )}
+      {deleting && (
+        <ConfirmModal
+          onClose={() => setDeleting(null)}
+          config={{
+            title: `Delete ${deleting.name}'s account?`,
+            message: `${deleting.email} will no longer be able to sign in. This cannot be undone.`,
+            confirmLabel: "Delete Account",
+            loading: busy,
+            error: deleteError,
+            onConfirm: () => void handleDelete(),
+            children: (
+              <ul className="mt-3 list-disc space-y-1.5 pl-4 text-sm text-gray-700">
+                {deleting.groups.length > 0 && (
+                  <li>
+                    {plural(deleting.groups.length, "group")} with {plural(deleting.student_count, "student")}{" "}
+                    will have no instructor until you assign another.
+                  </li>
+                )}
+                {deleting.course_count > 0 && (
+                  <li>
+                    {plural(deleting.course_count, "course assignment")} will show &ldquo;No instructor&rdquo; until
+                    you change {deleting.course_count === 1 ? "it" : "them"}.
+                  </li>
+                )}
+                {deleting.material_count > 0 && (
+                  <li>
+                    {plural(deleting.material_count, "Library material")} will pass to you, so students keep{" "}
+                    {deleting.material_count === 1 ? "it" : "them"}.
+                  </li>
+                )}
+                <li>The grades they gave and the Patient Cases and quizzes they made will stay.</li>
+              </ul>
+            ),
           }}
         />
       )}

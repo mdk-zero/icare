@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { adminVisibleUserIds, getAdminScope } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 import { applyRoleChangeReporting, parseSex } from '@/app/lib/auth/user';
+import { handOverMaterials } from '@/app/lib/library';
 
 /** Admin and super admin accounts are the super admin's to make (migration 054). */
 const ASSIGNABLE_ROLES = ['student', 'faculty'] as const;
@@ -138,10 +139,26 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
+    // An instructor's Library materials stay for their students, under the Dean.
+    const materials = user.role === 'faculty' ? await handOverMaterials(supabase, id, session.uid) : [];
+
     const { error } = await supabase.from('users').delete().eq('id', id);
     if (error) {
       console.error('Failed to delete user', error);
-      return NextResponse.json({ error: 'Unable to delete user' }, { status: 500 });
+      // The account is still here, so its materials go back to it.
+      if (materials.length > 0) {
+        const { error: restoreError } = await supabase
+          .from('library_materials')
+          .update({ created_by: id })
+          .in('id', materials);
+        if (restoreError) console.error('Failed to return library materials to their author', restoreError);
+      }
+      // 23503: rows elsewhere still point at this account without a cascade.
+      const message =
+        error.code === '23503'
+          ? 'This account still has records that block deletion'
+          : 'Unable to delete user';
+      return NextResponse.json({ error: message }, { status: error.code === '23503' ? 409 : 500 });
     }
 
     await logAudit(
@@ -150,7 +167,11 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         action: 'user.delete',
         entityType: 'users',
         entityId: id,
-        details: { email: user.email, role: user.role },
+        details: {
+          email: user.email,
+          role: user.role,
+          ...(materials.length > 0 ? { materials_handed_over: materials.length } : {}),
+        },
       },
       request,
     );

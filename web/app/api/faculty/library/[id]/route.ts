@@ -109,8 +109,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         mime_type: material.mime_type,
       });
     }
-    // The file's owner is the author, who may not be the admin editing it.
-    const parsed = await parseMaterialInput(merged, merged.file_path === material.file_path ? material.created_by : session.uid, isSkillId);
+    // A kept file stays in its uploader's folder, who may not be the admin
+    // editing it, or even its author now: a Dean takes over a deleted
+    // instructor's materials.
+    const keptFile = merged.file_path === material.file_path ? material.file_path : null;
+    const parsed = await parseMaterialInput(merged, keptFile ? keptFile.split('/')[0] : session.uid, isSkillId);
     if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
     // Moving it to another of the instructor's courses.
     let course: { offering_id?: string | null } = {};
