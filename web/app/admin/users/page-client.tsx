@@ -23,8 +23,8 @@ type Role = "student" | "faculty" | "admin" | "super_admin";
 
 /**
  * The roles this page offers. A Program Chair is stored as a Dean (role
- * admin) with admin_title 'program_chair' (080), with exactly a Dean's
- * access, so the page treats the title as one more role.
+ * admin) with admin_title 'program_chair' (080), with a Dean's access, so
+ * the page treats the title as one more role.
  */
 type Kind = Role | "program_chair";
 
@@ -166,6 +166,7 @@ export default function SuperAdminUsersClient() {
   const payload = data ?? EMPTY;
   const users = payload.users;
   const admins = users.filter((u) => u.role === "admin");
+  const deans = admins.filter((u) => kindOf(u) === "admin");
 
   const setUsers = (update: (previous: Account[]) => Account[]) =>
     setData((previous) => ({ ...(previous ?? EMPTY), users: update((previous ?? EMPTY).users) }));
@@ -261,9 +262,14 @@ export default function SuperAdminUsersClient() {
         ? { admin_title: form.role === "program_chair" ? "program_chair" : null }
         : {}),
       section_id: form.role === "student" ? form.section_id || null : null,
-      // Only an instructor's Dean is picked here; a student's follows their
-      // section (077), and other roles belong to no Dean.
+      // An instructor's or a Program Chair's Dean is picked here; a student's
+      // follows their section (077), and other roles belong to no Dean.
       ...(payload.owner_enabled && form.role === "faculty" ? { admin_id: form.admin_id || null } : {}),
+      // A value left over from another role might not be a Dean, which the
+      // database refuses; the picker offers only Deans.
+      ...(payload.owner_enabled && form.role === "program_chair"
+        ? { admin_id: deans.some((d) => d.id === form.admin_id) ? form.admin_id : null }
+        : {}),
       ...(deanLevel && payload.institutions
         ? form.campus_id === NEW_INSTITUTION
           ? { new_institution: form.new_institution }
@@ -383,6 +389,9 @@ export default function SuperAdminUsersClient() {
       return [user.section_name ?? "No section", dean].filter(Boolean).join(" · ");
     }
     if (user.role === "faculty" && payload.owner_enabled) return deanName(user.admin_id) ?? "No dean";
+    if (kindOf(user) === "program_chair" && payload.owner_enabled) {
+      return [user.institution_name, deanName(user.admin_id) ?? "No dean"].filter(Boolean).join(" · ");
+    }
     if (user.role === "admin" && payload.institutions) return user.institution_name ?? "No institution";
     return "—";
   };
@@ -794,6 +803,27 @@ export default function SuperAdminUsersClient() {
                     </option>
                   ))}
                 </select>
+              </div>
+            )}
+            {form.role === "program_chair" && payload.owner_enabled && (
+              <div>
+                <label className={LABEL} htmlFor="acct-chair-dean">Dean</label>
+                <select
+                  id="acct-chair-dean"
+                  value={deans.some((d) => d.id === form.admin_id) ? form.admin_id : ""}
+                  onChange={(e) => setForm({ ...form, admin_id: e.target.value })}
+                  className={INPUT}
+                >
+                  <option value="">None</option>
+                  {deans.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {[d.name, d.institution_name].filter(Boolean).join(" · ")}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-xs text-gray-500">
+                  They appear on this Dean&apos;s Program Chairs page and take the Dean&apos;s institution.
+                </p>
               </div>
             )}
             {editing === "new" && (

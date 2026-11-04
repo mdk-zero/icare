@@ -131,6 +131,10 @@ The application uses a cohesive teal-based color scheme aligned with the brand c
 #### `/app/dean/instructors/page.tsx`
 - Faculty management interface
 
+#### `/app/dean/program-chairs/page.tsx`
+- A Dean's Program Chairs: add, edit, change email, delete
+- A Dean only: the page and `/api/admin/program-chairs` refuse a Program Chair (`lib/auth/dean.ts`)
+
 #### `/app/dean/users/page.tsx`
 - User account management
 - Roles: student, faculty, administrator, super_admin

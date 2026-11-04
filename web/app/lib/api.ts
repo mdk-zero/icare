@@ -17,7 +17,7 @@ export interface User {
   email: string;
   name: string;
   role: 'student' | 'faculty' | 'admin' | 'super_admin';
-  /** 'program_chair' marks a Program Chair, who has a Dean's access (080); null for a Dean. */
+  /** 'program_chair' marks a Program Chair (080), who has a Dean's access but for managing Program Chairs; null for a Dean. */
   admin_title?: 'program_chair' | null;
   picture_url?: string | null;
   /** Null when unrecorded; the dashboard greeting drops the honorific then. */

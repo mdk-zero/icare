@@ -11,8 +11,8 @@ export const ROLE_LABEL: Record<string, string> = {
 
 /**
  * A Dean-level account's title (users.admin_title, migration 080). A Program
- * Chair is stored as a Dean (role admin) and has exactly a Dean's access;
- * only the name differs. Null is a Dean.
+ * Chair is stored as a Dean (role admin) and has a Dean's access, except for
+ * the Dean's Program Chairs page (lib/auth/dean.ts). Null is a Dean.
  */
 export type AdminTitle = "program_chair";
 

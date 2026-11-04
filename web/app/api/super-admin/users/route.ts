@@ -76,8 +76,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Only students can be placed in a section' }, { status: 400 });
   }
   const adminId = typeof body.admin_id === 'string' && body.admin_id ? body.admin_id : null;
-  if (adminId && role !== 'faculty' && role !== 'student') {
-    return NextResponse.json({ error: 'Only instructors and students belong to a Dean or Program Chair' }, { status: 400 });
+  // A Program Chair belongs to a Dean too (087).
+  if (adminId && role !== 'faculty' && role !== 'student' && !adminTitle) {
+    return NextResponse.json({ error: 'Only instructors, students and Program Chairs belong to a Dean' }, { status: 400 });
   }
 
   try {

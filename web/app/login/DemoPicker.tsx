@@ -49,7 +49,7 @@ const CHOICES: DemoChoice[] = [
     role: "admin",
     adminTitle: "program_chair",
     label: "Program Chair",
-    description: "Everything a Dean has, under the Program Chair title",
+    description: "The Dean's portal under their own title, without Program Chair management",
     icon: faSitemap,
   },
 ];

@@ -104,6 +104,8 @@ export const DEAN_ID = demoId(KIND.user, 2);
 export const INSTRUCTOR_ID = demoId(KIND.user, 3);
 export const INSTRUCTOR_2_ID = demoId(KIND.user, 4);
 export const INSTRUCTOR_3_ID = demoId(KIND.user, 5);
+export const PROGRAM_CHAIR_ID = demoId(KIND.user, 6);
+export const PROGRAM_CHAIR_2_ID = demoId(KIND.user, 7);
 
 export const SECTION_A = demoId(KIND.section, 1);
 export const SECTION_B = demoId(KIND.section, 2);
@@ -175,9 +177,14 @@ export function seedPeople(): { users: DemoUser[]; sections: DemoSection[]; team
     staff(INSTRUCTOR_ID, "Maria Santos", "maria.santos@demo.icare.ph", "faculty", "female", DEAN_ID),
     staff(INSTRUCTOR_2_ID, "Jose Reyes", "jose.reyes@demo.icare.ph", "faculty", "male", DEAN_ID),
     staff(INSTRUCTOR_3_ID, "Liza Fernandez", "liza.fernandez@demo.icare.ph", "faculty", "female", DEAN_ID),
+    // The Dean's Program Chairs. Their own instructors and students aren't in the demo.
+    { ...staff(PROGRAM_CHAIR_ID, "Elena Bautista", "elena.bautista@demo.icare.ph", "admin", "female", DEAN_ID), admin_title: "program_chair" },
+    { ...staff(PROGRAM_CHAIR_2_ID, "Carlo Mendoza", "carlo.mendoza@demo.icare.ph", "admin", "male", DEAN_ID), admin_title: "program_chair" },
   ];
   users[3].last_sign_in_at = ago(1.2);
   users[4].last_sign_in_at = ago(3.5);
+  users[5].last_sign_in_at = ago(2.4);
+  users[6].last_sign_in_at = null;
 
   STUDENTS.forEach(([name, sex, section, team, risk, probability, active], i) => {
     const n = FIRST_STUDENT_N + i;

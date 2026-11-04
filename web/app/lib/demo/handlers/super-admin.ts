@@ -68,7 +68,7 @@ route("POST", "/api/super-admin/users", (ctx) => {
     picture_url: null,
     section_id: body.role === "student" && body?.section_id ? body.section_id : null,
     team_id: null,
-    admin_id: body.role === "faculty" ? (body?.admin_id ?? null) : null,
+    admin_id: body.role === "faculty" || (body.role === "admin" && body?.admin_title === "program_chair") ? (body?.admin_id ?? null) : null,
     admin_title: body.role === "admin" && body?.admin_title === "program_chair" ? "program_chair" : null,
     student_number: null,
     created_at: new Date().toISOString(),
@@ -105,9 +105,12 @@ route("PATCH", "/api/super-admin/users/:id", (ctx) => {
   if (ROLES.includes(body?.role)) user.role = body.role;
   if (body?.sex === "male" || body?.sex === "female") user.sex = body.sex;
   if (body && "section_id" in body) user.section_id = user.role === "student" ? body.section_id || null : null;
-  if (body && "admin_id" in body) user.admin_id = user.role === "faculty" ? body.admin_id || null : null;
   if (user.role !== "admin") user.admin_title = null;
   else if (body && "admin_title" in body) user.admin_title = body.admin_title === "program_chair" ? "program_chair" : null;
+  // An instructor's Dean, or a Program Chair's (087); a Dean has none.
+  const hasDean = user.role === "faculty" || user.admin_title === "program_chair";
+  if (body && "admin_id" in body) user.admin_id = hasDean ? body.admin_id || null : null;
+  else if (!hasDean && user.role !== "student") user.admin_id = null;
   audit(db, viewer, "user.update", "users", { message: `Edited ${user.name}'s account` }, user.id);
   return { user: account(ctx, user) };
 });

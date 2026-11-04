@@ -173,6 +173,100 @@ route("PUT", "/api/admin/faculty/:id/students", (ctx) => {
 });
 
 // ---------------------------------------------------------------------------
+// Program Chairs: the Dean's own, which a Program Chair is refused
+// ---------------------------------------------------------------------------
+
+const deanProper = (ctx: Ctx) => ctx.role === "admin" && !ctx.viewer.admin_title;
+const programChairs = (ctx: Ctx) =>
+  ctx.db.users.filter((u) => u.role === "admin" && u.admin_title === "program_chair" && u.admin_id === ctx.viewer.id);
+
+function programChairRow(ctx: Ctx, u: DemoUser) {
+  const people = (role: DemoUser["role"]) => ctx.db.users.filter((p) => p.role === role && p.admin_id === u.id).length;
+  return {
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    picture_url: u.picture_url,
+    sex: u.sex,
+    created_at: u.created_at,
+    last_login_at: u.last_sign_in_at,
+    instructor_count: people("faculty"),
+    student_count: people("student"),
+  };
+}
+
+route("GET", "/api/admin/program-chairs", (ctx) => {
+  if (!deanProper(ctx)) return forbidden();
+  return { program_chairs: programChairs(ctx).sort(byName).map((u) => programChairRow(ctx, u)) };
+});
+
+route("POST", "/api/admin/program-chairs", (ctx) => {
+  if (!deanProper(ctx)) return forbidden();
+  const { db, body, viewer } = ctx;
+  const name = typeof body?.name === "string" ? body.name.trim() : "";
+  const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+  if (!name) return json({ error: "Name is required" }, 400);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: "Enter a valid email address" }, 400);
+  if (db.users.some((u) => u.email === email)) return json({ error: "A user with this email already exists" }, 409);
+  const user: DemoUser = {
+    id: newId(),
+    email,
+    name,
+    role: "admin",
+    sex: body?.sex === "male" || body?.sex === "female" ? body.sex : null,
+    picture_url: null,
+    section_id: null,
+    team_id: null,
+    admin_id: viewer.id,
+    admin_title: "program_chair",
+    student_number: null,
+    created_at: new Date().toISOString(),
+    last_sign_in_at: null,
+    last_activity: null,
+    status: "active",
+    google_linked: false,
+    risk_level: null,
+    risk_probability: null,
+  };
+  db.users.push(user);
+  audit(db, viewer, "user.create", "users", { message: `Added ${name} as a Program Chair` }, user.id);
+  return json(
+    {
+      user: programChairRow(ctx, user),
+      password: "Demo-Pass-2026",
+      warning: "This is a demo: no welcome email was sent. In the real app the new account gets this temporary password by email.",
+    },
+    201,
+  );
+});
+
+route("PATCH", "/api/admin/program-chairs/:id", (ctx) => {
+  if (!deanProper(ctx)) return forbidden();
+  const { db, body, params, viewer } = ctx;
+  const user = programChairs(ctx).find((u) => u.id === params.id);
+  if (!user) return notFound("Program Chair not found");
+  if (typeof body?.name === "string") {
+    if (!body.name.trim()) return json({ error: "Name is required" }, 400);
+    user.name = body.name.trim();
+  }
+  if (body?.sex === "male" || body?.sex === "female") user.sex = body.sex;
+  // An explicit empty clears it, as the real route does.
+  if (body?.sex === "" || body?.sex === null) user.sex = null;
+  audit(db, viewer, "user.update", "users", { message: `Edited ${user.name}'s account` }, user.id);
+  return { user: programChairRow(ctx, user) };
+});
+
+route("DELETE", "/api/admin/program-chairs/:id", (ctx) => {
+  if (!deanProper(ctx)) return forbidden();
+  const { db, params, viewer } = ctx;
+  const user = programChairs(ctx).find((u) => u.id === params.id);
+  if (!user) return notFound("Program Chair not found");
+  db.users = db.users.filter((u) => u.id !== user.id);
+  audit(db, viewer, "user.delete", "users", { message: `Deleted ${user.name}'s account` }, user.id);
+  return { success: true };
+});
+
+// ---------------------------------------------------------------------------
 // Sections
 // ---------------------------------------------------------------------------
 

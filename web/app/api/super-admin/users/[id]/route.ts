@@ -87,7 +87,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         return NextResponse.json({ error: 'The last admin cannot be demoted' }, { status: 400 });
       }
     }
-    // A section only means something on a student, an owner only on faculty.
+    // A section only means something on a student. The database drops an owner
+    // from anyone but an instructor, a student or a Program Chair (087).
     if (nextRole !== 'student' && updates.section_id) {
       return NextResponse.json({ error: 'Only students can be placed in a section' }, { status: 400 });
     }

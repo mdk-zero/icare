@@ -13,6 +13,7 @@ import StatTile from "../../components/StatTile";
 import ActionsMenu from "../../components/ActionsMenu";
 import ConfirmModal from "../../components/ConfirmModal";
 import ChangeEmailDialog from "../../components/ChangeEmailDialog";
+import GenderField from "../../components/GenderField";
 
 interface SectionRef {
   id: string;
@@ -49,34 +50,8 @@ const NO_FACULTY: Faculty[] = [];
 const NO_SECTIONS: SectionRef[] = [];
 const NO_GROUPS: GroupRef[] = [];
 
-const SEX_OPTIONS = [
-  { value: "", label: "Not specified" },
-  { value: "female", label: "Female (Ms.)" },
-  { value: "male", label: "Male (Mr.)" },
-];
-
 function plural(count: number, word: string): string {
   return `${count} ${word}${count === 1 ? "" : "s"}`;
-}
-
-function GenderField({ id, value, onChange }: { id: string; value: string; onChange: (value: string) => void }) {
-  return (
-    <div>
-      <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-2">
-        Gender <span className="font-normal text-gray-400">(optional)</span>
-      </label>
-      <select
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full px-4 py-2.5 bg-surface border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-brand-600"
-      >
-        {SEX_OPTIONS.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
-      </select>
-    </div>
-  );
 }
 
 function formatDate(value: string | null): string {

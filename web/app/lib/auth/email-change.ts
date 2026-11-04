@@ -3,7 +3,7 @@
  *
  * Who may change whose email, checked against the live rows on every step:
  *   - anyone but a student may change their own;
- *   - an admin may change the faculty accounts they own (users.admin_id);
+ *   - an admin may change the faculty and Program Chair accounts they own (users.admin_id);
  *   - a super admin may change any account that isn't a student's.
  * Student emails are fixed: they are institutional and the mobile app signs
  * students in by them.
@@ -16,6 +16,7 @@
 import type { NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '../supabase/server';
 import { getAdminScope, ownsFaculty } from '../admin-scope';
+import { findProgramChair } from '../program-chairs';
 import { logAudit } from '../audit';
 import { hashPassword, verifyPassword } from './password';
 import { generateOtp } from './reset';
@@ -72,7 +73,14 @@ export async function authorizeEmailChange(
   }
   if (session.role === 'admin') {
     const { data: me } = await supabase.from('users').select('role').eq('id', session.uid).maybeSingle();
-    if (me?.role !== 'admin' || target.role !== 'faculty') return fail(403, 'You can only change the email of instructors you manage');
+    if (me?.role !== 'admin') return fail(403, 'You can only change the email of instructors you manage');
+    // A Dean's Program Chairs (087). Only a Dean proper can hold one.
+    if (target.role === 'admin') {
+      return (await findProgramChair(supabase, session.uid, target.id))
+        ? { ok: true, value: target as EmailTarget }
+        : fail(403, 'You can only change the email of instructors you manage');
+    }
+    if (target.role !== 'faculty') return fail(403, 'You can only change the email of instructors you manage');
     const scope = await getAdminScope(supabase, session.uid);
     if (!ownsFaculty(scope, target.id)) return fail(403, 'You can only change the email of instructors you manage');
     return { ok: true, value: target as EmailTarget };
