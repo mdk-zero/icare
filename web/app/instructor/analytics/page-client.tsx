@@ -45,7 +45,7 @@ import GroupPerformance, { useGroupSummaries } from "./GroupPerformance";
 import CoursePerformance from "./CoursePerformance";
 import CourseFilter from "./CourseFilter";
 import ActivityBreakdown from "./ActivityBreakdown";
-import { parseDay, formatRange } from "./dates";
+import { courseRange, parseDay, formatRange } from "./dates";
 import { buildTrendSeries, TrendLegend, TrendBarChart, TrendTable } from "./GroupTrendChart";
 import { isActiveSkillArea } from "../../../scripts/taylors-chapters";
 
@@ -151,23 +151,6 @@ function rangeForPreset(preset: Exclude<PresetId, "custom" | "term">): {
       break;
   }
   return { from: isoDay(from), to: isoDay(today) };
-}
-
-/**
- * The range a course is read over: as far as the picked range reaches into its
- * term, since nothing outside the term counts toward it. A range missing the
- * term altogether stays as picked, so the empty panels name what was asked for.
- */
-function courseRange(
-  preset: PresetId,
-  range: { from: string; to: string },
-  term: { starts_on: string; ends_on: string } | undefined,
-): { from: string; to: string } {
-  if (!term) return range;
-  if (preset === "term") return { from: term.starts_on, to: term.ends_on };
-  const from = range.from > term.starts_on ? range.from : term.starts_on;
-  const to = range.to < term.ends_on ? range.to : term.ends_on;
-  return from <= to ? { from, to } : range;
 }
 
 const BUCKET_LABEL: Record<AnalyticsBucket, string> = {
@@ -644,7 +627,7 @@ export default function FacultyAnalyticsClient() {
   // A course offers its own sections, which can reach past the instructor's groups.
   const sectionChoices: Section[] = course ? course.sections : sections;
 
-  const { from, to } = courseRange(activePreset, range, course?.term);
+  const { from, to } = courseRange(activePreset === "term", range, course?.term);
   const sectionKey = [courseId ?? "", ...[...sectionIds].sort()].join(",");
 
   // One entry per filter combination. A late response lands on its own key

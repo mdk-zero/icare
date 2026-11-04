@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
@@ -34,6 +35,9 @@ import { CohortMasteryBody, useCohortMastery } from "../../components/SkillMaste
 import { PodiumLeaderboard } from "../../instructor/analytics/Leaderboard";
 import ActivityBreakdown from "../../instructor/analytics/ActivityBreakdown";
 import { CourseBarChart } from "../../instructor/analytics/CoursePerformance";
+import CourseFilter from "../../instructor/analytics/CourseFilter";
+import { courseRange } from "../../instructor/analytics/dates";
+import { deanCourseChoices, loadDeanCourses, type DeanCourseChoice } from "../courses/load";
 import { TARGET_SCORE } from "../../lib/performance-target";
 import AnalyticsFilterBar, {
   formatRangeLabel,
@@ -759,29 +763,54 @@ function AnalyticsSkeleton() {
 }
 
 export default function AdminAnalyticsClient() {
+  // The course lives in the URL, so it can be linked to and survives a trip to
+  // the leaderboard. replaceState keeps useSearchParams in step without a navigation.
+  const courseParam = useSearchParams().get("course");
 
-  // Filters — the same section + range controls the faculty dashboard has.
+  // Filters — the same course, section + range controls the faculty dashboard has.
   const [sectionIds, setSectionIds] = useState<string[]>([]);
-  const [preset, setPreset] = useState<PresetId>("3m");
+  const [preset, setPreset] = useState<PresetId>(courseParam ? "term" : "3m");
   // Lazily initialised so `new Date()` never runs during a server render.
   const [range, setRange] = useState(() => rangeForPreset("3m"));
   // What the custom date inputs show, kept apart from the applied `range` so a
   // half-typed or inverted range doesn't fire a request.
   const [draft, setDraft] = useState(() => rangeForPreset("3m"));
 
-  const { from, to } = range;
-  const sectionKey = [...sectionIds].sort().join(",");
-
   const { data: sectionsData } = usePageData("faculty:sections", fetchFacultySections);
   const allSections = sectionsData ?? NO_SECTIONS;
 
-  const applyPreset = useCallback((id: PresetId) => {
+  // The Courses page's own read, so going between the two costs nothing.
+  const { data: coursesList, loading: coursesListLoading } = usePageData("admin:courses", loadDeanCourses);
+  const offerings = useMemo(() => deanCourseChoices(coursesList?.courses), [coursesList]);
+  // A link to a course no longer theirs shows every course instead.
+  const course = offerings.find((o) => o.id === courseParam) ?? null;
+  const courseId = course?.id ?? null;
+  // Its term sets the range, so a linked course waits for the list.
+  const awaitingCourse = !!courseParam && coursesListLoading;
+  const activePreset = preset === "term" && !course && !awaitingCourse ? "3m" : preset;
+  const hasCourseFilter = coursesListLoading || offerings.length > 0;
+
+  const { from, to } = courseRange(activePreset === "term", range, course?.term);
+  const sectionKey = [courseId ?? "", ...[...sectionIds].sort()].join(",");
+
+  const applyPreset = (id: PresetId) => {
     setPreset(id);
-    if (id === "custom") return;
-    const next = rangeForPreset(id);
+    if (id === "term") return;
+    // Custom starts from the dates on show, which a whole term doesn't keep in `range`.
+    const next = id === "custom" ? { from, to } : rangeForPreset(id);
     setRange(next);
     setDraft(next);
-  }, []);
+  };
+
+  const selectCourse = (next: DeanCourseChoice | null) => {
+    window.history.replaceState(null, "", next ? `/dean/analytics?course=${next.id}` : "/dean/analytics");
+    // Narrowed, not cleared: a section the new scope still has stays picked.
+    const choices: Section[] = next ? next.sections : allSections;
+    setSectionIds((ids) => ids.filter((id) => choices.some((s) => s.id === id)));
+    // A course opens on its whole term; leaving it, there is no term to show.
+    if (next) setPreset("term");
+    else if (preset === "term") applyPreset("3m");
+  };
 
   const setCustom = (edge: "from" | "to", value: string) => {
     const next = { ...draft, [edge]: value };
@@ -796,8 +825,8 @@ export default function AdminAnalyticsClient() {
     loading,
     revalidating,
   } = usePageData(
-    `admin:analytics:${sectionKey}:${from}:${to}`,
-    () => fetchAnalyticsSummary({ sectionIds, from, to }),
+    awaitingCourse ? null : `admin:analytics:${sectionKey}:${from}:${to}`,
+    () => fetchAnalyticsSummary({ courseId, sectionIds, from, to }),
     { keepPreviousData: true },
   );
 
@@ -806,8 +835,8 @@ export default function AdminAnalyticsClient() {
   // course's grades is the slowest read on the page, so its panel loads on
   // its own.
   const { data: courseData, loading: coursesLoading } = usePageData(
-    `admin:analytics:courses:${sectionKey}:${from}:${to}`,
-    () => fetchCoursePerformance({ sectionIds, from, to }),
+    awaitingCourse ? null : `admin:analytics:courses:${sectionKey}:${from}:${to}`,
+    () => fetchCoursePerformance({ courseId, sectionIds, from, to }),
     { keepPreviousData: true },
   );
   const courseRows = courseData?.data?.courses ?? [];
@@ -834,7 +863,7 @@ export default function AdminAnalyticsClient() {
     return { roleCounts, rooms };
   });
 
-  const mastery = useCohortMastery(sectionIds);
+  const mastery = useCohortMastery(sectionIds, courseId);
 
   const summary = analytics?.summary ?? null;
   const roleCounts = live?.roleCounts ?? { student: 0, faculty: 0, admin: 0 };
@@ -886,6 +915,7 @@ export default function AdminAnalyticsClient() {
   const topStudents = (summary?.top_students ?? []).slice(0, TOP_STUDENTS);
   // The full ranking opens on its own page with the same scope.
   const leaderboardHref = `/dean/analytics/leaderboard?${new URLSearchParams({
+    ...(courseId ? { course: courseId } : {}),
     ...(sectionIds.length > 0 ? { sections: sectionIds.join(",") } : {}),
     from,
     to,
@@ -893,7 +923,7 @@ export default function AdminAnalyticsClient() {
 
   // The live figures gate it too: without them the tiles would read zero and
   // the rooms panel "No rooms configured" until they landed.
-  const firstLoad = (loading && !summary) || liveLoading;
+  const firstLoad = awaitingCourse || (loading && !summary) || liveLoading;
   const rangeTag = <ScopeTag label={formatRangeLabel(from, to)} />;
   const liveTag = <ScopeTag live />;
 
@@ -909,15 +939,29 @@ export default function AdminAnalyticsClient() {
       />
 
       <AnalyticsFilterBar
-        sections={allSections}
+        coursePicker={
+          hasCourseFilter ? (
+            <CourseFilter
+              offerings={offerings}
+              value={courseId}
+              loading={coursesListLoading}
+              onChange={selectCourse}
+            />
+          ) : undefined
+        }
+        wholeTerm={!!course}
+        // The picker names the course; two rows of it can differ in these alone.
+        scopeNote={course ? [course.term.name, course.instructor].filter(Boolean).join(" · ") : undefined}
+        // A course offers its own sections.
+        sections={course ? course.sections : allSections}
         sectionIds={sectionIds}
         onSectionsChange={setSectionIds}
         sectionCounts={sectionCounts}
-        preset={preset}
+        preset={activePreset}
         onPresetChange={applyPreset}
         draft={draft}
         onDraftChange={setCustom}
-        range={range}
+        range={{ from, to }}
         refreshing={revalidating}
       />
 
@@ -930,7 +974,7 @@ export default function AdminAnalyticsClient() {
               icon={faUserCheck}
               value={activeStudents}
               label="Active Students"
-              caption={`${activeRate}% of ${totalStudents} students · last 30 days`}
+              caption={`${activeRate}% of ${totalStudents} students · in this range`}
               iconBg="bg-emerald-50"
               iconColor="text-emerald-600"
             />
@@ -938,10 +982,14 @@ export default function AdminAnalyticsClient() {
               icon={faExclamationTriangle}
               value={atRisk}
               label="Low Performing Students"
+              // The model reads a student's whole record, so this doesn't move
+              // with a course, and a course's figure says as much.
               caption={
-                totalStudents
-                  ? `${atRiskRate}% of ${totalStudents} students`
-                  : "No students in range"
+                course
+                  ? "From their overall record"
+                  : totalStudents
+                    ? `${atRiskRate}% of ${totalStudents} students`
+                    : "No students in range"
               }
               iconBg="bg-rose-50"
               iconColor="text-rose-600"
@@ -984,9 +1032,13 @@ export default function AdminAnalyticsClient() {
             <Panel>
               <CardHeading
                 icon={faBookMedical}
-                title="Performance per Course"
-                subtitle="Class average grade per course assignment, semesters in this range"
-                tag={rangeTag}
+                title={course ? "Course Grade" : "Performance per Course"}
+                subtitle={
+                  course
+                    ? "Class average so far, across the whole term"
+                    : "Class average grade per course assignment, semesters in this range"
+                }
+                tag={course ? <ScopeTag label={course.term.name} /> : rangeTag}
                 aside={
                   courseRows.length > 0 ? (
                     <span className="hidden items-center gap-1.5 text-[11px] text-gray-500 sm:inline-flex">
@@ -1001,8 +1053,8 @@ export default function AdminAnalyticsClient() {
                 <p className="py-8 text-center text-sm text-gray-400">{courseData.error}</p>
               ) : courseRows.length === 0 ? (
                 <p className="py-8 text-center text-sm text-gray-400">
-                  No course assignments with students in these sections during{" "}
-                  {formatRangeLabel(from, to)}.
+                  {course ? "This course has no students" : "No course assignments with students"} in these sections
+                  during {formatRangeLabel(from, to)}.
                 </p>
               ) : (
                 <CourseBarChart courses={courseRows} linkable={false} />
@@ -1015,7 +1067,11 @@ export default function AdminAnalyticsClient() {
             <CardHeading
               icon={faBrain}
               title="Skill Mastery (BKT)"
-              subtitle="Bayesian Knowledge Tracing: the average chance your students know each skill, from quizzes, Patient Cases and Return Demonstrations. Weakest first."
+              subtitle={
+                course
+                  ? "Bayesian Knowledge Tracing for this course's roster, from each student's whole record of quizzes, Patient Cases and Return Demonstrations. Weakest first."
+                  : "Bayesian Knowledge Tracing: the average chance your students know each skill, from quizzes, Patient Cases and Return Demonstrations. Weakest first."
+              }
               tag={<ScopeTag label="Whole record" />}
             />
             <CohortMasteryBody data={mastery.data} loading={mastery.loading} />
@@ -1121,7 +1177,11 @@ export default function AdminAnalyticsClient() {
               <CardHeading
                 icon={faLayerGroup}
                 title="Section Engagement"
-                subtitle="Active students against enrollment, per section"
+                subtitle={
+                  course
+                    ? "Who handed in this course's work against its roster, per section"
+                    : "Active students against enrollment, per section"
+                }
                 tag={rangeTag}
               />
               {sectionEngagement.length === 0 ? (
@@ -1140,7 +1200,7 @@ export default function AdminAnalyticsClient() {
                 />
                 <MiniStat
                   icon={faUserCheck}
-                  label="Active (30d)"
+                  label="Active"
                   value={activeStudents}
                   chip="bg-emerald-50 text-emerald-600"
                 />

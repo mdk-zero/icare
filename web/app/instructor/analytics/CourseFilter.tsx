@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBookMedical, faCheck, faChevronDown } from "@fortawesome/free-solid-svg-icons";
-import type { FacultyCourseSummary } from "../../lib/api";
 import { termStatus, type TermStatus } from "../../lib/course-progress";
 
 const STATUS_ORDER: Record<TermStatus, number> = { current: 0, upcoming: 1, ended: 2 };
@@ -11,22 +10,34 @@ const STATUS_ORDER: Record<TermStatus, number> = { current: 0, upcoming: 1, ende
 const rowClass =
   "flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-sm text-gray-700 hover:bg-subtle";
 
+/** One course assignment on the list. */
+export interface CourseChoice {
+  id: string;
+  course: { code: string; title: string };
+  term: { id: string; name: string; starts_on: string; ends_on: string };
+  student_count: number;
+  /** Who teaches it, on a Dean's list, which has every instructor's assignments. */
+  instructor?: string | null;
+}
+
 /**
- * Picks one of the instructor's courses for the Analytics page, or all of
- * them. One at a time: a course is a whole scope of its own (its roster, its
- * work, its term), so two together would have no term to read them in. Listed
- * under their terms, running ones first, the way the Courses page lists them.
+ * Picks one course assignment for the Analytics page, or all of them: an
+ * instructor's own, or those of a Dean's courses, where the same course under
+ * two instructors is two rows. One at a time: a course is a whole scope of its
+ * own (its roster, its work, its term), so two together would have no term to
+ * read them in. Listed under their terms, running ones first, the way the
+ * Courses page lists them.
  */
-export default function CourseFilter({
+export default function CourseFilter<T extends CourseChoice>({
   offerings,
   value,
   loading,
   onChange,
 }: {
-  offerings: FacultyCourseSummary[];
+  offerings: T[];
   value: string | null;
   loading: boolean;
-  onChange: (offering: FacultyCourseSummary | null) => void;
+  onChange: (offering: T | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -50,7 +61,7 @@ export default function CourseFilter({
     };
   }, [open]);
 
-  const pick = (offering: FacultyCourseSummary | null) => {
+  const pick = (offering: T | null) => {
     setOpen(false);
     buttonRef.current?.focus();
     onChange(offering);
@@ -104,8 +115,11 @@ export default function CourseFilter({
                   const on = o.id === selected?.id;
                   return (
                     <button key={o.id} type="button" onClick={() => pick(o)} aria-pressed={on} className={rowClass}>
-                      <span className="min-w-0 truncate">
-                        <span className="font-semibold text-gray-900">{o.course.code}</span> {o.course.title}
+                      <span className="min-w-0">
+                        <span className="block truncate">
+                          <span className="font-semibold text-gray-900">{o.course.code}</span> {o.course.title}
+                        </span>
+                        {o.instructor && <span className="block truncate text-xs text-gray-500">{o.instructor}</span>}
                       </span>
                       {on ? (
                         <FontAwesomeIcon icon={faCheck} className="h-3 w-3 shrink-0 text-brand-600" />

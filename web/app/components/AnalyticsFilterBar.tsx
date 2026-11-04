@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronDown, faCheck, faLayerGroup } from "@fortawesome/free-solid-svg-icons";
 import type { Section } from "../lib/api";
@@ -14,7 +14,10 @@ function isoDay(d: Date): string {
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
-export type PresetId = "7d" | "30d" | "3m" | "12m" | "ytd" | "custom";
+export type PresetId = "term" | "7d" | "30d" | "3m" | "12m" | "ytd" | "custom";
+
+/** Only with a course picked: it has a term to show the whole of. */
+const TERM_PRESET: { id: PresetId; label: string } = { id: "term", label: "Whole term" };
 
 const PRESETS: { id: PresetId; label: string }[] = [
   { id: "7d", label: "7 days" },
@@ -26,7 +29,7 @@ const PRESETS: { id: PresetId; label: string }[] = [
 ];
 
 /** Ranges are inclusive of both ends, matching the SQL `>= from and <= to`. */
-export function rangeForPreset(preset: Exclude<PresetId, "custom">): { from: string; to: string } {
+export function rangeForPreset(preset: Exclude<PresetId, "custom" | "term">): { from: string; to: string } {
   const today = new Date();
   const from = new Date(today);
   switch (preset) {
@@ -167,11 +170,15 @@ function SectionPicker({
 }
 
 /**
- * Section + date-range filters for the analytics dashboards: the section
- * multi-select, the preset range buttons, and custom start/end dates. The
- * page owns the state; this only draws it and reports changes.
+ * Course, section + date-range filters for the analytics dashboards: the
+ * course picker when the page passes one, the section multi-select, the preset
+ * range buttons, and custom start/end dates. The page owns the state; this only
+ * draws it and reports changes.
  */
 export default function AnalyticsFilterBar({
+  coursePicker,
+  wholeTerm = false,
+  scopeNote,
   sections,
   sectionIds,
   onSectionsChange,
@@ -183,6 +190,11 @@ export default function AnalyticsFilterBar({
   range,
   refreshing,
 }: {
+  coursePicker?: ReactNode;
+  /** A course is picked, so its whole term is on offer as a range. */
+  wholeTerm?: boolean;
+  /** What the course on show is, beside the range read-out. */
+  scopeNote?: string;
   sections: Section[];
   sectionIds: string[];
   onSectionsChange: (ids: string[]) => void;
@@ -199,6 +211,17 @@ export default function AnalyticsFilterBar({
   return (
     <div className="mb-6 rounded-xl border border-hairline bg-surface shadow-tile">
       <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-3">
+        {coursePicker && (
+          <>
+            <div className="flex min-w-0 items-center gap-2.5">
+              <CardLabel>Course</CardLabel>
+              {coursePicker}
+            </div>
+
+            <span className="hidden h-6 w-px bg-hairline sm:block" />
+          </>
+        )}
+
         <div className="flex items-center gap-2.5">
           <CardLabel>Sections</CardLabel>
           <SectionPicker
@@ -209,16 +232,22 @@ export default function AnalyticsFilterBar({
           />
         </div>
 
-        <span className="hidden h-6 w-px bg-hairline sm:block" />
+        {/* Beside the sections there is room for the range; after a course too, it takes a line of its own. */}
+        {coursePicker ? (
+          <span className="hidden basis-full sm:block" />
+        ) : (
+          <span className="hidden h-6 w-px bg-hairline sm:block" />
+        )}
 
         <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2.5">
           <CardLabel>Range</CardLabel>
           <div className="flex flex-wrap items-center gap-1">
-            {PRESETS.map((p) => (
+            {(wholeTerm ? [TERM_PRESET, ...PRESETS] : PRESETS).map((p) => (
               <button
                 key={p.id}
                 type="button"
                 onClick={() => onPresetChange(p.id)}
+                aria-pressed={preset === p.id}
                 className={`rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
                   preset === p.id
                     ? "bg-brand-600 text-white"
@@ -253,8 +282,9 @@ export default function AnalyticsFilterBar({
           </div>
         )}
 
-        <div className="flex items-center gap-2 self-end text-xs text-gray-400 sm:ml-auto sm:self-auto">
+        <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5 self-end text-right text-xs text-gray-400 sm:ml-auto sm:self-auto">
           {refreshing && <EcgLoader size="xs" className="text-brand-600" />}
+          {scopeNote && <span>{scopeNote}</span>}
           <span className="tabular-nums">{formatRangeLabel(range.from, range.to)}</span>
         </div>
       </div>

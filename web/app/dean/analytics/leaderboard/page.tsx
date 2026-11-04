@@ -6,5 +6,5 @@ export const metadata: Metadata = {
 };
 
 export default function AdminLeaderboardPage() {
-  return <LeaderboardClient backHref="/dean/analytics" cacheScope="admin" />;
+  return <LeaderboardClient dean />;
 }

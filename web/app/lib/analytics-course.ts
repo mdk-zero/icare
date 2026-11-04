@@ -1,8 +1,10 @@
 import type { SessionPayload } from './auth/session';
 import type { getSupabaseAdmin } from './supabase/server';
+import { getAdminScope } from './admin-scope';
 import { bucketStart, deriveBucket, type AnalyticsBucket, type SummaryArgs } from './analytics';
 import {
   loadActivityItems,
+  loadDeanTaughtOffering,
   loadOfferingRosters,
   loadOwnOffering,
   loadSectionNames,
@@ -45,8 +47,13 @@ const KIND_OF_ITEM: Partial<Record<NonNullable<RequirementRow['activity_type']>,
 
 /**
  * `?offering_id=` as a scope. Null when the request isn't for one course;
- * 'not_found' when it isn't one of the instructor's own, the way a course
- * route answers 404. Only instructors have this filter.
+ * 'not_found' when it isn't one the viewer may read, the way a course route
+ * answers 404: an instructor's own assignment, or an assignment of a Dean's
+ * own course, whoever teaches it. A Program Chair reads theirs as a Dean does.
+ *
+ * A Dean still sees only the students they own, as on the rest of their page,
+ * should a roster reach past them. An instructor's roster can rightly reach
+ * past their groups, so it isn't limited.
  */
 export async function loadCourseScope(
   supabase: Supabase,
@@ -55,16 +62,23 @@ export async function loadCourseScope(
 ): Promise<CourseScope | 'not_found' | null> {
   const id = params.get('offering_id');
   if (!id) return null;
-  if (session.role !== 'faculty') return 'not_found';
-  const offering = await loadOwnOffering(supabase, session.uid, id);
+  if (session.role !== 'faculty' && session.role !== 'admin') return 'not_found';
+  const offering =
+    session.role === 'faculty'
+      ? await loadOwnOffering(supabase, session.uid, id)
+      : await loadDeanTaughtOffering(supabase, session.uid, id);
   if (!offering) return 'not_found';
 
-  const [rosters, activities] = await Promise.all([
+  const [rosters, activities, deanScope] = await Promise.all([
     loadOfferingRosters(supabase, [{ id, faculty_id: offering.faculty_id, section_ids: offering.section_ids }]),
     loadActivityItems(supabase, [id]),
+    session.role === 'admin' ? getAdminScope(supabase, session.uid) : null,
   ]);
   const wanted = new Set((params.get('section_ids') ?? '').split(',').map((s) => s.trim()).filter(Boolean));
-  const students = (rosters.get(id)?.students ?? []).filter((s) => wanted.size === 0 || wanted.has(s.section_id));
+  const own = deanScope ? new Set(deanScope.studentIds) : null;
+  const students = (rosters.get(id)?.students ?? []).filter(
+    (s) => (wanted.size === 0 || wanted.has(s.section_id)) && (!own || own.has(s.id)),
+  );
 
   const items = new Map<string, WorkKind>();
   for (const item of activities ?? []) {
@@ -78,8 +92,9 @@ export async function loadCourseScope(
 /**
  * The warehouse call for the course's roster, inside its term. The roster
  * alone sets who counts: it can reach past the sections of the instructor's
- * groups. A range wholly outside the term ends up with from after to, which
- * matches nothing.
+ * groups (loadCourseScope has already held a Dean to their own students). A
+ * range wholly outside the term ends up with from after to, which matches
+ * nothing.
  */
 export function courseArgs(args: SummaryArgs, scope: CourseScope): SummaryArgs {
   const { starts_on, ends_on } = scope.offering.term;
@@ -160,6 +175,23 @@ function cohortFigures(scope: CourseScope, work: HandedInWork[], graded: GradedW
   };
 }
 
+/** Per section, in the warehouse's order: who is on the roster, and who handed in the course's work. */
+function sectionFigures(scope: CourseScope, work: HandedInWork[]) {
+  const active = new Set(work.map((w) => w.student_id));
+  const sectionIds = [...new Set(scope.students.map((s) => s.section_id).filter(Boolean))];
+  return sectionIds
+    .map((id) => {
+      const members = scope.students.filter((s) => s.section_id === id);
+      return {
+        id,
+        name: scope.sectionNames.get(id) ?? 'Section',
+        students: members.length,
+        active_students: members.filter((s) => active.has(s.id)).length,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function trendFigures(graded: GradedWork[], bucket: AnalyticsBucket) {
   const buckets = new Map<string, number[]>();
   for (const w of graded) {
@@ -216,6 +248,7 @@ export async function courseFigures(supabase: Supabase, scope: CourseScope, args
   return {
     graded,
     figures: {
+      sections: sectionFigures(scope, work),
       cohort: cohortFigures(scope, work, graded),
       weekly_trend: trendFigures(graded, args.p_bucket),
       top_students: rankCourseStudents(scope, graded).slice(0, 10),

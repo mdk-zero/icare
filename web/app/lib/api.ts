@@ -1548,7 +1548,7 @@ export interface AnalyticsFilters {
   /** YYYY-MM-DD bounds. */
   from?: string;
   to?: string;
-  /** One of an instructor's course assignments: only its roster, its work and its term. */
+  /** One course assignment, the instructor's or of the Dean's courses: only its roster, its work and its term. */
   courseId?: string | null;
   /** Summary only: also attach `group_trend`, one series per group. */
   groupTrend?: boolean;

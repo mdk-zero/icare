@@ -6,8 +6,10 @@ import { useSearchParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft, faTrophy } from "@fortawesome/free-solid-svg-icons";
 import { fetchFacultySections, fetchMyCourses, fetchStudentLeaderboard, Section } from "../../../lib/api";
+import { deanCourseChoices, loadDeanCourses } from "../../../dean/courses/load";
 import PageHeader from "../../../components/PageHeader";
 import { usePageData } from "../../../lib/use-page-data";
+import type { CourseChoice } from "../CourseFilter";
 import { PodiumLeaderboard, PodiumLeaderboardSkeleton } from "../Leaderboard";
 import { formatRange } from "../dates";
 
@@ -21,13 +23,9 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
  * opened bare, it ranks all of the caller's sections over all time. The Dean
  * reuses it from their own analytics page, scoped server-side to their sections.
  */
-export default function LeaderboardClient({
-  backHref = "/instructor/analytics",
-  cacheScope = "faculty",
-}: {
-  backHref?: string;
-  cacheScope?: string;
-}) {
+export default function LeaderboardClient({ dean = false }: { dean?: boolean }) {
+  const backHref = dean ? "/dean/analytics" : "/instructor/analytics";
+  const cacheScope = dean ? "admin" : "faculty";
   const params = useSearchParams();
   const courseId = params.get("course");
   const sectionParam = params.get("sections") ?? "";
@@ -37,8 +35,12 @@ export default function LeaderboardClient({
   const to = DAY.test(params.get("to") ?? "") ? params.get("to")! : undefined;
 
   const { data: sectionsData } = usePageData("faculty:sections", fetchFacultySections);
-  const { data: coursesData } = usePageData(courseId ? "faculty:courses" : null, fetchMyCourses);
-  const course = coursesData?.data?.offerings.find((o) => o.id === courseId) ?? null;
+  const { data: myCourses } = usePageData(courseId && !dean ? "faculty:courses" : null, fetchMyCourses);
+  const { data: deanCourses } = usePageData(courseId && dean ? "admin:courses" : null, loadDeanCourses);
+  const offerings: (CourseChoice & { sections: Section[] })[] = dean
+    ? deanCourseChoices(deanCourses?.courses)
+    : (myCourses?.data?.offerings ?? []);
+  const course = offerings.find((o) => o.id === courseId) ?? null;
   const sections = course?.sections ?? sectionsData ?? NO_SECTIONS;
 
   const loader = useCallback(
@@ -82,6 +84,7 @@ export default function LeaderboardClient({
         </Link>
         <p className="text-sm text-gray-500">
           {course && `${course.course.code} ${course.course.title} · `}
+          {course?.instructor && `${course.instructor} · `}
           {sectionLabel} · <span className="tabular-nums">{rangeLabel}</span>
         </p>
       </div>

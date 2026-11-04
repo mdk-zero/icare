@@ -17,9 +17,9 @@ import { WORK_KINDS, type WorkKind } from '@/app/lib/work-kinds';
  *
  * Query params (all optional): section_ids (csv), from, to — see
  * resolveSummaryArgs, which also confines faculty to their own sections.
- * offering_id narrows the figures to one of an instructor's courses (see
- * analytics-course.ts). group_trend=1 also attaches `group_trend` (see
- * readGroupTrend).
+ * offering_id narrows the figures to one course: an instructor's own, or any
+ * assignment of a Dean's own courses (see analytics-course.ts). group_trend=1
+ * also attaches `group_trend` (see readGroupTrend).
  */
 const STALE_MS = 5 * 60 * 1000; // refresh the warehouse at most every 5 minutes
 

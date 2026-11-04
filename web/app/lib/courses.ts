@@ -679,6 +679,31 @@ export async function loadOwnOffering(supabase: Supabase, facultyId: string, id:
   };
 }
 
+/**
+ * An assignment of one of a Dean's own courses, in the shape its instructor
+ * reads it, or null. One that has lost its instructor has no roster to read.
+ */
+export async function loadDeanTaughtOffering(supabase: Supabase, adminId: string, id: string): Promise<OwnOffering | null> {
+  const row = must(
+    await supabase
+      .from('course_offerings')
+      .select('id, faculty_id, courses!inner(id, code, title, description, admin_id), academic_terms(id, name, starts_on, ends_on)')
+      .eq('id', id)
+      .eq('courses.admin_id', adminId)
+      .not('faculty_id', 'is', null)
+      .maybeSingle(),
+  );
+  if (!row) return null;
+  const sections = (await loadOfferingSections(supabase, [id])).get(id) ?? [];
+  return {
+    id: row.id as string,
+    course: row.courses as unknown as OwnOffering['course'],
+    term: row.academic_terms as unknown as OwnOffering['term'],
+    faculty_id: row.faculty_id as string,
+    section_ids: sections,
+  };
+}
+
 export interface SectionChoice {
   id: string;
   name: string;

@@ -11,7 +11,8 @@ import { isGraded } from '@/app/lib/graded-work';
  * summary's section_ids/from/to params and scoping — a faculty member only
  * ever sees their own sections. Reads the warehouse as-is: the summary route
  * is what keeps it fresh, and this page is only reached from there.
- * offering_id ranks one of an instructor's courses on its own work instead.
+ * offering_id ranks one course on its own work instead: an instructor's own,
+ * or any assignment of a Dean's own courses.
  */
 export async function GET(request: NextRequest) {
   const session = await readSession();

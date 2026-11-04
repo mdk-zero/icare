@@ -527,9 +527,17 @@ function analyticsScope(ctx: Ctx) {
   const { db, query } = ctx;
   const allowed = visibleSections(db, ctx.role, ctx.viewer.id).map((s) => s.id);
   const asked = (query.get("section_ids") ?? "").split(",").filter(Boolean);
-  // One of the instructor's courses: its roster and its work, inside its term.
+  // One course, the instructor's own or of the Dean's courses: its roster and its work, inside its term.
   const offeringId = query.get("offering_id");
-  const offering = offeringId ? courseDb(db).offerings.find((o) => o.id === offeringId && o.faculty_id === ctx.viewer.id) : null;
+  const offering = offeringId
+    ? courseDb(db).offerings.find(
+        (o) =>
+          o.id === offeringId &&
+          (ctx.role === "faculty"
+            ? o.faculty_id === ctx.viewer.id
+            : !!o.faculty_id && db.courses.some((c) => c.id === o.course_id && c.admin_id === ctx.viewer.id)),
+      )
+    : null;
   const term = offering ? db.terms.find((t) => t.id === offering.term_id) : null;
   const items = offering ? courseActivityIds(db, offering.id) : null;
   const choices = offering ? offering.section_ids : allowed;
@@ -637,6 +645,8 @@ route("GET", "/api/analytics/summary", (ctx) => {
   }
 
   const thirty = Date.now() - 30 * DAY_MS;
+  const handedIn = new Set(work.map((w) => w.student_id));
+  const isActive = (s: { id: string }) => (scope.oneCourse ? handedIn.has(s.id) : Date.parse(lastActivity(db, s.id) ?? "1970") > thirty);
   return {
     bucket,
     summary: {
@@ -647,7 +657,7 @@ route("GET", "/api/analytics/summary", (ctx) => {
           id,
           name: sectionName(db, id) ?? "—",
           students: members.length,
-          active_students: members.filter((s) => Date.parse(lastActivity(db, s.id) ?? "1970") > thirty).length,
+          active_students: members.filter(isActive).length,
         };
       }),
       cohort: {
@@ -661,9 +671,7 @@ route("GET", "/api/analytics/summary", (ctx) => {
             return [kind, { average_score: mean(of.map((w) => w.score)) ?? 0, graded: of.length, students: new Set(of.map((w) => w.student_id)).size }];
           }),
         ),
-        active_students_30d: scope.oneCourse
-          ? new Set(work.map((w) => w.student_id)).size
-          : students.filter((s) => Date.parse(lastActivity(db, s.id) ?? "1970") > thirty).length,
+        active_students_30d: students.filter(isActive).length,
       },
       weekly_trend,
       group_trend:
