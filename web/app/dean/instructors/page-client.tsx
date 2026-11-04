@@ -3,7 +3,6 @@
 import { apiFetch } from "@/app/lib/api";
 import { usePageData } from "@/app/lib/use-page-data";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faUsers, faPlus, faPenToSquare, faTrashCan, faLayerGroup } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
@@ -14,21 +13,7 @@ import ActionsMenu from "../../components/ActionsMenu";
 import ConfirmModal from "../../components/ConfirmModal";
 import ChangeEmailDialog from "../../components/ChangeEmailDialog";
 import GenderField from "../../components/GenderField";
-
-interface SectionRef {
-  id: string;
-  name: string;
-}
-
-interface GroupRef {
-  id: string;
-  name: string;
-  section_id: string;
-  section_name: string;
-  faculty_id: string | null;
-  faculty_name: string | null;
-  member_count: number;
-}
+import AssignGroupsModal, { type GroupRef, type SectionRef } from "./assign-groups-modal";
 
 interface Faculty {
   id: string;
@@ -64,7 +49,6 @@ function formatDate(value: string | null): string {
 }
 
 export default function FacultyClient() {
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [tempPassword, setTempPassword] = useState<{ email: string; password: string; warning?: string } | null>(null);
@@ -73,7 +57,6 @@ export default function FacultyClient() {
   const [newFaculty, setNewFaculty] = useState({ name: "", email: "", sex: "" });
 
   const [selectedFaculty, setSelectedFaculty] = useState<Faculty | null>(null);
-  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [filterSection, setFilterSection] = useState("");
 
   const [editing, setEditing] = useState<Faculty | null>(null);
@@ -161,34 +144,30 @@ export default function FacultyClient() {
 
   const openAssignModal = (member: Faculty) => {
     setSelectedFaculty(member);
-    setSelectedGroups(member.groups.map((g) => g.id));
   };
 
-  const toggleGroup = (groupId: string) => {
-    setSelectedGroups((prev) =>
-      prev.includes(groupId) ? prev.filter((id) => id !== groupId) : [...prev, groupId],
-    );
-  };
-
-  const handleSaveAssignments = async () => {
-    if (!selectedFaculty) return;
-    setBusy(true);
-    const res = await apiFetch(`/api/admin/faculty/${selectedFaculty.id}/groups`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ team_ids: selectedGroups }),
-    });
-    setBusy(false);
-    if (!res.ok) {
-      const json = (await res.json()) as { error?: string };
-      flash(json.error ?? "Failed to save groups");
-      return;
+  // Failures go back to the dialog: the page's own message sits behind its backdrop.
+  const handleSaveAssignments = async (groupIds: string[]): Promise<string | null> => {
+    if (!selectedFaculty) return null;
+    try {
+      const res = await apiFetch(`/api/admin/faculty/${selectedFaculty.id}/groups`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ team_ids: groupIds }),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        return json.error ?? "Failed to save groups";
+      }
+    } catch {
+      return "Something went wrong. Check your connection and try again.";
     }
     setSelectedFaculty(null);
     flash("Groups updated");
     // Reload: a moved group changes another instructor's row too.
     await loadData();
+    return null;
   };
 
   const openEdit = (member: Faculty) => {
@@ -508,117 +487,13 @@ export default function FacultyClient() {
       )}
 
       {selectedFaculty && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-surface rounded-xl p-4 w-full max-w-lg mx-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline max-h-[80vh] overflow-hidden flex flex-col">
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Assign Groups to {selectedFaculty.name}
-              </h3>
-              <p className="text-sm text-gray-500">
-                This instructor handles the students in the checked groups. A group has one
-                instructor, so checking another&apos;s group moves it here.
-              </p>
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-4 mb-4">
-              {sections.length === 0 ? (
-                <p className="text-gray-400 text-sm text-center py-8">
-                  No sections yet — create them on the{" "}
-                  <button
-                    onClick={() => router.push("/dean/instructors/assignment")}
-                    className="text-brand-600 font-medium hover:underline"
-                  >
-                    Sections page
-                  </button>
-                </p>
-              ) : (
-                sections.map((section) => {
-                  const sectionGroups = groups.filter((g) => g.section_id === section.id);
-                  return (
-                    <div key={section.id}>
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                        Section {section.name}
-                      </p>
-                      {sectionGroups.length === 0 ? (
-                        <p className="rounded-xl border border-dashed border-gray-200 p-3 text-sm text-gray-400">
-                          No groups yet — create them in{" "}
-                          <button
-                            onClick={() => router.push("/dean/student-management")}
-                            className="text-brand-600 font-medium hover:underline"
-                          >
-                            Student Management
-                          </button>
-                        </p>
-                      ) : (
-                        <div className="space-y-2">
-                          {sectionGroups.map((group) => {
-                            const checked = selectedGroups.includes(group.id);
-                            // May be another dean's instructor when a section is shared.
-                            const holder =
-                              group.faculty_id && group.faculty_id !== selectedFaculty.id
-                                ? (group.faculty_name ?? "another instructor")
-                                : null;
-                            return (
-                              <label
-                                key={group.id}
-                                className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                                  checked
-                                    ? "border-brand-600 bg-brand-600/5"
-                                    : "border-gray-200 hover:border-gray-300"
-                                }`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={() => toggleGroup(group.id)}
-                                  className="w-4 h-4 text-brand-600 rounded focus:ring-brand-600"
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <p className="font-medium text-gray-800">{group.name}</p>
-                                  <p className="text-xs text-gray-400">
-                                    {group.member_count} student{group.member_count === 1 ? "" : "s"}
-                                  </p>
-                                </div>
-                                {holder && (
-                                  <span
-                                    className={`text-xs shrink-0 ${checked ? "text-amber-600" : "text-gray-400"}`}
-                                  >
-                                    {checked ? `Moves from ${holder}` : `With ${holder}`}
-                                  </span>
-                                )}
-                              </label>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            <div className="flex justify-between items-center pt-4 border-t border-gray-200">
-              <p className="text-sm text-gray-500">
-                {selectedGroups.length} group{selectedGroups.length !== 1 ? "s" : ""} selected
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setSelectedFaculty(null)}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveAssignments}
-                  disabled={busy}
-                  className="px-4 py-2 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 transition-all disabled:opacity-50"
-                >
-                  {busy ? "Saving…" : "Save Groups"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AssignGroupsModal
+          instructor={selectedFaculty}
+          sections={sections}
+          groups={groups}
+          onClose={() => setSelectedFaculty(null)}
+          onSave={handleSaveAssignments}
+        />
       )}
       {editing && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">

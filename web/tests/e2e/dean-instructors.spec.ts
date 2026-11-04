@@ -106,4 +106,35 @@ test.describe('Dean: instructor accounts', () => {
     await firstRow(page).locator('td').first().click();
     await expect(page.getByRole('heading', { name: /^Assign Groups to / })).toBeVisible();
   });
+
+  test('group assignment says what saving would change', async ({ page }) => {
+    await page.locator('tbody tr', { hasText: 'Jose Reyes' }).locator('td').first().click();
+    const dialog = page.getByRole('dialog');
+    const section = dialog.locator('section', { hasText: 'Section BSN 3101' });
+    await expect(dialog.getByText('1 group selected, 5 students')).toBeVisible();
+
+    // Ticking the section takes both of its groups from their instructor.
+    await dialog.getByRole('checkbox', { name: /in Section BSN 3101$/ }).check();
+    await expect(section.getByText('2 of 2 selected')).toBeVisible();
+    await expect(section.getByText('Moves from Maria Santos')).toHaveCount(2);
+    await expect(dialog.getByText('3 groups selected, 15 students')).toBeVisible();
+    await expect(dialog.getByText('2 move from another instructor')).toBeVisible();
+
+    // Unticking one of their own leaves it with nobody.
+    await dialog
+      .locator('section', { hasText: 'Section BSN 3102' })
+      .locator('label', { hasText: 'Group B' })
+      .getByRole('checkbox')
+      .uncheck();
+    await expect(dialog.getByText('Will have no instructor', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('2 move from another instructor, 1 will have no instructor')).toBeVisible();
+
+    // A closed section still shows its tally.
+    await dialog.getByRole('button', { name: 'Section BSN 3101', exact: true }).click();
+    await expect(section.getByRole('checkbox', { name: 'Group A' })).toHaveCount(0);
+    await expect(section.getByText('2 of 2 selected')).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+  });
 });
