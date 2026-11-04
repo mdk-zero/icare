@@ -207,7 +207,7 @@ Give at most 3 strengths, 3 improvements and 3 goals. Use the skill numbers show
 export async function generateFeedback(work: GradedWork): Promise<Feedback> {
   if (work.items.length === 0) return ruleFeedback(work);
   try {
-    const raw = await callAI(feedbackPrompt(work));
+    const raw = await callAI(feedbackPrompt(work), { studentData: true });
     const known = new Set(work.items.map((i) => i.skill_id).filter(Boolean));
     const points = (v: unknown) =>
       (Array.isArray(v) ? v : [])

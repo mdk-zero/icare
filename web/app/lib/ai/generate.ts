@@ -119,18 +119,20 @@ const PROVIDERS: { name: string; call: (prompt: string, options: AiOptions) => P
 /**
  * Claude Haiku first, falling back to Gemini (JSON mode) and then the
  * OpenRouter free-model chain. A provider without a key fails instantly, so
- * an unset ANTHROPIC_API_KEY just skips straight to Gemini.
+ * an unset ANTHROPIC_API_KEY just skips straight to Gemini. A student's record
+ * only ever goes to Claude (AiOptions.studentData).
  */
 export async function callAI(prompt: string, options: AiOptions = {}): Promise<Record<string, unknown>> {
   await enforceAiBudget();
+  const providers = options.studentData ? PROVIDERS.slice(0, 1) : PROVIDERS;
   const errors: string[] = [];
-  for (const [i, provider] of PROVIDERS.entries()) {
+  for (const [i, provider] of providers.entries()) {
     try {
       return await provider.call(prompt, options);
     } catch (err) {
       const message = err instanceof Error ? err.message : `${provider.name} failed`;
       errors.push(message);
-      const next = PROVIDERS[i + 1];
+      const next = providers[i + 1];
       if (next) console.warn(`${provider.name} failed, falling back to ${next.name}`, message);
     }
   }

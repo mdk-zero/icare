@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
+import { hasAiConsent } from '@/app/lib/ai-consent';
 import { focusFingerprint, loadSkillFocus } from '@/app/lib/skill-focus';
 import { buildSkillTipsPrompt, sanitizeSkillTips } from '@/app/lib/skill-tips';
 import { loadSkillMastery } from '@/app/lib/skill-mastery';
@@ -48,6 +49,12 @@ export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
 
+    // Nothing reaches the AI without the student's yes. An older app reads this
+    // as having no tips.
+    if (!(await hasAiConsent(supabase, session.uid))) {
+      return NextResponse.json({ tips: [], generated_at: null, ai_off: true });
+    }
+
     const mastery = (await loadSkillMastery(supabase, [session.uid])).get(session.uid) ?? [];
     const [focus, overall] = await Promise.all([
       loadSkillFocus(supabase, session.uid, mastery),
@@ -85,7 +92,7 @@ export async function GET() {
     );
     const goals = new Map(details.map((d) => [d.id, d.goal]));
 
-    const generated = await callAI(buildSkillTipsPrompt(skills, goals, overall, materials));
+    const generated = await callAI(buildSkillTipsPrompt(skills, goals, overall, materials), { studentData: true });
     const tips = sanitizeSkillTips(generated, new Set(skills.map((s) => s.skill_id)), MAX_TIPS + 1);
 
     if (tips.length === 0) {

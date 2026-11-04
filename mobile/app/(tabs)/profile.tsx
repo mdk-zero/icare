@@ -27,6 +27,7 @@ import { ThemePreference, useThemePreference } from "@/hooks/useThemePreference"
 import { roleLabel } from "@/lib/roles";
 import { openPrivacy, openTerms } from "@/lib/legal";
 import PermissionSwitches from "@/components/PermissionSwitches";
+import AiConsentSwitch from "@/components/AiConsentSwitch";
 
 /** Teal ramp sampled from the pill logo's cap (same as login/header/tab bar/dashboard). */
 const Teal = {
@@ -292,6 +293,10 @@ export default function ProfileScreen() {
 
           <View style={styles.rowBorder}>
             <PermissionSwitches />
+          </View>
+
+          <View style={styles.rowBorder}>
+            <AiConsentSwitch />
           </View>
 
           <Pressable

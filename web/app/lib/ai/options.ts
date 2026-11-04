@@ -13,4 +13,11 @@ export interface AiOptions {
   pdf?: string;
   /** Stops waiting on the provider, for routes with a time limit to stay inside. */
   signal?: AbortSignal;
+  /**
+   * The prompt carries a student's record, so it goes to Claude on our paid key
+   * and nowhere else. Gemini's free tier says not to send it personal data and
+   * may have people read what it gets; OpenRouter's free models pass it on to
+   * whichever provider is serving them. Check hasAiConsent before calling.
+   */
+  studentData?: boolean;
 }

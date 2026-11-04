@@ -518,6 +518,11 @@ export async function flushOutbox(): Promise<FlushResult> {
   return { sent, remaining: outbox.length, rejected };
 }
 
+/** Drops one path's offline copy, for data the student asked to have deleted. */
+export async function forgetCached(path: string): Promise<void> {
+  await AsyncStorage.removeItem(CACHE_PREFIX + path);
+}
+
 export async function clearCache(): Promise<void> {
   const keys = await AsyncStorage.getAllKeys();
   await AsyncStorage.multiRemove(keys.filter((k) => k.startsWith(CACHE_PREFIX)));

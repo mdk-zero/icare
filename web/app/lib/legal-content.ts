@@ -20,7 +20,7 @@ export interface LegalDoc {
   sections: LegalSection[];
 }
 
-export const LEGAL_EFFECTIVE = 'November 3, 2026';
+export const LEGAL_EFFECTIVE = 'November 4, 2026';
 
 export const UNIVERSITY = 'Batangas State University – The National Engineering University';
 export const CAMPUS = 'ARASOF Nasugbu Campus';
@@ -137,7 +137,7 @@ export const TERMS: LegalDoc = {
       title: 'AI features',
       blocks: [
         {
-          p: 'Some features use AI to give study tips, feedback and summaries. AI output can be wrong, so treat it as a suggestion. Your grades are given by your clinical instructors, not by AI. The Privacy Policy explains what data the AI features use.',
+          p: 'Some features use AI to give study tips, feedback and summaries. AI output can be wrong, so treat it as a suggestion. Your grades are given by your clinical instructors, not by AI. The Privacy Policy explains what data the AI features use, and you can turn them off anytime in Profile, under Settings.',
         },
       ],
     },
@@ -246,7 +246,16 @@ export const PRIVACY: LegalDoc = {
       title: 'AI features',
       blocks: [
         {
-          p: "Study tips, feedback on reflections, performance summaries for your clinical instructor, and help for instructors writing cases and quiz questions use AI services from Anthropic (Claude) and Google (Gemini). Only the text a feature needs is sent, such as your scores, a reflection or course material, never your password. AI does not decide grades; your clinical instructor does.",
+          p: "If you allow it, AI writes your study tips, your feedback on graded work and the performance summaries your clinical instructor can ask for. These use Claude, from Anthropic. Only what a feature needs is sent: your scores, skill ratings and your clinical instructor's remarks, never your name, email or password.",
+        },
+        {
+          p: 'Nothing is sent unless you say yes. The app asks the first time you sign in, and you can change your answer anytime in Profile, under Settings. If you say no or change your mind, your grades and coursework stay the same, feedback comes straight from your grades, your clinical instructor cannot ask for an AI summary of your work, and any AI tips and feedback saved for you are deleted.',
+        },
+        {
+          p: "Instructors also use AI to help write cases and quiz questions, read curriculum documents and summarize a whole class's results. These tools use Anthropic (Claude), Google (Gemini) and OpenRouter, which passes requests to the AI model companies it works with. They receive course material, simulated patients and class totals, not any one student's record.",
+        },
+        {
+          p: 'AI does not decide grades; your clinical instructor does.',
         },
       ],
     },
@@ -264,10 +273,11 @@ export const PRIVACY: LegalDoc = {
         { p: 'We do not sell your data or use it for advertising. These service providers run parts of iCARE++ for us:' },
         {
           list: [
-            'Supabase: database and file storage (Singapore).',
+            'Supabase: database and file storage (Sydney, Australia).',
             'Vercel: hosting for the website and its server.',
             'Render: the service that makes performance predictions and fits the skill estimates.',
-            'Anthropic and Google: the AI features.',
+            'Anthropic: the AI features you allow, and tools for instructors.',
+            'Google and OpenRouter: tools for instructors, which receive no student records.',
             'Expo: delivering notifications to your phone.',
             'Sentry: error reports.',
           ],
@@ -314,7 +324,7 @@ export const PRIVACY: LegalDoc = {
           p: `To use these rights or to ask for your account to be deleted, contact ${LEGAL_CONTACT}. Academic records the University must keep may not be erased; you will be told which and why.`,
         },
         {
-          p: 'You can turn notifications and camera access on or off anytime in Profile, under Settings.',
+          p: 'You can turn notifications, camera access and the AI features on or off anytime in Profile, under Settings.',
         },
       ],
     },

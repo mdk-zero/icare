@@ -48,6 +48,7 @@ export function FocusSection({
   loading,
   tips,
   tipsLoading,
+  tipsOff,
   atRisk,
   materialsBySkill,
   renderMaterial,
@@ -58,6 +59,8 @@ export function FocusSection({
   loading: boolean;
   tips: AiTip[];
   tipsLoading: boolean;
+  /** The student hasn't allowed AI features, so there are no tips and the panel says why. */
+  tipsOff: boolean;
   /** Their latest at-risk prediction flags them: the panel starts open, with more to study. */
   atRisk: boolean;
   materialsBySkill: Map<string, LibraryItem[]>;
@@ -127,6 +130,12 @@ export function FocusSection({
         </View>
         <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={18} color={Palette.textMuted} />
       </Pressable>
+
+      {open && tipsOff ? (
+        <View style={styles.block}>
+          <Text style={styles.subheading}>AI study tips are off. You can turn them on in Profile, under Settings.</Text>
+        </View>
+      ) : null}
 
       {open && hasOverall ? (
         <OverallBlock profile={overall} tip={overallTip} tipsLoading={tipsLoading} styles={styles} theme={theme} />

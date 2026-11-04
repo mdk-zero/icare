@@ -142,7 +142,7 @@ export default function PermissionSwitches({ inset = 0 }: { inset?: number }) {
         </View>
         <View style={styles.text}>
           <Text style={styles.title}>Camera</Text>
-          <Text style={styles.detail}>Take a profile picture. Choosing one from your gallery needs no permission.</Text>
+          <Text style={styles.detail}>Take a profile picture, or a photo for a support request. Choosing one from your gallery needs no permission.</Text>
         </View>
         <Switch
           value={!!state.camera}

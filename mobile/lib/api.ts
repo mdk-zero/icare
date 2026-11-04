@@ -13,6 +13,7 @@ import {
   clearCache,
   clearToken,
   enqueueWrite,
+  forgetCached,
   isNetworkError,
   duringTokenSwap,
   replaceToken,
@@ -518,6 +519,8 @@ export interface AiTipsResult {
   generated_at: string | null;
   /** True when generation failed and the server fell back to older tips. */
   stale?: boolean;
+  /** True when the student hasn't allowed AI features, so there are no tips. */
+  ai_off?: boolean;
 }
 
 /**
@@ -528,6 +531,25 @@ export interface AiTipsResult {
 export async function fetchAiTips(): Promise<CachedResult<AiTipsResult>> {
   const result = await cachedGet<AiTipsResult>('/api/student/tips');
   return { ...result, data: { ...result.data, tips: result.data.tips ?? [] } };
+}
+
+export interface AiConsentState {
+  /** null: the student hasn't answered yet. */
+  consent: boolean | null;
+  /** False when the server can't read or save the answer, so the app shouldn't ask. */
+  available: boolean;
+}
+
+/** Read fresh every time: an old answer from the offline copy must not decide this. */
+export async function fetchAiConsent(): Promise<AiConsentState> {
+  return api<AiConsentState>('/api/student/ai-consent');
+}
+
+/** A no also deletes the tips and feedback saved for the student, including the offline copy. */
+export async function saveAiConsent(consent: boolean): Promise<AiConsentState> {
+  const saved = await api<AiConsentState>('/api/student/ai-consent', { method: 'POST', body: { consent } });
+  if (!consent) await forgetCached('/api/student/tips');
+  return saved;
 }
 
 // ---------------------------------------------------------------

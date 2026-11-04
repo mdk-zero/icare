@@ -34,6 +34,10 @@ function AuthStack() {
       <Stack.Screen name="student/[id]" options={{ title: "Student" }} />
       <Stack.Screen name="welcome" options={{ headerShown: false, animation: 'fade' }} />
       <Stack.Screen name="legal/[doc]" options={{ title: '' }} />
+      <Stack.Screen
+        name="ai-consent"
+        options={{ headerShown: false, presentation: 'fullScreenModal', gestureEnabled: false }}
+      />
       <Stack.Screen name="login" options={{ headerShown: false, animation: 'fade' }} />
       <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />

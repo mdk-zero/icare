@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { canSeeStudent } from '@/app/lib/admin-scope';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
+import { hasAiConsent } from '@/app/lib/ai-consent';
 import { isActiveSkillArea } from '@/scripts/taylors-chapters';
 import { getStudentsWithWork } from '@/app/lib/faculty-dashboard';
 import { MASTERY_THRESHOLD, type SkillMastery } from '@/app/lib/bkt';
@@ -40,14 +41,13 @@ interface PredictionRecord {
 }
 
 function buildPrompt(input: {
-  name: string;
   quizAttempts: QuizAttempt[];
   scenarios: ScenarioRecord[];
   competencies: CompetencyRecord[];
   prediction: PredictionRecord | null;
   mastery: SkillMastery[];
 }): string {
-  const { name, quizAttempts, scenarios, competencies, prediction, mastery } = input;
+  const { quizAttempts, scenarios, competencies, prediction, mastery } = input;
 
   const quizBlock = quizAttempts.length > 0
     ? quizAttempts
@@ -78,7 +78,7 @@ function buildPrompt(input: {
       (mastery.every((s) => s.source === 'default') ? '\nThese skills are still on starting parameters, so treat the percentages as rough estimates.' : '')
     : '(no results on a skill yet)';
 
-  return `You are a clinical nursing education expert. Write a concise performance summary of the nursing student "${name}" for their faculty instructor, based only on the data below.
+  return `You are a clinical nursing education expert. Write a concise performance summary of one nursing student for their faculty instructor, based only on the data below. Call them "the student".
 
 Quiz attempts (newest first):
 ${quizBlock}
@@ -148,7 +148,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
 
     const { data: student, error: studentError } = await supabase
       .from('users')
-      .select('id, name, email')
+      .select('id')
       .eq('id', id)
       .eq('role', 'student')
       .maybeSingle();
@@ -164,6 +164,14 @@ export async function POST(_request: Request, { params }: RouteParams) {
     // Faculty only their group members; an admin only their own students.
     if (!(await canSeeStudent(supabase, session, id))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Their record goes to the AI only with their own yes (092).
+    if (!(await hasAiConsent(supabase, id))) {
+      return NextResponse.json(
+        { error: "This student hasn't turned on AI features in the app, so an AI summary isn't available." },
+        { status: 409 },
+      );
     }
 
     const [attemptsRes, assignmentsRes, scoresRes, predictionRes] = await Promise.all([
@@ -246,9 +254,9 @@ export async function POST(_request: Request, { params }: RouteParams) {
         return [];
       });
 
-    const generated = await callAI(
-      buildPrompt({ name: student.name, quizAttempts, scenarios, competencies, prediction, mastery }),
-    );
+    const generated = await callAI(buildPrompt({ quizAttempts, scenarios, competencies, prediction, mastery }), {
+      studentData: true,
+    });
     const summary = sanitizeSummary(generated);
 
     return NextResponse.json({ summary, generated_at: new Date().toISOString() });

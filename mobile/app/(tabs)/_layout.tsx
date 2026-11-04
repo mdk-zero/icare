@@ -4,6 +4,7 @@ import { View } from "react-native";
 import { useTheme } from "@/hooks/useTheme";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useAuth } from "@/hooks/useAuth";
+import { useAiConsentPrompt } from "@/hooks/useAiConsentPrompt";
 import { homeFor } from "@/lib/roles";
 import { AppHeader, FloatingTabBar, type TabIcons } from "@/components/navigation/AppTabs";
 
@@ -27,6 +28,7 @@ export default function TabLayout() {
   const { Palette } = useTheme();
   const { user } = useAuth();
   const router = useRouter();
+  useAiConsentPrompt();
 
   // These tabs are the student's. Anyone else is sent to their own home
   // before a student screen mounts and asks a student-only endpoint (403).

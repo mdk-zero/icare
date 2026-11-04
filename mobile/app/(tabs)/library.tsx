@@ -54,6 +54,17 @@ export default function LibraryScreen() {
     }, [reload, reloadFocus]),
   );
 
+  // Turning AI features on or off in Profile changes the tips. Not on the first
+  // visit, which has just loaded them: two reads at once could both reach the AI.
+  const reloadTips = tips.reload;
+  const tipsVisited = React.useRef(false);
+  useFocusEffect(
+    React.useCallback(() => {
+      if (tipsVisited.current) reloadTips();
+      tipsVisited.current = true;
+    }, [reloadTips]),
+  );
+
   const refreshFocus = focus.refresh;
   const refreshTips = tips.refresh;
   const refreshAll = React.useCallback(() => {
@@ -208,6 +219,7 @@ export default function LibraryScreen() {
         loading={focus.loading}
         tips={tips.data?.tips ?? []}
         tipsLoading={tips.loading}
+        tipsOff={tips.data?.ai_off ?? false}
         atRisk={focus.data?.at_risk ?? false}
         materialsBySkill={materialsBySkill}
         renderMaterial={(m) => <MaterialRow item={m} onPress={() => open(m)} styles={styles} Accent={Accent} Palette={Palette} />}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { hasAiConsent } from '@/app/lib/ai-consent';
 import {
   generateFeedback,
   isMissingReflectionTables,
@@ -36,6 +37,10 @@ export async function POST(request: NextRequest) {
   const supabase = getSupabaseAdmin();
   const work = await loadGradedWork(supabase, session.uid, sourceType, sourceId);
   if (!work) return NextResponse.json({ error: 'Not graded yet' }, { status: 404 });
+  // Without the student's yes, the feedback comes from the grades alone.
+  if (!(await hasAiConsent(supabase, session.uid))) {
+    return NextResponse.json({ feedback: ruleFeedback(work) });
+  }
   const signature = workSignature(work);
 
   const { data: cached, error } = await supabase
