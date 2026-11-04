@@ -1,5 +1,5 @@
 -- =================================================================
--- 089: The curriculum.
+-- 091: The curriculum.
 --
 -- A Dean keeps their program of study here: every course by year level and
 -- term, with its units, pre-requisites and co-requisites. It can start from an
@@ -17,7 +17,7 @@
 -- Everything goes through the service role in the API routes, which check the
 -- caller's role and ownership themselves, so RLS is on with no policies.
 --
--- Every step is safe to re-run. Until it runs, the page says it needs 089 and
+-- Every step is safe to re-run. Until it runs, the page says it needs 091 and
 -- Assign Course keeps the built-in list.
 -- =================================================================
 

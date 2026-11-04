@@ -8,7 +8,7 @@ import type { Parsed } from './course-progress';
  * person to look at.
  */
 
-/** These match the checks in migration 089; change the two together. */
+/** These match the checks in migration 091; change the two together. */
 export const CURRICULUM_LIMITS = {
   name: 150,
   code: 50,

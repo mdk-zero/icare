@@ -10,7 +10,7 @@ import {
 import { DEAN_ID, KIND, ago, demoId } from "./people";
 
 /**
- * The Dean's curriculum (migration 089). Written the way the AI reads a PDF, and
+ * The Dean's curriculum (migration 091). Written the way the AI reads a PDF, and
  * put through the same code, so the demo's courses are shaped exactly like a
  * real import. A demo's "upload" reads the same plan with a few faults added,
  * since no AI runs in the browser.

@@ -17,7 +17,7 @@ import { demoReading, seedCurriculum, type DemoCurriculum } from "../fixtures/cu
 import { audit } from "./shared";
 
 /**
- * The curriculum (migration 089), answered from the demo store in the shapes
+ * The curriculum (migration 091), answered from the demo store in the shapes
  * the real routes return. A demo Program Chair is the same account as the demo
  * Dean, so the two share a curriculum here as well.
  */

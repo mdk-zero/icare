@@ -75,7 +75,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           .eq('curriculum_id', id);
         if (error) throw error;
         if (!count) return badRequest('Add a course before using this curriculum');
-        // At most one is in use (089's index), so the old one has to stop first.
+        // At most one is in use (091's index), so the old one has to stop first.
         must(await supabase.from('curricula').update({ is_active: false }).eq('admin_id', ownerId).eq('is_active', true));
       }
       must(await supabase.from('curricula').update({ is_active: body.is_active }).eq('id', id));

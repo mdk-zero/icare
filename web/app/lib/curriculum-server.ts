@@ -17,13 +17,13 @@ import {
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
 /**
- * Server side of the curriculum (migration 089). A curriculum belongs to a
+ * Server side of the curriculum (migration 091). A curriculum belongs to a
  * Dean, and a Program Chair works on their Dean's, so both reach the same one:
  * that is why these routes go by `ownerId` rather than the caller's own id.
  */
 
 export const CURRICULUM_BUCKET = 'curricula';
-export const CURRICULUM_NEEDS_MIGRATION = 'The curriculum needs database migration 089 (curriculum) applied first.';
+export const CURRICULUM_NEEDS_MIGRATION = 'The curriculum needs database migration 091 applied first.';
 
 export const CURRICULUM_COLUMNS = 'id, name, is_active, source_name, source_path, analysis, created_at';
 const COURSE_COLUMNS = 'id, code, title, year_level, term, lecture_units, lab_units, requisite_note, position';
@@ -38,7 +38,7 @@ export interface CurriculumRow {
   created_at: string;
 }
 
-/** The 503 before migration 089, otherwise a logged 500. */
+/** The 503 before migration 091, otherwise a logged 500. */
 export function curriculumFailure(err: unknown, message: string): NextResponse {
   if (isMissingCourseSchema(err)) return NextResponse.json({ error: CURRICULUM_NEEDS_MIGRATION }, { status: 503 });
   console.error(message, err);
@@ -202,7 +202,7 @@ export async function removeCurriculumFile(supabase: Supabase, path: string | nu
 /**
  * What Assign Course offers: the laboratory courses of the curriculum in use, or
  * null to keep the built-in list (none in use, none of its codes end in L, or
- * before 089). A read that fails only loses the list, never the Courses page
+ * before 091). A read that fails only loses the list, never the Courses page
  * around it.
  */
 export async function loadActiveCatalog(supabase: Supabase, session: SessionPayload): Promise<CatalogCourse[] | null> {

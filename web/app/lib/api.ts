@@ -4367,14 +4367,14 @@ export interface DeanCourses {
   terms: AcademicTerm[];
   courses: CourseSummary[];
   offerings: CourseOfferingRow[];
-  /** The lab courses of the curriculum in use (089), which Assign Course offers; null with none. */
+  /** The lab courses of the curriculum in use (091), which Assign Course offers; null with none. */
   catalog?: CatalogCourse[] | null;
 }
 
 const courseRequest = caseRequest;
 
 // ---------------------------------------------------------------------------
-// The curriculum (migration 089)
+// The curriculum (migration 091)
 // ---------------------------------------------------------------------------
 
 export interface CurriculumSummary {

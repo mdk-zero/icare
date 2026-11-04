@@ -1,6 +1,6 @@
 /**
  * The courses a dean picks from until they have a curriculum of their own in
- * use (migration 089), and how terms are named. The courses are the NCM
+ * use (migration 091), and how terms are named. The courses are the NCM
  * laboratory courses ("L": skills lab and RLE) of the Batangas State University
  * BSN program curriculum, where the skills iCARE tracks are done. Lecture
  * courses, GEd and the rest of the curriculum aren't here.

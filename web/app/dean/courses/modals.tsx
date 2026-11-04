@@ -257,7 +257,7 @@ export function CoursePicker({
   existing?: { code: string; title: string }[];
   /** Only the curriculum's courses for this semester; all of them for Midterm or when left out. */
   semester?: Semester;
-  /** The Dean's curriculum in use (089); the built-in NCM lab courses without one. */
+  /** The Dean's curriculum in use (091); the built-in NCM lab courses without one. */
   catalog?: readonly CurriculumCourse[];
 }) {
   const semesterNo = semester === "first" ? 1 : semester === "second" ? 2 : null;
