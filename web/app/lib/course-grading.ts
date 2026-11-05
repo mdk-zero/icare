@@ -446,7 +446,10 @@ export function studentStanding(
   const grade = result.grades.student;
   const criteria = split.parts
     .map((p) => {
-      const items = [...p.items, ...p.components.flatMap((c) => c.items)].flatMap((id) => byId.get(id) ?? []);
+      // Work not assigned to the student (N/A) isn't theirs to count.
+      const items = [...p.items, ...p.components.flatMap((c) => c.items)]
+        .flatMap((id) => byId.get(id) ?? [])
+        .filter((r) => row?.[r.id]?.assigned !== false);
       return {
         id: p.id,
         name: p.name,

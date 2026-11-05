@@ -264,7 +264,7 @@ export function CourseCriteria({ courses }: { courses: CourseCriteriaEntry[] }) 
               {term.name} – Instructor: {instructor}
             </Text>
             <Table
-              head={['Criterion', 'Weight', 'Scored', 'Average']}
+              head={['Criteria for Assessment', 'Weight', 'Scored', 'Average']}
               widths={[3, 1.3, 1.3, 1.9]}
               rows={standing.criteria.map((c) => [c.name, `${c.weight}%`, `${c.scored}/${c.items}`, gradeText(c.score)])}
               emptyText={standing.auto ? 'Nothing to grade in this course yet.' : 'No grading criteria set for this course yet.'}

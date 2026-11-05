@@ -491,11 +491,16 @@ export async function loadStudentStandings(supabase: Supabase, studentId: string
   const courses = await Promise.all(
     offerings.map(async (o): Promise<StudentCourseStanding> => {
       const own = requirements.filter((r) => r.offering_id === o.id);
-      const [facts, { grading }] = await Promise.all([
+      const [facts, { grading }, assignees] = await Promise.all([
         loadProgressFacts(supabase, own, o.term, [studentId]),
         loadGrading(supabase, o.id),
+        loadActivityAssignees(supabase, own, [studentId]),
       ]);
       const row = evaluate(own, skills.get(o.course.id) ?? [], o.term, [studentId], facts)[studentId];
+      // An activity the student was never given is N/A, as on the Progress tab.
+      for (const [requirementId, given] of assignees) {
+        if (row?.[requirementId]) row[requirementId].assigned = given.has(studentId);
+      }
       return {
         id: o.id,
         course: { code: o.course.code, title: o.course.title },

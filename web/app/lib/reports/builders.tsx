@@ -21,6 +21,7 @@ import { isActiveSkillArea } from '@/scripts/taylors-chapters';
 import { CASE_CRITERIA, isLateSubmission, type CaseObservations } from '../case-rubric';
 import { isLateSubmission as isLateAttempt } from '../assessment-timing';
 import { quizGrade } from '../quiz-attempts';
+import { activityOfferings } from '../activity-course';
 import { ratingLabel, scoreDescriptor, type TaskRating } from '../task-ratings';
 import { loadStudentStandings, type StudentCourseStanding } from '../course-requirements';
 import { isMissingCourseSchema } from '../courses';
@@ -81,75 +82,111 @@ export async function buildStudentReport(
     .maybeSingle();
   if (!student) return { error: 'Student not found', status: 404 };
 
-  const [groups, { data: scenarios }, cases, { data: attempts }, { data: scores }, courses] = await Promise.all([
-    groupNames(supabase, [studentId]),
-    supabase
-      .from('scenario_assignments')
-      .select('scenario_id, status, score, submitted_at, completed_at, deadline, scenarios(title)')
-      .eq('student_id', studentId)
-      .order('assigned_at', { ascending: false }),
-    supabase
-      .from('case_submissions')
-      .select('status, score, submitted_at, case_presentations(title, deadline)')
-      .eq('student_id', studentId)
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('assessment_attempts')
-      .select('score, submitted_at, time_taken_seconds, assessments(title, time_limit_seconds)')
-      .eq('student_id', studentId)
-      .eq('status', 'submitted')
-      .order('submitted_at', { ascending: false }),
-    supabase
-      .from('competency_scores')
-      .select('score, created_at, competency_areas(name)')
-      .eq('student_id', studentId)
-      .order('created_at', { ascending: false }),
-    studentCourses(supabase, studentId),
-  ]);
+  const [groups, { data: scenarios }, cases, { data: quizAssignments }, { data: attempts }, { data: scores }, courses] =
+    await Promise.all([
+      groupNames(supabase, [studentId]),
+      supabase
+        .from('scenario_assignments')
+        .select('scenario_id, status, score, submitted_at, completed_at, deadline, scenarios(title)')
+        .eq('student_id', studentId)
+        .order('assigned_at', { ascending: false }),
+      supabase
+        .from('case_submissions')
+        .select('presentation_id, status, score, submitted_at, case_presentations(title, deadline)')
+        .eq('student_id', studentId)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('assessment_assignments')
+        .select('assessment_id, deadline, assessments(title, time_limit_seconds)')
+        .eq('student_id', studentId),
+      supabase
+        .from('assessment_attempts')
+        .select('assessment_id, score, submitted_at, time_taken_seconds')
+        .eq('student_id', studentId)
+        .eq('status', 'submitted')
+        .order('submitted_at', { ascending: false }),
+      supabase
+        .from('competency_scores')
+        .select('score, created_at, competency_areas(name)')
+        .eq('student_id', studentId)
+        .order('created_at', { ascending: false }),
+      studentCourses(supabase, studentId),
+    ]);
   if (cases.error) console.error('Report: failed to read case submissions', cases.error);
 
-  // Return Demonstrations (072) get their own table; the Patient Case rows and average leave them out.
-  const kinds = await scenarioKinds(supabase, (scenarios ?? []).map((a) => a.scenario_id as string));
-  const scenarioRows = ofKind(scenarios ?? [], kinds, 'patient_case', (a) => a.scenario_id as string).map((a) => {
+  // The course each assigned activity was made for (070), so the work reads course by course.
+  const scenarioIds = (scenarios ?? []).map((a) => a.scenario_id as string);
+  const quizIds = (quizAssignments ?? []).map((a) => a.assessment_id as string);
+  const presentationIds = (cases.data ?? []).map((c) => c.presentation_id as string);
+  const [kinds, scenarioCourse, quizCourse, presentationCourse] = await Promise.all([
+    scenarioKinds(supabase, scenarioIds),
+    activityOfferings(supabase, 'scenarios', scenarioIds),
+    activityOfferings(supabase, 'assessments', quizIds),
+    activityOfferings(supabase, 'case_presentations', presentationIds),
+  ]);
+
+  type Row = { offering: string | null; cells: string[]; score: number | null };
+  const scenarioRows: Row[] = ofKind(scenarios ?? [], kinds, 'patient_case', (a) => a.scenario_id as string).map((a) => {
     const title = (a as unknown as { scenarios: { title: string } | null }).scenarios?.title ?? 'Unknown patient case';
     const late = isLate(a.submitted_at, a.deadline);
+    const score = a.status === 'completed' && a.score !== null ? Number(a.score) : null;
     return {
-      title,
-      status: scenarioStatus(a),
-      submitted: a.submitted_at ? `${date(a.submitted_at)}${late ? ' (late)' : ''}` : '—',
-      score: a.status === 'completed' && a.score !== null ? Number(a.score) : null,
+      offering: scenarioCourse.get(a.scenario_id as string) ?? null,
+      cells: [title, scenarioStatus(a), a.submitted_at ? `${date(a.submitted_at)}${late ? ' (late)' : ''}` : '—', grade(score)],
+      score,
     };
   });
-  const returnDemoRows = ofKind(scenarios ?? [], kinds, 'return_demo', (a) => a.scenario_id as string).map((a) => ({
-    title: (a as unknown as { scenarios: { title: string } | null }).scenarios?.title ?? 'Return Demonstration',
-    status: scenarioStatus(a),
-    graded: a.status === 'completed' && a.completed_at ? date(a.completed_at) : '—',
-    score: a.status === 'completed' && a.score !== null ? Number(a.score) : null,
-  }));
-  const scenarioScores = scenarioRows.flatMap((r) => (r.score === null ? [] : [r.score]));
-
-  const caseRows = (cases.data ?? []).map((c) => {
+  const returnDemoRows: Row[] = ofKind(scenarios ?? [], kinds, 'return_demo', (a) => a.scenario_id as string).map((a) => {
+    const score = a.status === 'completed' && a.score !== null ? Number(a.score) : null;
+    return {
+      offering: scenarioCourse.get(a.scenario_id as string) ?? null,
+      cells: [
+        (a as unknown as { scenarios: { title: string } | null }).scenarios?.title ?? 'Return Demonstration',
+        scenarioStatus(a),
+        a.status === 'completed' && a.completed_at ? date(a.completed_at) : '—',
+        grade(score),
+      ],
+      score,
+    };
+  });
+  const caseRows: Row[] = (cases.data ?? []).map((c) => {
     const p = (c as unknown as { case_presentations: { title: string; deadline: string | null } | null }).case_presentations;
     const late = isLate(c.submitted_at, p?.deadline ?? null);
+    const score = c.status === 'graded' && c.score !== null ? Number(c.score) : null;
     return {
-      title: p?.title ?? 'Case presentation',
-      status: CASE_STATUS_LABEL[c.status as string] ?? String(c.status),
-      submitted: c.submitted_at ? `${date(c.submitted_at)}${late ? ' (late)' : ''}` : '—',
-      score: c.status === 'graded' && c.score !== null ? Number(c.score) : null,
+      offering: presentationCourse.get(c.presentation_id as string) ?? null,
+      cells: [
+        p?.title ?? 'Case presentation',
+        CASE_STATUS_LABEL[c.status as string] ?? String(c.status),
+        c.submitted_at ? `${date(c.submitted_at)}${late ? ' (late)' : ''}` : '—',
+        grade(score),
+      ],
+      score,
     };
   });
-  const caseScores = caseRows.flatMap((r) => (r.score === null ? [] : [r.score]));
-
-  const quizRows = (attempts ?? []).map((a) => {
-    const quiz = (a as unknown as { assessments: { title: string; time_limit_seconds: number | null } | null }).assessments;
-    const late = isLateAttempt(a.time_taken_seconds, quiz?.time_limit_seconds ?? null);
+  // One row per quiz the student was given, graded as the average of their graded tries.
+  const triesOf = new Map<string, NonNullable<typeof attempts>>();
+  for (const a of attempts ?? []) triesOf.set(a.assessment_id as string, [...(triesOf.get(a.assessment_id as string) ?? []), a]);
+  const quizRows: Row[] = (quizAssignments ?? []).map((q) => {
+    const quiz = (q as unknown as { assessments: { title: string; time_limit_seconds: number | null } | null }).assessments;
+    const tries = triesOf.get(q.assessment_id as string) ?? [];
+    const graded = tries.filter((t) => t.score !== null).map((t) => Number(t.score));
+    const average = quizGrade(graded);
+    const latest = tries[0];
+    const late = latest ? isLateAttempt(latest.time_taken_seconds, quiz?.time_limit_seconds ?? null) : false;
+    const score = average === null ? null : Math.round(average);
     return {
-      title: quiz?.title ?? 'Unknown assessment',
-      submitted: `${date(a.submitted_at)}${late ? ' (late)' : ''}`,
-      score: a.score === null ? null : Math.round(Number(a.score)),
+      offering: quizCourse.get(q.assessment_id as string) ?? null,
+      cells: [
+        quiz?.title ?? 'Unknown assessment',
+        tries.length ? 'Completed' : 'Not started',
+        latest ? `${date(latest.submitted_at)}${late ? ' (late)' : ''}` : '—',
+        pct(score),
+      ],
+      score,
     };
   });
-  const quizScores = quizRows.flatMap((r) => (r.score === null ? [] : [r.score]));
+  const scoresOf = (rows: Row[]) => rows.flatMap((r) => (r.score === null ? [] : [r.score]));
 
   // Rows arrive newest-first, so the first hit per area is the latest score.
   const byArea = new Map<string, { latest: number; count: number }>();
@@ -163,6 +200,24 @@ export async function buildStudentReport(
   const areas = [...byArea.entries()].sort(([a], [b]) => a.localeCompare(b));
 
   const section = (student as unknown as { sections: { name: string } | null }).sections?.name ?? 'Unassigned';
+
+  // The student's courses in the order the criteria list them, then work made for no course of theirs.
+  const known = new Set(courses.map((c) => c.id));
+  const all = [...scenarioRows, ...returnDemoRows, ...caseRows, ...quizRows];
+  const blocks = [
+    ...courses.map((c) => ({ key: c.id, heading: `${c.course.code} – ${c.course.title}`, sub: `${c.term.name} – Instructor: ${c.instructor}` })),
+    ...(all.some((r) => !r.offering || !known.has(r.offering))
+      ? [{ key: 'none', heading: 'Not in one of their courses', sub: 'Work assigned outside a course' }]
+      : []),
+  ];
+  const inBlock = (key: string, rows: Row[]) =>
+    rows.filter((r) => (key === 'none' ? !r.offering || !known.has(r.offering) : r.offering === key));
+  const tables = [
+    { title: 'Patient Cases', head: ['Patient Case', 'Status', 'Submitted', 'Grade'], rows: scenarioRows },
+    { title: 'Return Demonstrations', head: ['Return Demonstration', 'Status', 'Graded', 'Grade'], rows: returnDemoRows },
+    { title: 'Case Presentations', head: ['Presentation', 'Status', 'Submitted', 'Grade'], rows: caseRows },
+    { title: 'Quizzes', head: ['Quiz', 'Status', 'Last submitted', 'Grade'], rows: quizRows },
+  ];
 
   const pdf = (
     <ReportShell
@@ -179,45 +234,39 @@ export async function buildStudentReport(
       <Text style={styles.sectionTitle}>Summary</Text>
       <StatGrid
         items={[
-          gradeTile('Patient case average', avg(scenarioScores)),
-          gradeTile('Case presentation average', avg(caseScores)),
-          { label: 'Quiz average', value: pct(avg(quizScores)) },
+          gradeTile('Patient case average', avg(scoresOf(scenarioRows))),
+          gradeTile('Case presentation average', avg(scoresOf(caseRows))),
+          { label: 'Quiz average', value: pct(avg(scoresOf(quizRows))) },
         ]}
       />
 
-      <Text style={styles.sectionTitle}>Courses and assessment criteria</Text>
+      <Text style={styles.sectionTitle}>Courses and criteria for assessment</Text>
       <CourseCriteria courses={courses} />
 
-      <Text style={styles.sectionTitle}>Patient Cases</Text>
-      <Table
-        head={['Patient Case', 'Status', 'Submitted', 'Grade']}
-        widths={[3, 1.3, 1.3, 1.9]}
-        rows={scenarioRows.map((r) => [r.title, r.status, r.submitted, grade(r.score)])}
-        emptyText="No patient cases assigned yet."
-      />
-
-      <Text style={styles.sectionTitle}>Return Demonstrations</Text>
-      <Table
-        head={['Return Demonstration', 'Status', 'Graded', 'Grade']}
-        widths={[3, 1.3, 1.3, 1.9]}
-        rows={returnDemoRows.map((r) => [r.title, r.status, r.graded, grade(r.score)])}
-        emptyText="No return demonstrations assigned yet."
-      />
-
-      <Text style={styles.sectionTitle}>Case presentations</Text>
-      <Table
-        head={['Presentation', 'Status', 'Submitted', 'Grade']}
-        widths={[3, 1.3, 1.3, 1.9]}
-        rows={caseRows.map((r) => [r.title, r.status, r.submitted, grade(r.score)])}
-        emptyText="No case presentations assigned yet."
-      />
-
-      <Text style={styles.sectionTitle}>Quizzes</Text>
-      <Table
-        head={['Assessment', 'Submitted', 'Score']}
-        rows={quizRows.map((r) => [r.title, r.submitted, pct(r.score)])}
-        emptyText="No quizzes submitted yet."
-      />
+      <Text style={styles.sectionTitle}>Assigned work by course</Text>
+      {blocks.length === 0 ? (
+        <Text style={styles.empty}>Nothing has been assigned to this student yet.</Text>
+      ) : (
+        blocks.map((b) => {
+          const own = tables.map((t) => ({ ...t, rows: inBlock(b.key, t.rows) })).filter((t) => t.rows.length > 0);
+          return (
+            <View key={b.key} style={{ marginBottom: 6 }}>
+              <Text style={styles.courseTitle}>{b.heading}</Text>
+              <Text style={styles.courseSub}>{b.sub}</Text>
+              {own.length === 0 ? (
+                <Text style={styles.empty}>Nothing assigned to this student in this course yet.</Text>
+              ) : (
+                own.map((t) => (
+                  <View key={t.title} wrap={false} style={{ marginBottom: 4 }}>
+                    <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, marginTop: 4, marginBottom: 2 }}>{t.title}</Text>
+                    <Table head={t.head} widths={[3, 1.3, 1.3, 1.9]} rows={t.rows.map((r) => r.cells)} />
+                  </View>
+                ))
+              )}
+            </View>
+          );
+        })
+      )}
 
       <Text style={styles.sectionTitle}>Skill areas</Text>
       <Table
@@ -227,7 +276,8 @@ export async function buildStudentReport(
       />
 
       <Text style={note}>
-        Grades use the verbal scale instructors grade on: Excellent, Satisfactory or Needs Practice. Skill
+        Only work assigned to the student is listed. Grades use the verbal scale instructors grade on: Excellent,
+        Satisfactory or Needs Practice. A quiz grade is the average of the student&apos;s graded tries. Skill
         Assessments pass at {PASSING_SCORE}%.
       </Text>
     </ReportShell>
