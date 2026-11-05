@@ -116,9 +116,10 @@ app asks for the stream to show a percentage; the nightly workflow doesn't.
   `python -m training.train_icare` labels students by the mean of their
   finalized patient-case grades and any faculty-validated competency scores
   vs the 75 passing mark (it needs 30 labeled students with both outcomes),
-  trains on `EXTENDED_FEATURES`, and registers artifacts as `staging`. The
-  fictional App Review section is left out of the labels. A class is too
-  small to spare a holdout, so its metrics are stratified k-fold
+  trains on `EXTENDED_FEATURES`, and registers artifacts as `staging`. Only
+  real students count: the test institution (campus `ICARE-TEST`, see
+  `app/cohorts.py`) is left out. A class is too small to spare a holdout, so
+  its metrics are stratified k-fold
   cross-validated (up to 5 folds, out-of-fold predictions, `f1_fold_std` for
   the spread) and the shipped model is fit on every labeled student. The
   nightly run does this on its own through `POST /models/retrain` once there
@@ -148,8 +149,9 @@ app asks for the stream to show a percentage; the nightly workflow doesn't.
   metrics, and OULAD figures as OULAD figures only.
 - **iCARE evaluation** — `python -m eval.icare_eval` scores the models
   against those same outcomes: raw, as deployed (participation-weighted),
-  and the latest stored predictions faculty saw. Until real grades replace
-  the seeded history, its numbers only show the pipeline works.
+  and the latest stored predictions faculty saw. With `--simulated` it scores
+  the test institution's simulated class instead, which only shows the pipeline
+  works. Accuracy figures come from real students, without that flag.
 - **Bayesian Knowledge Tracing** (`app/bkt.py`) — one two-state hidden
   Markov model per Taylor's skill, over each student's answers in time order.
   An answer is a quiz answer (graded attempts and review quizzes) or a skill's
@@ -157,7 +159,9 @@ app asks for the stream to show a percentage; the nightly workflow doesn't.
   Satisfactory count as right, Needs Practice as wrong, and N/A or an unrated
   check-off is skipped. A rated task is one answer however many sub-tasks it
   has, because its sub-tasks are one performance rated in one sitting. Both
-  kinds share a skill's parameters. EM (Baum-Welch, as in pyBKT) fits
+  kinds share a skill's parameters, so the fit reads real students only once
+  any has a result; until then it reads the simulated class, which keeps the
+  pipeline running and is not evidence. EM (Baum-Welch, as in pyBKT) fits
   P(L0), P(T), P(G), P(S) on every whole-cohort `/recommend/refresh` (nightly,
   or an admin's run; scoped runs leave it alone), with guess and slip
   capped below 0.5 to avoid degenerate fits. Cold start: a skill needs 5

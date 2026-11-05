@@ -50,6 +50,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from app.cohorts import simulated_students  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.db import Db  # noqa: E402
 from app.features import StudentFeatures, build_student_features  # noqa: E402
@@ -65,10 +66,6 @@ MAX_FOLDS = 5
 # model that flags everyone, whose F1 looks fine when most students are at risk.
 SWITCH_MIN_FOLDS = MAX_FOLDS
 SWITCH_MIN_ROC_AUC = 0.7
-
-# Sections of made-up students (web/scripts/seed-review-accounts.ts). Their
-# grades are simulated, so they mustn't teach a model that can go live.
-FICTIONAL_SECTIONS = ["App Review"]
 
 
 def cross_validated(estimator, X: np.ndarray, y: np.ndarray, cv: StratifiedKFold) -> dict:
@@ -95,19 +92,14 @@ def cross_validated(estimator, X: np.ndarray, y: np.ndarray, cv: StratifiedKFold
     }
 
 
-def _fictional_students(db: Db) -> set[str]:
-    sections = db.select("sections", "id", [("name", "in", FICTIONAL_SECTIONS)])
-    if not sections:
-        return set()
-    students = db.select("users", "id", [("section_id", "in", [s["id"] for s in sections])])
-    return {s["id"] for s in students}
-
-
-def outcome_labels(db: Db, pass_threshold: float) -> dict[str, int]:
+def outcome_labels(db: Db, pass_threshold: float, simulated: bool = False) -> dict[str, int]:
     """Each graded student's outcome: 1 (at risk) when the mean of their
     finalized case grades and faculty validations is below pass_threshold.
-    Students with neither are left out, as are FICTIONAL_SECTIONS. Shared with
-    eval/icare_eval.py.
+    Students with neither are left out. Shared with eval/icare_eval.py.
+
+    Real students only, or with simulated=True only the simulated ones (for
+    evaluation, never training): a model that can go live on its own mustn't
+    learn from made-up grades.
 
     Faculty judgements only. Assessment-derived competency scores are
     computed from the same attempts that produce the features, so folding
@@ -124,10 +116,10 @@ def outcome_labels(db: Db, pass_threshold: float) -> dict[str, int]:
         [("source", "eq", "faculty_validation")],
     )
     print(f"  {len(finalized)} finalized case grades, {len(validated)} faculty validations")
-    fictional = _fictional_students(db)
+    cohort = simulated_students(db)
     scores_by_student: dict[str, list[float]] = {}
     for row in [*finalized, *validated]:
-        if row["student_id"] not in fictional:
+        if (row["student_id"] in cohort) == simulated:
             scores_by_student.setdefault(row["student_id"], []).append(float(row["score"]))
     return {
         sid: int(np.mean(scores) < pass_threshold)

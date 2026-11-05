@@ -33,6 +33,7 @@ from typing import Any
 import httpx
 import numpy as np
 
+from .cohorts import simulated_students
 from .db import Db
 
 # Keep in step with DEFAULT_BKT in web/app/lib/bkt.ts.
@@ -305,8 +306,8 @@ def load_sequences(db: Db) -> tuple[Sequences, dict[str, str]]:
     time they were handed in, answers within one by their place on the paper,
     and finished Patient Cases and Return Demonstrations among them by the time
     the grade was finished. Graded attempts and practice runs both count — BKT
-    models learning across practice. Also returns skill -> chapter (competency)
-    id."""
+    models learning across practice. Real students only, once any has a result.
+    Also returns skill -> chapter (competency) id."""
     skill_chapter = {s["id"]: s["chapter_id"] for s in db.select("taylor_skills", "id,chapter_id")}
     # Filtered here rather than in the query: before web migration 083 the
     # 'practiced' status doesn't exist, and naming it would fail the read.
@@ -340,6 +341,10 @@ def load_sequences(db: Db) -> tuple[Sequences, dict[str, str]]:
         ordered.append((attempt["student_id"], skill, attempt["submitted_at"], ans["attempt_id"], slot,
                         bool(ans["is_correct"])))
     ordered.extend(_checklist_rows(db, skill_chapter))
+    # Parameters are shared, so a fit to the simulated class would steer real
+    # students' mastery. It only keeps the pipeline running until they have results.
+    simulated = simulated_students(db)
+    ordered = [row for row in ordered if row[0] not in simulated] or ordered
     ordered.sort(key=lambda row: (row[2], row[3], row[4]))
 
     sequences: Sequences = {}

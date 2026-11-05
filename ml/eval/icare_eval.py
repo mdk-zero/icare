@@ -21,6 +21,10 @@ matrix so they read in that light.
 
 Usage (env must contain SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / ML_SERVICE_SECRET):
     python -m eval.icare_eval [--models "models/*-oulad.joblib"] [--pass-threshold 75]
+                              [--simulated]
+
+--simulated scores the test institution's simulated class instead of real
+students. That checks the pipeline. It is not evidence of accuracy.
 
 Writes eval/out/icare_eval.json and eval/out/icare_eval.md (aggregates
 only, no student ids).
@@ -75,12 +79,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--models", default=str(ML_ROOT / "models" / "*-oulad.joblib"))
     parser.add_argument("--pass-threshold", type=float, default=75.0)
+    parser.add_argument("--simulated", action="store_true", help="score the simulated class, not real students")
     args = parser.parse_args()
     threshold = get_settings().risk_threshold
 
     db = Db()
     try:
-        labels = outcome_labels(db, args.pass_threshold)
+        labels = outcome_labels(db, args.pass_threshold, args.simulated)
         features = build_student_features(db, list(labels) or None)
         stored = db.select(
             "performance_predictions", "student_id,probability,predicted_at",
@@ -91,7 +96,7 @@ def main() -> None:
 
     students = [features[sid] for sid in labels if sid in features]
     if not students:
-        sys.exit("no labeled students: finalize some case grades first")
+        sys.exit(f"no labeled {'simulated' if args.simulated else 'real'} students: finalize some case grades first")
     y = np.array([labels[s.student_id] for s in students], dtype=int)
     print(f"  {len(y)} labeled students, {int(y.sum())} at risk")
 
@@ -125,6 +130,7 @@ def main() -> None:
     out_dir = ML_ROOT / "eval" / "out"
     out_dir.mkdir(parents=True, exist_ok=True)
     payload = {
+        "simulated": args.simulated,
         "labels": f"mean finalized case grade / faculty validation < {args.pass_threshold}",
         "samples": int(len(y)),
         "at_risk": int(y.sum()),
@@ -136,6 +142,7 @@ def main() -> None:
 
     lines = [
         "# At-risk models on iCARE++ outcomes", "",
+        *(["**Simulated class: these figures check the pipeline, not accuracy.**", ""] if args.simulated else []),
         f"{len(y)} graded students, {int(y.sum())} at risk (mean grade below "
         f"{args.pass_threshold:g}). Flag threshold {threshold}. "
         f"{payload['students_with_full_evidence']} students have the "

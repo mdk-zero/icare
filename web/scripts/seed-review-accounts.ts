@@ -9,9 +9,8 @@
  * sight: they are tied to a course, so a student only sees one assigned to them.
  * The grades come from seed-student-history and seed-courses, the same code the
  * test cohort uses, and only ever touch the accounts named here. They do count
- * as simulated data in that Dean's analytics and in BKT. At-risk retraining
- * leaves this section out by name (FICTIONAL_SECTIONS in ml/training/train_icare.py),
- * so keep the two in step.
+ * as simulated data in that Dean's analytics. The ML service keeps the whole
+ * test campus apart from real students (ml/app/cohorts.py).
  *
  * Safe to re-run: accounts, the section, the group and the term are matched by
  * name or email, and the sample work is rebuilt. Passwords are only set when an
@@ -191,7 +190,7 @@ async function main() {
 
   // ---- Graded work and a course --------------------------------------------
   console.log('\nBuilding their work (a few minutes)...');
-  await seedHistory(PROFILES, { [SECTION]: WORK });
+  await seedHistory(PROFILES, { [SECTION]: WORK }, { deanId: dean.id as string, instructorId });
 
   // Its own term, since the instructor's screens only list a course in a term that is running.
   const now = Date.now();

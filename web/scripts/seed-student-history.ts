@@ -1,61 +1,56 @@
 /**
- * Gives the existing students a past: finished scenarios and sat quizzes.
+ * A real-world simulation of a class, for testing. Every result it writes is
+ * made up.
  *
- * seed-basic-cases.ts and seed-scenario-quizzes.ts build the ward and the
- * papers, but every student starts with an empty record — no attempts, no
- * competency standing, nothing for the faculty dashboards, the analytics
- * warehouse or the ML recommender to read. This fills that in.
+ * Who: the test institution only (campus ICARE-TEST), meaning its Dean's
+ * students in Michael Smith's sections. It refuses a student under any other
+ * Dean and reads only that Dean's cases and quizzes, so a real campus such as
+ * Batangas State University can't be reached from here. Real evidence comes
+ * from those campuses, which is why the ML service keeps this one apart
+ * (ml/app/cohorts.py): at-risk training never reads it, and BKT reads it only
+ * while no real student has a result.
  *
- * Two things make the output worth training on rather than just worth
- * looking at.
+ * What makes it read like a class rather than a demo:
  *
- *   It is generated through the real code. Papers come from
- *   selectQuestionsForAttempt(), the same adaptive selector the student app
- *   uses, and competency standing from deriveCompetencyScoresForAttempt(),
- *   the same roll-up the submit route calls. A seed that reimplemented either
- *   would drift from the app the first time the real logic changed.
+ *   A spread. Most students are ordinary and a few are not, instead of 17
+ *   students at 95% and 2 failing. PROFILES is calibrated against the one real
+ *   cohort in this repo, OULAD (ml/data/oulad_holdout.csv): its passing
+ *   students score a median of 81, 63 to 91 from the 10th to the 90th
+ *   percentile, and hand in a median of 17% of their work late. Its failure
+ *   rate is a distance-learning one, so this class fails fewer: about 1 in 5,
+ *   which is an assumption, not a measurement.
  *
- *   It has structure. Each student carries an ability and a list of
- *   competencies they are weak or strong at, and answers are drawn against
- *   that — so a student who is weak at Medications misses medication
- *   questions consistently, across every quiz, the way a real one would.
- *   Uniform random answers would give the recommender nothing to find.
+ *   Students who change. Some improve and some slide, block by block, and
+ *   theory and bedside skill don't always agree (ability, handsOn, growth).
  *
- * Everything is deterministic: the RNG is seeded per student and attempt, so
- * a re-run reproduces the same history rather than a new random one.
+ *   Questions that differ. A question's difficulty belongs to the question, so
+ *   the same one is hard for the whole class, and wrong answers take longer.
+ *   Guessing puts a floor under a four-option question.
  *
- * It fills the calendar. The history is a term of TERM_DAYS ending today: each
- * section works through its cases in back-to-back blocks, and each block's
- * quiz stays open for the whole block and is sat again: past the quiz's graded
- * tries as a review quiz, as in the app. Sittings
- * are planned per section, one a day, so every section has attempts on every
- * day of the term — the analytics trend has a point in every daily, weekly
- * and monthly bucket back to the term's start, up to today. Dates are
- * relative to the moment it runs, so re-running moves the term to the new
- * today.
+ *   The calendar of a real term. Quizzes are mostly sat in the evening, close
+ *   to the deadline for those who leave things late, and some work comes in
+ *   after it (the app flags late work, it doesn't block it). Instructors grade
+ *   in person on the group's lab day, so a case can sit handed in and awaiting
+ *   its grade. The newest block is still running, so some work is open today.
+ *   There are empty days, because a real class has them.
  *
- * It follows the groups. A group works one case at a time, the same case for
- * every member, and each member is scored on their own: every member has
- * their own assignment row, carrying the group, graded by the group's
- * supervising faculty member. Over the term a group works through all of its
- * section's cases, each group starting at a different one, so two groups in a
- * section never share a case in the same block. Quizzes stay individual and
- * follow the member's case order.
+ * It is generated through the real code: papers from
+ * selectQuestionsForAttempt(), competency standing from
+ * deriveCompetencyScoresForAttempt() and case scores from scoreAssignment(). It
+ * follows the groups: one case per group per block, each member scored alone.
+ * Everything is deterministic per student and piece of work, but dates are
+ * relative to the moment it runs.
  *
- * It grades the way faculty do. Every performed task has each of its
- * sub-tasks rated Excellent, Satisfactory or Needs Practice against the
- * student's profile, and the stored score comes from the app's own
- * scoreAssignment(), so re-opening a grade and saving it keeps the score.
+ * Re-runs and what it won't touch: it clears and rebuilds what it wrote for the
+ * students in PROFILES, on the work in its catalog. Real work stays, and that
+ * case or quiz is skipped for that student. Rows are told apart by the stamps
+ * below: every seeded rating is dated exactly at its assignment's completed_at,
+ * and every seeded hand-in exactly time_taken after its start, neither of which
+ * the app lands on. The main run also clears those students' untouched
+ * assignments on the Dean's other work, or leftover test assignments would count
+ * as missed work.
  *
- * Scope and re-runs: this owns the (student, scenario) and (student,
- * assessment) pairs of every case and quiz in the catalog below, for every
- * student in PROFILES. Those are cleared and
- * rebuilt on each run, so a student whose group or group case changed loses
- * the old pair rather than keeping it; anything else in the database is left
- * alone. Deleting an attempt
- * also drops its derived competency_scores, by the trigger migration 027
- * installs, so the roll-up never double-counts.
- *
+ *   npx tsx scripts/seed-student-history.ts --dry-run   report the plan, write nothing
  *   npx tsx scripts/seed-student-history.ts
  */
 
@@ -66,16 +61,20 @@ import { attemptLimit } from '../app/lib/quiz-attempts';
 import { deriveCompetencyScoresForAttempt } from '../app/lib/competency';
 import { scoreAssignment } from '../app/lib/scenario-tasks';
 import { ratingForCredit, TASK_RATINGS, type TaskRating } from '../app/lib/task-ratings';
-import { generateRandomPassword, hashPassword } from '../app/lib/auth/password';
 
 config({ path: '.env.local' });
 
-/** Deterministic RNG, so a re-run reproduces the same history. */
+const TEST_CAMPUS = 'ICARE-TEST';
+const TEST_INSTRUCTOR = 'Michael Smith';
+
+/** Deterministic RNG (mulberry32), so a re-run reproduces the same class. */
 function seeded(seed: number): () => number {
-  let s = seed >>> 0 || 1;
+  let s = seed >>> 0;
   return () => {
-    s = (s * 1103515245 + 12345) & 0x7fffffff;
-    return s / 0x7fffffff;
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 
@@ -88,260 +87,98 @@ function hash(text: string): number {
   return h >>> 0;
 }
 
+const clamp = (x: number, low: number, high: number) => Math.min(high, Math.max(low, x));
+const logit = (p: number) => Math.log(p / (1 - p));
+const logistic = (x: number) => 1 / (1 + Math.exp(-x));
+/** A bell-shaped draw: mean 0, standard deviation 1. */
+const bell = (rng: () => number) => (rng() + rng() + rng() - 1.5) * 2;
+
 export interface Profile {
   email: string;
-  /** Used only when the student does not exist yet; existing rows are left alone. */
   name: string;
   section: string;
   sex: 'male' | 'female';
-  /** Baseline chance of answering a question correctly. */
+  /** Share of quiz questions they get right at the start of the term, guesses included. */
   ability: number;
   /**
-   * Skill areas — Taylor's chapters — this student reliably misses, and
-   * reliably gets. Only chapters their section's skill assessments test have
-   * any effect; every assessment is built on Chapters 1 (Vital Signs), 14
-   * (Oxygenation) and 15 (Fluid, Electrolyte, and Acid–Base Balance).
+   * Skill areas (Taylor's chapters) this student reliably misses, and reliably
+   * gets. Only chapters their work tests have any effect.
    */
   weakAt: string[];
   strongAt: string[];
-  /** Share of a scenario's task points they complete before it is finalized. */
+  /** Share of a case's tasks they perform before it is graded. */
   taskCompletion: number;
   /**
-   * Share of their section's work they actually did, 0..1.
-   *
-   * Below 1 leaves the rest assigned but untouched — no attempt, no
-   * submission, and past its deadline it reads as overdue. That absence is
-   * the strongest at-risk signal there is, and a cohort where everyone
-   * finished everything never produces it.
+   * Share of the term they stayed for, 0..1. Past it they stop: the work is
+   * assigned and untouched, and reads as overdue once its deadline passes.
    */
   engagement: number;
+  /**
+   * Chance a checklist step earns Excellent at the bedside. Defaults to ability.
+   * On the grade scale, 0.1 is about a 66, 0.2 a 73, 0.3 a 78, 0.4 an 83, 0.6 a 90.
+   */
+  handsOn?: number;
+  /** How far they move per block, in log-odds. Negative for a student sliding. */
+  growth?: number;
+  /** Where in a window they work: 0 is the last hours, 1 as soon as it opens. */
+  punctuality?: number;
+  /** Chance a piece of work comes in after its deadline. */
+  lateness?: number;
+  /** Chance they never do a given piece of work, while still coming to class. */
+  skips?: number;
+  /** Chance they go back for a review quiz after a graded try. */
+  reviews?: number;
 }
 
+const DEFAULT_GROWTH = 0.2;
+const DEFAULT_PUNCTUALITY = 0.55;
+const DEFAULT_LATENESS = 0.08;
+const DEFAULT_REVIEWS = 0.3;
+
+/** In log-odds: how far a skill area moves a student's chances. */
+const WEAK_AREA = -1.1;
+const STRONG_AREA = 0.6;
+/** A review re-asks what they got wrong, and they have seen the answer since. */
+const SEEN_ANSWER = 0.9;
+
 /**
- * Michael Smith's four groups — every student in BSN 1101 and BSN 1102.
+ * Students in Michael Smith's BSN 1101 and BSN 1102 groups, as an ordinary
+ * class. Case grades land about 1 in 5 under the 75 passing mark.
  *
- * The cohort is a strong one on purpose: all but two finish everything on
- * time and average above 90% on both their patient cases and their quizzes.
- * Kenji Villanueva and Paulo Hernandez are the two at-risk students — low
- * ability, and they stopped after the first couple of blocks, so the rest of
- * their work sits overdue. That is enough contrast for the risk model to find
- * exactly them.
+ * The developer's own student account is not here on purpose: it holds real
+ * attempts from testing the app by hand.
  */
-const PROFILES: Profile[] = [
+export const PROFILES: Profile[] = [
   // ---- BSN 1101 -----------------------------------------------------------
-  {
-    email: '23-74349@g.batstate-u.edu.ph',
-    name: 'Linux Mandrake S. Adona',
-    section: 'BSN 1101',
-    sex: 'male',
-    ability: 0.96,
-    weakAt: [],
-    strongAt: ['Vital Signs', 'Oxygenation'],
-    taskCompletion: 1,
-    engagement: 1,
-  },
-  {
-    email: '23-80112@g.batstate-u.edu.ph',
-    name: 'Bea R. Katigbak',
-    section: 'BSN 1101',
-    sex: 'female',
-    ability: 0.95,
-    weakAt: [],
-    strongAt: ['Oxygenation', 'Fluid, Electrolyte, and Acid–Base Balance'],
-    taskCompletion: 1,
-    engagement: 1,
-  },
-  {
-    email: '23-80147@g.batstate-u.edu.ph',
-    name: 'Miguel A. Panganiban',
-    section: 'BSN 1101',
-    sex: 'male',
-    ability: 0.94,
-    weakAt: [],
-    strongAt: ['Vital Signs'],
-    taskCompletion: 1,
-    engagement: 1,
-  },
-  {
-    email: '23-80233@g.batstate-u.edu.ph',
-    name: 'Trisha Mae L. Macatangay',
-    section: 'BSN 1101',
-    sex: 'female',
-    ability: 0.95,
-    weakAt: [],
-    strongAt: ['Fluid, Electrolyte, and Acid–Base Balance'],
-    taskCompletion: 1,
-    engagement: 1,
-  },
-  {
-    // At risk: weak, and stopped after the first two blocks.
-    email: '23-80318@g.batstate-u.edu.ph',
-    name: 'Kenji P. Villanueva',
-    section: 'BSN 1101',
-    sex: 'male',
-    ability: 0.38,
-    weakAt: ['Vital Signs'],
-    strongAt: [],
-    taskCompletion: 0.4,
-    engagement: 0.34,
-  },
-  {
-    email: '23-80402@g.batstate-u.edu.ph',
-    name: 'Angelica D. Manalo',
-    section: 'BSN 1101',
-    sex: 'female',
-    ability: 0.96,
-    weakAt: [],
-    strongAt: ['Vital Signs'],
-    taskCompletion: 1,
-    engagement: 1,
-  },
-  {
-    email: '23-12355@g.batstate-u.edu.ph',
-    name: 'Miguel Fernandez',
-    section: 'BSN 1101',
-    sex: 'male',
-    ability: 0.95,
-    weakAt: [],
-    strongAt: ['Oxygenation'],
-    taskCompletion: 1,
-    engagement: 1,
-  },
-  {
-    email: '23-12356@g.batstate-u.edu.ph',
-    name: 'Bea Navarro',
-    section: 'BSN 1101',
-    sex: 'female',
-    ability: 0.94,
-    weakAt: [],
-    strongAt: ['Fluid, Electrolyte, and Acid–Base Balance'],
-    taskCompletion: 1,
-    engagement: 1,
-  },
-  {
-    email: '23-12357@g.batstate-u.edu.ph',
-    name: 'Rafael Torres',
-    section: 'BSN 1101',
-    sex: 'male',
-    ability: 0.95,
-    weakAt: [],
-    strongAt: ['Vital Signs'],
-    taskCompletion: 1,
-    engagement: 1,
-  },
-  {
-    email: '23-12358@g.batstate-u.edu.ph',
-    name: 'Camille Pascual',
-    section: 'BSN 1101',
-    sex: 'female',
-    ability: 0.96,
-    weakAt: [],
-    strongAt: ['Oxygenation'],
-    taskCompletion: 1,
-    engagement: 1,
-  },
-  {
-    email: '23-12359@g.batstate-u.edu.ph',
-    name: 'Gabriel Soriano',
-    section: 'BSN 1101',
-    sex: 'male',
-    ability: 0.94,
-    weakAt: [],
-    strongAt: ['Fluid, Electrolyte, and Acid–Base Balance'],
-    taskCompletion: 1,
-    engagement: 1,
-  },
+  // Top of the class: early, and goes back over what they missed.
+  { email: '23-80112@g.batstate-u.edu.ph', name: 'Bea R. Katigbak', section: 'BSN 1101', sex: 'female', ability: 0.86, handsOn: 0.62, growth: 0.15, punctuality: 0.8, lateness: 0, reviews: 0.6, weakAt: [], strongAt: ['Health Assessment'], taskCompletion: 1, engagement: 1 },
+  { email: '23-80147@g.batstate-u.edu.ph', name: 'Miguel A. Panganiban', section: 'BSN 1101', sex: 'male', ability: 0.76, handsOn: 0.42, lateness: 0.08, weakAt: [], strongAt: ['Vital Signs'], taskCompletion: 1, engagement: 1 },
+  // Crams: decent marks, always in the last hours, often past them.
+  { email: '23-80233@g.batstate-u.edu.ph', name: 'Trisha Mae L. Macatangay', section: 'BSN 1101', sex: 'female', ability: 0.78, handsOn: 0.35, growth: 0.1, punctuality: 0.12, lateness: 0.35, reviews: 0.1, weakAt: [], strongAt: [], taskCompletion: 1, engagement: 1 },
+  // Struggling but still here: skips some work, weak on the core skill.
+  { email: '23-80318@g.batstate-u.edu.ph', name: 'Kenji P. Villanueva', section: 'BSN 1101', sex: 'male', ability: 0.58, handsOn: 0.13, growth: 0.1, punctuality: 0.3, lateness: 0.3, skips: 0.2, reviews: 0.1, weakAt: ['Vital Signs'], strongAt: [], taskCompletion: 0.9, engagement: 1 },
+  { email: '23-80402@g.batstate-u.edu.ph', name: 'Angelica D. Manalo', section: 'BSN 1101', sex: 'female', ability: 0.84, handsOn: 0.58, punctuality: 0.75, lateness: 0.03, reviews: 0.5, weakAt: [], strongAt: ['Vital Signs'], taskCompletion: 1, engagement: 1 },
+  // Good on paper, shaky at the bedside: passes quizzes, borderline on cases.
+  { email: '23-12355@g.batstate-u.edu.ph', name: 'Miguel Fernandez', section: 'BSN 1101', sex: 'male', ability: 0.82, handsOn: 0.2, growth: 0.25, punctuality: 0.6, lateness: 0.05, reviews: 0.4, weakAt: [], strongAt: [], taskCompletion: 1, engagement: 1 },
+  // The reverse: steady hands, weak on written work.
+  { email: '23-12356@g.batstate-u.edu.ph', name: 'Bea Navarro', section: 'BSN 1101', sex: 'female', ability: 0.66, handsOn: 0.55, punctuality: 0.55, lateness: 0.1, weakAt: ['Health Assessment'], strongAt: [], taskCompletion: 1, engagement: 1 },
+  // Starts badly and climbs: a low first block, a pass by the last.
+  { email: '23-12357@g.batstate-u.edu.ph', name: 'Rafael Torres', section: 'BSN 1101', sex: 'male', ability: 0.62, handsOn: 0.15, growth: 0.55, punctuality: 0.4, lateness: 0.15, reviews: 0.5, weakAt: [], strongAt: [], taskCompletion: 1, engagement: 1 },
+  { email: '23-12358@g.batstate-u.edu.ph', name: 'Camille Pascual', section: 'BSN 1101', sex: 'female', ability: 0.74, handsOn: 0.38, punctuality: 0.65, lateness: 0.08, reviews: 0.35, weakAt: [], strongAt: ['Health Assessment'], taskCompletion: 1, engagement: 1 },
+  // Starts well and slides, the student a good first block hides.
+  { email: '23-12359@g.batstate-u.edu.ph', name: 'Gabriel Soriano', section: 'BSN 1101', sex: 'male', ability: 0.8, handsOn: 0.45, growth: -0.6, punctuality: 0.5, lateness: 0.25, skips: 0.1, reviews: 0.2, weakAt: [], strongAt: [], taskCompletion: 1, engagement: 1 },
 
   // ---- BSN 1102 -----------------------------------------------------------
-  {
-    email: '23-75538@g.batstate-u.edu.ph',
-    name: 'Andre A. Cachola',
-    section: 'BSN 1102',
-    sex: 'male',
-    ability: 0.95,
-    weakAt: [],
-    strongAt: ['Oxygenation'],
-    taskCompletion: 1,
-    engagement: 1,
-  },
-  {
-    email: 'cacholaandot@gmail.com',
-    name: 'Andot S. Wong',
-    section: 'BSN 1102',
-    sex: 'male',
-    ability: 0.94,
-    weakAt: [],
-    strongAt: ['Vital Signs'],
-    taskCompletion: 1,
-    engagement: 1,
-  },
-  {
-    email: 'dotdot042822@gmail.com',
-    name: 'Dotdot I. Corpuz',
-    section: 'BSN 1102',
-    sex: 'male',
-    ability: 0.95,
-    weakAt: [],
-    strongAt: ['Oxygenation'],
-    taskCompletion: 1,
-    engagement: 1,
-  },
-  {
-    email: '23-80519@g.batstate-u.edu.ph',
-    name: 'Jomar T. Dimaculangan',
-    section: 'BSN 1102',
-    sex: 'male',
-    ability: 0.97,
-    weakAt: [],
-    strongAt: ['Fluid, Electrolyte, and Acid–Base Balance', 'Oxygenation'],
-    taskCompletion: 1,
-    engagement: 1,
-  },
-  {
-    email: '23-80624@g.batstate-u.edu.ph',
-    name: 'Shaira Mae B. Aguilar',
-    section: 'BSN 1102',
-    sex: 'female',
-    ability: 0.94,
-    weakAt: [],
-    strongAt: ['Vital Signs'],
-    taskCompletion: 1,
-    engagement: 1,
-  },
-  {
-    email: '23-80730@g.batstate-u.edu.ph',
-    name: 'Renz Carlo M. Ilagan',
-    section: 'BSN 1102',
-    sex: 'male',
-    ability: 0.95,
-    weakAt: [],
-    strongAt: ['Fluid, Electrolyte, and Acid–Base Balance'],
-    taskCompletion: 1,
-    engagement: 1,
-  },
-  {
-    email: '23-80845@g.batstate-u.edu.ph',
-    name: 'Nicole Anne S. Perez',
-    section: 'BSN 1102',
-    sex: 'female',
-    ability: 0.96,
-    weakAt: [],
-    strongAt: ['Oxygenation'],
-    taskCompletion: 1,
-    engagement: 1,
-  },
-  {
-    // At risk: barely engaged, and what he did went badly.
-    email: '23-80951@g.batstate-u.edu.ph',
-    name: 'Paulo G. Hernandez',
-    section: 'BSN 1102',
-    sex: 'male',
-    ability: 0.33,
-    weakAt: ['Oxygenation', 'Fluid, Electrolyte, and Acid–Base Balance'],
-    strongAt: [],
-    taskCompletion: 0.3,
-    engagement: 0.34,
-  },
+  { email: '23-75538@g.batstate-u.edu.ph', name: 'Andre A. Cachola', section: 'BSN 1102', sex: 'male', ability: 0.75, handsOn: 0.44, punctuality: 0.6, lateness: 0.06, weakAt: [], strongAt: ['Vital Signs'], taskCompletion: 1, engagement: 1 },
+  { email: 'cacholaandot@gmail.com', name: 'Andot S. Wong', section: 'BSN 1102', sex: 'male', ability: 0.7, handsOn: 0.26, growth: 0.15, punctuality: 0.4, lateness: 0.15, reviews: 0.2, weakAt: [], strongAt: [], taskCompletion: 1, engagement: 1 },
+  { email: 'dotdot042822@gmail.com', name: 'Dotdot I. Corpuz', section: 'BSN 1102', sex: 'male', ability: 0.72, handsOn: 0.33, punctuality: 0.5, lateness: 0.12, weakAt: [], strongAt: ['Health Assessment'], taskCompletion: 1, engagement: 1 },
+  { email: '23-80519@g.batstate-u.edu.ph', name: 'Jomar T. Dimaculangan', section: 'BSN 1102', sex: 'male', ability: 0.88, handsOn: 0.65, growth: 0.1, punctuality: 0.85, lateness: 0, reviews: 0.5, weakAt: [], strongAt: ['Vital Signs'], taskCompletion: 1, engagement: 1 },
+  { email: '23-80624@g.batstate-u.edu.ph', name: 'Shaira Mae B. Aguilar', section: 'BSN 1102', sex: 'female', ability: 0.77, handsOn: 0.42, punctuality: 0.6, lateness: 0.05, reviews: 0.4, weakAt: [], strongAt: [], taskCompletion: 1, engagement: 1 },
+  // Another crammer, with less to spare.
+  { email: '23-80730@g.batstate-u.edu.ph', name: 'Renz Carlo M. Ilagan', section: 'BSN 1102', sex: 'male', ability: 0.7, handsOn: 0.24, growth: 0.15, punctuality: 0.1, lateness: 0.4, reviews: 0.1, weakAt: ['Health Assessment'], strongAt: [], taskCompletion: 1, engagement: 1 },
+  { email: '23-80845@g.batstate-u.edu.ph', name: 'Nicole Anne S. Perez', section: 'BSN 1102', sex: 'female', ability: 0.79, handsOn: 0.48, growth: 0.15, punctuality: 0.7, lateness: 0.03, reviews: 0.4, weakAt: [], strongAt: ['Health Assessment'], taskCompletion: 1, engagement: 1 },
+  // Drifts away after the first block, the clearest signal a class produces.
+  { email: '23-80951@g.batstate-u.edu.ph', name: 'Paulo G. Hernandez', section: 'BSN 1102', sex: 'male', ability: 0.55, handsOn: 0.1, growth: 0, punctuality: 0.25, lateness: 0.4, reviews: 0, weakAt: ['Vital Signs', 'Health Assessment'], strongAt: [], taskCompletion: 0.8, engagement: 0.34 },
 ];
 
 export interface WorkItem {
@@ -349,163 +186,146 @@ export interface WorkItem {
   quiz: string;
 }
 
-const FEVER: WorkItem = { scenario: 'Fever Workup: Temperature, Pulse and Respirations', quiz: 'Temperature, Pulse, Respiration, and Pulse Oximetry' };
-const DEHYDRATION: WorkItem = { scenario: 'Dehydration: Starting and Monitoring a Peripheral IV', quiz: 'Peripheral IV Therapy, Pulse, and Blood Pressure' };
-const POST_OP: WorkItem = { scenario: 'Post-Op Day One: Incentive Spirometry and the IV Site', quiz: 'Incentive Spirometry, IV Site Care, and Temperature' };
-const HYPERTENSION: WorkItem = { scenario: 'New Hypertension: Accurate Blood Pressure and Apical Pulse', quiz: 'Blood Pressure, Apical Pulse, and Radial Pulse' };
-const ANAEMIA: WorkItem = { scenario: 'Anaemia and Dizziness: Orthostatic Vital Signs and Oxygen Saturation', quiz: 'Blood Pressure, Pulse, and Pulse Oximetry' };
-const UTI: WorkItem = { scenario: 'UTI with Low-Grade Fever: A Full Set of Vital Signs', quiz: 'A Full Set of Vital Signs' };
-const ASTHMA: WorkItem = { scenario: 'Asthma: Pulse Oximetry, Respirations and Nasal Cannula Oxygen', quiz: 'Pulse Oximetry, Respiration, and Nasal Cannula Oxygen' };
-const CELLULITIS: WorkItem = { scenario: 'Cellulitis: IV Antibiotic Through a Saline Lock', quiz: 'Saline Lock, IV Site Monitoring, and Temperature' };
+// The test Dean's finished cases and published quizzes, as they stand on live.
+const PNEUMONIA: WorkItem = { scenario: 'Community-Acquired Pneumonia: Respiratory and Pulse Assessment', quiz: 'Vital Signs: Pulse, Respiration, and Blood Pressure' };
+const HEART_FAILURE: WorkItem = { scenario: 'Heart Failure: Cardiovascular Assessment', quiz: 'Vital Signs Fundamentals' };
+const GASTROENTERITIS: WorkItem = { scenario: 'Acute Gastroenteritis: Abdominal and Skin Assessment', quiz: 'Health Assessment: General Survey, Skin, and Head and Neck' };
 
 /**
- * The cases each section works through over the term, in order, and so the
- * quizzes its students sit. A group starts this cycle at its own place
- * (see groupWork below).
- *
- * An assigned scenario is visible to whoever teaches an assigned student
- * (lib/scenario-visibility.ts); Michael Smith and Drei Cachola both teach
- * BSN 1101 and 1102, so either's cases can go to either section.
+ * The cases each section works through, in order, and so the quizzes its
+ * students sit. A group starts this cycle at its own place (see groupWork).
  */
 const SECTION_WORK: Record<string, WorkItem[]> = {
-  'BSN 1101': [FEVER, DEHYDRATION, POST_OP, HYPERTENSION, ANAEMIA],
-  'BSN 1102': [UTI, ASTHMA, CELLULITIS],
+  'BSN 1101': [PNEUMONIA, HEART_FAILURE, GASTROENTERITIS],
+  'BSN 1102': [GASTROENTERITIS, PNEUMONIA, HEART_FAILURE],
 };
 
+const RETURN_DEMOS = ['Chapter 1: Skill 1-7', 'Chapter 2: Skill 2-2'];
+
 /**
- * A group's cases: its section's cycle, started at the group's place among
- * the section's groups, so the section's groups are on different cases in
- * any one block.
+ * A group's cases: its section's cycle, started at the group's place among the
+ * section's groups, so a section's groups are on different cases in any block.
  */
 function groupWork(work: WorkItem[], ordinal: number): WorkItem[] {
   const shift = ordinal % work.length;
   return [...work.slice(shift), ...work.slice(0, shift)];
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+const MANILA_MS = 8 * HOUR_MS;
+const END_OF_DAY = 23.98;
 
-/**
- * How far back the history reaches. Fourteen weeks, so the analytics page's
- * default three-month window is populated from its first week to today's.
- */
-const TERM_DAYS = 98;
-/** The last block's quiz stays open this long past today: it is still running. */
-const OPEN_AHEAD_DAYS = 7;
-/**
- * A block's quiz opens this long after its scenario is assigned — after the
- * student has worked the case — and stays open this long into the next
- * block, so a section is never between quizzes.
- */
-const FIRST_SITTING_DAYS = 2;
-/**
- * How often a section sits a quiz. Daily, so every day of the term holds
- * attempts from every section and the trend has no empty bucket at any range
- * the dashboard offers. Each student still sits only every few days; it is
- * the class between them that covers every day.
- */
-const SITTING_STEP_DAYS = 1;
+/** How much of the term the history covers. */
+const TERM_WEEKS = 14;
+/** The newest block began at least this long ago, so some of it is done and some isn't. */
+const CURRENT_BLOCK_AGE_DAYS = 7;
+const CASE_DAYS = 14;
+/** A quiz opens once the group has started on the case. */
+const QUIZ_OPENS_AFTER_DAYS = 4;
+const QUIZ_DAYS = 10;
+const DEMO_OPENS_AFTER_DAYS = 21;
+const DEMO_DAYS = 10;
+/** An instructor doesn't get to everyone: some grades wait for the next lab day. */
+const NEXT_LAB_CHANCE = 0.25;
 
-interface Block {
-  /** When its scenario is assigned. */
-  start: number;
-  /** When the next block's scenario is. */
-  end: number;
+/** `hour` o'clock in Manila, on the day `ms` falls on there. */
+function manilaAt(ms: number, hour: number): number {
+  return Math.floor((ms + MANILA_MS) / DAY_MS) * DAY_MS - MANILA_MS + hour * HOUR_MS;
 }
 
-/** The window a block's quiz is open: from its first sitting until the next block's begins. */
-function quizWindow(block: Block): { opens: number; closes: number } {
-  return {
-    opens: block.start + FIRST_SITTING_DAYS * DAY_MS,
-    closes: block.end + FIRST_SITTING_DAYS * DAY_MS,
-  };
+const manilaWeekday = (ms: number) => new Date(ms + MANILA_MS).getUTCDay();
+
+/** The first `weekday` (0 is Sunday) on or after `ms`. */
+function nextWeekday(ms: number, weekday: number): number {
+  return ms + ((weekday - manilaWeekday(ms) + 7) % 7) * DAY_MS;
 }
 
-/** A section's work as back-to-back blocks, one per case, spanning the term. */
-function termBlocks(count: number, termStart: number): Block[] {
-  const length = ((TERM_DAYS + OPEN_AHEAD_DAYS) * DAY_MS) / count;
-  return Array.from({ length: count }, (_, k) => ({
-    start: termStart + k * length,
-    end: termStart + (k + 1) * length,
-  }));
+/** Block starts, one Monday morning each, the newest a little before today. */
+function termBlocks(count: number, now: number): number[] {
+  const newest = manilaAt(nextWeekday(now - (CURRENT_BLOCK_AGE_DAYS + 6) * DAY_MS, 1), 8);
+  const length = Math.round(TERM_WEEKS / count) * 7 * DAY_MS;
+  return Array.from({ length: count }, (_, k) => newest - (count - 1 - k) * length);
 }
 
-interface Sitting {
-  at: number;
-  /** Index into the section's members. */
-  member: number;
-  /** Index into the section's work, and so its blocks. */
-  block: number;
+/** Most sit a quiz in the evening; some between classes. */
+function homeHour(ms: number, rng: () => number): number {
+  return manilaAt(ms, rng() < 0.7 ? 18 + rng() * 5.5 : 9 + rng() * 8);
 }
 
-/**
- * When each quiz sitting in a section happens, and who sits it.
- *
- * Planned per section rather than per student: nobody sits a quiz every week,
- * but between them a class does. Everyone who did block k (`doers[k]`) gets a
- * first sitting of its quiz, in shuffled order, and the block's remaining
- * slots go round the same order again as practice until the block closes.
- */
-function planSittings(section: string, blocks: Block[], doers: number[][], now: number): Sitting[] {
-  const sittings: Sitting[] = [];
-  blocks.forEach((block, k) => {
-    const rng = seeded(hash(`${section}|block ${k}`));
-    const order = [...doers[k]];
-    for (let i = order.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      [order[i], order[j]] = [order[j], order[i]];
-    }
-    const { opens, closes } = quizWindow(block);
-    // Nothing in the future, and nothing so recent its submission would be.
-    const last = Math.min(closes, now - 2 * HOUR_MS);
-    if (order.length === 0 || last - opens < HOUR_MS) return;
-    // A window too short to seat everyone at the usual spacing packs tighter.
-    const step = Math.min(SITTING_STEP_DAYS * DAY_MS, (last - opens) / order.length);
-    // Some time in each slot's school day, 09:00–17:00 Manila (UTC+8). Slots
-    // count by calendar day, so today's is kept once its school day has begun
-    // even though the slot itself falls later than `last`.
-    const schoolDay = (slot: number) => slot - (slot % DAY_MS) + HOUR_MS;
-    for (let i = 0; schoolDay(opens + i * step) <= last; i++) {
-      const at = Math.min(schoolDay(opens + i * step) + rng() * 8 * HOUR_MS, last);
-      sittings.push({ at, member: order[i % order.length], block: k });
-    }
-  });
-  return sittings.sort((x, y) => x.at - y.at);
+/** Bedside work happens during school hours on a school day. */
+function labHour(ms: number, rng: () => number): number {
+  const weekday = manilaWeekday(ms);
+  const shift = weekday === 6 ? 2 : weekday === 0 ? 1 : 0;
+  return manilaAt(ms + shift * DAY_MS, 8 + rng() * 8);
 }
 
-/** The Monday (UTC) starting the week `ms` falls in — Postgres's date_trunc('week'). */
-function weekOf(ms: number): string {
-  const d = new Date(ms);
-  const sinceMonday = (d.getUTCDay() + 6) % 7;
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - sinceMonday))
-    .toISOString()
-    .slice(0, 10);
+/** When a student does a piece of work open from `opens` to `due`. */
+function workMoment(profile: Profile, opens: number, due: number, hour: (ms: number, rng: () => number) => number, rng: () => number): number {
+  const late = rng() < (profile.lateness ?? DEFAULT_LATENESS);
+  const share = clamp(1 - (profile.punctuality ?? DEFAULT_PUNCTUALITY) + (rng() - 0.5) * 0.35, 0.02, 0.97);
+  const day = late ? due + (0.5 + rng() * 4.5) * DAY_MS : opens + share * (due - opens);
+  return Math.round(hour(day, rng));
+}
+
+/** A question's or checklist step's own difficulty, in log-odds: the same for the whole class. */
+function difficulty(id: string): number {
+  return bell(seeded(hash(id))) * 0.6;
+}
+
+function areaEffect(profile: Profile, areas: string[]): number {
+  let effect = 0;
+  if (areas.some((a) => profile.weakAt.includes(a))) effect += WEAK_AREA;
+  if (areas.some((a) => profile.strongAt.includes(a))) effect += STRONG_AREA;
+  return effect;
+}
+
+/** Chance this student gets a question right in a given block of the term. */
+export function answerChance(
+  profile: Profile,
+  areas: string[],
+  question: { id: string; optionCount: number },
+  block: number,
+  seenAnswer: boolean,
+): number {
+  const guess = 1 / Math.max(2, question.optionCount);
+  const knows = clamp((profile.ability - guess) / (1 - guess), 0.02, 0.98);
+  const x =
+    logit(knows) +
+    areaEffect(profile, areas) +
+    (profile.growth ?? DEFAULT_GROWTH) * block -
+    difficulty(question.id) +
+    (seenAnswer ? SEEN_ANSWER : 0);
+  return Math.min(0.98, guess + (1 - guess) * logistic(x));
 }
 
 /**
- * Probability this student answers a given question correctly.
- *
- * Their weaknesses and strengths are competency names, and a question carries
- * the competencies it was tagged with — so the same student misses the same
- * kind of question wherever it appears.
+ * Chance a checklist step earns Excellent. `form` is how this student's day is
+ * going, shared by every step of one case, so one case can run well or badly.
  */
-function chanceCorrect(profile: Profile, competencyNames: string[]): number {
-  let p = profile.ability;
-  if (competencyNames.some((n) => profile.weakAt.includes(n))) p -= 0.3;
-  if (competencyNames.some((n) => profile.strongAt.includes(n))) p += 0.12;
-  return Math.min(0.97, Math.max(0.08, p));
+export function stepChance(profile: Profile, area: string, stepId: string, block: number, form: number): number {
+  const x =
+    logit(clamp(profile.handsOn ?? profile.ability, 0.02, 0.98)) +
+    areaEffect(profile, area ? [area] : []) +
+    (profile.growth ?? DEFAULT_GROWTH) * block +
+    form -
+    difficulty(stepId) * 0.5;
+  return logistic(x);
 }
 
+/** A student's form on one case, in log-odds. */
+export const dayForm = (rng: () => number) => bell(rng) * 0.35;
+
 /**
- * The level a student earns on one sub-task, drawn against their profile for
- * the task's skill area: a likely-correct student is mostly Excellent, a weak
- * one mostly Needs Practice.
+ * Excellent as often as `p`. Short of that, a solid student is mostly
+ * Satisfactory and a weak one mostly Needs Practice. It has to lean that hard:
+ * the grade scale (scaledGrade) floors at 37.5, so an all-Satisfactory case earns
+ * 79 and falling under 75 takes a run of Needs Practice.
  */
-function drawLevel(p: number, rng: () => number): TaskRating {
+export function drawLevel(p: number, rng: () => number): TaskRating {
   const x = rng();
   if (x < p) return 'excellent';
-  if (x < p + (1 - p) * 0.55) return 'satisfactory';
-  return 'needs_practice';
+  return x < 1 - (1 - p) ** 3 ? 'satisfactory' : 'needs_practice';
 }
 
 const REMARKS: Record<TaskRating, string[]> = {
@@ -514,82 +334,163 @@ const REMARKS: Record<TaskRating, string[]> = {
   needs_practice: ['Missed steps; review the checklist.', 'Needs supervised practice before the next case.'],
 };
 
-export async function seedHistory(profiles: Profile[], sectionWork: Record<string, WorkItem[]>) {
+/** Whether a hand-in carries the seed's stamp: exactly time_taken after its start. */
+function stamped(startedAt: string | null, seconds: number | null, submittedAt: string | null): boolean {
+  if (!startedAt || !submittedAt || seconds === null) return false;
+  return Math.abs(Date.parse(submittedAt) - Date.parse(startedAt) - seconds * 1000) <= 1;
+}
+
+export interface SeedOptions {
+  /** The Dean whose students and work this may touch. Anyone else's is out of reach. */
+  deanId: string;
+  /** Who assigns and grades. A student in a group someone else supervises stops the run. */
+  instructorId: string;
+  /** Return Demonstrations, one per block from the first. */
+  returnDemos?: string[];
+  /** Also clear these students' untouched assignments on the Dean's other work. */
+  clearUntouched?: boolean;
+  /** Report the plan and write nothing. */
+  dryRun?: boolean;
+}
+
+interface CasePlan {
+  title: string;
+  scenarioId: string;
+  block: number;
+  assignedAt: number;
+  deadline: number;
+  handIn: number | null;
+  gradedAt: number | null;
+  status: 'pending' | 'in_progress' | 'completed' | 'overdue';
+}
+
+interface QuizPlan {
+  title: string;
+  assessmentId: string;
+  block: number;
+  assignedAt: number;
+  deadline: number;
+  /** The graded try, then any reviews: only those that have happened by now. */
+  sittings: number[];
+  status: 'pending' | 'completed' | 'overdue';
+}
+
+interface Member {
+  profile: Profile;
+  studentId: string;
+  teamId: string | null;
+  didCount: number;
+  cases: CasePlan[];
+  quizzes: QuizPlan[];
+  // What is already there.
+  removeCases: string[];
+  removeAttempts: string[];
+  removeQuizAssignments: string[];
+  /** Real work: these stay, and the plan skips them. */
+  keptCases: Set<string>;
+  keptQuizzes: Set<string>;
+}
+
+function planCase(
+  profile: Profile,
+  didCount: number,
+  work: { title: string; scenarioId: string; block: number; opens: number; days: number; labDay: number },
+  now: number,
+): CasePlan {
+  const rng = seeded(hash(`${profile.email}|${work.title}|plan`));
+  const deadline = manilaAt(work.opens + work.days * DAY_MS, END_OF_DAY);
+  const doesIt = work.block < didCount && rng() >= (profile.skips ?? 0);
+  const planned = doesIt ? workMoment(profile, work.opens, deadline, labHour, rng) : null;
+  const handIn = planned !== null && planned < now - HOUR_MS ? planned : null;
+  let gradedAt: number | null = null;
+  if (handIn !== null) {
+    const lab = nextWeekday(handIn + 12 * HOUR_MS, work.labDay) + (rng() < NEXT_LAB_CHANCE ? 7 * DAY_MS : 0);
+    const at = Math.round(manilaAt(lab, 13 + rng() * 4));
+    if (at < now) gradedAt = at;
+  }
+  return {
+    title: work.title,
+    scenarioId: work.scenarioId,
+    block: work.block,
+    assignedAt: work.opens,
+    deadline,
+    handIn,
+    gradedAt,
+    status: gradedAt !== null ? 'completed' : handIn !== null ? 'in_progress' : deadline < now ? 'overdue' : 'pending',
+  };
+}
+
+function planQuiz(
+  profile: Profile,
+  didCount: number,
+  work: { title: string; assessmentId: string; block: number; opens: number },
+  now: number,
+): QuizPlan {
+  const rng = seeded(hash(`${profile.email}|${work.title}|plan`));
+  const deadline = manilaAt(work.opens + QUIZ_DAYS * DAY_MS, END_OF_DAY);
+  const planned: number[] = [];
+  if (work.block < didCount && rng() >= (profile.skips ?? 0)) {
+    let at = workMoment(profile, work.opens, deadline, homeHour, rng);
+    planned.push(at);
+    // Likely once if they go back at all, less so again.
+    let chance = profile.reviews ?? DEFAULT_REVIEWS;
+    while (planned.length < 3 && rng() < chance) {
+      at = Math.round(homeHour(at + (0.5 + rng() * 3) * DAY_MS, rng));
+      planned.push(at);
+      chance /= 2;
+    }
+  }
+  const sittings = planned.filter((at) => at < now - 2 * HOUR_MS);
+  return {
+    title: work.title,
+    assessmentId: work.assessmentId,
+    block: work.block,
+    assignedAt: work.opens,
+    deadline,
+    sittings,
+    status: sittings.length > 0 ? 'completed' : deadline < now ? 'overdue' : 'pending',
+  };
+}
+
+export async function seedHistory(profiles: Profile[], sectionWork: Record<string, WorkItem[]>, options: SeedOptions) {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
-    console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env.local');
-    process.exit(1);
-  }
+  if (!url || !key) throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env.local');
   const supabase: SupabaseClient = createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+  const now = Date.now();
+  const returnDemos = options.returnDemos ?? [];
 
-  // ---- Create any student in the roster that does not exist yet ---------
-  const { data: sections } = await supabase.from('sections').select('id, name');
-  const sectionByName = new Map((sections ?? []).map((r) => [r.name, r.id]));
-
-  const { data: before } = await supabase.from('users').select('email').eq('role', 'student');
-  const existing = new Set((before ?? []).map((r) => r.email));
-  const credentials: string[] = [];
-
-  for (const profile of profiles) {
-    if (existing.has(profile.email)) continue;
-    const sectionId = sectionByName.get(profile.section);
-    if (!sectionId) {
-      console.error(`  ✗ ${profile.email}: no section named "${profile.section}"`);
-      process.exit(1);
-    }
-    // Same shape the admin invite flow creates: a temporary password the
-    // student must change at first login.
-    //
-    // Only the hash is stored, so a generated one exists solely in the line
-    // printed below — lose that and the account is unreachable. Set
-    // SEED_STUDENT_PASSWORD to give every seeded student the same known
-    // password instead, which is usually what you want for a dev cohort you
-    // intend to log in as.
-    const password = process.env.SEED_STUDENT_PASSWORD || generateRandomPassword();
-    const { error } = await supabase.from('users').insert({
-      email: profile.email,
-      name: profile.name,
-      role: 'student',
-      sex: profile.sex,
-      section_id: sectionId,
-      password_hash: await hashPassword(password),
-      force_password_change: true,
-    });
-    if (error) {
-      console.error(`  ✗ ${profile.email}:`, error.message);
-      process.exit(1);
-    }
-    credentials.push(`  ${profile.email.padEnd(32)} ${password}`);
+  // ---- Look up everything this seed refers to, under this Dean only ---------
+  const [studentsRes, scenariosRes, assessmentsRes, competenciesRes, groupsRes, skillsRes, tagsRes, questionsRes] = await Promise.all([
+    supabase
+      .from('users')
+      .select('id, email, sections!section_id(name)')
+      .eq('role', 'student')
+      .eq('admin_id', options.deanId)
+      .in('email', profiles.map((p) => p.email)),
+    supabase.from('scenarios').select('id, title').eq('admin_id', options.deanId),
+    supabase.from('assessments').select('id, title, max_attempts, time_limit_seconds').eq('admin_id', options.deanId),
+    supabase.from('competency_areas').select('id, name'),
+    supabase.from('teams').select('id, name, section_id, faculty_id, team_members(student_id)'),
+    supabase.from('taylor_skills').select('id, chapter_id'),
+    supabase.from('question_competencies').select('question_id, competency_id'),
+    supabase.from('questions').select('id, correct_index, options'),
+  ]);
+  for (const res of [studentsRes, scenariosRes, assessmentsRes, competenciesRes, groupsRes, skillsRes, tagsRes, questionsRes]) {
+    if (res.error) throw new Error(`read: ${res.error.message}`);
   }
-  if (credentials.length > 0) {
-    console.log(`Created ${credentials.length} student(s). Temporary passwords:`);
-    for (const line of credentials) console.log(line);
-    if (!process.env.SEED_STUDENT_PASSWORD) {
-      console.log(
-        '\n  These were randomly generated and are not stored anywhere. Keep them,\n' +
-          '  or re-run with SEED_STUDENT_PASSWORD set to choose your own.',
-      );
-    }
-    console.log('');
-  }
+  const students = studentsRes.data ?? [];
+  const scenarios = scenariosRes.data ?? [];
+  const assessments = assessmentsRes.data ?? [];
 
-  // ---- Look up everything this seed refers to by name -------------------
-  const { data: students } = await supabase
-    .from('users')
-    .select('id, email, name, section_id, sections!section_id(name)')
-    .eq('role', 'student');
-
-  const { data: scenarios } = await supabase.from('scenarios').select('id, title');
-  const { data: assessments } = await supabase.from('assessments').select('id, title, max_attempts');
-  const { data: competencies } = await supabase.from('competency_areas').select('id, name');
-
-  const scenarioByTitle = new Map((scenarios ?? []).map((s) => [s.title, s.id]));
-  const assessmentByTitle = new Map((assessments ?? []).map((a) => [a.title, a.id]));
-  const limitOfAssessment = new Map((assessments ?? []).map((a) => [a.id, attemptLimit(null, a.max_attempts)]));
-  const competencyName = new Map((competencies ?? []).map((c) => [c.id, c.name]));
+  const scenarioByTitle = new Map(scenarios.map((s) => [s.title as string, s.id as string]));
+  const assessmentByTitle = new Map(assessments.map((a) => [a.title as string, a.id as string]));
+  const limitOfAssessment = new Map(assessments.map((a) => [a.id as string, attemptLimit(null, a.max_attempts)]));
+  const secondsOfAssessment = new Map(assessments.map((a) => [a.id as string, a.time_limit_seconds as number | null]));
+  const competencyName = new Map((competenciesRes.data ?? []).map((c) => [c.id as string, c.name as string]));
+  const chapterOfSkill = new Map((skillsRes.data ?? []).map((r) => [r.id as string, r.chapter_id as string]));
 
   // Strengths and weaknesses are matched to question tags by name, so a name
   // that is not a competency area would silently change nothing.
@@ -597,521 +498,521 @@ export async function seedHistory(profiles: Profile[], sectionWork: Record<strin
   const unknown = profiles.flatMap((p) =>
     [...p.weakAt, ...p.strongAt].filter((name) => !areaNames.has(name)).map((name) => `${p.email}: "${name}"`),
   );
-  if (unknown.length > 0) {
-    console.error(`Profiles name competencies that do not exist:\n  ${unknown.join('\n  ')}`);
-    process.exit(1);
-  }
+  if (unknown.length > 0) throw new Error(`Profiles name competencies that do not exist:\n  ${unknown.join('\n  ')}`);
 
-  // Faculty who teach each section, for assigned_by / finalized_by.
-  const { data: facultyLinks } = await supabase
-    .from('faculty_sections')
-    .select('faculty_id, section_id');
-  const facultyBySection = new Map(
-    (facultyLinks ?? []).map((l) => [l.section_id, l.faculty_id]),
-  );
+  const catalog = Object.values(sectionWork).flat();
+  const catalogScenarioTitles = [...new Set([...catalog.map((i) => i.scenario), ...returnDemos])];
+  const catalogQuizTitles = [...new Set(catalog.map((i) => i.quiz))];
+  const absent = [
+    ...catalogScenarioTitles.filter((t) => !scenarioByTitle.has(t)),
+    ...catalogQuizTitles.filter((t) => !assessmentByTitle.has(t)),
+  ];
+  if (absent.length > 0) throw new Error(`This Dean doesn't have:\n  ${absent.join('\n  ')}`);
+  const catalogScenarios = new Set(catalogScenarioTitles.map((t) => scenarioByTitle.get(t)!));
+  const catalogQuizzes = new Set(catalogQuizTitles.map((t) => assessmentByTitle.get(t)!));
 
   // Groups: each member's group, its supervisor, and the group's place among
   // its section's groups (by name), which picks the group's case.
-  const { data: groupRows, error: groupError } = await supabase
-    .from('teams')
-    .select('id, name, section_id, faculty_id, team_members(student_id)');
-  if (groupError) console.warn('  groups not read, seeding without them:', groupError.message);
-  const groupOf = new Map<string, { teamId: string; supervisor: string | null; ordinal: number }>();
-  const sortedGroups = [...(groupRows ?? [])].sort((a, b) =>
+  const sortedGroups = [...(groupsRes.data ?? [])].sort((a, b) =>
     (a.name as string).localeCompare(b.name as string, undefined, { numeric: true }),
   );
+  const groupOf = new Map<string, { teamId: string; supervisor: string | null; ordinal: number }>();
   for (const g of sortedGroups) {
     const ordinal = sortedGroups.filter((o) => o.section_id === g.section_id).indexOf(g);
     for (const m of (g.team_members ?? []) as { student_id: string }[]) {
-      groupOf.set(m.student_id, {
-        teamId: g.id as string,
-        supervisor: (g.faculty_id as string | null) ?? null,
-        ordinal,
-      });
+      groupOf.set(m.student_id, { teamId: g.id as string, supervisor: (g.faculty_id as string | null) ?? null, ordinal });
     }
   }
 
-  // Each task's skill area, so a sub-task is rated against the student's
-  // strengths and weaknesses there.
-  const { data: skillRows } = await supabase.from('taylor_skills').select('id, chapter_id');
-  const chapterOfSkill = new Map((skillRows ?? []).map((r) => [r.id as string, r.chapter_id as string]));
-
-  // Every question's competency tags, so an answer can be drawn against the
-  // student's actual weaknesses rather than a coin flip.
-  const { data: tags } = await supabase
-    .from('question_competencies')
-    .select('question_id, competency_id');
-  const tagsByQuestion = new Map<string, string[]>();
-  for (const t of tags ?? []) {
-    const names = tagsByQuestion.get(t.question_id) ?? [];
-    names.push(competencyName.get(t.competency_id) ?? '');
-    tagsByQuestion.set(t.question_id, names);
+  // Every question's skill areas, so an answer reflects the student's actual
+  // weaknesses rather than a coin flip.
+  const areasOfQuestion = new Map<string, string[]>();
+  for (const t of tagsRes.data ?? []) {
+    const names = areasOfQuestion.get(t.question_id as string) ?? [];
+    names.push(competencyName.get(t.competency_id as string) ?? '');
+    areasOfQuestion.set(t.question_id as string, names);
   }
+  const questionById = new Map((questionsRes.data ?? []).map((q) => [q.id as string, q]));
 
-  const { data: allQuestions } = await supabase
-    .from('questions')
-    .select('id, correct_index, options');
-  const questionById = new Map((allQuestions ?? []).map((q) => [q.id, q]));
-
-  let scenarioCount = 0;
-  let attemptCount = 0;
-  let reviewCount = 0;
-  let taskCount = 0;
-  let stepRatingCount = 0;
-  const keptScenarios = new Set<string>();
-  let skippedScenarios = 0;
-  let skippedQuizzes = 0;
-  const coverage: string[] = [];
-
-  const now = Date.now();
-  const termStart = now - TERM_DAYS * DAY_MS;
-
-  // Every day and week of the term, to check each section's sittings against.
-  const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
-  const termDays = new Set<string>();
-  for (let t = termStart + FIRST_SITTING_DAYS * DAY_MS; t < now; t += DAY_MS) termDays.add(dayOf(t));
-  termDays.add(dayOf(now));
-  const termWeeks = new Set([...termDays].map((day) => weekOf(Date.parse(day))));
-
-  // Sittings are planned per section, so group the students first — by the
-  // section the database has them in, which is what decides their work.
-  interface Member {
-    profile: Profile;
-    studentId: string;
-    facultyId: string | null;
-    teamId: string | null;
-    /** This member's cases, block by block (their group's order); their quizzes too. */
-    work: WorkItem[];
-    /** Work beyond this index was assigned and never touched. */
-    didCount: number;
-  }
+  // ---- Plan each student's term ---------------------------------------------
   const bySection = new Map<string, Member[]>();
+  const refused: string[] = [];
   for (const profile of profiles) {
-    const student = (students ?? []).find((s) => s.email === profile.email);
+    const student = students.find((s) => s.email === profile.email);
     if (!student) {
-      console.warn(`  skipped ${profile.email} — no such student`);
+      refused.push(`${profile.email}: not a student under this Dean`);
       continue;
     }
-    const sectionName =
-      (student as unknown as { sections: { name: string } | null }).sections?.name ?? '';
+    const sectionName = (student as unknown as { sections: { name: string } | null }).sections?.name ?? '';
     const ownWork = sectionWork[sectionName];
     if (!ownWork) {
-      console.warn(`  skipped ${profile.email} — section "${sectionName}" has no work defined`);
+      refused.push(`${profile.email}: section "${sectionName}" has no work defined`);
       continue;
     }
-    const group = groupOf.get(student.id) ?? null;
+    const group = groupOf.get(student.id as string) ?? null;
+    if (group?.supervisor && group.supervisor !== options.instructorId) {
+      refused.push(`${profile.email}: their group has another supervisor`);
+      continue;
+    }
     const work = group ? groupWork(ownWork, group.ordinal) : ownWork;
+    const blocks = termBlocks(work.length, now);
+    const didCount = Math.max(1, Math.round(profile.engagement * work.length));
+    // Each group has its own lab day, Tuesday to Friday.
+    const labDay = 2 + (hash(sectionName) % 2) + 2 * ((group?.ordinal ?? 0) % 2);
+    const cases = work.map((item, block) =>
+      planCase(profile, didCount, { title: item.scenario, scenarioId: scenarioByTitle.get(item.scenario)!, block, opens: blocks[block], days: CASE_DAYS, labDay }, now),
+    );
+    const demos = returnDemos.slice(0, blocks.length).map((title, block) =>
+      planCase(profile, didCount, { title, scenarioId: scenarioByTitle.get(title)!, block, opens: blocks[block] + DEMO_OPENS_AFTER_DAYS * DAY_MS, days: DEMO_DAYS, labDay }, now),
+    );
+    const quizzes = work.map((item, block) =>
+      planQuiz(profile, didCount, { title: item.quiz, assessmentId: assessmentByTitle.get(item.quiz)!, block, opens: blocks[block] + QUIZ_OPENS_AFTER_DAYS * DAY_MS }, now),
+    );
     const members = bySection.get(sectionName) ?? [];
     members.push({
       profile,
-      studentId: student.id,
-      // A group's supervisor assigns and grades its members' work.
-      facultyId: group?.supervisor ?? facultyBySection.get(student.section_id) ?? null,
+      studentId: student.id as string,
       teamId: group?.teamId ?? null,
-      work,
-      didCount: Math.max(1, Math.round(profile.engagement * work.length)),
+      didCount,
+      cases: [...cases, ...demos],
+      quizzes,
+      removeCases: [],
+      removeAttempts: [],
+      removeQuizAssignments: [],
+      keptCases: new Set(),
+      keptQuizzes: new Set(),
     });
     bySection.set(sectionName, members);
   }
+  if (refused.length > 0) throw new Error(`Nothing was written. Refused:\n  ${refused.join('\n  ')}`);
 
-  // Sections share no students and no rows, so they are built side by side —
-  // one after another, the term's ~500 sittings take the better part of an hour.
-  await Promise.all([...bySection].map(async ([sectionName, members]) => {
-    const work = sectionWork[sectionName];
-    const blocks = termBlocks(work.length, termStart);
-
-    // ---- Clear every catalog pair these students hold -------------------
-    // Joining a group, or a group changing case, moves a student off a case,
-    // so clearing only the cases they get now would leave the old ones behind.
-    //
-    // Two kinds of row are real work, not ours, and are kept: a scenario a
-    // faculty member graded sub-task by sub-task in the app, and an attempt
-    // still in progress (the seed only writes submitted ones). The seed rates
-    // every sub-task at exactly the assignment's completed_at, so a rating at
-    // any other moment was made in the app.
-    const catalog = Object.values(sectionWork).flat();
-    const catalogScenarios = catalog.map((i) => scenarioByTitle.get(i.scenario)).filter((x): x is string => !!x);
-    const catalogQuizzes = catalog.map((i) => assessmentByTitle.get(i.quiz)).filter((x): x is string => !!x);
-    for (const member of members) {
-      const { data: held } = await supabase
+  // ---- Sort what is already there into ours and real work -------------------
+  const ownedScenarios = scenarios.map((s) => s.id as string);
+  const ownedQuizzes = assessments.map((a) => a.id as string);
+  const members = [...bySection.values()].flat();
+  for (const member of members) {
+    const [heldCases, heldAttempts, heldQuizzes] = await Promise.all([
+      supabase
         .from('scenario_assignments')
-        .select('id, scenario_id, completed_at, scenario_task_step_ratings(rated_at)')
+        .select('id, scenario_id, started_at, submitted_at, completed_at, time_taken, scenario_task_step_ratings(rated_at)')
         .eq('student_id', member.studentId)
-        .in('scenario_id', catalogScenarios);
-      for (const row of held ?? []) {
-        const ratings = (row.scenario_task_step_ratings ?? []) as { rated_at: string }[];
-        const completedAt = row.completed_at ? Date.parse(row.completed_at as string) : NaN;
-        if (ratings.some((r) => Date.parse(r.rated_at) !== completedAt)) {
-          keptScenarios.add(`${member.studentId}|${row.scenario_id}`);
-        } else {
-          await supabase.from('scenario_assignments').delete().eq('id', row.id);
-        }
-      }
-      // Attempts cascade to answers, served questions and criteria scores;
-      // the 027 trigger takes the derived competency scores.
-      await supabase
+        .in('scenario_id', ownedScenarios),
+      supabase
         .from('assessment_attempts')
-        .delete()
+        .select('id, assessment_id, status, started_at, submitted_at, time_taken_seconds')
         .eq('student_id', member.studentId)
-        .neq('status', 'in_progress')
-        .in('assessment_id', catalogQuizzes);
-      await supabase
-        .from('assessment_assignments')
-        .delete()
-        .eq('student_id', member.studentId)
-        .in('assessment_id', catalogQuizzes);
+        .in('assessment_id', ownedQuizzes),
+      supabase.from('assessment_assignments').select('id, assessment_id').eq('student_id', member.studentId).in('assessment_id', ownedQuizzes),
+    ]);
+    if (heldCases.error || heldAttempts.error || heldQuizzes.error) {
+      throw new Error(`read held work: ${(heldCases.error ?? heldAttempts.error ?? heldQuizzes.error)?.message}`);
     }
+    for (const row of heldCases.data ?? []) {
+      const scenarioId = row.scenario_id as string;
+      const untouched = !row.started_at && !row.submitted_at && !row.completed_at;
+      if (untouched) {
+        if (catalogScenarios.has(scenarioId) || options.clearUntouched) member.removeCases.push(row.id as string);
+        continue;
+      }
+      if (!catalogScenarios.has(scenarioId)) continue;
+      const ratings = (row.scenario_task_step_ratings ?? []) as { rated_at: string }[];
+      const ours =
+        ratings.length > 0
+          ? ratings.every((r) => Date.parse(r.rated_at) === Date.parse(row.completed_at as string))
+          : stamped(row.started_at as string | null, row.time_taken as number | null, row.submitted_at as string | null);
+      if (ours) member.removeCases.push(row.id as string);
+      else member.keptCases.add(scenarioId);
+    }
+    const attemptedQuizzes = new Set<string>();
+    for (const attempt of heldAttempts.data ?? []) {
+      const assessmentId = attempt.assessment_id as string;
+      attemptedQuizzes.add(assessmentId);
+      if (!catalogQuizzes.has(assessmentId)) continue;
+      const ours =
+        attempt.status !== 'in_progress' &&
+        stamped(attempt.started_at as string | null, attempt.time_taken_seconds as number | null, attempt.submitted_at as string | null);
+      if (ours) member.removeAttempts.push(attempt.id as string);
+      else member.keptQuizzes.add(assessmentId);
+    }
+    for (const row of heldQuizzes.data ?? []) {
+      const assessmentId = row.assessment_id as string;
+      if (catalogQuizzes.has(assessmentId)) {
+        if (!member.keptQuizzes.has(assessmentId)) member.removeQuizAssignments.push(row.id as string);
+      } else if (options.clearUntouched && !attemptedQuizzes.has(assessmentId)) {
+        member.removeQuizAssignments.push(row.id as string);
+      }
+    }
+    member.cases = member.cases.filter((c) => !member.keptCases.has(c.scenarioId));
+    member.quizzes = member.quizzes.filter((q) => !member.keptQuizzes.has(q.assessmentId));
+  }
 
-    // ---- Scenarios ------------------------------------------------------
-    for (const member of members) {
-      for (const [k, item] of member.work.entries()) {
-        const completed = k < member.didCount;
-        const scenarioId = scenarioByTitle.get(item.scenario);
-        if (!scenarioId) {
-          console.warn(`  missing scenario "${item.scenario}" — run db:seed:basic-cases first`);
-          continue;
-        }
-        const rng = seeded(hash(`${member.profile.email}|${item.scenario}`));
+  if (options.dryRun) {
+    console.log('\nPlan, as of now. Nothing was written.\n');
+    for (const m of members) {
+      const count = <T extends string>(rows: { status: T }[]) =>
+        Object.entries(rows.reduce<Record<string, number>>((acc, r) => ({ ...acc, [r.status]: (acc[r.status] ?? 0) + 1 }), {}))
+          .map(([status, n]) => `${n} ${status}`)
+          .join(', ');
+      console.log(
+        `${m.profile.name.padEnd(26)} cases: ${count(m.cases)} | quizzes: ${count(m.quizzes)} | removes ${m.removeCases.length} case rows, ` +
+          `${m.removeAttempts.length} attempts, ${m.removeQuizAssignments.length} quiz rows | keeps ${m.keptCases.size} cases, ${m.keptQuizzes.size} quizzes`,
+      );
+    }
+    return;
+  }
 
-        // Graded in the app: that grade stands (cleared pairs were removed above).
-        if (keptScenarios.has(`${member.studentId}|${scenarioId}`)) {
-          console.log(`  kept ${member.profile.email} / ${item.scenario}: graded in the app`);
-          continue;
-        }
+  // ---- Write ----------------------------------------------------------------
+  interface Tally {
+    quizzes: number[];
+    cases: number[];
+    late: number;
+    handedIn: number;
+    awaiting: number;
+    overdue: number;
+    reviews: number;
+  }
+  const tallies = new Map<string, Tally>();
 
-        // The scenario opens its block; the student works it within a day,
-        // before its quiz opens.
-        const assignedAt = new Date(blocks[k].start);
-        const submittedAt = new Date(assignedAt.getTime() + (0.5 + rng() * 0.5) * DAY_MS);
-        const completedAt = new Date(submittedAt.getTime() + 6 * HOUR_MS);
+  // Sections share no students and no rows, so they are built side by side.
+  await Promise.all([...bySection.values()].map(async (sectionMembers) => {
+    for (const member of sectionMembers) {
+      const tally: Tally = { quizzes: [], cases: [], late: 0, handedIn: 0, awaiting: 0, overdue: 0, reviews: 0 };
+      tallies.set(member.profile.name, tally);
 
-        const deadline = new Date(assignedAt.getTime() + 7 * DAY_MS);
-        // Untouched work that is past its deadline is overdue, not pending —
-        // the same distinction the app makes, and the one faculty act on.
-        const openStatus = deadline.getTime() < now ? 'overdue' : 'pending';
+      // ---- Clear ------------------------------------------------------------
+      // Attempts cascade to answers, served questions and criteria scores; the
+      // 027 trigger takes the derived competency scores.
+      const removals: [string, string[]][] = [
+        ['scenario_assignments', member.removeCases],
+        ['assessment_attempts', member.removeAttempts],
+        ['assessment_assignments', member.removeQuizAssignments],
+      ];
+      for (const [table, ids] of removals) {
+        if (ids.length === 0) continue;
+        const { error } = await supabase.from(table).delete().in('id', ids);
+        if (error) throw new Error(`clear ${table} for ${member.profile.email}: ${error.message}`);
+      }
 
+      // ---- Cases and Return Demonstrations -----------------------------------
+      for (const plan of member.cases) {
+        const rng = seeded(hash(`${member.profile.email}|${plan.title}`));
+        const handedIn = plan.handIn !== null;
+        const graded = plan.gradedAt !== null;
+        const seconds = handedIn ? Math.round(2700 * Math.exp(bell(rng) * 0.3)) : null;
         const { data: assignment, error: aErr } = await supabase
           .from('scenario_assignments')
           .insert({
-            scenario_id: scenarioId,
+            scenario_id: plan.scenarioId,
             student_id: member.studentId,
             team_id: member.teamId,
-            assigned_by: member.facultyId,
-            assigned_at: assignedAt.toISOString(),
-            deadline: deadline.toISOString(),
-            status: completed ? 'completed' : openStatus,
+            assigned_by: options.instructorId,
+            assigned_at: new Date(plan.assignedAt).toISOString(),
+            deadline: new Date(plan.deadline).toISOString(),
+            status: plan.status,
             required: true,
-            submitted_at: completed ? submittedAt.toISOString() : null,
-            time_taken: completed ? 1800 + Math.round(rng() * 2400) : null,
-            completed_at: completed ? completedAt.toISOString() : null,
-            finalized_by: completed ? member.facultyId : null,
-            score: completed ? 0 : null, // replaced below once tasks are known
+            started_at: handedIn ? new Date(plan.handIn! - seconds! * 1000).toISOString() : null,
+            submitted_at: handedIn ? new Date(plan.handIn!).toISOString() : null,
+            time_taken: seconds,
+            completed_at: graded ? new Date(plan.gradedAt!).toISOString() : null,
+            finalized_by: graded ? options.instructorId : null,
+            score: graded ? 0 : null, // replaced below once tasks are known
           })
           .select('id')
           .single();
-        if (aErr || !assignment) {
-          console.error(`  ✗ ${member.profile.email} / ${item.scenario}:`, aErr?.message);
-          process.exit(1);
-        }
+        if (aErr || !assignment) throw new Error(`${member.profile.email} / ${plan.title}: ${aErr?.message}`);
 
-        if (!completed) {
-          skippedScenarios += 1;
-          continue;
+        if (handedIn) {
+          tally.handedIn += 1;
+          if (plan.handIn! > plan.deadline) tally.late += 1;
         }
+        if (plan.status === 'in_progress') tally.awaiting += 1;
+        if (plan.status === 'overdue') tally.overdue += 1;
+        if (!graded) continue;
 
-        const { data: tasks } = await supabase
+        const { data: tasks, error: tasksError } = await supabase
           .from('scenario_tasks')
           .select('id, points, skill_id, scenario_task_steps(id)')
-          .eq('scenario_id', scenarioId)
+          .eq('scenario_id', plan.scenarioId)
           .order('sort_order', { ascending: true });
+        if (tasksError) throw new Error(`read tasks of ${plan.title}: ${tasksError.message}`);
 
         // Grade the way faculty do: each performed task has every sub-task
         // rated, and its completion row carries the level those add up to.
-        const gradedAt = completedAt.toISOString();
+        const gradedAt = new Date(plan.gradedAt!).toISOString();
+        const form = dayForm(rng);
         const done = (tasks ?? []).filter(() => rng() < member.profile.taskCompletion);
-        const stepRatings: { assignment_id: string; step_id: string; rating: TaskRating; rated_by: string | null; rated_at: string }[] = [];
+        const stepRatings: { assignment_id: string; step_id: string; rating: TaskRating; rated_by: string; rated_at: string }[] = [];
         const completions = done.map((t) => {
           const area = competencyName.get(chapterOfSkill.get(t.skill_id as string) ?? '') ?? '';
-          const p = chanceCorrect(member.profile, area ? [area] : []);
           const steps = (t.scenario_task_steps ?? []) as { id: string }[];
           let rating: TaskRating;
           if (steps.length > 0) {
             let credit = 0;
             for (const step of steps) {
-              const level = drawLevel(p, rng);
+              const level = drawLevel(stepChance(member.profile, area, step.id, plan.block, form), rng);
               credit += TASK_RATINGS.find((l) => l.key === level)!.credit;
-              stepRatings.push({
-                assignment_id: assignment.id,
-                step_id: step.id,
-                rating: level,
-                rated_by: member.facultyId,
-                rated_at: gradedAt,
-              });
+              stepRatings.push({ assignment_id: assignment.id, step_id: step.id, rating: level, rated_by: options.instructorId, rated_at: gradedAt });
             }
             rating = ratingForCredit(credit / steps.length);
           } else {
-            rating = drawLevel(p, rng);
+            rating = drawLevel(stepChance(member.profile, area, t.id as string, plan.block, form), rng);
           }
-          const remarks = rng() < 0.4 ? REMARKS[rating][Math.floor(rng() * REMARKS[rating].length)] : null;
           return {
             assignment_id: assignment.id,
             task_id: t.id,
             // Every task is rated in person by the faculty member; students
             // no longer chart on the ward, so nothing completes by itself.
-            completed_by: member.facultyId,
+            completed_by: options.instructorId,
             completed_via: 'faculty' as const,
-            completed_at: submittedAt.toISOString(),
+            completed_at: new Date(plan.handIn!).toISOString(),
             rating,
-            remarks,
-            rated_by: member.facultyId,
+            remarks: rng() < 0.4 ? REMARKS[rating][Math.floor(rng() * REMARKS[rating].length)] : null,
+            rated_by: options.instructorId,
           };
         });
         if (completions.length > 0) {
-          const { error: cErr } = await supabase.from('scenario_task_completions').insert(completions);
-          if (cErr) {
-            console.error(`  ✗ completions ${member.profile.email} / ${item.scenario}:`, cErr.message);
-            process.exit(1);
-          }
-          taskCount += completions.length;
+          const { error } = await supabase.from('scenario_task_completions').insert(completions);
+          if (error) throw new Error(`completions ${member.profile.email} / ${plan.title}: ${error.message}`);
         }
         if (stepRatings.length > 0) {
-          const { error: rErr } = await supabase.from('scenario_task_step_ratings').insert(stepRatings);
-          if (rErr) {
-            console.error(`  ✗ step ratings ${member.profile.email} / ${item.scenario}:`, rErr.message);
-            process.exit(1);
-          }
-          stepRatingCount += stepRatings.length;
+          const { error } = await supabase.from('scenario_task_step_ratings').insert(stepRatings);
+          if (error) throw new Error(`step ratings ${member.profile.email} / ${plan.title}: ${error.message}`);
         }
 
         // The finalize route's own scoring, so the stored score is the one a
         // faculty member re-opening and saving this grade would get.
-        const scored = await scoreAssignment(supabase, assignment.id, scenarioId);
-        if (scored.error) {
-          console.error(`  ✗ scoring ${member.profile.email} / ${item.scenario}:`, scored.error.message);
-          process.exit(1);
-        }
-        await supabase.from('scenario_assignments').update({ score: scored.score }).eq('id', assignment.id);
-        scenarioCount += 1;
+        const scored = await scoreAssignment(supabase, assignment.id, plan.scenarioId);
+        if (scored.error) throw new Error(`scoring ${member.profile.email} / ${plan.title}: ${scored.error.message}`);
+        const { error: scoreError } = await supabase.from('scenario_assignments').update({ score: scored.score }).eq('id', assignment.id);
+        if (scoreError) throw new Error(`score ${member.profile.email} / ${plan.title}: ${scoreError.message}`);
+        tally.cases.push(scored.score);
       }
-    }
 
-    // ---- Quiz assignments -----------------------------------------------
-    // One per student per quiz, due when its window closes, so every practice
-    // sitting below falls inside the window the student could sit it.
-    const assignmentIds = new Map<string, string | null>();
-    for (const member of members) {
-      for (const [k, item] of member.work.entries()) {
-        const assessmentId = assessmentByTitle.get(item.quiz);
-        if (!assessmentId) {
-          console.warn(`  missing quiz "${item.quiz}" — run db:seed:scenario-quizzes first`);
-          continue;
-        }
-
-        const sat = k < member.didCount;
-        const { closes } = quizWindow(blocks[k]);
-        const { data: quizAssignment } = await supabase
+      // ---- Quizzes ------------------------------------------------------------
+      for (const plan of member.quizzes) {
+        const { data: quizAssignment, error: qaErr } = await supabase
           .from('assessment_assignments')
           .insert({
-            assessment_id: assessmentId,
+            assessment_id: plan.assessmentId,
             student_id: member.studentId,
-            assigned_by: member.facultyId,
-            assigned_at: new Date(blocks[k].start).toISOString(),
-            deadline: new Date(closes).toISOString(),
-            status: sat ? 'completed' : closes < now ? 'overdue' : 'pending',
+            assigned_by: options.instructorId,
+            assigned_at: new Date(plan.assignedAt).toISOString(),
+            deadline: new Date(plan.deadline).toISOString(),
+            status: plan.status,
             required: true,
           })
           .select('id')
           .single();
-        assignmentIds.set(`${member.studentId}|${assessmentId}`, quizAssignment?.id ?? null);
-
-        // Assigned but never sat: the row stands, with no attempt behind it.
-        if (!sat) skippedQuizzes += 1;
-      }
-    }
-
-    // ---- Quiz sittings --------------------------------------------------
-    const doers = blocks.map((_, k) =>
-      members.flatMap((member, i) => (k < member.didCount ? [i] : [])),
-    );
-    const sittings = planSittings(sectionName, blocks, doers, now);
-    const sittingsSoFar = new Map<string, number>();
-    const daysCovered = new Set<string>();
-
-    // Chronological, so the selector sees each student's earlier sittings of
-    // a quiz and prefers questions they have not met.
-    for (const planned of sittings) {
-      const member = members[planned.member];
-      const item = member.work[planned.block];
-      const assessmentId = assessmentByTitle.get(item.quiz);
-      if (!assessmentId) continue;
-      const key = `${member.studentId}|${assessmentId}`;
-      const sitting = sittingsSoFar.get(key) ?? 0;
-      sittingsSoFar.set(key, sitting + 1);
-
-      const rng = seeded(hash(`${member.profile.email}|${item.quiz}|${sitting}`));
-
-      // The real selector, so a sitting is served the way the student app
-      // would serve it: past the graded tries, a review of what this student
-      // still has wrong, and nothing once that runs out.
-      const review = sitting >= (limitOfAssessment.get(assessmentId) ?? 1);
-      let selection: SelectionResult;
-      try {
-        selection = await selectQuestionsForAttempt(supabase, {
-          assessmentId,
-          studentId: member.studentId,
-          practice: review,
-          rng,
-        });
-      } catch (err) {
-        if (review && err instanceof SelectionError) continue;
-        throw err;
-      }
-
-      const startedAt = new Date(planned.at);
-      const { data: attempt, error: atErr } = await supabase
-        .from('assessment_attempts')
-        .insert({
-          assessment_id: assessmentId,
-          student_id: member.studentId,
-          assignment_id: assignmentIds.get(key) ?? null,
-          status: 'in_progress',
-          started_at: startedAt.toISOString(),
-        })
-        .select('id')
-        .single();
-      if (atErr || !attempt) {
-        console.error(`  ✗ ${member.profile.email} / ${item.quiz}:`, atErr?.message);
-        process.exit(1);
-      }
-
-      await supabase.from('attempt_questions').insert(
-        selection.questions.map((q) => ({
-          attempt_id: attempt.id,
-          question_id: q.id,
-          criteria_id: q.criteria_id,
-          position: q.position,
-        })),
-      );
-
-      // Answer each served question against the profile. Later sittings get
-      // a modest lift — practice helps — capped so a fourth go is no
-      // guaranteed pass.
-      const lift = Math.min(sitting, 2) * 0.08;
-      const answers = selection.questions.map((q) => {
-        const question = questionById.get(q.id);
-        const correctIndex = question?.correct_index ?? 0;
-        const optionCount = Array.isArray(question?.options) ? question.options.length : 4;
-        const p = Math.min(0.97, chanceCorrect(member.profile, tagsByQuestion.get(q.id) ?? []) + lift);
-        const isCorrect = rng() < p;
-        let selected = correctIndex;
-        if (!isCorrect) {
-          // Land on a wrong option rather than "no answer": an unanswered
-          // question and a wrong one are different signals downstream.
-          const offset = 1 + Math.floor(rng() * (optionCount - 1));
-          selected = (correctIndex + offset) % optionCount;
+        if (qaErr || !quizAssignment) throw new Error(`${member.profile.email} / ${plan.title}: ${qaErr?.message}`);
+        if (plan.status === 'overdue') tally.overdue += 1;
+        if (plan.sittings.length > 0) {
+          tally.handedIn += 1;
+          if (plan.sittings[0] > plan.deadline) tally.late += 1;
         }
-        return {
-          attempt_id: attempt.id,
-          question_id: q.id,
-          selected_index: selected,
-          is_correct: isCorrect,
-          time_spent_seconds: 20 + Math.round(rng() * 70),
-          answered_at: startedAt.toISOString(),
-        };
-      });
-      await supabase.from('attempt_answers').insert(answers);
 
-      const correctByQuestion = new Map(answers.map((a) => [a.question_id, a.is_correct]));
-      const correctCount = answers.filter((a) => a.is_correct).length;
-      const score = Math.round((correctCount / answers.length) * 10000) / 100;
+        // In order, so the selector sees each sitting's earlier ones: past the
+        // graded tries, a review of what this student still has wrong, and
+        // nothing once that runs out.
+        for (const [sitting, at] of plan.sittings.entries()) {
+          const rng = seeded(hash(`${member.profile.email}|${plan.title}|${sitting}`));
+          const review = sitting >= (limitOfAssessment.get(plan.assessmentId) ?? 1);
+          let selection: SelectionResult;
+          try {
+            selection = await selectQuestionsForAttempt(supabase, {
+              assessmentId: plan.assessmentId,
+              studentId: member.studentId,
+              practice: review,
+              rng,
+            });
+          } catch (err) {
+            if (review && err instanceof SelectionError) break;
+            throw err;
+          }
 
-      // Same per-criterion arithmetic as the submit route, over the paper
-      // this attempt was actually served.
-      const { data: criteria } = await supabase
-        .from('assessment_criteria')
-        .select('id, name, weight, competency_id')
-        .eq('assessment_id', assessmentId)
-        .order('sort_order', { ascending: true });
+          const { data: attempt, error: atErr } = await supabase
+            .from('assessment_attempts')
+            .insert({
+              assessment_id: plan.assessmentId,
+              student_id: member.studentId,
+              assignment_id: quizAssignment.id,
+              status: 'in_progress',
+              started_at: new Date(at).toISOString(),
+            })
+            .select('id')
+            .single();
+          if (atErr || !attempt) throw new Error(`${member.profile.email} / ${plan.title}: ${atErr?.message}`);
 
-      const breakdown = (criteria ?? [])
-        .map((c) => {
-          const mine = selection.questions.filter((q) => q.criteria_id === c.id);
-          const total = mine.length;
-          const correct = mine.filter((q) => correctByQuestion.get(q.id)).length;
-          const pct = total > 0 ? Math.round((correct / total) * 10000) / 100 : 0;
-          return {
-            attempt_id: attempt.id,
-            criteria_id: c.id,
-            competency_id: c.competency_id,
-            criteria_name: c.name,
-            weight: c.weight,
-            correct,
-            total,
-            score: pct,
-            weighted_score: Math.round(pct * (Number(c.weight) / 100) * 100) / 100,
-          };
-        })
-        .filter((b) => !review || b.total > 0);
-      if (breakdown.length > 0) {
-        await supabase.from('attempt_criteria_scores').insert(breakdown);
+          const { error: servedError } = await supabase.from('attempt_questions').insert(
+            selection.questions.map((q) => ({
+              attempt_id: attempt.id,
+              question_id: q.id,
+              criteria_id: q.criteria_id,
+              position: q.position,
+            })),
+          );
+          if (servedError) throw new Error(`served questions ${member.profile.email}: ${servedError.message}`);
+
+          const drawn = selection.questions.map((q) => {
+            const question = questionById.get(q.id);
+            const correctIndex = (question?.correct_index as number | undefined) ?? 0;
+            const optionCount = Array.isArray(question?.options) ? question.options.length : 4;
+            const p = answerChance(member.profile, areasOfQuestion.get(q.id) ?? [], { id: q.id, optionCount }, plan.block, review);
+            const isCorrect = rng() < p;
+            // Land on a wrong option rather than "no answer": an unanswered
+            // question and a wrong one are different signals downstream.
+            const selected = isCorrect ? correctIndex : (correctIndex + 1 + Math.floor(rng() * (optionCount - 1))) % optionCount;
+            const seconds = 40 * Math.exp(difficulty(q.id) * 0.5 + bell(rng) * 0.45) * (isCorrect ? 1 : 1.25);
+            return { questionId: q.id, selected, isCorrect, seconds };
+          });
+          // The app closes a timed paper at its limit.
+          const limit = secondsOfAssessment.get(plan.assessmentId);
+          const total = drawn.reduce((sum, d) => sum + d.seconds, 0);
+          const pace = limit && total > limit * 0.97 ? (limit * 0.97) / total : 1;
+          let elapsed = 0;
+          const answers = drawn.map((d) => {
+            const seconds = Math.max(5, Math.round(d.seconds * pace));
+            elapsed += seconds;
+            return {
+              attempt_id: attempt.id,
+              question_id: d.questionId,
+              selected_index: d.selected,
+              is_correct: d.isCorrect,
+              time_spent_seconds: seconds,
+              answered_at: new Date(at + elapsed * 1000).toISOString(),
+            };
+          });
+          const { error: answersError } = await supabase.from('attempt_answers').insert(answers);
+          if (answersError) throw new Error(`answers ${member.profile.email}: ${answersError.message}`);
+
+          const correctByQuestion = new Map(answers.map((a) => [a.question_id, a.is_correct]));
+          const correctCount = answers.filter((a) => a.is_correct).length;
+          const score = Math.round((correctCount / answers.length) * 10000) / 100;
+
+          // Same per-criterion arithmetic as the submit route, over the paper
+          // this attempt was actually served.
+          const { data: criteria } = await supabase
+            .from('assessment_criteria')
+            .select('id, name, weight, competency_id')
+            .eq('assessment_id', plan.assessmentId)
+            .order('sort_order', { ascending: true });
+          const breakdown = (criteria ?? [])
+            .map((c) => {
+              const mine = selection.questions.filter((q) => q.criteria_id === c.id);
+              const correct = mine.filter((q) => correctByQuestion.get(q.id)).length;
+              const pct = mine.length > 0 ? Math.round((correct / mine.length) * 10000) / 100 : 0;
+              return {
+                attempt_id: attempt.id,
+                criteria_id: c.id,
+                competency_id: c.competency_id,
+                criteria_name: c.name,
+                weight: c.weight,
+                correct,
+                total: mine.length,
+                score: pct,
+                weighted_score: Math.round(pct * (Number(c.weight) / 100) * 100) / 100,
+              };
+            })
+            .filter((b) => !review || b.total > 0);
+          if (breakdown.length > 0) {
+            const { error } = await supabase.from('attempt_criteria_scores').insert(breakdown);
+            if (error) throw new Error(`criteria scores ${member.profile.email}: ${error.message}`);
+          }
+
+          // Exactly time_taken after the start: the stamp a re-run knows it by.
+          const submittedAt = at + elapsed * 1000;
+          const { error: submitError } = await supabase
+            .from('assessment_attempts')
+            .update({
+              status: review ? 'practiced' : 'submitted',
+              submitted_at: new Date(submittedAt).toISOString(),
+              score,
+              time_taken_seconds: elapsed,
+            })
+            .eq('id', attempt.id);
+          if (submitError) throw new Error(`submit ${member.profile.email}: ${submitError.message}`);
+
+          // A review grades nothing, and the warehouse doesn't date anything by it.
+          if (review) {
+            tally.reviews += 1;
+            continue;
+          }
+          tally.quizzes.push(score);
+
+          // The app's own roll-up, so competency standing matches what a real
+          // submission would have produced, dated by the sitting.
+          await deriveCompetencyScoresForAttempt(supabase, attempt.id);
+          await supabase
+            .from('competency_scores')
+            .update({ created_at: new Date(submittedAt).toISOString() })
+            .eq('attempt_id', attempt.id);
+        }
       }
-
-      const timeTaken = answers.reduce((sum, a) => sum + (a.time_spent_seconds ?? 0), 0);
-      const submittedAt = startedAt.getTime() + timeTaken * 1000;
-      await supabase
-        .from('assessment_attempts')
-        .update({
-          status: review ? 'practiced' : 'submitted',
-          submitted_at: new Date(submittedAt).toISOString(),
-          score,
-          time_taken_seconds: timeTaken,
-        })
-        .eq('id', attempt.id);
-
-      // A review grades nothing, and the warehouse doesn't date anything by it.
-      if (review) {
-        reviewCount += 1;
-        continue;
-      }
-
-      // The app's own roll-up, so competency standing matches what a real
-      // submission would have produced.
-      await deriveCompetencyScoresForAttempt(supabase, attempt.id);
-      // Dated by the sitting, not by this run, so the skill-area trend and
-      // "newest wins" both follow the term's calendar.
-      await supabase
-        .from('competency_scores')
-        .update({ created_at: new Date(submittedAt).toISOString() })
-        .eq('attempt_id', attempt.id);
-
-      attemptCount += 1;
-      // The warehouse dates an attempt by its submission, so that is the
-      // day it counts toward on the trend chart.
-      daysCovered.add(dayOf(submittedAt));
     }
-
-    const weeksCovered = new Set([...daysCovered].map((day) => weekOf(Date.parse(day))));
-    const missing = [...termDays].filter((day) => !daysCovered.has(day));
-    coverage.push(
-      `  ${sectionName.padEnd(10)} ${String(sittings.length).padStart(3)} sittings  ` +
-        `${daysCovered.size}/${termDays.size} days  ${weeksCovered.size}/${termWeeks.size} weeks` +
-        (missing.length > 0 ? `  — none on ${missing.join(', ')}` : ''),
-    );
   }));
 
+  // ---- Report ---------------------------------------------------------------
+  const mean = (values: number[]) => (values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : NaN);
+  const show = (x: number) => (Number.isNaN(x) ? '  - ' : x.toFixed(0).padStart(4));
+  console.log(`\n${'Student'.padEnd(26)} Quiz Case Late Waiting Overdue Reviews`);
+  const rows = [...tallies].sort(([, a], [, b]) => mean(b.cases) - mean(a.cases));
+  for (const [name, t] of rows) {
+    console.log(
+      `${name.padEnd(26)} ${show(mean(t.quizzes))} ${show(mean(t.cases))} ${String(t.late).padStart(4)} ` +
+        `${String(t.awaiting).padStart(7)} ${String(t.overdue).padStart(7)} ${String(t.reviews).padStart(7)}`,
+    );
+  }
+  const all = [...tallies.values()];
+  const caseMeans = all.map((t) => mean(t.cases)).filter((x) => !Number.isNaN(x));
+  const handedIn = all.reduce((sum, t) => sum + t.handedIn, 0);
   console.log(
-    `\nScenarios: ${scenarioCount} completed (${taskCount} rated tasks, ${stepRatingCount} rated sub-tasks), ` +
-      `${skippedScenarios} left outstanding.\n` +
-      `Quizzes: ${attemptCount} graded attempts, ${reviewCount} review quizzes, ${skippedQuizzes} assignments never sat.\n`,
+    `\nClass: quizzes ${mean(all.flatMap((t) => t.quizzes)).toFixed(1)}, cases ${mean(all.flatMap((t) => t.cases)).toFixed(1)}. ` +
+      `${caseMeans.filter((x) => x < 75).length} of ${caseMeans.length} under 75 on cases. ` +
+      `${all.reduce((sum, t) => sum + t.late, 0)} of ${handedIn} pieces of work late.`,
   );
-  console.log('Sittings per section, against the days and weeks of the term:');
-  for (const line of coverage.sort()) console.log(line);
+}
+
+async function main() {
+  const dryRun = process.argv.includes('--dry-run');
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env.local');
+  const supabase = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+
+  // Found by the campus, so a Dean or instructor anywhere else can't be picked up.
+  const { data: campus, error: campusError } = await supabase.from('campuses').select('id, name').eq('code', TEST_CAMPUS).maybeSingle();
+  if (campusError || !campus) throw new Error(`No campus with code ${TEST_CAMPUS}: ${campusError?.message ?? 'not found'}`);
+  const { data: deans, error: deanError } = await supabase
+    .from('users')
+    .select('id, name')
+    .eq('role', 'admin')
+    .eq('campus_id', campus.id)
+    .is('admin_title', null);
+  if (deanError) throw new Error(`read test Dean: ${deanError.message}`);
+  if (deans?.length !== 1) throw new Error(`Expected one Dean at ${campus.name}, found ${deans?.length ?? 0}.`);
+  const { data: instructor, error: instructorError } = await supabase
+    .from('users')
+    .select('id, name')
+    .eq('role', 'faculty')
+    .eq('admin_id', deans[0].id)
+    .eq('name', TEST_INSTRUCTOR)
+    .maybeSingle();
+  if (instructorError || !instructor) throw new Error(`${TEST_INSTRUCTOR} isn't under ${deans[0].name}: ${instructorError?.message ?? 'not found'}`);
+
+  console.log(`Target: ${new URL(url).hostname}${dryRun ? ' (dry run)' : ''}`);
+  console.log(`Under: ${deans[0].name} and ${instructor.name}, ${campus.name}`);
+  await seedHistory(PROFILES, SECTION_WORK, {
+    deanId: deans[0].id as string,
+    instructorId: instructor.id as string,
+    returnDemos: RETURN_DEMOS,
+    clearUntouched: true,
+    dryRun,
+  });
 }
 
 // Run directly. seed-review-accounts.ts calls seedHistory for its own section.
 if (process.argv[1]?.endsWith('seed-student-history.ts')) {
-  seedHistory(PROFILES, SECTION_WORK).catch((err) => {
-    console.error(err);
+  main().catch((err) => {
+    console.error(err instanceof Error ? err.message : err);
     process.exit(1);
   });
 }
