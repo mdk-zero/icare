@@ -66,6 +66,20 @@ def get_active_model(db: Db, kind: str) -> dict[str, Any] | None:
     return rows[0] if rows else None
 
 
+def get_serving_model(db: Db) -> dict[str, Any] | None:
+    """The model that scores students: the active retrained model when there
+    is one, since it learned from this college's students. Until then the
+    baseline of the primary kind, or whichever kind is active."""
+    active = db.select(
+        "ml_models",
+        "id,name,kind,version,status,metrics,artifact_url,is_baseline,trained_at",
+        [("kind", "in", MODEL_KINDS), ("status", "eq", "active")],
+        order="created_at.desc",
+    )
+    primary = get_settings().primary_model_kind
+    return min(active, key=lambda m: (m["is_baseline"], m["kind"] != primary), default=None)
+
+
 def list_models(db: Db) -> list[dict[str, Any]]:
     return db.select(
         "ml_models",
@@ -84,6 +98,19 @@ def promote_model(db: Db, model_id: str) -> dict[str, Any]:
         {"status": "retired"},
         [("kind", "eq", target["kind"]), ("status", "eq", "active"), ("id", "neq", model_id)],
     )
+    if target["kind"] in MODEL_KINDS:
+        # get_serving_model prefers any retrained model, so one left active
+        # under the other kind would keep scoring over the model just promoted.
+        db.update(
+            "ml_models",
+            {"status": "retired"},
+            [
+                ("kind", "in", MODEL_KINDS),
+                ("is_baseline", "eq", "false"),
+                ("status", "eq", "active"),
+                ("id", "neq", model_id),
+            ],
+        )
     db.update("ml_models", {"status": "active"}, [("id", "eq", model_id)])
     target["status"] = "active"
     return target

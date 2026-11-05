@@ -983,14 +983,23 @@ function SuiteSection({
 
 /** What each kind in the registry is for, in the order the pipeline reads. */
 const ML_MODELS = [
-  { kind: "random_forest", name: "Random Forest", job: "Who needs intervention: the low-performing flag" },
-  { kind: "logistic_regression", name: "Logistic Regression", job: "Who needs intervention: the comparison baseline" },
+  { kind: "random_forest", name: "Random Forest", job: "Who needs intervention: the low-performing flag, or its comparison" },
+  { kind: "logistic_regression", name: "Logistic Regression", job: "Who needs intervention: the low-performing flag, or its comparison" },
   { kind: "knowledge_tracing", name: "Bayesian Knowledge Tracing", job: "What to practice: mastery per skill, which orders the review quiz" },
   { kind: "recommender", name: "Content-based recommender (TF-IDF)", job: "What to practice: other quizzes on the weakest skill areas" },
 ];
 
 interface MlStatus {
-  models: { kind: string; version: string; is_baseline: boolean }[];
+  models: {
+    id: string;
+    kind: string;
+    version: string;
+    is_baseline: boolean;
+    /** Cross-validated on iCARE++ students when the model was retrained. */
+    metrics: { samples?: number; cv_folds?: number; f1?: number; roc_auc?: number };
+  }[];
+  /** The model behind the latest low-performing flag. */
+  in_use_model_id: string | null;
   bkt: { skills: number; fitted: number; chapter: number; default: number; answers: number; fitted_at: string | null } | null;
 }
 
@@ -1008,6 +1017,7 @@ function MlSection() {
     ["rocAuc", "ROC-AUC"],
   ] as const;
   const bkt = status?.bkt;
+  const inUse = status?.models.find((row) => row.id === status.in_use_model_id);
   return (
     <section id="models" className={`${CARD} p-4 sm:p-5 scroll-mt-4`}>
       <SectionHead
@@ -1035,7 +1045,10 @@ function MlSection() {
                     {loading ? (
                       <SkeletonText className="ml-auto h-4 w-16" />
                     ) : live ? (
-                      `v${live.version}${live.is_baseline ? " (baseline)" : ""}`
+                      <>
+                        {`v${live.version}${live.is_baseline ? " (baseline)" : ""}`}
+                        {live === inUse && <span className="ml-2 text-xs font-medium text-brand-600">In use</span>}
+                      </>
                     ) : (
                       <span className="text-gray-400">{status ? "Not registered" : "—"}</span>
                     )}
@@ -1048,6 +1061,11 @@ function MlSection() {
       </div>
 
       <h3 className="mt-6 font-semibold text-gray-800">Risk prediction</h3>
+      {inUse && !inUse.is_baseline && inUse.metrics.f1 !== undefined && (
+        <p className="mt-1 text-sm text-gray-700">
+          {`The flag runs on a model retrained on ${inUse.metrics.samples} iCARE++ students: F1 ${(inUse.metrics.f1 * 100).toFixed(1)}%, ROC-AUC ${((inUse.metrics.roc_auc ?? 0) * 100).toFixed(1)}%, ${inUse.metrics.cv_folds}-fold cross-validated. The table below is the OULAD baseline it replaced.`}
+        </p>
+      )}
       <p className="mb-3 text-xs text-gray-500">
         {`${MODEL_EVAL_DATASET.name} set: ${MODEL_EVAL_DATASET.samples.toLocaleString()} samples, ${Math.round(
           MODEL_EVAL_DATASET.atRiskRate * 1000,

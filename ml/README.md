@@ -58,7 +58,8 @@ On startup the service seeds `ml_models` with the shipped OULAD baseline
 artifacts (`models/*-oulad.joblib`) as **active** models — the manuscript's
 pre-trained-baseline clause — so predictions work before any local training
 data exists. A nightly in-process scheduler (`ML_SCHEDULE_TIME`, default 03:00)
-runs batch predictions, refits BKT and retrains on iCARE data when there is enough.
+runs batch predictions, refits BKT and retrains on iCARE data when there is
+enough, switching to a retrained model when it clears the gate under Models.
 
 ## API
 
@@ -69,8 +70,8 @@ All endpoints except `/health` require header `X-ICARE-ML-KEY: $ML_SERVICE_SECRE
 |---|---|
 | `GET /health` | liveness |
 | `GET /models` | registry contents |
-| `POST /models/{id}/promote` | staging → active (retires the previous active of that kind) |
-| `POST /models/retrain` `{force?}` | retrain both at-risk models on iCARE data and register them as **staging** (artifacts in Supabase Storage, web migration 090); answers `{"skipped": ...}` until 30 labeled students, or when none were labeled since the last retrain |
+| `POST /models/{id}/promote` | make a model active by hand (retires the previous active of that kind, and any other retrained at-risk model) |
+| `POST /models/retrain` `{force?}` | retrain both at-risk models on iCARE data, register them as **staging** (artifacts in Supabase Storage, web migration 090) and switch to one if it clears the gate; answers `{"skipped": ...}` until 30 labeled students, or when none were labeled since the last retrain |
 | `POST /predict/at-risk` `{student_ids?}` | batch-score cohort, write `performance_predictions`, notify roster faculty on new at-risk transitions |
 | `POST /recommend/refresh` `{student_ids?}` | refit `bkt_parameters` (whole-cohort runs only; a scoped run is a no-op). The path is kept from the TF-IDF days so callers didn't change |
 
@@ -115,16 +116,36 @@ app asks for the stream to show a percentage; the nightly workflow doesn't.
   `python -m training.train_icare` labels students by the mean of their
   finalized patient-case grades and any faculty-validated competency scores
   vs the 75 passing mark (it needs 30 labeled students with both outcomes),
-  trains on `EXTENDED_FEATURES`, and registers artifacts as `staging`;
-  promote via the API after review. A class is too small to spare a
-  holdout, so its metrics are stratified k-fold cross-validated (up to 5
-  folds, out-of-fold predictions, `f1_fold_std` for the spread) and the
-  shipped model is fit on every labeled student. Prefer the logistic
-  regression unless the forest's scores clearly beat it. The nightly run does
-  this on its own through `POST /models/retrain` once there are enough labeled
-  students, and again whenever more are labeled; the artifacts go to the
-  `ml-models` Storage bucket (the free host's disk doesn't survive a restart)
-  and stay `staging` until an admin promotes them.
+  trains on `EXTENDED_FEATURES`, and registers artifacts as `staging`. The
+  fictional App Review section is left out of the labels. A class is too
+  small to spare a holdout, so its metrics are stratified k-fold
+  cross-validated (up to 5 folds, out-of-fold predictions, `f1_fold_std` for
+  the spread) and the shipped model is fit on every labeled student. The
+  nightly run does this on its own through `POST /models/retrain` once there
+  are enough labeled students, and again whenever more are labeled; the
+  artifacts go to the `ml-models` Storage bucket (the free host's disk doesn't
+  survive a restart).
+- **Switching models** — a retrained model replaces the one in use with nobody
+  reviewing it, so it has to clear a gate (`choose_switch` in
+  `training/train_icare.py`): 5 full folds (at least 5 students of each
+  outcome), ROC-AUC of at least 0.7, and an F1 no lower than the model in use.
+  An OULAD baseline is scored on the same iCARE students for that comparison,
+  since its OULAD figures say nothing about them. A retrained model answers
+  with the cross-validated F1 saved when it was trained, since it has seen
+  most of them. If both kinds clear the gate, logistic regression goes live
+  unless the forest's F1 beats it by more than its fold spread. A model that
+  doesn't clear it stays `staging`, and retraining tries again when more
+  students are labeled. On a switch, Admins get a notification, the winner's
+  `metrics.replaced` records what it replaced, and every student moves to the
+  new model on the next run. Faculty may see a burst of low-performing
+  notifications that night, since the flags are recomputed. An active
+  retrained model always scores ahead of a baseline, whatever
+  `ML_PRIMARY_MODEL_KIND` says.
+
+  To go back: set `ML_AUTO_SWITCH=false` first, or the next retrain can switch
+  again, then `POST /models/{id}/promote` the baseline. That retires the
+  retrained model. Report a switched model's accuracy from its cross-validated
+  metrics, and OULAD figures as OULAD figures only.
 - **iCARE evaluation** — `python -m eval.icare_eval` scores the models
   against those same outcomes: raw, as deployed (participation-weighted),
   and the latest stored predictions faculty saw. Until real grades replace

@@ -15,6 +15,7 @@ class Settings:
     ml_service_secret: str
     risk_threshold: float
     primary_model_kind: str
+    auto_switch: bool
     schedule_enabled: bool
     schedule_time: str  # "HH:MM", 24h
     models_dir: Path
@@ -37,6 +38,7 @@ def get_settings() -> Settings:
         ml_service_secret=_required_secret(),
         risk_threshold=float(os.environ.get("ML_RISK_THRESHOLD", "0.5")),
         primary_model_kind=os.environ.get("ML_PRIMARY_MODEL_KIND", "random_forest"),
+        auto_switch=os.environ.get("ML_AUTO_SWITCH", "true").lower() == "true",
         schedule_enabled=os.environ.get("ML_SCHEDULE_ENABLED", "true").lower() == "true",
         schedule_time=os.environ.get("ML_SCHEDULE_TIME", "03:00"),
         models_dir=ML_ROOT / "models",

@@ -12,11 +12,13 @@ take scores from quiz attempts, and from a case only its status and
 deadline.
 
 New artifacts go to Supabase Storage (the ml-models bucket, web migration
-090) and are registered in ml_models with status 'staging'; promote via
-POST /models/{id}/promote once the metrics are reviewed (they then replace
-the OULAD baselines). The nightly run calls this through POST
-/models/retrain, which skips until there are enough labeled students and
-whenever none were labeled since the last retrain.
+090) and are registered in ml_models with status 'staging'. One then replaces
+the model in use on its own if it clears the switch gate (choose_switch), which
+is how the OULAD baselines give way, and Admins get a notification. With
+ML_AUTO_SWITCH=false they stay in staging for POST /models/{id}/promote. The
+nightly run calls this through POST /models/retrain, which skips until there
+are enough labeled students and whenever none were labeled since the last
+retrain.
 
 Usage (env must contain SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / ML_SERVICE_SECRET):
     python -m training.train_icare [--pass-threshold 75] [--min-samples 30]
@@ -48,13 +50,25 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from app.config import get_settings  # noqa: E402
 from app.db import Db  # noqa: E402
-from app.features import build_student_features  # noqa: E402
-from app.registry import STORAGE_PREFIX  # noqa: E402
+from app.features import StudentFeatures, build_student_features  # noqa: E402
+from app.registry import STORAGE_PREFIX, get_serving_model, load_artifact, promote_model  # noqa: E402
 from app.schema import EXTENDED_FEATURES  # noqa: E402
 
 SEED = 42
 MAX_FOLDS = 5
+
+# The switch gate, for a model going live with nobody reviewing it. Full folds
+# take five students of each outcome; with fewer, the scores swing too much to
+# act on. 0.7 is the usual floor for acceptable discrimination, and it stops a
+# model that flags everyone, whose F1 looks fine when most students are at risk.
+SWITCH_MIN_FOLDS = MAX_FOLDS
+SWITCH_MIN_ROC_AUC = 0.7
+
+# Sections of made-up students (web/scripts/seed-review-accounts.ts). Their
+# grades are simulated, so they mustn't teach a model that can go live.
+FICTIONAL_SECTIONS = ["App Review"]
 
 
 def cross_validated(estimator, X: np.ndarray, y: np.ndarray, cv: StratifiedKFold) -> dict:
@@ -81,10 +95,19 @@ def cross_validated(estimator, X: np.ndarray, y: np.ndarray, cv: StratifiedKFold
     }
 
 
+def _fictional_students(db: Db) -> set[str]:
+    sections = db.select("sections", "id", [("name", "in", FICTIONAL_SECTIONS)])
+    if not sections:
+        return set()
+    students = db.select("users", "id", [("section_id", "in", [s["id"] for s in sections])])
+    return {s["id"] for s in students}
+
+
 def outcome_labels(db: Db, pass_threshold: float) -> dict[str, int]:
     """Each graded student's outcome: 1 (at risk) when the mean of their
     finalized case grades and faculty validations is below pass_threshold.
-    Students with neither are left out. Shared with eval/icare_eval.py.
+    Students with neither are left out, as are FICTIONAL_SECTIONS. Shared with
+    eval/icare_eval.py.
 
     Faculty judgements only. Assessment-derived competency scores are
     computed from the same attempts that produce the features, so folding
@@ -101,9 +124,11 @@ def outcome_labels(db: Db, pass_threshold: float) -> dict[str, int]:
         [("source", "eq", "faculty_validation")],
     )
     print(f"  {len(finalized)} finalized case grades, {len(validated)} faculty validations")
+    fictional = _fictional_students(db)
     scores_by_student: dict[str, list[float]] = {}
     for row in [*finalized, *validated]:
-        scores_by_student.setdefault(row["student_id"], []).append(float(row["score"]))
+        if row["student_id"] not in fictional:
+            scores_by_student.setdefault(row["student_id"], []).append(float(row["score"]))
     return {
         sid: int(np.mean(scores) < pass_threshold)
         for sid, scores in scores_by_student.items()
@@ -129,6 +154,92 @@ def _last_icare_samples(db: Db) -> int | None:
     return int(samples) if samples is not None else None
 
 
+def _f1_to_beat(
+    db: Db, students: list[StudentFeatures], y: np.ndarray
+) -> tuple[dict[str, Any] | None, float]:
+    """The model in use and the F1 a new one must match. A baseline never saw
+    these students, so it is scored on them, the same students behind the new
+    model's scores (its 0.93 on OULAD's holdout says nothing about them). A
+    retrained model was fit on most of them and would flatter itself, so it
+    answers with the cross-validated F1 saved when it was trained."""
+    in_use = get_serving_model(db)
+    if in_use is None or not in_use.get("artifact_url"):
+        return in_use, 0.0
+    if not in_use["is_baseline"]:
+        return in_use, float((in_use.get("metrics") or {}).get("f1", 0.0))
+    bundle = load_artifact(in_use["artifact_url"])
+    X = np.array([[s.features[n] for n in bundle["feature_names"]] for s in students], dtype=float)
+    if bundle.get("scaler") is not None:
+        X = bundle["scaler"].transform(X)
+    probabilities = bundle["model"].predict_proba(X)[:, 1]
+    # The same 0.5 cross_validated scores at.
+    return in_use, round(float(f1_score(y, probabilities >= 0.5, zero_division=0)), 4)
+
+
+def choose_switch(candidates: list[dict[str, Any]], to_beat: float) -> dict[str, Any] | None:
+    """Which new model, if any, replaces the one in use: it needs full folds, a
+    ROC-AUC above the floor and an F1 no lower than to_beat. When both clear
+    that, logistic regression, the steadier fit on a class-sized sample, unless
+    the forest beats it by more than one split would swing."""
+    cleared = {
+        c["kind"]: c
+        for c in candidates
+        if c["metrics"]["cv_folds"] >= SWITCH_MIN_FOLDS
+        and c["metrics"]["roc_auc"] >= SWITCH_MIN_ROC_AUC
+        and c["metrics"]["f1"] >= to_beat
+    }
+    forest, logistic = cleared.get("random_forest"), cleared.get("logistic_regression")
+    if forest and logistic:
+        margin = logistic["metrics"]["f1"] + logistic["metrics"]["f1_fold_std"]
+        return forest if forest["metrics"]["f1"] > margin else logistic
+    return forest or logistic
+
+
+def _notify_admins_of_switch(db: Db, winner: dict[str, Any], replaced: dict[str, Any]) -> None:
+    """Nobody reviewed this model, so the people who could undo it get told."""
+    admins = db.select("users", "id", [("role", "eq", "super_admin")])
+    metrics = winner["metrics"]
+    db.insert(
+        "notifications",
+        [
+            {
+                "user_id": admin["id"],
+                "type": "system",
+                "title": "Low-performing flag switched models",
+                "body": (
+                    f"The flag now runs on {winner['kind'].replace('_', ' ')} v{winner['version']}, "
+                    f"trained on {metrics['samples']} iCARE++ students "
+                    f"(F1 {metrics['f1']}, ROC-AUC {metrics['roc_auc']}). "
+                    f"It replaces {replaced['model']} (F1 {replaced['f1']})."
+                ),
+                "data": {"kind": "ml_model_switched", "model_id": winner["id"]},
+            }
+            for admin in admins
+        ],
+    )
+
+
+def _switch_if_better(
+    db: Db, registered: list[dict[str, Any]], students: list[StudentFeatures], y: np.ndarray, log
+) -> dict[str, Any] | None:
+    in_use, to_beat = _f1_to_beat(db, students, y)
+    name = f"{in_use['kind'].replace('_', ' ')} v{in_use['version']}" if in_use else "no model"
+    winner = choose_switch(registered, to_beat)
+    if winner is None:
+        log(f"no switch: nothing cleared the gate against {name} (F1 {to_beat})")
+        return None
+    replaced = {"model": name, "f1": to_beat}
+    db.update(
+        "ml_models",
+        {"metrics": {**winner["metrics"], "replaced": replaced}},
+        [("id", "eq", winner["id"])],
+    )
+    promote_model(db, winner["id"])
+    _notify_admins_of_switch(db, winner, replaced)
+    log(f"switched to {winner['kind']} v{winner['version']} from {name}")
+    return {"kind": winner["kind"], "version": winner["version"], "f1": winner["metrics"]["f1"], "replaced": replaced}
+
+
 def train_and_register(
     db: Db,
     pass_threshold: float = 75.0,
@@ -137,15 +248,17 @@ def train_and_register(
     force: bool = False,
     log=print,
 ) -> dict[str, Any]:
-    """Train both at-risk models on iCARE data and register them as staging.
+    """Train both at-risk models on iCARE data, register them as staging, and
+    switch to one if it clears the gate (choose_switch).
 
     Returns what happened. Skips, without writing anything, until there are
     min_samples labeled students with both outcomes, and (unless force) when
     no student has been labeled since the newest iCARE model, so a nightly
-    call doesn't pile up identical staging rows. Nothing goes live here: an
-    admin still promotes a staging model via POST /models/{id}/promote.
+    call doesn't pile up identical staging rows.
     """
-    version = version or datetime.now(timezone.utc).strftime("%Y.%m.%d")
+    # To the minute: GitHub starts the nightly run late, so two can land on one
+    # UTC date, and a repeated version would overwrite the first run's file.
+    version = version or datetime.now(timezone.utc).strftime("%Y.%m.%d.%H%M")
     log("building live feature frame...")
     features = build_student_features(db)
     labels = outcome_labels(db, pass_threshold)
@@ -187,9 +300,6 @@ def train_and_register(
     trained_at = datetime.now(timezone.utc).isoformat()
 
     registered: list[dict[str, Any]] = []
-    # Logistic regression first: with a class-sized sample its few
-    # coefficients are the steadier fit, and the one to promote unless
-    # the forest's cross-validated scores clearly beat it.
     for kind in ("logistic_regression", "random_forest"):
         if kind == "random_forest":
             estimator = RandomForestClassifier(
@@ -224,7 +334,7 @@ def train_and_register(
         # restart, which would leave the registry pointing at nothing.
         db.upload_object(MODEL_BUCKET, filename, buffer.getvalue())
         artifact_url = f"{STORAGE_PREFIX}{MODEL_BUCKET}/{filename}"
-        db.insert(
+        row = db.insert(
             "ml_models",
             [{
                 "name": f"iCARE++ retrained ({kind.replace('_', ' ')})",
@@ -236,19 +346,24 @@ def train_and_register(
                 "is_baseline": False,
                 "trained_at": trained_at,
             }],
-        )
+            returning=True,
+        )[0]
         log(f"  registered as staging: {artifact_url}")
-        registered.append({"kind": kind, "version": f"{version}-icare", "metrics": metrics})
+        registered.append({"id": row["id"], "kind": kind, "version": f"{version}-icare", "metrics": metrics})
 
-    log("review metrics, then promote via POST /models/{id}/promote")
-    return {"registered": registered, "labeled": int(len(y))}
+    switched = None
+    if get_settings().auto_switch:
+        switched = _switch_if_better(db, registered, [features[sid] for sid in student_ids], y, log)
+    else:
+        log("ML_AUTO_SWITCH is off: review the metrics, then promote via POST /models/{id}/promote")
+    return {"registered": registered, "labeled": int(len(y)), "switched": switched}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--pass-threshold", type=float, default=75.0)
     parser.add_argument("--min-samples", type=int, default=30)
-    parser.add_argument("--version", default=None, help="defaults to today's date")
+    parser.add_argument("--version", default=None, help="defaults to the current UTC date and time")
     parser.add_argument("--force", action="store_true", help="retrain even with no newly labeled students")
     args = parser.parse_args()
 

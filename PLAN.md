@@ -161,6 +161,8 @@ New migrations in `web/supabase/migrations/` (all tables: RLS enabled, `campus_i
 
 **Status 2026-10-16 (at-risk model, cold start → iCARE):** the deployed flag is a hybrid: OULAD baseline probability weighted by graded quiz attempts (full weight at 3), the rest from missed-deadline participation (`ml/app/predictor.py`). Retraining (3.4) now labels by mean finalized patient-case grade (+ any faculty validations) < 75, since nothing in normal grading wrote `faculty_validation` rows; it cross-validates (stratified k-fold) instead of a single split and needs 30 labeled students with both outcomes (19 as of today, all seeded). `ml/eval/icare_eval.py` scores the models against those iCARE outcomes — the held-out evaluation the manuscript's Instrumentation section describes, since iCARE data never trained the baselines. Report OULAD figures as OULAD figures; iCARE accuracy only from a real term's grades.
 
+**Status 2026-11-05 (automatic switch):** a retrained model now replaces the one in use without a manual promote when it clears a gate: 5 full folds, ROC-AUC ≥ 0.7, F1 no lower than the model in use on the same students (`choose_switch` in `ml/training/train_icare.py`). `ML_AUTO_SWITCH=false` turns it off. The App Review section's fictional students are left out of the labels. Live that day the flag was still the OULAD random forest: it needs the Render redeploy, migration 090, and 30 labeled students (8 then, 5 of them App Review).
+
 | # | Task | Detail | Effort |
 |---|------|--------|--------|
 | 3.1 | Scaffold FastAPI service | Python 3.10+, scikit-learn/pandas/NumPy (per manuscript Table I); Dockerfile; shared-secret auth from Next.js | M |

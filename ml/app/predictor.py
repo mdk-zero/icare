@@ -1,6 +1,6 @@
 """Batch at-risk prediction (Phase 3.5).
 
-Scores students with the active primary model, writes
+Scores students with the model in use (registry.get_serving_model), writes
 public.performance_predictions (feature snapshot + top contributing
 features), and notifies roster faculty when a student newly transitions
 to at_risk (Phase 2.9 notification contract, type 'at_risk_flag').
@@ -26,7 +26,7 @@ from .config import get_settings
 from .db import Db
 from .features import FEATURE_STEPS, StudentFeatures, build_student_features
 from .progress import Progress, Report
-from .registry import get_active_model, load_artifact
+from .registry import get_serving_model, load_artifact
 
 TOP_EXPLANATIONS = 3
 
@@ -147,13 +147,7 @@ def run_batch_predictions(
     # is one in-memory matrix pass, too quick to be worth a step.
     progress = Progress(FEATURE_STEPS + 3, report=report)
 
-    model_row = get_active_model(db, settings.primary_model_kind)
-    if model_row is None:
-        # fall back to whichever kind has an active model
-        for kind in ("random_forest", "logistic_regression"):
-            model_row = get_active_model(db, kind)
-            if model_row:
-                break
+    model_row = get_serving_model(db)
     if model_row is None or not model_row.get("artifact_url"):
         raise RuntimeError("no active prediction model with an artifact in ml_models")
 

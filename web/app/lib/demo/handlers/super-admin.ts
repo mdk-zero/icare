@@ -398,11 +398,12 @@ route("GET", "/api/super-admin/ml-status", (ctx) => {
   ]).size;
   return {
     models: [
-      { kind: "knowledge_tracing", name: "Bayesian Knowledge Tracing", version: "1.0.0", is_baseline: false },
-      { kind: "recommender", name: "Content-based quiz recommender", version: "1.0.0", is_baseline: false },
-      { kind: "logistic_regression", name: "OULAD baseline (logistic regression)", version: "0.1.0-oulad", is_baseline: true },
-      { kind: "random_forest", name: "OULAD baseline (random forest)", version: "0.1.0-oulad", is_baseline: true },
+      { id: "demo-bkt", kind: "knowledge_tracing", name: "Bayesian Knowledge Tracing", version: "1.0.0", is_baseline: false, metrics: {} },
+      { id: "demo-recommender", kind: "recommender", name: "Content-based quiz recommender", version: "1.0.0", is_baseline: false, metrics: {} },
+      { id: "demo-logreg", kind: "logistic_regression", name: "OULAD baseline (logistic regression)", version: "0.1.0-oulad", is_baseline: true, metrics: {} },
+      { id: "demo-forest", kind: "random_forest", name: "OULAD baseline (random forest)", version: "0.1.0-oulad", is_baseline: true, metrics: {} },
     ],
+    in_use_model_id: "demo-forest",
     bkt: {
       skills,
       fitted: skills,

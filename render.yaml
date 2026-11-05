@@ -51,5 +51,7 @@ services:
         value: "0.5"
       - key: ML_PRIMARY_MODEL_KIND
         value: random_forest
+      - key: ML_AUTO_SWITCH
+        value: "true"
       - key: ML_RECOMMEND_K
         value: "5"

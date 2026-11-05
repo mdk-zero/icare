@@ -29,6 +29,12 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
+    # Naming the shell turns on pipefail. Without it `curl | tee` answers with
+    # tee's status, so a failed request reads as success: /models/retrain gave
+    # the deployed service's 404 for days with every run green.
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Wake the service
         # A sleeping free instance takes up to a minute to come back, and the
@@ -59,6 +65,7 @@ jobs:
       - name: Refit skill mastery (BKT)
         # The per-skill knowledge-tracing parameters the adaptive review quiz
         # and the Library read. The path is kept from the TF-IDF days.
+        if: ${{ !cancelled() }}
         run: |
           curl -sS --fail-with-body --max-time 600 \
             -X POST "${{ secrets.ML_SERVICE_URL }}/recommend/refresh" \
@@ -69,7 +76,9 @@ jobs:
       - name: Retrain on iCARE data when there is enough
         # Registers new at-risk models as staging once 30+ students have
         # finalized grades and some were graded since the last retrain;
-        # otherwise answers {"skipped": ...}. An admin still promotes them.
+        # otherwise answers {"skipped": ...}. One goes live on its own if it
+        # clears the switch gate, and scores everyone on the next run.
+        if: ${{ !cancelled() }}
         run: |
           curl -sS --fail-with-body --max-time 600 \
             -X POST "${{ secrets.ML_SERVICE_URL }}/models/retrain" \

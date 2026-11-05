@@ -137,13 +137,17 @@ class RetrainRequest(BaseModel):
 async def retrain(body: RetrainRequest | None = None) -> dict:
     """Retrain the at-risk models on iCARE data and register them as staging,
     once there are enough labeled students (finalized case grades, faculty
-    validations) and some were labeled since the last retrain. Nothing goes
-    live: an admin promotes a staging model, as before."""
+    validations) and some were labeled since the last retrain. One goes live
+    on its own if it clears the switch gate in training/train_icare.py. A
+    failure answers 500, so the nightly workflow shows it."""
     db = Db()
     try:
-        return await asyncio.to_thread(_retrain, db, bool(body and body.force))
+        result = await asyncio.to_thread(_retrain, db, bool(body and body.force))
     finally:
         db.close()
+    if "error" in result:
+        raise HTTPException(status_code=500, detail=result["error"])
+    return result
 
 
 NDJSON = "application/x-ndjson"
