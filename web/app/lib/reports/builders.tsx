@@ -22,6 +22,7 @@ import { CASE_CRITERIA, isLateSubmission, type CaseObservations } from '../case-
 import { isLateSubmission as isLateAttempt } from '../assessment-timing';
 import { quizGrade } from '../quiz-attempts';
 import { activityOfferings } from '../activity-course';
+import { readMatching } from '../fetch-all';
 import { ratingLabel, scoreDescriptor, type TaskRating } from '../task-ratings';
 import { loadStudentStandings, type StudentCourseStanding } from '../course-requirements';
 import { isMissingCourseSchema } from '../courses';
@@ -318,17 +319,24 @@ export async function buildSectionReport(
   const students = (sectionStudents ?? []).filter((s) => !scope || scope.includes(s.id));
   const ids = students.map((s) => s.id);
 
-  const [groups, work, { data: scores }] = await Promise.all([
+  const [groups, work, scores] = await Promise.all([
     groupNames(supabase, ids),
     studentWork(supabase, ids),
-    ids.length
-      ? supabase.from('competency_scores').select('score, competency_areas(name)').in('student_id', ids)
-      : Promise.resolve({ data: [] as unknown[] }),
+    // Every rating, paged past the 1,000-row cap.
+    readMatching<{ score: number; competency_areas: { name: string } | null }>(ids, (part, from, to) =>
+      supabase
+        .from('competency_scores')
+        .select('id, score, competency_areas(name)')
+        .in('student_id', part)
+        .order('id')
+        .range(from, to),
+    ),
   ]);
 
   const roster = students.map((s) => ({ ...s, group: groups.get(s.id) ?? null, work: work.get(s.id)! }));
   const scenarioAverages = roster.flatMap((r) => (r.work.scenarioAverage === null ? [] : [r.work.scenarioAverage]));
   const quizAverages = roster.flatMap((r) => (r.work.quizAverage === null ? [] : [r.work.quizAverage]));
+  const demoAverages = roster.flatMap((r) => (r.work.returnDemoAverage === null ? [] : [r.work.returnDemoAverage]));
   const needsPractice = scenarioAverages.filter((s) => s < NEEDS_PRACTICE_BELOW).length;
 
   const byGroup = new Map<string, typeof roster>();
@@ -344,7 +352,7 @@ export async function buildSectionReport(
     });
 
   const byArea = new Map<string, number[]>();
-  for (const s of (scores ?? []) as { score: number; competency_areas: { name: string } | null }[]) {
+  for (const s of scores) {
     const name = s.competency_areas?.name ?? 'Unknown';
     if (!isActiveSkillArea(name)) continue;
     byArea.set(name, [...(byArea.get(name) ?? []), Number(s.score)]);
@@ -369,6 +377,7 @@ export async function buildSectionReport(
         items={[
           { label: 'Students', value: roster.length },
           gradeTile('Patient case average', avg(scenarioAverages)),
+          gradeTile('Return demo average', avg(demoAverages)),
           { label: 'Quiz average', value: pct(avg(quizAverages)) },
           { label: 'Needs Practice', value: needsPractice },
         ]}
@@ -384,13 +393,14 @@ export async function buildSectionReport(
 
       <Text style={styles.sectionTitle}>Students</Text>
       <Table
-        head={['Student', 'Group', 'Patient Cases', 'Patient case grade', 'Case grade', 'Quiz average']}
-        widths={[2.3, 1.1, 1, 2, 1, 1.3]}
+        head={['Student', 'Group', 'Patient Cases', 'Patient case grade', 'Return demo grade', 'Case grade', 'Quiz average']}
+        widths={[2.1, 1, 0.9, 1.8, 1.8, 0.9, 1.1]}
         rows={roster.map((r) => [
           r.name,
           r.group ?? '—',
           `${r.work.scenariosGraded}/${r.work.scenariosAssigned}`,
           grade(r.work.scenarioAverage),
+          grade(r.work.returnDemoAverage),
           pct(r.work.caseAverage),
           pct(r.work.quizAverage),
         ])}
@@ -404,7 +414,8 @@ export async function buildSectionReport(
         emptyText="No skill area ratings recorded for this section yet."
       />
       <Text style={note}>
-        Patient cases counts graded out of assigned. Needs Practice counts students whose patient case average is
+        Patient cases counts graded out of assigned. A quiz average is over the quizzes the student has taken, each
+        graded as the average of its graded tries. Needs Practice counts students whose patient case average is
         below {NEEDS_PRACTICE_BELOW}%.
       </Text>
     </ReportShell>
@@ -804,8 +815,13 @@ export async function buildRosterReport(
   }));
   const scenarioAverages = rows.flatMap((r) => (r.work.scenarioAverage === null ? [] : [r.work.scenarioAverage]));
   const quizAverages = rows.flatMap((r) => (r.work.quizAverage === null ? [] : [r.work.quizAverage]));
+  const demoAverages = rows.flatMap((r) => (r.work.returnDemoAverage === null ? [] : [r.work.returnDemoAverage]));
   const noWork = rows.filter(
-    (r) => r.work.scenariosGraded === 0 && r.work.casesGraded === 0 && r.work.quizAttempts === 0,
+    (r) =>
+      r.work.scenariosGraded === 0 &&
+      r.work.returnDemosGraded === 0 &&
+      r.work.casesGraded === 0 &&
+      r.work.quizzesTaken === 0,
   ).length;
 
   const pdf = (
@@ -823,6 +839,7 @@ export async function buildRosterReport(
         items={[
           { label: 'Students', value: rows.length },
           gradeTile('Patient case average', avg(scenarioAverages)),
+          gradeTile('Return demo average', avg(demoAverages)),
           { label: 'Quiz average', value: pct(avg(quizAverages)) },
           { label: 'Nothing graded yet', value: noWork },
         ]}
@@ -830,13 +847,14 @@ export async function buildRosterReport(
 
       <Text style={styles.sectionTitle}>Students</Text>
       <Table
-        head={['Student', 'Section', 'Group', 'Patient case grade', 'Case grade', 'Quiz average']}
-        widths={[2.3, 1, 1, 2, 1, 1.3]}
+        head={['Student', 'Section', 'Group', 'Patient case grade', 'Return demo grade', 'Case grade', 'Quiz average']}
+        widths={[2.1, 1, 1, 1.8, 1.8, 0.9, 1.1]}
         rows={rows.map((r) => [
           r.name,
           r.section,
           r.group,
           grade(r.work.scenarioAverage),
+          grade(r.work.returnDemoAverage),
           pct(r.work.caseAverage),
           pct(r.work.quizAverage),
         ])}

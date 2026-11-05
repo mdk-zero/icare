@@ -3,6 +3,10 @@ import { Text } from '@react-pdf/renderer';
 import type { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { ReportShell, StatGrid, Table, styles, type ReportMeta, type ReportDocument } from './kit';
 import { avg, date as fmtDate, grade, gradeTile, groupNames, pct, plural, studentWork } from './data';
+import { readMatching } from '../fetch-all';
+import { kindOf, scenarioKinds } from '../scenario-kind';
+import { termStatus } from '../course-progress';
+import { loadOfferingRosters } from '../courses';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -39,71 +43,151 @@ const idsOrNone = (ids: readonly string[]) => (ids.length ? [...ids] : ['0000000
 
 interface FacultyLoad {
   groups: { id: string; label: string; section: string }[];
+  /** Their roster: their group members, plus whole sections and added students on their running courses. */
   studentIds: string[];
+  /** Patient Cases they finalized. */
   scenariosGraded: number;
+  /** Return Demonstrations they finalized. */
+  demosGraded: number;
   casesGraded: number;
   /** Handed in by their students and not graded yet. */
   awaiting: number;
+  /** The work behind `awaiting`, so totals across instructors count each piece once. */
+  awaitingIds: string[];
 }
 
 /**
- * What each faculty member looks after since groups (048/051): the members of
- * the groups they supervise, not whole sections, and the grades they gave.
+ * What each instructor looks after and the grades they gave. Their students
+ * are their group members (048/051) and the rosters of their courses whose
+ * semester hasn't ended (whole sections where they have no group, and students
+ * added by hand), the same roster their Students tab shows. Every read pages
+ * past PostgREST's 1,000-row cap.
  */
 async function facultyLoad(supabase: Supabase, facultyIds: readonly string[]): Promise<Map<string, FacultyLoad>> {
   const load = new Map<string, FacultyLoad>(
-    facultyIds.map((id) => [id, { groups: [], studentIds: [], scenariosGraded: 0, casesGraded: 0, awaiting: 0 }]),
+    facultyIds.map((id) => [
+      id,
+      { groups: [], studentIds: [], scenariosGraded: 0, demosGraded: 0, casesGraded: 0, awaiting: 0, awaitingIds: [] },
+    ]),
   );
   if (facultyIds.length === 0) return load;
+  const ids = [...facultyIds];
 
-  const { data: teams } = await supabase
-    .from('teams')
-    .select('id, name, faculty_id, sections(name)')
-    .in('faculty_id', [...facultyIds]);
+  const teams = await readMatching<{ id: string; name: string; faculty_id: string; sections: { name: string } | null }>(
+    ids,
+    (part, from, to) => supabase.from('teams').select('id, name, faculty_id, sections(name)').in('faculty_id', part).order('id').range(from, to),
+  );
   const teamOwner = new Map<string, string>();
-  for (const t of teams ?? []) {
-    const section = (t as unknown as { sections: { name: string } | null }).sections?.name ?? 'No section';
-    load.get(t.faculty_id as string)?.groups.push({ id: t.id, label: `${section} / ${t.name}`, section });
-    teamOwner.set(t.id, t.faculty_id as string);
+  for (const t of teams) {
+    const section = t.sections?.name ?? 'No section';
+    load.get(t.faculty_id)?.groups.push({ id: t.id, label: `${section} / ${t.name}`, section });
+    teamOwner.set(t.id, t.faculty_id);
   }
 
-  const teamIds = [...teamOwner.keys()];
-  const { data: members } = teamIds.length
-    ? await supabase.from('team_members').select('team_id, student_id').in('team_id', teamIds)
-    : { data: [] as { team_id: string; student_id: string }[] };
-  const supervisorOf = new Map<string, string>();
-  for (const m of members ?? []) {
-    const owner = teamOwner.get(m.team_id as string);
-    if (!owner) continue;
-    load.get(owner)!.studentIds.push(m.student_id as string);
-    supervisorOf.set(m.student_id as string, owner);
+  const members = await readMatching<{ team_id: string; student_id: string }>([...teamOwner.keys()], (part, from, to) =>
+    supabase.from('team_members').select('id, team_id, student_id').in('team_id', part).order('id').range(from, to),
+  );
+  const roster = new Map<string, Set<string>>(ids.map((id) => [id, new Set<string>()]));
+  for (const m of members) {
+    const owner = teamOwner.get(m.team_id);
+    if (owner) roster.get(owner)!.add(m.student_id);
   }
 
-  const students = [...supervisorOf.keys()];
-  const [scenarios, cases, waitingScenarios, waitingCases] = await Promise.all([
-    supabase.from('scenario_assignments').select('finalized_by').eq('status', 'completed').in('finalized_by', [...facultyIds]),
-    supabase.from('case_submissions').select('graded_by').eq('status', 'graded').in('graded_by', [...facultyIds]),
-    supabase
-      .from('scenario_assignments')
-      .select('student_id')
-      .neq('status', 'completed')
-      .not('submitted_at', 'is', null)
-      .in('student_id', idsOrNone(students)),
-    supabase.from('case_submissions').select('student_id').eq('status', 'submitted').in('student_id', idsOrNone(students)),
+  // Their running courses' rosters (a course they teach this semester or next).
+  const offerings = (
+    await readMatching<{ id: string; faculty_id: string; academic_terms: { starts_on: string; ends_on: string } | null }>(
+      ids,
+      (part, from, to) =>
+        supabase
+          .from('course_offerings')
+          .select('id, faculty_id, academic_terms(starts_on, ends_on)')
+          .in('faculty_id', part)
+          .order('id')
+          .range(from, to),
+    ).catch(() => [])
+  ).filter((o) => o.academic_terms && termStatus(o.academic_terms) !== 'ended');
+  if (offerings.length > 0) {
+    const links = await readMatching<{ offering_id: string; section_id: string }>(
+      offerings.map((o) => o.id),
+      (part, from, to) =>
+        supabase.from('course_offering_sections').select('offering_id, section_id').in('offering_id', part).order('offering_id').range(from, to),
+    );
+    const sectionsOf = new Map<string, string[]>();
+    for (const l of links) sectionsOf.set(l.offering_id, [...(sectionsOf.get(l.offering_id) ?? []), l.section_id]);
+    const rosters = await loadOfferingRosters(
+      supabase,
+      offerings.map((o) => ({ id: o.id, faculty_id: o.faculty_id, section_ids: sectionsOf.get(o.id) ?? [] })),
+    );
+    for (const o of offerings) {
+      for (const s of rosters.get(o.id)?.students ?? []) roster.get(o.faculty_id)?.add(s.id);
+    }
+  }
+  const instructorsOf = new Map<string, string[]>();
+  for (const [facultyId, students] of roster) {
+    load.get(facultyId)!.studentIds = [...students];
+    for (const s of students) instructorsOf.set(s, [...(instructorsOf.get(s) ?? []), facultyId]);
+  }
+
+  const students = [...instructorsOf.keys()];
+  const [finalized, graded, waitingScenarios, waitingCases] = await Promise.all([
+    readMatching<{ finalized_by: string; scenario_id: string }>(ids, (part, from, to) =>
+      supabase
+        .from('scenario_assignments')
+        .select('id, finalized_by, scenario_id')
+        .eq('status', 'completed')
+        .in('finalized_by', part)
+        .order('id')
+        .range(from, to),
+    ),
+    readMatching<{ graded_by: string }>(ids, (part, from, to) =>
+      supabase.from('case_submissions').select('id, graded_by').eq('status', 'graded').in('graded_by', part).order('id').range(from, to),
+    ).catch(() => []),
+    readMatching<{ id: string; student_id: string }>(students, (part, from, to) =>
+      supabase
+        .from('scenario_assignments')
+        .select('id, student_id')
+        .neq('status', 'completed')
+        .not('submitted_at', 'is', null)
+        .in('student_id', part)
+        .order('id')
+        .range(from, to),
+    ),
+    readMatching<{ id: string; student_id: string }>(students, (part, from, to) =>
+      supabase.from('case_submissions').select('id, student_id').eq('status', 'submitted').in('student_id', part).order('id').range(from, to),
+    ).catch(() => []),
   ]);
-  for (const r of scenarios.data ?? []) {
-    const e = load.get(r.finalized_by as string);
-    if (e) e.scenariosGraded += 1;
+  const kinds = await scenarioKinds(supabase, [...new Set(finalized.map((r) => r.scenario_id))]);
+  for (const r of finalized) {
+    const e = load.get(r.finalized_by);
+    if (!e) continue;
+    if (kindOf(kinds, r.scenario_id) === 'return_demo') e.demosGraded += 1;
+    else e.scenariosGraded += 1;
   }
-  for (const r of cases.data ?? []) {
-    const e = load.get(r.graded_by as string);
+  for (const r of graded) {
+    const e = load.get(r.graded_by);
     if (e) e.casesGraded += 1;
   }
-  for (const r of [...(waitingScenarios.data ?? []), ...(waitingCases.data ?? [])]) {
-    const e = load.get(supervisorOf.get(r.student_id as string) ?? '');
-    if (e) e.awaiting += 1;
+  for (const [prefix, rows] of [['s', waitingScenarios], ['c', waitingCases]] as const) {
+    for (const r of rows) {
+      for (const facultyId of instructorsOf.get(r.student_id) ?? []) {
+        const e = load.get(facultyId)!;
+        e.awaiting += 1;
+        e.awaitingIds.push(`${prefix}:${r.id}`);
+      }
+    }
   }
   return load;
+}
+
+/** Totals across instructors, each student and each piece of work counted once. */
+function loadTotals(load: Map<string, FacultyLoad>) {
+  const all = [...load.values()];
+  return {
+    groups: all.reduce((n, l) => n + l.groups.length, 0),
+    students: new Set(all.flatMap((l) => l.studentIds)).size,
+    graded: all.reduce((n, l) => n + l.scenariosGraded + l.demosGraded + l.casesGraded, 0),
+    awaiting: new Set(all.flatMap((l) => l.awaitingIds)).size,
+  };
 }
 
 export async function buildAdminFacultyReport(
@@ -124,15 +208,7 @@ export async function buildAdminFacultyReport(
     const faculty = allFaculty ?? [];
     const load = await facultyLoad(supabase, faculty.map((f) => f.id));
 
-    const totals = [...load.values()].reduce(
-      (t, l) => ({
-        groups: t.groups + l.groups.length,
-        students: t.students + l.studentIds.length,
-        graded: t.graded + l.scenariosGraded + l.casesGraded,
-        awaiting: t.awaiting + l.awaiting,
-      }),
-      { groups: 0, students: 0, graded: 0, awaiting: 0 },
-    );
+    const totals = loadTotals(load);
     const withoutGroups = faculty.filter((f) => (load.get(f.id)?.groups.length ?? 0) === 0).length;
 
     const pdf = (
@@ -170,7 +246,7 @@ export async function buildAdminFacultyReport(
               `${f.name}\n${f.email}`,
               l.groups.length,
               l.studentIds.length,
-              l.scenariosGraded + l.casesGraded,
+              l.scenariosGraded + l.demosGraded + l.casesGraded,
               l.awaiting,
               fmtDate(f.last_login_at),
             ];
@@ -178,9 +254,10 @@ export async function buildAdminFacultyReport(
           emptyText="No instructor accounts yet."
         />
         <Text style={{ fontSize: 8, color: '#6b7280', marginTop: 6 }}>
-          Students are the members of the groups each instructor supervises. Graded counts patient cases
-          and case presentations they graded. Awaiting counts work their students handed in that is not
-          graded yet.
+          Students are each instructor&apos;s roster: their group members, plus whole sections and students
+          added by hand on their courses this semester. Graded counts the patient cases, return demonstrations
+          and case presentations they graded. Awaiting counts work their students handed in that is not graded
+          yet. The totals count a student or a piece of work shared by two instructors once.
         </Text>
       </ReportShell>
     );
@@ -233,6 +310,7 @@ export async function buildAdminFacultyReport(
           { label: 'Groups', value: l.groups.length },
           { label: 'Students', value: l.studentIds.length },
           { label: 'Patient cases graded', value: l.scenariosGraded },
+          { label: 'Return demos graded', value: l.demosGraded },
           { label: 'Cases graded', value: l.casesGraded },
           { label: 'Awaiting grade', value: l.awaiting },
         ]}
@@ -521,7 +599,7 @@ export async function buildAdminUserReport(
             items={[
               { label: 'Groups', value: load.groups.length },
               { label: 'Students', value: load.studentIds.length },
-              { label: 'Grades given', value: load.scenariosGraded + load.casesGraded },
+              { label: 'Grades given', value: load.scenariosGraded + load.demosGraded + load.casesGraded },
               { label: 'Awaiting grade', value: load.awaiting },
             ]}
           />
@@ -603,10 +681,11 @@ export async function buildAdminSummaryReport(
   const totalOccupied = (rooms ?? []).reduce((sum, r) => sum + (occupancy.get(r.id) ?? 0), 0);
   const studentIds = scope ? scope.studentIds : null;
   const load = await facultyLoad(supabase, (faculty ?? []).map((f) => f.id));
-  const awaiting = [...load.values()].reduce((sum, l) => sum + l.awaiting, 0);
-  const gradesGiven = [...load.values()].reduce((sum, l) => sum + l.scenariosGraded + l.casesGraded, 0);
-  const inGroups = new Set([...load.values()].flatMap((l) => l.studentIds));
-  const ungrouped = studentIds === null ? null : studentIds.filter((id) => !inGroups.has(id)).length;
+  const totals = loadTotals(load);
+  const awaiting = totals.awaiting;
+  const gradesGiven = totals.graded;
+  const onARoster = new Set([...load.values()].flatMap((l) => l.studentIds));
+  const ungrouped = studentIds === null ? null : studentIds.filter((id) => !onARoster.has(id)).length;
 
   const dean = roleNames(meta).admin;
   const description = `${dean} overview with ${plural(totalStudents, 'student')}, ${totalFaculty} instructors, ${plural(totalAdmins, dean.toLowerCase())} and ${plural(totalRooms, 'room')} (${totalOccupied} of ${totalCapacity} places occupied).`;
@@ -638,7 +717,7 @@ export async function buildAdminSummaryReport(
         items={[
           { label: 'Grades given', value: gradesGiven },
           { label: 'Awaiting grade', value: awaiting },
-          { label: 'Students in no supervised group', value: ungrouped ?? '—' },
+          { label: "Students on no instructor's roster", value: ungrouped ?? '—' },
         ]}
       />
 
