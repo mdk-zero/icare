@@ -66,7 +66,7 @@ export function formatRangeLabel(from: string, to: string): string {
 }
 
 /** "All sections", a single section's name, or "3 sections". */
-function sectionScopeLabel(sections: Section[], selected: string[]): string {
+export function sectionScopeLabel(sections: Section[], selected: string[]): string {
   // Empty selection means "everything" — the same thing the API does when no
   // section_ids are sent.
   if (selected.length === 0 || selected.length === sections.length) return "All sections";
@@ -177,6 +177,7 @@ function SectionPicker({
  */
 export default function AnalyticsFilterBar({
   coursePicker,
+  action,
   wholeTerm = false,
   scopeNote,
   sections,
@@ -191,6 +192,8 @@ export default function AnalyticsFilterBar({
   refreshing,
 }: {
   coursePicker?: ReactNode;
+  /** A button at the end of the filters' row; it reads them but isn't one. */
+  action?: ReactNode;
   /** A course is picked, so its whole term is on offer as a range. */
   wholeTerm?: boolean;
   /** What the course on show is, beside the range read-out. */
@@ -232,12 +235,10 @@ export default function AnalyticsFilterBar({
           />
         </div>
 
-        {/* Beside the sections there is room for the range; after a course too, it takes a line of its own. */}
-        {coursePicker ? (
-          <span className="hidden basis-full sm:block" />
-        ) : (
-          <span className="hidden h-6 w-px bg-hairline sm:block" />
-        )}
+        {action}
+
+        {/* The range always takes a line of its own, so nothing wraps unevenly. */}
+        <span className="hidden basis-full sm:block" />
 
         <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2.5">
           <CardLabel>Range</CardLabel>

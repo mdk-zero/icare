@@ -1,6 +1,46 @@
+import { viewerDeanId } from './dean-scope';
 import type { getSupabaseAdmin } from './supabase/server';
 
 type SupabaseAdmin = ReturnType<typeof getSupabaseAdmin>;
+
+/**
+ * The rooms of the viewer's Dean's ward (077), each with its live counts. A
+ * room's occupancy is its patients: that is what `capacity` gates in
+ * /api/faculty/patients. Students rostered to a room are a separate count and
+ * are deliberately not measured against the same ceiling.
+ */
+export async function loadRoomsWithCounts(supabase: SupabaseAdmin, session: { uid: string; role: string }) {
+  const deanId = await viewerDeanId(supabase, session);
+  let roomsQuery = supabase.from('rooms').select('*').order('room_number');
+  if (deanId) roomsQuery = roomsQuery.eq('admin_id', deanId);
+  const [
+    { data: rooms, error: roomsError },
+    { data: assignments, error: asgError },
+    { data: roomedPatients, error: patientsError },
+  ] = await Promise.all([
+    roomsQuery,
+    supabase.from('room_assignments').select('room_id').is('ends_at', null),
+    supabase.from('patients').select('room_id').not('room_id', 'is', null),
+  ]);
+  const failed = roomsError ?? asgError ?? patientsError;
+  if (failed) throw failed;
+
+  const students = new Map<string, number>();
+  for (const { room_id } of assignments ?? []) {
+    students.set(room_id, (students.get(room_id) ?? 0) + 1);
+  }
+
+  const patients = new Map<string, number>();
+  for (const { room_id } of roomedPatients ?? []) {
+    if (room_id) patients.set(room_id, (patients.get(room_id) ?? 0) + 1);
+  }
+
+  return (rooms ?? []).map((room) => ({
+    ...room,
+    students_assigned: students.get(room.id) ?? 0,
+    patients_assigned: patients.get(room.id) ?? 0,
+  }));
+}
 
 /**
  * Shared by the patients CRUD route and the check-in/check-out route so the

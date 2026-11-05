@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -11,10 +11,7 @@ import {
   faChevronDown,
   faCheck,
   faLayerGroup,
-  faWandMagicSparkles,
-  faArrowsRotate,
   faTrophy,
-  faXmark,
   faClipboardCheck,
   faBrain,
 } from "@fortawesome/free-solid-svg-icons";
@@ -23,8 +20,6 @@ import {
   fetchCoursePerformance,
   fetchFacultySections,
   fetchMyCourses,
-  generateAnalyticsNarrative,
-  AnalyticsNarrative,
   AnalyticsBucket,
   FacultyCourseSummary,
   Section,
@@ -38,7 +33,7 @@ import StatTile from "../../components/StatTile";
 import Card, { CardLabel } from "../../components/Card";
 import { usePageData } from "../../lib/use-page-data";
 import { EcgLoader } from "../../components/EcgLoader";
-import AiThinking from "../../components/AiThinking";
+import { AiSummaryButton, AnalyticsSummaryModal, useAnalyticsSummary } from "../../components/AnalyticsSummary";
 import { CohortMasteryBody, useCohortMastery } from "../../components/SkillMastery";
 import { Leaderboard, LeaderboardSkeleton } from "./Leaderboard";
 import GroupPerformance, { useGroupSummaries } from "./GroupPerformance";
@@ -52,56 +47,6 @@ import { isActiveSkillArea } from "../../../scripts/taylors-chapters";
 /** Stable empty fallback, so nothing downstream sees a new array each render. */
 const NO_SECTIONS: Section[] = [];
 const NO_COURSES: FacultyCourseSummary[] = [];
-
-/**
- * Successful narratives survive a hard refresh (not just client-side nav) via
- * localStorage, keyed by the same data signature as the in-memory cache. A
- * failed generation is deliberately never persisted here — replaying a stale
- * "rate-limited" message after the limit has since cleared would be worse
- * than just trying again. Capped so a semester of filter combinations
- * doesn't grow this without bound.
- */
-const NARRATIVE_STORAGE_PREFIX = "icare:analytics-narrative:";
-const NARRATIVE_STORAGE_INDEX_KEY = "icare:analytics-narrative:index";
-const NARRATIVE_STORAGE_MAX_ENTRIES = 15;
-
-/** Shown in turn while the summary is written — it reads the figures below. */
-const ANALYTICS_SUMMARY_PHRASES = [
-  "Thinking…",
-  "Reading the figures…",
-  "Analyzing trends…",
-  "Comparing sections…",
-  "Spotting what stands out…",
-  "Drafting the summary…",
-];
-
-type NarrativeResult = Awaited<ReturnType<typeof generateAnalyticsNarrative>>;
-
-function readStoredNarrative(key: string): NarrativeResult | null {
-  try {
-    const raw = localStorage.getItem(NARRATIVE_STORAGE_PREFIX + key);
-    return raw ? (JSON.parse(raw) as NarrativeResult) : null;
-  } catch {
-    // Private browsing, disabled storage, or corrupt JSON — just miss the cache.
-    return null;
-  }
-}
-
-function writeStoredNarrative(key: string, result: NarrativeResult) {
-  try {
-    localStorage.setItem(NARRATIVE_STORAGE_PREFIX + key, JSON.stringify(result));
-    const raw = localStorage.getItem(NARRATIVE_STORAGE_INDEX_KEY);
-    const index: string[] = raw ? (JSON.parse(raw) as string[]) : [];
-    const next = [...index.filter((k) => k !== key), key];
-    while (next.length > NARRATIVE_STORAGE_MAX_ENTRIES) {
-      const evicted = next.shift();
-      if (evicted) localStorage.removeItem(NARRATIVE_STORAGE_PREFIX + evicted);
-    }
-    localStorage.setItem(NARRATIVE_STORAGE_INDEX_KEY, JSON.stringify(next));
-  } catch {
-    // Storage full or unavailable — the in-memory cache still covers this tab.
-  }
-}
 
 /* ---------------------------------------------------------------- dates */
 
@@ -435,169 +380,6 @@ function CompetencyBarChart({ items }: { items: { key: string; label: string; va
   );
 }
 
-/**
- * Plain-language reading of the figures, in a popup. It only opens on
- * request, so an AI call is spent only when someone actually wants one.
- */
-function NarrativeModal({
-  narrative,
-  generatedAt,
-  loading,
-  error,
-  scope,
-  onRetry,
-  onClose,
-}: {
-  narrative: AnalyticsNarrative | null;
-  generatedAt: string | null;
-  loading: boolean;
-  error: string | null;
-  /** The course, sections and range the summary reads, e.g. "All sections · Jun 1 – Sep 19". */
-  scope: string;
-  onRetry: () => void;
-  onClose: () => void;
-}) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  const lists = narrative
-    ? [
-        {
-          title: "Highlights",
-          items: narrative.highlights,
-          dot: "bg-emerald-600",
-        },
-        {
-          title: "Watch-outs",
-          items: narrative.watchouts,
-          dot: "bg-amber-600",
-        },
-        {
-          title: "Suggested Actions",
-          items: narrative.actions,
-          dot: "bg-brand-600",
-        },
-      ].filter((l) => l.items.length > 0)
-    : [];
-
-  // Closing mid-generation is fine: the request finishes in the background
-  // and reopening picks up its result instead of asking again.
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="ai-summary-title"
-        className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-hairline bg-surface shadow-overlay"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between gap-3 border-b border-hairline bg-subtle px-5 py-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600/10">
-              <FontAwesomeIcon icon={faWandMagicSparkles} className="h-4 w-4 text-brand-600" />
-            </span>
-            <div className="min-w-0">
-              <h2
-                id="ai-summary-title"
-                className="font-display text-lg font-semibold text-gray-900"
-              >
-                AI Summary
-              </h2>
-              <p className="truncate text-sm text-gray-500">{scope}</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-            aria-label="Close"
-          >
-            <FontAwesomeIcon icon={faXmark} className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
-          {error && !loading && (
-            <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
-              {error}
-            </p>
-          )}
-
-          {loading && (
-            <AiThinking phrases={ANALYTICS_SUMMARY_PHRASES} label="Generating the AI summary" />
-          )}
-
-          {!loading && narrative && (
-            <div className="space-y-4">
-              {narrative.headline && (
-                <p className="font-display text-lg font-semibold leading-snug text-gray-900">
-                  {narrative.headline}
-                </p>
-              )}
-              <p className="text-sm leading-relaxed text-gray-700">{narrative.overview}</p>
-
-              {lists.length > 0 && (
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                  {lists.map((list) => (
-                    <div key={list.title} className="rounded-xl bg-subtle p-4">
-                      <p className="mb-2 text-sm font-semibold text-gray-900">{list.title}</p>
-                      <ul className="space-y-2">
-                        {list.items.map((item, idx) => (
-                          <li key={idx} className="flex items-start gap-2 text-sm text-gray-600">
-                            <span
-                              className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${list.dot}`}
-                            />
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-between gap-3 border-t border-hairline px-5 py-3">
-          <p className="text-xs text-gray-400">
-            {!loading && narrative && generatedAt
-              ? `AI-generated ${new Date(generatedAt).toLocaleString()} — review before acting on it.`
-              : null}
-          </p>
-          <div className="flex shrink-0 items-center gap-2">
-            {error && !loading && (
-              <button
-                type="button"
-                onClick={onRetry}
-                className="flex items-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
-              >
-                <FontAwesomeIcon icon={faArrowsRotate} className="h-3.5 w-3.5" />
-                Retry
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-gray-200 bg-surface px-3.5 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function FacultyAnalyticsClient() {
   // The course lives in the URL, so it can be linked to and survives a trip to
   // the leaderboard. replaceState keeps useSearchParams in step without a navigation.
@@ -737,83 +519,7 @@ export default function FacultyAnalyticsClient() {
   // the full read-out, so it always lists every group.
   const [trendFocus, setTrendFocus] = useState<string | null>(null);
 
-  /* --- AI narrative -------------------------------------------------- */
-
-  // Keyed by the numbers themselves rather than the filter selection, so
-  // picking a section/range that happens to produce the same figures — or
-  // just navigating back to this page — reuses the cached reading instead of
-  // spending another (slow) AI call to describe data that hasn't moved.
-  const dataSignature = summary
-    ? JSON.stringify({
-        course: courseId,
-        avg: summary.cohort.average_score,
-        attempts: summary.cohort.submitted_attempts,
-        graded: summary.cohort.graded,
-        kinds: summary.cohort.by_kind,
-        active: summary.cohort.active_students_30d,
-        total: summary.cohort.total_students,
-        risk: summary.risk_distribution,
-        competency: summary.competency_breakdown,
-        // Both keys are undefined on a warehouse that hasn't run migration
-        // 030 yet, hence the fallbacks — same as everywhere else these are read.
-        top: (summary.top_students ?? []).map((s) => [s.student_key, s.average_score, s.attempts]),
-        sections: (summary.sections ?? []).map((s) => [s.id, s.students, s.active_students ?? 0]),
-      })
-    : null;
-  const narrativeKey = dataSignature ? `faculty:analytics:narrative:${dataSignature}` : null;
-
-  // Nothing is generated until the AI Summary button is clicked. The click
-  // pins the key and filters it was made for, so a warehouse refresh landing
-  // while the popup is open can't quietly start (and pay for) a second call.
-  const [narrativeRequest, setNarrativeRequest] = useState<{
-    key: string;
-    courseId: string | null;
-    sectionIds: string[];
-    from: string;
-    to: string;
-  } | null>(null);
-  const [narrativeOpen, setNarrativeOpen] = useState(false);
-
-  const narrativeLoader = useCallback(async () => {
-    if (!narrativeRequest) return {};
-    const stored = readStoredNarrative(narrativeRequest.key);
-    if (stored) return stored;
-    const { key, ...filters } = narrativeRequest;
-    const result = await generateAnalyticsNarrative(filters);
-    if (result.narrative) writeStoredNarrative(key, result);
-    return result;
-  }, [narrativeRequest]);
-
-  const {
-    data: narrativeResult,
-    loading: narrativeLoading,
-    revalidating: narrativeRevalidating,
-    refresh: reloadNarrative,
-  } = usePageData(narrativeRequest?.key ?? null, narrativeLoader, {
-    freshFor: Infinity,
-  });
-
-  const narrative = narrativeResult?.narrative ?? null;
-  const narrativeAt = narrativeResult?.generated_at ?? null;
-  const narrativeError =
-    narrativeResult && !narrativeResult.narrative
-      ? (narrativeResult.error ?? "Unable to generate summary")
-      : null;
-  const narrativeBusy = narrativeLoading || narrativeRevalidating;
-
-  const openNarrative = () => {
-    if (!narrativeKey) return;
-    setNarrativeOpen(true);
-    if (narrativeRequest?.key === narrativeKey) {
-      // Same figures as last time: show what's held, unless that was a
-      // failure — clicking again is a request to try once more.
-      if (narrativeError && !narrativeBusy) void reloadNarrative();
-      return;
-    }
-    setNarrativeRequest({ key: narrativeKey, courseId, sectionIds, from, to });
-  };
-
-  const closeNarrative = useCallback(() => setNarrativeOpen(false), []);
+  const narrative = useAnalyticsSummary({ cacheScope: "faculty", summary, courseId, sectionIds, from, to });
 
   const mastery = useCohortMastery(sectionIds, courseId);
 
@@ -855,7 +561,7 @@ export default function FacultyAnalyticsClient() {
   })}`;
   const prevAtRisk = prevSummary?.risk_distribution?.at_risk ?? null;
   const comparisonLabel = comparing ? `vs ${formatRange(prevRangeValue.from, prevRangeValue.to)}` : course?.term.name;
-  const narrativeCourse = offerings.find((o) => o.id === narrativeRequest?.courseId) ?? null;
+  const narrativeCourse = offerings.find((o) => o.id === narrative.modal?.request.courseId) ?? null;
 
   const statCards = [
     {
@@ -934,28 +640,7 @@ export default function FacultyAnalyticsClient() {
             />
           </div>
 
-          {/* At the end of the filters' row rather than among them: it reads
-              whatever they select, but isn't itself a filter. Last of all on a
-              phone. Held while a filter change is still loading, so the summary
-              can't be filed under the old figures. */}
-          <button
-            type="button"
-            onClick={openNarrative}
-            disabled={!narrativeKey || refreshing}
-            title={
-              refreshing
-                ? "Waiting for the latest figures…"
-                : "Generate a plain-language reading of the current selection"
-            }
-            className="order-last flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-transparent bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60 sm:order-none sm:ml-auto"
-          >
-            {narrativeBusy ? (
-              <EcgLoader />
-            ) : (
-              <FontAwesomeIcon icon={faWandMagicSparkles} className="h-3.5 w-3.5" />
-            )}
-            AI Summary
-          </button>
+          <AiSummaryButton onClick={narrative.open} busy={narrative.busy} ready={narrative.ready} waiting={refreshing} />
 
           {/* The range always takes a line of its own, so nothing wraps unevenly. */}
           <span className="hidden basis-full sm:block" />
@@ -1020,21 +705,21 @@ export default function FacultyAnalyticsClient() {
       </div>
 
 
-      {narrativeOpen && narrativeRequest && (
-        <NarrativeModal
-          narrative={narrative}
-          generatedAt={narrativeAt}
-          loading={narrativeBusy}
-          error={narrativeError}
+      {narrative.modal && (
+        <AnalyticsSummaryModal
+          narrative={narrative.modal.narrative}
+          generatedAt={narrative.modal.generatedAt}
+          loading={narrative.modal.loading}
+          error={narrative.modal.error}
           scope={[
             narrativeCourse?.course.code,
-            sectionScopeLabel(narrativeCourse ? narrativeCourse.sections : sections, narrativeRequest.sectionIds),
-            formatRange(narrativeRequest.from, narrativeRequest.to),
+            sectionScopeLabel(narrativeCourse ? narrativeCourse.sections : sections, narrative.modal.request.sectionIds),
+            formatRange(narrative.modal.request.from, narrative.modal.request.to),
           ]
             .filter(Boolean)
             .join(" · ")}
-          onRetry={() => void reloadNarrative()}
-          onClose={closeNarrative}
+          onRetry={narrative.modal.onRetry}
+          onClose={narrative.modal.onClose}
         />
       )}
 

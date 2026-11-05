@@ -730,6 +730,26 @@ route("POST", "/api/analytics/narrative", async (ctx) => {
   const avg = mean(scope.work.map((w) => w.score));
   const top = topStudents(ctx, scope);
   const atRisk = scope.students.filter((s) => s.risk_level === "at_risk").sort(byName);
+  // Written for the Dean, and naming nobody, as the real prompt gives it no names.
+  if (ctx.role === "admin") {
+    return {
+      generated_at: new Date().toISOString(),
+      narrative: {
+        headline: `Grades are holding at ${avg ?? "—"}% across ${scope.students.length} students`,
+        overview: `${scope.work.length} pieces of work were graded in this period, which is what Performance by Activity averages. Performance per Course shows each class's grade so far against the 75% target. Skill Mastery is an estimate of how likely students are to know each skill, from their whole record, and IV site care is where it is lowest.`,
+        highlights: ["Most students who retook a quiz improved on their second attempt."],
+        watchouts: [
+          ...(atRisk.length ? [`${atRisk.length} ${atRisk.length === 1 ? "student is" : "students are"} flagged as Low Performing, a prediction from their overall record.`] : []),
+          "Several patient cases from last week are still waiting to be graded.",
+        ],
+        actions: [
+          "Ask instructors to grade last week's patient cases so students get feedback before this week's case.",
+          "Ask the instructors of any course under the 75% target what support they have planned.",
+          "Check with instructors that the low-performing students have a plan before their next ward duty.",
+        ],
+      },
+    };
+  }
   return {
     generated_at: new Date().toISOString(),
     narrative: {

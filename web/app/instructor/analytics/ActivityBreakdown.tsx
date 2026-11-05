@@ -22,10 +22,16 @@ function tone(v: number) {
 export default function ActivityBreakdown({
   byKind,
   compact = false,
+  fill = false,
 }: {
   byKind: NonNullable<AnalyticsSummary["cohort"]["by_kind"]>;
   /** Two columns at most, for a card that shares its row. */
   compact?: boolean;
+  /**
+   * Takes the height of a taller card beside it, in a flex column: one column
+   * where that card is tallest, each kind in an equal share of the height.
+   */
+  fill?: boolean;
 }) {
   const [grown, setGrown] = useState(false);
   useEffect(() => {
@@ -34,12 +40,16 @@ export default function ActivityBreakdown({
   }, []);
 
   return (
-    <ul className={`grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 ${compact ? "" : "xl:grid-cols-4"}`}>
+    <ul
+      className={`grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 ${compact ? "" : "xl:grid-cols-4"} ${
+        fill ? "flex-1 auto-rows-fr xl:grid-cols-1 2xl:grid-cols-2" : ""
+      }`}
+    >
       {WORK_KINDS.map(({ kind, label }) => {
         const k = byKind[kind];
         if (!k) {
           return (
-            <li key={kind} className="min-w-0">
+            <li key={kind} className={`min-w-0 ${fill ? "flex flex-col justify-center" : ""}`}>
               <p className="truncate text-xs font-medium text-gray-500">{label}</p>
               <p className="mt-1 font-display text-2xl font-bold text-gray-300">—</p>
               <div className="mt-2 h-1.5 rounded-full bg-subtle" aria-hidden />
@@ -50,7 +60,7 @@ export default function ActivityBreakdown({
         const t = tone(k.average_score);
         const width = `${Math.min(Math.max(k.average_score, 0), 100)}%`;
         return (
-          <li key={kind} className="min-w-0">
+          <li key={kind} className={`min-w-0 ${fill ? "flex flex-col justify-center" : ""}`}>
             <p className="truncate text-xs font-medium text-gray-500">{label}</p>
             <p className={`mt-1 font-display text-2xl font-bold tabular-nums ${t.text}`}>
               {k.average_score}%

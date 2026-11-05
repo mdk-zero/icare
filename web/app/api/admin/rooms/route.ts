@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { deanInstitution, viewerDeanId } from '@/app/lib/dean-scope';
+import { loadRoomsWithCounts } from '@/app/lib/patient-rooms';
 
 const validStatuses = ['active', 'inactive', 'maintenance'] as const;
 
@@ -14,46 +15,7 @@ export async function GET() {
   }
 
   try {
-    const supabase = getSupabaseAdmin();
-    // The viewer's Dean's ward only (077).
-    const deanId = await viewerDeanId(supabase, session);
-    let roomsQuery = supabase.from('rooms').select('*').order('room_number');
-    if (deanId) roomsQuery = roomsQuery.eq('admin_id', deanId);
-    // A room's occupancy is its patients — that is what `capacity` gates in
-    // /api/faculty/patients. Students rostered to a room are a separate count
-    // and are deliberately not measured against the same ceiling.
-    const [
-      { data: rooms, error: roomsError },
-      { data: assignments, error: asgError },
-      { data: roomedPatients, error: patientsError },
-    ] = await Promise.all([
-      roomsQuery,
-      supabase.from('room_assignments').select('room_id').is('ends_at', null),
-      supabase.from('patients').select('room_id').not('room_id', 'is', null),
-    ]);
-
-    if (roomsError || asgError || patientsError) {
-      console.error('Failed to fetch rooms', roomsError ?? asgError ?? patientsError);
-      return NextResponse.json({ error: 'Unable to fetch rooms' }, { status: 500 });
-    }
-
-    const students = new Map<string, number>();
-    for (const { room_id } of assignments ?? []) {
-      students.set(room_id, (students.get(room_id) ?? 0) + 1);
-    }
-
-    const patients = new Map<string, number>();
-    for (const { room_id } of roomedPatients ?? []) {
-      if (room_id) patients.set(room_id, (patients.get(room_id) ?? 0) + 1);
-    }
-
-    return NextResponse.json({
-      rooms: (rooms ?? []).map((room) => ({
-        ...room,
-        students_assigned: students.get(room.id) ?? 0,
-        patients_assigned: patients.get(room.id) ?? 0,
-      })),
-    });
+    return NextResponse.json({ rooms: await loadRoomsWithCounts(getSupabaseAdmin(), session) });
   } catch (err) {
     console.error('Fetch rooms failed', err);
     return NextResponse.json({ error: 'Unable to fetch rooms' }, { status: 500 });

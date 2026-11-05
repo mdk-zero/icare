@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
+import { adminTitleOf } from '@/app/lib/auth/user';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { hasAiConsent } from '@/app/lib/ai-consent';
 import { callAI, aiErrorResponse } from '@/app/lib/ai/generate';
-import { callAnalytics, resolveSummaryArgs, type SummaryArgs } from '@/app/lib/analytics';
-import { courseArgs, courseFigures, loadCourseScope, type CourseScope } from '@/app/lib/analytics-course';
-import { MASTERY_THRESHOLD, summariseCohort, type CohortMastery } from '@/app/lib/bkt';
+import { callAnalytics, resolveSummaryArgs } from '@/app/lib/analytics';
+import { courseArgs, courseFigures, loadCourseScope } from '@/app/lib/analytics-course';
+import {
+  buildNarrativePrompt,
+  type DeanNarrativeContext,
+  type WarehouseSummary,
+} from '@/app/lib/analytics-narrative';
+import { summariseCohort } from '@/app/lib/bkt';
+import { loadCoursePerformance } from '@/app/lib/course-performance';
+import { loadRoomsWithCounts } from '@/app/lib/patient-rooms';
+import { roleLabel } from '@/app/lib/role-labels';
 import { analyticsStudentIds, loadSkillMastery } from '@/app/lib/skill-mastery';
-import { WORK_KINDS, type WorkKind } from '@/app/lib/work-kinds';
-
-/** How many of the weakest skills the summary is told about. */
-const WEAKEST_SKILLS = 5;
 
 /**
  * Plain-language reading of the analytics dashboard.
@@ -20,175 +26,28 @@ const WEAKEST_SKILLS = 5;
  * allowed to see, and can't be steered by a doctored request body.
  */
 
-interface WarehouseSummary {
-  sections?: { id: string; name: string; students: number }[];
-  cohort?: {
-    total_students?: number;
-    submitted_attempts?: number;
-    /** 085 on: graded work of every kind, with a split per kind. */
-    graded?: number;
-    average_score?: number | null;
-    active_students_30d?: number;
-    by_kind?: Partial<Record<WorkKind, { average_score: number; graded: number; students: number }>>;
-  };
-  weekly_trend?: { week_start: string; average_score: number; attempts: number }[];
-  competency_detail?: {
-    name: string;
-    ratings: number;
-    students: number;
-    average_score: number;
-    pass_rate_pct: number;
-  }[];
-  clinical_activity?: Record<string, number>;
-  risk_distribution?: Record<string, number>;
-}
-
-const BUCKET_NOUN: Record<SummaryArgs['p_bucket'], string> = {
-  day: 'day',
-  week: 'week',
-  month: 'month',
-  year: 'year',
-};
-
-function buildPrompt(
-  summary: WarehouseSummary,
-  args: SummaryArgs,
-  course: CourseScope | null,
-  mastery: CohortMastery | null,
-): string {
-  const cohort = summary.cohort ?? {};
-  const trend = summary.weekly_trend ?? [];
-  const competencies = summary.competency_detail ?? [];
-  const activity = summary.clinical_activity ?? {};
-  const risk = summary.risk_distribution ?? {};
-
-  const sectionNames = (summary.sections ?? []).map((s) => `${s.name} (${s.students} students)`);
-  const scope = sectionNames.length > 0 ? sectionNames.join(', ') : 'all sections';
-  const period =
-    args.p_from && args.p_to ? `${args.p_from} to ${args.p_to}` : 'the full available history';
-
-  // From 085 every kind of graded work counts; before it, quizzes only.
-  const allWork = cohort.graded !== undefined;
-  const unit = allWork ? 'graded pieces of work' : 'attempts';
-
-  const bucket = BUCKET_NOUN[args.p_bucket];
-  const trendBlock =
-    trend.length > 0
-      ? trend.map((t) => `- ${t.week_start} (${bucket}): ${t.average_score}% over ${t.attempts} ${unit}`).join('\n')
-      : allWork
-        ? '(nothing graded in this period)'
-        : '(no submitted attempts in this period)';
-
-  const kindBlock = WORK_KINDS.map(({ kind, label }) => {
-    const k = cohort.by_kind?.[kind];
-    return k
-      ? `- ${label}: avg ${k.average_score}%, ${k.graded} graded across ${k.students} students`
-      : `- ${label}: nothing graded in this period`;
-  }).join('\n');
-
-  const cohortBlock = allWork
-    ? `- Students in scope: ${cohort.total_students ?? 0}
-- Students active (handed in at least one piece of work in the period): ${cohort.active_students_30d ?? 0}
-- Graded pieces of work (patient cases, quizzes, case presentations and return demonstrations): ${cohort.graded ?? 0}
-- Average grade across all of them: ${cohort.average_score ?? 'nothing graded'}
-
-Average grade by kind of work:
-${kindBlock}`
-    : `- Students in scope: ${cohort.total_students ?? 0}
-- Students active (submitted at least one attempt in the period): ${cohort.active_students_30d ?? 0}
-- Submitted quiz attempts: ${cohort.submitted_attempts ?? 0}
-- Average quiz score: ${cohort.average_score ?? 'no submitted attempts'}`;
-
-  const competencyBlock =
-    competencies.length > 0
-      ? competencies
-          .map(
-            (c) =>
-              `- ${c.name}: avg ${c.average_score}%, ${c.pass_rate_pct}% at or above the 75% pass mark, ${c.ratings} ratings across ${c.students} students`,
-          )
-          .join('\n')
-      : '(no faculty-validated skill area scores in this period)';
-
-  const activityBlock =
-    Object.keys(activity).length > 0
-      ? Object.entries(activity)
-          .map(([key, value]) => `- ${key.replace(/_/g, ' ')}: ${value}`)
-          .join('\n')
-      : '(no clinical activity recorded in this period)';
-
-  const atRisk = risk.at_risk ?? 0;
-  const safe = risk.safe ?? 0;
-  const riskBlock =
-    atRisk + safe > 0
-      ? `${atRisk} students classified low performing, ${safe} on track (latest ML prediction per student).`
-      : '(the ML prediction service has not produced any predictions for these students yet)';
-
-  const masteryBlock =
-    mastery && mastery.skills.length > 0
-      ? `${mastery.students_traced} of ${mastery.total_students} students traced across ${mastery.answers} results (quiz answers, and skills rated on finished Patient Cases and Return Demonstrations). Weakest skills:\n` +
-        mastery.skills
-          .slice(0, WEAKEST_SKILLS)
-          .map(
-            (s) =>
-              `- Skill ${s.skill_id} ${s.title}: average ${Math.round(s.average_mastery * 100)}%, ${s.mastered} of ${s.students} students mastered`,
-          )
-          .join('\n') +
-        (mastery.skills.every((s) => s.source === 'default')
-          ? '\nThese skills are still on starting parameters, so treat the percentages as rough estimates.'
-          : '')
-      : '(no results on a skill yet)';
-
-  return `You are a nursing education analyst briefing a faculty member on their cohort dashboard. Describe only the data below. Never invent a number, a student, or a trend that is not present.
-
-Scope: ${scope}
-Period: ${period}
-${
-  course
-    ? `Course: ${course.offering.course.code} ${course.offering.course.title}, ${course.offering.term.name}. The totals, trend and skill area scores count only this course's own work. The clinical training activity and the low-performance prediction are each student's overall record, not this course alone.\n`
-    : ''
-}
-Cohort totals for the period:
-${cohortBlock}
-
-${allWork ? 'Grade' : 'Score'} trend, one point per ${bucket}:
-${trendBlock}
-
-Faculty-validated skill area scores:
-${competencyBlock}
-
-Clinical training activity:
-${activityBlock}
-
-Low-performance prediction (call these students "low performing", never "at risk"):
-${riskBlock}
-
-Skill mastery estimated by Bayesian Knowledge Tracing, from each student's whole record of quizzes, Patient Cases and Return Demonstrations rather than this period (${Math.round(MASTERY_THRESHOLD * 100)}% counts as mastered):
-${masteryBlock}
-
-Return ONLY a valid JSON object with this exact structure (no markdown, no explanations):
-
-{
-  "headline": "string",
-  "overview": "string",
-  "highlights": ["string"],
-  "watchouts": ["string"],
-  "actions": ["string"]
-}
-
-Guidelines:
-- "headline" is one short sentence (under 15 words) stating the single most important takeaway for this period.
-- "overview" is 2-4 sentences covering participation, performance, and direction of travel. Quote the figures you rely on.
-- "highlights" (up to 3) are genuinely positive findings. Missing, absent, or zero data is never a highlight — it belongs in "watchouts". If nothing is genuinely going well, return an empty array rather than padding it.
-- "watchouts" (2-3) are what needs attention; "actions" (2-3) are concrete steps this faculty member can take next.
-- If a section of the data is empty, say so plainly rather than speculating — and treat sparse data as a data-collection problem worth flagging, not as poor student performance.
-- Describe the trend only if there are at least two points; otherwise say the period is too short to show a trend.
-- Plain, professional language for an educator audience. No medical advice about real patients.`;
-}
-
 function pickStringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((v): v is string => typeof v === 'string' && v.trim() !== '')
     : [];
+}
+
+function logAndSkip(what: string) {
+  return (err: unknown) => {
+    console.error(`Failed to read ${what} for the narrative`, err);
+    return null;
+  };
+}
+
+/** What a Dean or Program Chair's page shows beyond the warehouse, from the reads that page uses. */
+async function deanContext(session: { uid: string; role: string }, params: URLSearchParams): Promise<DeanNarrativeContext> {
+  const supabase = getSupabaseAdmin();
+  const [title, rooms, courses] = await Promise.all([
+    adminTitleOf(supabase, session.uid),
+    loadRoomsWithCounts(supabase, session).catch(logAndSkip('rooms')),
+    loadCoursePerformance(supabase, session, params).catch(logAndSkip('course grades')),
+  ]);
+  return { viewer: roleLabel('admin', title), rooms, courses };
 }
 
 export async function POST(request: NextRequest) {
@@ -234,15 +93,29 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // The reading stands without it, so a failure here doesn't cost the summary.
-    const mastery = await analyticsStudentIds(supabase, resolved, course)
-      .then(async (ids) => summariseCohort(await loadSkillMastery(supabase, ids), ids.length))
-      .catch((err) => {
-        console.error('Failed to read skill mastery for the narrative', err);
-        return null;
-      });
+    const studentIds = await analyticsStudentIds(supabase, resolved, course).catch(logAndSkip('the students in scope'));
 
-    const generated = await callAI(buildPrompt(summary, args, course, mastery));
+    // The totals of one student are that student's record, so they go by the
+    // student's own yes (092), and only to Claude. Not knowing counts as no.
+    const oneStudent = summary.cohort?.total_students === 1 || studentIds?.length === 1;
+    if (oneStudent && !(studentIds?.length === 1 && (await hasAiConsent(supabase, studentIds[0])))) {
+      return NextResponse.json(
+        { error: "This selection covers one student, who hasn't turned on AI features in the app, so an AI summary isn't available." },
+        { status: 409 },
+      );
+    }
+
+    // The reading stands without any of these, so a failure doesn't cost the summary.
+    const [mastery, dean] = await Promise.all([
+      studentIds
+        ? loadSkillMastery(supabase, studentIds)
+            .then((byStudent) => summariseCohort(byStudent, studentIds.length))
+            .catch(logAndSkip('skill mastery'))
+        : null,
+      session.role === 'admin' ? deanContext(session, request.nextUrl.searchParams) : null,
+    ]);
+
+    const generated = await callAI(buildNarrativePrompt(summary, args, course, mastery, dean), { studentData: oneStudent });
 
     return NextResponse.json({
       narrative: {

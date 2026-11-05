@@ -42,8 +42,10 @@ import { TARGET_SCORE } from "../../lib/performance-target";
 import AnalyticsFilterBar, {
   formatRangeLabel,
   rangeForPreset,
+  sectionScopeLabel,
   type PresetId,
 } from "../../components/AnalyticsFilterBar";
+import { AiSummaryButton, AnalyticsSummaryModal, useAnalyticsSummary } from "../../components/AnalyticsSummary";
 
 /** How many of the busiest rooms the bed board shows; the Rooms page has the rest. */
 const TOP_ROOMS = 8;
@@ -706,16 +708,45 @@ function AnalyticsSkeleton() {
           </div>
         </Panel>
 
-      <Panel>
-        <SkeletonHeading subtitle="w-40" />
-        <Bone className="mb-2 h-3 w-full rounded-full" />
-        <Bone className="mb-5 h-3 w-56" />
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 xl:grid-cols-2 2xl:grid-cols-4">
-          {Array.from({ length: TOP_ROOMS }).map((_, i) => (
-            <SkeletonRoomCard key={i} />
-          ))}
-        </div>
+        <Panel className="flex flex-col">
+          <SkeletonHeading subtitle="w-72" />
+          <div className="flex flex-1 flex-col justify-center">
+            <Bone className="h-[300px] w-full rounded-xl" />
+          </div>
+        </Panel>
+      </div>
+
+      <Panel className="mb-6">
+        <SkeletonHeading subtitle="w-96" />
+        <Bone className="h-96 w-full rounded-xl" />
       </Panel>
+
+      <div className="mb-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <Panel className="flex flex-col">
+          <SkeletonHeading subtitle="w-56" />
+          <Bone className="mb-5 h-9 w-64" />
+          <div className="grid flex-1 auto-rows-fr grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex flex-col justify-center gap-2">
+                <Bone className="h-3 w-24" />
+                <Bone className="h-7 w-16" />
+                <Bone className="h-1.5 w-full rounded-full" />
+                <Bone className="h-3 w-32" />
+              </div>
+            ))}
+          </div>
+        </Panel>
+
+        <Panel>
+          <SkeletonHeading subtitle="w-40" />
+          <Bone className="mb-2 h-3 w-full rounded-full" />
+          <Bone className="mb-5 h-3 w-56" />
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 xl:grid-cols-2 2xl:grid-cols-4">
+            {Array.from({ length: TOP_ROOMS }).map((_, i) => (
+              <SkeletonRoomCard key={i} />
+            ))}
+          </div>
+        </Panel>
       </div>
 
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -834,7 +865,7 @@ export default function AdminAnalyticsClient() {
   // they are their own read. Not part of the first paint: working out every
   // course's grades is the slowest read on the page, so its panel loads on
   // its own.
-  const { data: courseData, loading: coursesLoading } = usePageData(
+  const { data: courseData, loading: coursesLoading, revalidating: coursesRefreshing } = usePageData(
     awaitingCourse ? null : `admin:analytics:courses:${sectionKey}:${from}:${to}`,
     () => fetchCoursePerformance({ courseId, sectionIds, from, to }),
     { keepPreviousData: true },
@@ -909,6 +940,22 @@ export default function AdminAnalyticsClient() {
     .sort((a, b) => b.utilization_pct - a.utilization_pct)
     .slice(0, TOP_ROOMS);
 
+  // The server reads these figures for itself; here they only say when a saved
+  // reading has gone out of date.
+  const narrative = useAnalyticsSummary({
+    cacheScope: "admin",
+    summary,
+    courseId,
+    sectionIds,
+    from,
+    to,
+    extraFigures: {
+      courses: courseRows.map((c) => [c.id, c.students, c.graded, c.average]),
+      rooms: [activeRooms, occupiedBeds, totalBeds],
+    },
+  });
+  const narrativeCourse = offerings.find((o) => o.id === narrative.modal?.request.courseId) ?? null;
+
   const sectionEngagement = (summary?.sections ?? [])
     .filter((s) => s.students > 0)
     .map((s) => ({ ...s, active_students: s.active_students ?? 0 }));
@@ -949,6 +996,14 @@ export default function AdminAnalyticsClient() {
             />
           ) : undefined
         }
+        action={
+          <AiSummaryButton
+            onClick={narrative.open}
+            busy={narrative.busy}
+            ready={narrative.ready}
+            waiting={revalidating || coursesLoading || coursesRefreshing || liveLoading}
+          />
+        }
         wholeTerm={!!course}
         // The picker names the course; two rows of it can differ in these alone.
         scopeNote={course ? [course.term.name, course.instructor].filter(Boolean).join(" · ") : undefined}
@@ -964,6 +1019,24 @@ export default function AdminAnalyticsClient() {
         range={{ from, to }}
         refreshing={revalidating}
       />
+
+      {narrative.modal && (
+        <AnalyticsSummaryModal
+          narrative={narrative.modal.narrative}
+          generatedAt={narrative.modal.generatedAt}
+          loading={narrative.modal.loading}
+          error={narrative.modal.error}
+          scope={[
+            narrativeCourse?.course.code,
+            sectionScopeLabel(narrativeCourse ? narrativeCourse.sections : allSections, narrative.modal.request.sectionIds),
+            formatRangeLabel(narrative.modal.request.from, narrative.modal.request.to),
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+          onRetry={narrative.modal.onRetry}
+          onClose={narrative.modal.onClose}
+        />
+      )}
 
       {firstLoad ? (
         <AnalyticsSkeleton />
@@ -1002,82 +1075,7 @@ export default function AdminAnalyticsClient() {
             />
           </div>
 
-          {/* Every kind of graded work (from the warehouse, 085) beside each
-              course's class average grade. */}
-          <div
-            className={`mb-6 grid grid-cols-1 gap-6 ${summary?.cohort.by_kind ? "xl:grid-cols-2" : ""}`}
-          >
-            {summary?.cohort.by_kind && (
-              <Panel>
-                <CardHeading
-                  icon={faClipboardCheck}
-                  title="Performance by Activity"
-                  subtitle="Average grade for each kind of graded work"
-                  tag={rangeTag}
-                />
-                {summary.cohort.average_score != null && (
-                  <p className="mb-5 flex items-baseline gap-2">
-                    <span className="font-display text-3xl font-bold tabular-nums text-gray-900">
-                      {summary.cohort.average_score}%
-                    </span>
-                    <span className="text-sm text-gray-500">
-                      overall, across {summary.cohort.graded ?? 0} graded pieces of work
-                    </span>
-                  </p>
-                )}
-                <ActivityBreakdown byKind={summary.cohort.by_kind} compact />
-              </Panel>
-            )}
-
-            <Panel>
-              <CardHeading
-                icon={faBookMedical}
-                title={course ? "Course Grade" : "Performance per Course"}
-                subtitle={
-                  course
-                    ? "Class average so far, across the whole term"
-                    : "Class average grade per course assignment, semesters in this range"
-                }
-                tag={course ? <ScopeTag label={course.term.name} /> : rangeTag}
-                aside={
-                  courseRows.length > 0 ? (
-                    <span className="hidden items-center gap-1.5 text-[11px] text-gray-500 sm:inline-flex">
-                      <span className="h-3 border-l border-dashed border-gray-500" /> Target {TARGET_SCORE}%
-                    </span>
-                  ) : undefined
-                }
-              />
-              {coursesLoading && !courseData ? (
-                <div className="h-[300px] animate-pulse rounded-xl bg-gray-100" aria-hidden />
-              ) : courseData?.error ? (
-                <p className="py-8 text-center text-sm text-gray-400">{courseData.error}</p>
-              ) : courseRows.length === 0 ? (
-                <p className="py-8 text-center text-sm text-gray-400">
-                  {course ? "This course has no students" : "No course assignments with students"} in these sections
-                  during {formatRangeLabel(from, to)}.
-                </p>
-              ) : (
-                <CourseBarChart courses={courseRows} linkable={false} />
-              )}
-            </Panel>
-          </div>
-
-          {/* A student's whole record, so the range doesn't move it. */}
-          <Panel className="mb-6">
-            <CardHeading
-              icon={faBrain}
-              title="Skill Mastery (BKT)"
-              subtitle={
-                course
-                  ? "Bayesian Knowledge Tracing for this course's roster, from each student's whole record of quizzes, Patient Cases and Return Demonstrations. Weakest first."
-                  : "Bayesian Knowledge Tracing: the average chance your students know each skill, from quizzes, Patient Cases and Return Demonstrations. Weakest first."
-              }
-              tag={<ScopeTag label="Whole record" />}
-            />
-            <CohortMasteryBody data={mastery.data} loading={mastery.loading} />
-          </Panel>
-
-          {/* Top students beside the room bed board; stacked below xl */}
+          {/* The top students beside each course's class average grade; stacked below xl */}
           <div className="mb-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
             {/* Top students: podium for the first three, rows for the rest. A
                 column so the leaderboard link stays at the bottom when the room
@@ -1103,6 +1101,82 @@ export default function AdminAnalyticsClient() {
                 </div>
               )}
             </Panel>
+
+            <Panel className="flex flex-col">
+              <CardHeading
+                icon={faBookMedical}
+                title={course ? "Course Grade" : "Performance per Course"}
+                subtitle={
+                  course
+                    ? "Class average so far, across the whole term"
+                    : "Class average grade per course assignment, semesters in this range"
+                }
+                tag={course ? <ScopeTag label={course.term.name} /> : rangeTag}
+                aside={
+                  courseRows.length > 0 ? (
+                    <span className="hidden items-center gap-1.5 text-[11px] text-gray-500 sm:inline-flex">
+                      <span className="h-3 border-l border-dashed border-gray-500" /> Target {TARGET_SCORE}%
+                    </span>
+                  ) : undefined
+                }
+              />
+              {/* Centred when the top students beside it stretch the row. */}
+              <div className="flex flex-1 flex-col justify-center">
+                {coursesLoading && !courseData ? (
+                  <div className="h-[300px] animate-pulse rounded-xl bg-gray-100" aria-hidden />
+                ) : courseData?.error ? (
+                  <p className="py-8 text-center text-sm text-gray-400">{courseData.error}</p>
+                ) : courseRows.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-gray-400">
+                    {course ? "This course has no students" : "No course assignments with students"} in these sections
+                    during {formatRangeLabel(from, to)}.
+                  </p>
+                ) : (
+                  <CourseBarChart courses={courseRows} linkable={false} />
+                )}
+              </div>
+            </Panel>
+          </div>
+
+          {/* A student's whole record, so the range doesn't move it. */}
+          <Panel className="mb-6">
+            <CardHeading
+              icon={faBrain}
+              title="Skill Mastery (BKT)"
+              subtitle={
+                course
+                  ? "Bayesian Knowledge Tracing for this course's roster, from each student's whole record of quizzes, Patient Cases and Return Demonstrations. Weakest first."
+                  : "Bayesian Knowledge Tracing: the average chance your students know each skill, from quizzes, Patient Cases and Return Demonstrations. Weakest first."
+              }
+              tag={<ScopeTag label="Whole record" />}
+            />
+            <CohortMasteryBody data={mastery.data} loading={mastery.loading} />
+          </Panel>
+
+          {/* Every kind of graded work (from the warehouse, 085) beside the room
+              bed board; stacked below xl */}
+          <div className={`mb-6 grid grid-cols-1 gap-6 ${summary?.cohort.by_kind ? "xl:grid-cols-2" : ""}`}>
+            {summary?.cohort.by_kind && (
+              <Panel className="flex flex-col">
+                <CardHeading
+                  icon={faClipboardCheck}
+                  title="Performance by Activity"
+                  subtitle="Average grade for each kind of graded work"
+                  tag={rangeTag}
+                />
+                {summary.cohort.average_score != null && (
+                  <p className="mb-5 flex items-baseline gap-2">
+                    <span className="font-display text-3xl font-bold tabular-nums text-gray-900">
+                      {summary.cohort.average_score}%
+                    </span>
+                    <span className="text-sm text-gray-500">
+                      overall, across {summary.cohort.graded ?? 0} graded pieces of work
+                    </span>
+                  </p>
+                )}
+                <ActivityBreakdown byKind={summary.cohort.by_kind} compact fill />
+              </Panel>
+            )}
 
           {/* Room Utilization: a bed board of the busiest rooms */}
           <Panel>
