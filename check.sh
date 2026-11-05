@@ -10,7 +10,8 @@
 #   web       next typegen → tsc → eslint (advisory) → next build (into
 #             .next-build, so a running `next dev` keeps its .next)
 #   mobile    tsc → eslint (advisory)
-#   ml        byte-compiles the Python sources (there is no test suite yet)
+#   ml        byte-compiles the Python sources (there is no test suite yet);
+#             what the Dockerfile copies must get past .dockerignore
 #   audit     npm audit --audit-level=high, web + mobile (advisory)
 #
 # Usage:
@@ -223,6 +224,25 @@ ml_compile() {
   (cd "$ROOT/ml" && "$py" -m compileall -q "${dirs[@]}")
 }
 
+# ---- ml: what the Dockerfile copies has to reach the build -------------------
+# Render builds the image from git and nothing here builds it first, so a COPY
+# of something .dockerignore leaves out only shows up as a failed deploy.
+
+ml_docker_context() {
+  local src pattern failed=0
+  while read -r _ src _; do
+    src=${src%/}
+    [ -e "$ROOT/ml/$src" ] || { echo "Dockerfile copies $src, which doesn't exist"; failed=1; }
+    while IFS= read -r pattern; do
+      pattern=${pattern%$'\r'}
+      case "$pattern" in ''|'#'*) continue ;; esac
+      # shellcheck disable=SC2254 # the pattern is meant to glob
+      case "$src" in $pattern) echo "Dockerfile copies $src, but .dockerignore leaves it out ($pattern)"; failed=1 ;; esac
+    done < "$ROOT/ml/.dockerignore"
+  done < <(grep -E '^COPY ' "$ROOT/ml/Dockerfile")
+  return "$failed"
+}
+
 # ---- preflight: fail loudly before the first slow step ----------------------
 
 if enabled web || enabled mobile; then
@@ -264,6 +284,7 @@ fi
 
 if enabled ml; then
   run blocking 'ml · compile' . ml_compile
+  run blocking 'ml · docker context' . ml_docker_context
 fi
 
 if [ "$quick" -eq 1 ]; then
