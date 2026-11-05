@@ -398,8 +398,8 @@ export default function CurriculumClient() {
     const labs = courses.filter((c) => isLabCourse(c.code)).length;
     const offers =
       labs > 0
-        ? `Assign Course will offer its ${plural(labs, "lab course")}.`
-        : "None of its course codes end in L, so Assign Course keeps the built-in list of NCM laboratory courses.";
+        ? `Add Course will offer its ${plural(labs, "lab course")}.`
+        : "None of its course codes end in L, so Add Course keeps the built-in list of NCM laboratory courses.";
     setConfirmation({
       title: `Use ${current.name}?`,
       message: `${inUse ? `It takes over from ${inUse.name}, which is kept. ` : ""}${offers} Existing course assignments and grades don't change.`,
@@ -414,7 +414,7 @@ export default function CurriculumClient() {
     if (!current) return;
     setConfirmation({
       title: `Stop using ${current.name}?`,
-      message: "It is kept, and Assign Course goes back to the built-in list of NCM laboratory courses. Existing course assignments and grades don't change.",
+      message: "It is kept, and Add Course goes back to the built-in list of NCM laboratory courses. Existing course assignments and grades don't change.",
       confirmLabel: "Stop using",
       danger: false,
       run: () => updateCurriculum(current.id, { is_active: false }),
@@ -427,7 +427,7 @@ export default function CurriculumClient() {
     setConfirmation({
       title: `Delete ${current.name}?`,
       message: `Its ${plural(current.course_count, "course")}${current.has_source ? " and the uploaded PDF" : ""} are removed for good.${
-        current.is_active ? " Assign Course goes back to the built-in list of NCM laboratory courses." : ""
+        current.is_active ? " Add Course goes back to the built-in list of NCM laboratory courses." : ""
       } Existing course assignments and grades don't change.`,
       confirmLabel: "Delete curriculum",
       danger: true,
@@ -668,7 +668,7 @@ export default function CurriculumClient() {
                   : current.source_name
                     ? "Check these courses against the PDF and correct anything misread, then use it."
                     : "Once its courses are right, use it."}{" "}
-                Assign Course then offers its lab courses
+                Add Course then offers its lab courses
                 {inUse ? `, in place of ${inUse.name}` : ""}.
               </p>
               <button

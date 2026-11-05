@@ -17,11 +17,19 @@ export default function AddStudentModal({
   courseCode,
   onClose,
   onAdded,
+  search = searchCourseStudents,
+  addStudent = addCourseStudent,
+  instructorName,
 }: {
   offeringId: string;
   courseCode: string;
   onClose: () => void;
   onAdded: () => void;
+  /** The instructor's search and add by default; the Dean's Courses page passes its own. */
+  search?: typeof searchCourseStudents;
+  addStudent?: typeof addCourseStudent;
+  /** Set on the Dean's page: whose roster the student joins, worded for the Dean. */
+  instructorName?: string;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<AddableStudent[] | null>(null);
@@ -36,7 +44,7 @@ export default function AddStudentModal({
     let live = true;
     const timer = setTimeout(async () => {
       setSearching(true);
-      const result = await searchCourseStudents(offeringId, q);
+      const result = await search(offeringId, q);
       if (!live) return;
       setSearching(false);
       if (result.error !== undefined) {
@@ -50,11 +58,11 @@ export default function AddStudentModal({
       live = false;
       clearTimeout(timer);
     };
-  }, [offeringId, query]);
+  }, [offeringId, query, search]);
 
   const add = async (student: AddableStudent) => {
     setAdding(student.id);
-    const result = await addCourseStudent(offeringId, student.id);
+    const result = await addStudent(offeringId, student.id);
     setAdding(null);
     if (result.error !== undefined) {
       toast(result.error, "error");
@@ -85,7 +93,11 @@ export default function AddStudentModal({
               <h2 id="add-student-title" className="truncate font-display text-lg font-semibold text-gray-900">
                 Add a student to {courseCode}
               </h2>
-              <p className="truncate text-sm text-gray-500">For a student outside your groups and sections</p>
+              <p className="truncate text-sm text-gray-500">
+                {instructorName
+                  ? `Onto ${instructorName}'s roster, for a student outside their groups and sections`
+                  : "For a student outside your groups and sections"}
+              </p>
             </div>
           </div>
           <button
@@ -115,7 +127,8 @@ export default function AddStudentModal({
             />
           </div>
           <p className="mt-2 text-xs text-gray-500">
-            Students in this course&rsquo;s sections are already on your roster, through your groups or their section.
+            Students in this course&rsquo;s sections are already on {instructorName ? "the" : "your"} roster, through{" "}
+            {instructorName ? "the instructor's" : "your"} groups or their section.
           </p>
         </div>
 

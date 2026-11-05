@@ -41,7 +41,7 @@ import {
 import { NO_DATA, NO_INSTRUCTORS, loadDeanCourses, pickerCatalog } from "../load";
 
 /**
- * Assign Course, as one top-to-bottom sheet: the term, the course and who
+ * Add Course, as one top-to-bottom sheet: the term, the course and who
  * teaches it. A term or course that doesn't exist yet is added on Assign, so
  * nothing has to be set up first. The instructor adds the sections later.
  */
@@ -119,7 +119,7 @@ export default function AssignCourseClient() {
     }
     const result = await createCourseOffering({ course_id: courseId, term_id: termId, faculty_id: facultyId, section_ids: [] });
     if (result.error !== undefined) return fail(result.error);
-    progress.success(`Assigned ${label}`);
+    progress.success(`Added ${label}`);
     // The list reloads with the new assignment on it.
     forgetPage("admin:courses");
     router.push("/dean/courses");
@@ -129,7 +129,7 @@ export default function AssignCourseClient() {
     <div className="pb-4">
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faChalkboardUser} className="h-3.5 w-3.5" />, label: "Curriculum" }}
-        title="Assign Course"
+        title="Add Course"
         subtitle="Pick the semester, the course and the instructor who teaches it"
       />
       <button
@@ -312,7 +312,7 @@ export default function AssignCourseClient() {
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700 disabled:opacity-60"
               >
                 {saving && <EcgLoader />}
-                Assign course
+                Add course
               </button>
               <button
                 type="button"
