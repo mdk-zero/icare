@@ -153,15 +153,15 @@ export default function CoursesClient() {
 
       {/* One view: the term, then its courses. A plain row, like the Instructors and Students filters. */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        {/* The action first, then the term. Assign Course adds the term and the course as it goes. */}
+        {/* The action first, then the term. Add Course adds the term and the course as it goes. */}
         <button
           type="button"
           onClick={() => router.push("/dean/courses/new")}
-          aria-label="Assign a course to an instructor"
+          aria-label="Add a course and its instructor"
           className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700"
         >
           <FontAwesomeIcon icon={faPlus} className="h-4 w-4" />
-          Assign Course
+          Add Course
         </button>
         <FilterSelect
           value={selectedTerm}

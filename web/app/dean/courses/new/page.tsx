@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Assign Course | iCARE++",
+  title: "Add Course | iCARE++",
 };
 
 import AssignCourseClient from "./page-client";

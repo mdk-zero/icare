@@ -41,7 +41,7 @@ export function deanCourseChoices({ courses, terms, offerings }: DeanCourses = N
 export const pickerCatalog = (courses?: DeanCourses) =>
   courses?.catalog?.length ? courses.catalog : NCM_LAB_COURSES;
 
-/** The dean's terms, courses and assignments, and the instructors to assign. Shared by the list and Assign Course. */
+/** The dean's terms, courses and assignments, and the instructors to assign. Shared by the list and Add Course. */
 export async function loadDeanCourses() {
   const [courses, facultyRes] = await Promise.all([
     fetchDeanCourses(),

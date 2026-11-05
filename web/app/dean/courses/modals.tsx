@@ -658,14 +658,14 @@ export function AssignmentModal({
     const result = await createCourseOffering({ course_id: courseId, term_id: termId, faculty_id: facultyId, section_ids: [] });
     if (result.error !== undefined) return fail(result.error);
     setSaving(false);
-    progress.success(`Assigned ${label}`);
+    progress.success(`Added ${label}`);
     onSaved(result.data.warnings ?? []);
   };
 
   return (
     <ModalFrame
       icon={faChalkboardUser}
-      title={offering ? `Edit ${code || "assignment"}` : "Assign a course"}
+      title={offering ? `Edit ${code || "assignment"}` : "Add a course"}
       subtitle={
         offering
           ? `${editTerm?.name ?? "Semester"} · the checklist stays with the assignment`
@@ -745,7 +745,7 @@ export function AssignmentModal({
         <ModalActions
           busy={saving}
           onClose={onClose}
-          submitLabel={offering ? "Save assignment" : "Assign course"}
+          submitLabel={offering ? "Save assignment" : "Add course"}
           disabled={!code || !facultyId || !!clash || (!offering && !term && !datesValid)}
         />
       </form>

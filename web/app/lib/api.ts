@@ -4715,6 +4715,33 @@ export const addCourseStudent = (offeringId: string, studentId: string) =>
     body: { student_id: studentId },
   });
 
+/** One student on a course assignment's roster, as the Dean's Courses page lists them. */
+export interface OfferingRosterStudent {
+  id: string;
+  name: string;
+  email: string;
+  section: string;
+  group: string;
+  source: 'group' | 'section' | 'added';
+}
+
+/** The Dean: the students on one course assignment (its instructor's roster for it). */
+export const fetchOfferingStudents = (offeringId: string) =>
+  courseRequest<{ students: OfferingRosterStudent[] }>(`/api/admin/course-offerings/${offeringId}/students`);
+
+/** The Dean: their students who could be added to a course assignment. */
+export const searchOfferingStudents = (offeringId: string, q: string) =>
+  courseRequest<{ students: AddableStudent[] }>(
+    `/api/admin/course-offerings/${offeringId}/students?q=${encodeURIComponent(q)}`,
+  );
+
+/** The Dean: add a student to a course assignment's roster by hand. */
+export const addOfferingStudent = (offeringId: string, studentId: string) =>
+  courseRequest<{ success: true }>(`/api/admin/course-offerings/${offeringId}/students`, {
+    method: 'POST',
+    body: { student_id: studentId },
+  });
+
 export const removeCourseStudent = (offeringId: string, studentId: string) =>
   courseRequest<{ success: true }>(`/api/faculty/courses/${offeringId}/students/${studentId}`, { method: 'DELETE' });
 

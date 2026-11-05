@@ -13,18 +13,24 @@ import {
   faPenToSquare,
   faPlus,
   faTrashCan,
+  faUserPlus,
   faUsers,
 } from "@fortawesome/free-solid-svg-icons";
 import ActionsMenu from "../../components/ActionsMenu";
 import { usePageData } from "../../lib/use-page-data";
+import { forgetPage } from "../../lib/request-cache";
 import {
+  addOfferingStudent,
   fetchSkillCatalog,
+  searchOfferingStudents,
   type AcademicTerm,
   type CourseOfferingRow,
   type CourseSummary,
   type SkillSummary,
 } from "../../lib/api";
 import SkillsTab from "../../instructor/courses/[id]/skills-tab";
+import AddStudentModal from "../../instructor/courses/[id]/add-student-modal";
+import RosterModal from "./roster-modal";
 
 const NO_SKILLS: SkillSummary[] = [];
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -72,6 +78,9 @@ export default function CourseBrowser({
   const [courseId, setCourseId] = useState<string | null>(null);
   const [sectionId, setSectionId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("instructors");
+  // One instructor's students for the course, and adding one to them.
+  const [rosterFor, setRosterFor] = useState<CourseOfferingRow | null>(null);
+  const [addingFor, setAddingFor] = useState<CourseOfferingRow | null>(null);
   const { data: catalog = NO_SKILLS } = usePageData("skills:catalog", fetchSkillCatalog, { freshFor: 10 * 60_000 });
 
   const termOfferings = offerings.filter((o) => o.term_id === term?.id);
@@ -168,16 +177,37 @@ export default function CourseBrowser({
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-gray-900">
-                        {o.faculty_name ?? <span className="text-amber-700">No instructor</span>}
+                        {o.faculty_name ? (
+                          <button
+                            type="button"
+                            onClick={() => setRosterFor(o)}
+                            title={`See ${o.faculty_name}'s students for ${course.code}`}
+                            className="text-left text-brand-700 underline-offset-2 hover:underline"
+                          >
+                            {o.faculty_name}
+                          </button>
+                        ) : (
+                          <span className="text-amber-700">No instructor</span>
+                        )}
                       </p>
                       <p className="text-xs text-gray-500">
                         {here?.has_group ? "Teaches their groups here" : "No group here, so the whole section is on their roster"}
                         {" · "}
-                        {plural(o.student_count, "student")} in all their sections
+                        <button type="button" onClick={() => setRosterFor(o)} className="hover:text-brand-700 hover:underline">
+                          {plural(o.student_count, "student")} in all their sections
+                        </button>
                         {" · "}
                         {o.requirement_count === 0 ? "checklist not set up" : `checklist of ${plural(o.requirement_count, "item")}`}
                       </p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setAddingFor(o)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-surface px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-brand-600/50 hover:text-brand-700"
+                    >
+                      <FontAwesomeIcon icon={faUserPlus} className="h-3 w-3" />
+                      Add student
+                    </button>
                     <ActionsMenu
                       variant="compact"
                       label={`Actions for ${o.faculty_name ?? "assignment"}`}
@@ -205,6 +235,28 @@ export default function CourseBrowser({
             skillIds={course.skill_ids}
             catalog={catalog}
             onEditSkills={() => actions.editSkills(course)}
+          />
+        )}
+
+        {rosterFor && !addingFor && (
+          <RosterModal
+            offeringId={rosterFor.id}
+            courseCode={course.code}
+            instructorName={rosterFor.faculty_name ?? "The instructor"}
+            onClose={() => setRosterFor(null)}
+            onAddStudent={() => setAddingFor(rosterFor)}
+          />
+        )}
+        {addingFor && (
+          <AddStudentModal
+            offeringId={addingFor.id}
+            courseCode={course.code}
+            instructorName={addingFor.faculty_name ?? "the instructor"}
+            search={searchOfferingStudents}
+            addStudent={addOfferingStudent}
+            onClose={() => setAddingFor(null)}
+            // The roster re-reads when it next opens, with the student on it.
+            onAdded={() => forgetPage(`dean:offering-roster:${addingFor.id}`)}
           />
         )}
       </div>
@@ -291,7 +343,7 @@ export default function CourseBrowser({
     <div className="space-y-6">
       {assigned.length === 0 ? (
         <p className="rounded-xl border border-dashed border-gray-300 bg-surface px-4 py-8 text-center text-sm text-gray-500">
-          No course is assigned in this semester yet. Use Assign Course: it adds the semester and the course as it goes.
+          No course is assigned in this semester yet. Use Add Course: it adds the semester and the course as it goes.
         </p>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

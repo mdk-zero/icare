@@ -6,8 +6,6 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import type { AiTip, FocusSkill, LibraryItem, LibraryKind, StudyProfile } from '@/lib/api';
 
-/** Skills shown before "Show more": the least mastered ones. */
-const FIRST_SKILLS = 3;
 /** Per skill, so one card never outgrows the screen; a student flagged at risk gets more. */
 const MAX_MATERIALS = 3;
 const MAX_MATERIALS_AT_RISK = 5;
@@ -72,7 +70,6 @@ export function FocusSection({
   // Open for a student flagged at risk, closed otherwise, until they tap it.
   const [chosen, setChosen] = React.useState<boolean | null>(null);
   const open = chosen ?? atRisk;
-  const [showAll, setShowAll] = React.useState(false);
 
   const tipBySkill = new Map(tips.filter((t) => t.skill_id).map((t) => [t.skill_id as string, t]));
   const overallTip = tipBySkill.get('overall');
@@ -100,7 +97,6 @@ export function FocusSection({
   }
   if (skills.length === 0 && !hasOverall) return null;
 
-  const shown = showAll ? skills : skills.slice(0, FIRST_SKILLS);
   const toggle = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setChosen(!open);
@@ -153,69 +149,113 @@ export function FocusSection({
             </Text>
           </View>
 
-          {shown.map((skill) => {
-            const tip = tipBySkill.get(skill.skill_id);
-            const materials = orderMaterials(materialsBySkill.get(skill.skill_id) ?? [], skill.mastery).slice(
-              0,
-              atRisk ? MAX_MATERIALS_AT_RISK : MAX_MATERIALS,
-            );
-            return (
-              <View key={skill.skill_id} style={styles.block}>
-                <Text style={styles.eyebrow}>
-                  Chapter {skill.chapter} · {skill.area}
-                </Text>
-                <Text style={styles.skillTitle}>
-                  <Text style={styles.skillId}>Skill {skill.skill_id} · </Text>
-                  {skill.title}
-                </Text>
-                {skill.mastery !== undefined ? <MasteryBar mastery={skill.mastery} styles={styles} theme={theme} /> : null}
-
-
-                {tip ? (
-                  <View style={[styles.tip, { backgroundColor: Accent.blue.bg, borderColor: Accent.blue.border }]}>
-                    <Ionicons name="bulb" size={14} color={Accent.blue.fg} style={{ marginTop: 1 }} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.tipTitle, { color: Accent.blue.fg }]}>{tip.title}</Text>
-                      <Text style={styles.tipText}>{tip.tip}</Text>
-                    </View>
-                  </View>
-                ) : tipsLoading ? (
-                  <View style={[styles.tip, { borderColor: Palette.border }]}>
-                    <View style={{ flex: 1 }}>
-                      <SkeletonBlock width="45%" height={11} />
-                      <SkeletonBlock width="95%" height={10} style={{ marginTop: 6 }} />
-                    </View>
-                  </View>
-                ) : null}
-
-                <Text style={styles.listLabel}>Study</Text>
-                {materials.length > 0 ? (
-                  materials.map((m) => <React.Fragment key={m.id}>{renderMaterial(m)}</React.Fragment>)
-                ) : (
-                  <Text style={styles.none}>No materials for this skill yet.</Text>
-                )}
-              </View>
-            );
-          })}
-
-          {skills.length > FIRST_SKILLS ? (
-            <Pressable
-              onPress={() => {
-                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                setShowAll((v) => !v);
-              }}
-              style={[styles.block, styles.more]}
-              accessibilityRole="button"
-            >
-              <Text style={styles.moreText}>
-                {showAll ? 'Show fewer' : `Show ${skills.length - FIRST_SKILLS} more`}
-              </Text>
-              <Ionicons name={showAll ? 'chevron-up' : 'chevron-down'} size={14} color={Palette.primary} />
-            </Pressable>
-          ) : null}
+          {skills.map((skill) => (
+            <SkillRow
+              key={skill.skill_id}
+              skill={skill}
+              tip={tipBySkill.get(skill.skill_id)}
+              tipsLoading={tipsLoading}
+              materials={orderMaterials(materialsBySkill.get(skill.skill_id) ?? [], skill.mastery).slice(
+                0,
+                atRisk ? MAX_MATERIALS_AT_RISK : MAX_MATERIALS,
+              )}
+              renderMaterial={renderMaterial}
+              styles={styles}
+              theme={theme}
+            />
+          ))}
         </>
       ) : null}
 
+    </View>
+  );
+}
+
+/**
+ * One weak skill as a dropdown: closed, its name and mastery; open, a blue
+ * Study tip button that shows the AI's tip, then the skill's materials.
+ */
+function SkillRow({
+  skill,
+  tip,
+  tipsLoading,
+  materials,
+  renderMaterial,
+  styles,
+  theme,
+}: {
+  skill: FocusSkill;
+  tip: AiTip | undefined;
+  tipsLoading: boolean;
+  materials: LibraryItem[];
+  renderMaterial: (item: LibraryItem) => React.ReactNode;
+  styles: ReturnType<typeof createStyles>;
+  theme: Theme;
+}) {
+  const { Accent, Palette } = theme;
+  const [open, setOpen] = React.useState(false);
+  const [showTip, setShowTip] = React.useState(false);
+  const animate = () => LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+  return (
+    <View style={styles.block}>
+      <Pressable
+        onPress={() => {
+          animate();
+          setOpen((v) => !v);
+        }}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={`Skill ${skill.skill_id}, ${skill.title}`}
+        style={({ pressed }) => [styles.skillHeader, pressed && styles.pressed]}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={styles.skillTitle} numberOfLines={open ? undefined : 2}>
+            <Text style={styles.skillId}>Skill {skill.skill_id} · </Text>
+            {skill.title}
+          </Text>
+          {skill.mastery !== undefined ? <MasteryBar mastery={skill.mastery} styles={styles} theme={theme} /> : null}
+        </View>
+        <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={16} color={Palette.textMuted} />
+      </Pressable>
+
+      {open ? (
+        <>
+          {tip || tipsLoading ? (
+            <Pressable
+              onPress={() => {
+                animate();
+                setShowTip((v) => !v);
+              }}
+              disabled={!tip}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showTip, disabled: !tip }}
+              style={({ pressed }) => [
+                styles.tipButton,
+                { backgroundColor: Accent.blue.fg, opacity: tip ? 1 : 0.6 },
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons name="bulb" size={14} color="#fff" />
+              <Text style={styles.tipButtonText}>{tip ? (showTip ? 'Hide study tip' : 'Study tip') : 'Writing your study tip…'}</Text>
+            </Pressable>
+          ) : null}
+          {tip && showTip ? (
+            <View style={[styles.tip, { backgroundColor: Accent.blue.bg, borderColor: Accent.blue.border }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.tipTitle, { color: Accent.blue.fg }]}>{tip.title}</Text>
+                <Text style={styles.tipText}>{tip.tip}</Text>
+              </View>
+            </View>
+          ) : null}
+
+          <Text style={styles.listLabel}>Study</Text>
+          {materials.length > 0 ? (
+            materials.map((m) => <React.Fragment key={m.id}>{renderMaterial(m)}</React.Fragment>)
+          ) : (
+            <Text style={styles.none}>No materials for this skill yet.</Text>
+          )}
+        </>
+      ) : null}
     </View>
   );
 }
@@ -334,6 +374,19 @@ function createStyles({ Palette, Shadow, Type }: Theme) {
     skillTitle: { ...Type.itemTitle, marginTop: 2 },
     skillId: { color: Palette.primary, fontWeight: '700' },
     mastery: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
+    skillHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 8 },
+    tipButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      gap: 6,
+      marginTop: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 9,
+      borderRadius: 999,
+      minHeight: 44,
+    },
+    tipButtonText: { color: '#fff', fontWeight: '700', fontSize: 13 },
     weakest: { ...Type.caption, marginTop: 10 },
     masteryTrack: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden' },
     masteryFill: { height: '100%', borderRadius: 3 },
