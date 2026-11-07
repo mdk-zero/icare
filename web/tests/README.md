@@ -1,7 +1,8 @@
 # Automated tests
 
 Two suites, both run against a **running** iCARE++ web app (local `npm run dev`, or a
-deployment). Neither creates, edits nor deletes app data, so they are safe to point at the live
+deployment). Against localhost, Playwright starts `npm run dev` itself when nothing is running
+there and stops it afterwards; the Postman suite needs it started by hand. Neither creates, edits nor deletes app data, so they are safe to point at the live
 site. Playwright tests that do change things (create a section, publish a note, delete an
 instructor) run in the demo, which keeps every change in the browser and never calls the API.
 Signing in does update each test account's "last sign-in" time, and the Playwright

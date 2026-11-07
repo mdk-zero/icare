@@ -95,7 +95,7 @@ test.describe('Instructor, demo', () => {
     const title = 'QA note: taking an oral temperature';
     await page.locator('#lib-note').fill('## Key points\n- Wait 15 minutes after the patient eats or drinks.');
     await page.locator('#lib-title').fill(title);
-    await page.getByRole('button', { name: 'Publish' }).click();
+    await page.getByRole('button', { name: 'Publish', exact: true }).click();
 
     await expect(page.getByRole('heading', { name: 'Add material' })).toBeHidden();
     await expect(page.getByText(title)).toBeVisible();
