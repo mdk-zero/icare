@@ -186,7 +186,7 @@ async function insertSkillTasks(
 ): Promise<SkillTaskWrite> {
   const catalogIds = items.flatMap((i) => (i.selection.skillId ? [i.selection.skillId] : []));
   const skills = new Map((catalogIds.length ? await getSkills(supabase, catalogIds) : []).map((s) => [s.id, s]));
-  const built = items.flatMap(({ selection, sortOrder }): { selection: SkillSelection; sortOrder: number; skill: SkillDetail | null }[] => {
+  const built = items.flatMap(({ selection, sortOrder }) => {
     if (selection.skillId === null) return [{ selection, sortOrder, skill: null }];
     const skill = skills.get(selection.skillId);
     return skill ? [{ selection, sortOrder, skill }] : [];
