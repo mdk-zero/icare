@@ -4,6 +4,7 @@ import "./globals.css";
 import { THEME_INIT_SCRIPT } from "./lib/theme";
 import ImpersonationBanner from "./components/ImpersonationBanner";
 import TabPresence from "./components/TabPresence";
+import UpdateToast from "./components/UpdateToast";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 
@@ -57,6 +58,7 @@ export default function RootLayout({
         <ImpersonationBanner />
         <TabPresence />
         {children}
+        <UpdateToast />
         <SpeedInsights />
         <Analytics />
       </body>

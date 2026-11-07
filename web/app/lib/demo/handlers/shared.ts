@@ -46,6 +46,8 @@ route("POST", "/api/support/attachments", notInDemo);
 
 route("GET", "/api/health", () => ({ ok: true }));
 route("HEAD", "/api/health", () => new Response(null, { status: 200 }));
+// The demo runs on the bundle it loaded with, so it never asks for a refresh.
+route("GET", "/api/version", () => ({ version: process.env.ICARE_BUILD_ID || null }));
 route("POST", "/api/metrics", ({ body }) => ({ accepted: Array.isArray(body?.events) ? body.events.length : 0 }));
 
 // --- Notifications -----------------------------------------------------------

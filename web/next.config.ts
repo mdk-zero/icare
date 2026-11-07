@@ -9,6 +9,14 @@ const nextConfig: NextConfig = {
   // `NEXT_DIST_DIR=.next-build npm run build`. Running a build into .next while
   // `next dev` is live leaves the dev server serving a half-updated CSS chunk.
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  env: {
+    // Which code this build is, baked into the browser bundle and the
+    // server alike. /api/version answers with the live deployment's, and an
+    // open tab holding an older one offers a refresh (UpdateToast). The
+    // commit, so a redeploy of the same code (an env var change) prompts
+    // nobody. Empty off Vercel, which turns the check off.
+    ICARE_BUILD_ID: process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || "",
+  },
   typescript: {
     // check.sh type-checks first, with tsconfig.check.json, and its build
     // skips a second pass: `next build` checks everything tsconfig.json
