@@ -17,8 +17,8 @@ export function RosterModeToggle({
   onChange: (editing: boolean) => void;
 }) {
   const modes = [
-    { editing: false, label: "Students", icon: faAddressCard },
     { editing: true, label: "Edit groups", icon: faPeopleGroup },
+    { editing: false, label: "Students", icon: faAddressCard },
   ];
   return (
     <div role="radiogroup" aria-label="Section view" className="inline-flex rounded-xl border border-hairline bg-surface p-1">

@@ -374,10 +374,9 @@ route("POST", "/api/faculty/students", (ctx) => {
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
   if (!name) return json({ error: "Student name is required" }, 400);
   if (!email) return json({ error: "Student email is required" }, 400);
-  // As the server: an instructor registers into one of their own groups, and
-  // the group decides the section.
+  // As the server: into one of the instructor's own groups, where the group
+  // decides the section, or into one of their sections alone.
   const teamId = typeof body?.team_id === "string" && body.team_id.trim() ? body.team_id.trim() : null;
-  if (ctx.role === "faculty" && !teamId) return json({ error: "Choose one of your groups for the student" }, 400);
   const team = teamId ? db.teams.find((t) => t.id === teamId) : undefined;
   if (teamId && (!team || (ctx.role === "faculty" && team.faculty_id !== ctx.viewer.id))) {
     return json({ error: "You can only register students into your own groups" }, 403);

@@ -35,8 +35,9 @@ export interface BulkEnrollJob {
   /** Called when the job is over, to reload the roster and the groups. */
   onDone: () => void;
   /**
-   * An instructor's batch: `groups` are theirs and every student goes into
-   * one of them — the one the list names, else the smallest. No group is made.
+   * An instructor's batch: `groups` are theirs; a student goes into the one
+   * the list names, or with none into the section under "Not in a group".
+   * No group is made.
    */
   asInstructor?: boolean;
 }
@@ -167,34 +168,37 @@ async function groupLeftOver(job: BulkEnrollJob, studentIds: string[]): Promise<
 }
 
 /**
- * An instructor's batch: each student is registered straight into one of the
- * instructor's groups, the named one or else whichever is smallest so far, so
- * every newcomer lands on their roster.
+ * An instructor's batch: a student whose row names a group is registered
+ * straight into that group; one with no group goes into the section alone and
+ * waits under "Not in a group" for the instructor to place them.
  */
 async function enrollIntoOwnGroups(job: BulkEnrollJob, task: ReturnType<typeof startTask>) {
   const { sectionName, students } = job;
   const byName = new Map(job.groups.map((g) => [g.name.trim().toLowerCase(), g.id]));
-  const sizes = new Map(job.groups.map((g) => [g.id, g.size ?? 0]));
   const names = new Map(job.groups.map((g) => [g.id, g.name]));
 
   let enrolled = 0;
   for (const s of students) {
     const itemId = s.email.trim().toLowerCase();
     task.item(itemId, { status: "working" });
-    const named = s.group.trim() ? byName.get(s.group.trim().toLowerCase()) : undefined;
-    const teamId = named ?? [...sizes.entries()].sort((a, b) => a[1] - b[1])[0]?.[0];
-    if (!teamId) {
-      task.item(itemId, { status: "failed", message: `${s.group.trim() || "No group"} isn't one of your groups` });
+    const teamId = s.group.trim() ? byName.get(s.group.trim().toLowerCase()) : null;
+    if (teamId === undefined) {
+      task.item(itemId, { status: "failed", message: `${s.group.trim()} isn't one of your groups` });
       continue;
     }
-    const created = await createFacultyStudent(`${s.fname.trim()} ${s.lname.trim()}`, s.email.trim(), teamId, s.sex);
+    const created = await createFacultyStudent(
+      `${s.fname.trim()} ${s.lname.trim()}`,
+      s.email.trim(),
+      teamId,
+      s.sex,
+      job.sectionId,
+    );
     if (created.error || !created.data) {
       task.item(itemId, { status: "failed", message: created.error ?? "Failed to enroll" });
       continue;
     }
     enrolled++;
-    sizes.set(teamId, (sizes.get(teamId) ?? 0) + 1);
-    const notes = [`In ${names.get(teamId)}.`];
+    const notes = [teamId ? `In ${names.get(teamId)}.` : "Not in a group yet."];
     if (created.data.warning) notes.push("The invitation email didn't go out; hand them this password.");
     task.item(itemId, {
       status: created.data.warning ? "warning" : "done",
