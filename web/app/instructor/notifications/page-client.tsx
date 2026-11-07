@@ -8,6 +8,7 @@ import { SkeletonNotificationItem } from "../../components/skeletons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBell,
+  faBullhorn,
   faCheck,
   faCheckDouble,
   faChevronRight,
@@ -49,6 +50,12 @@ const TYPE_META: Record<
     icon: faCircleInfo,
     chip: "bg-blue-500/10 text-blue-600 dark:text-blue-300",
   },
+};
+
+/** An Admin's announcement wears a bullhorn, so it doesn't read as a routine alert. */
+const ANNOUNCEMENT_META = {
+  icon: faBullhorn,
+  chip: "bg-teal-500/10 text-teal-600 dark:text-teal-300",
 };
 
 export default function FacultyNotificationsClient({
@@ -177,7 +184,9 @@ export default function FacultyNotificationsClient({
 
                 <div className="space-y-2.5">
                   {group.items.map((notification, i) => {
-                    const meta = TYPE_META[notification.type] ?? TYPE_META.info;
+                    const meta = notification.announcement
+                      ? ANNOUNCEMENT_META
+                      : (TYPE_META[notification.type] ?? TYPE_META.info);
                     const unread = !notification.is_read;
                     const delay = (gi * 6 + Math.min(i, 8)) * 35;
                     // A pending account request opens its create form when the

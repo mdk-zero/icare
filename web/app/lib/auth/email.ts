@@ -746,6 +746,41 @@ export async function sendAppLinkEmails(
   }
 }
 
+function buildAnnouncementHtml(name: string, title: string, message: string, adminName: string): string {
+  return `
+    <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px; color: #0f172a;">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #0d7377; margin: 0 0 8px;">iCARE++ announcement</p>
+      <h2 style="color: #0f172a; margin: 0 0 16px; line-height: 1.3;">${htmlEscape(title)}</h2>
+      <p style="line-height: 1.6; margin: 0 0 12px;">Hi ${htmlEscape(name)},</p>
+      <div style="line-height: 1.6; margin: 0 0 16px;">${htmlEscape(message).replace(/\n/g, "<br/>")}</div>
+      <p style="line-height: 1.6; margin: 0 0 4px; color: #334155;">${htmlEscape(adminName)}<br/><span style="color: #64748b;">iCARE++ Admin</span></p>
+      <p style="font-size: 13px; color: #64748b; margin-top: 24px;">You'll also find this in your iCARE++ notifications. Questions? Reply to this email to reach the team.</p>
+    </div>`;
+}
+
+/**
+ * An Admin's announcement, one message per person so nobody sees anyone
+ * else's address. Replies go to the team's contact inbox.
+ */
+export async function sendAnnouncementEmails(
+  recipients: { email: string; name: string }[],
+  announcement: { title: string; message: string; adminName: string; replyTo: string },
+): Promise<{ sent: number; error?: string }> {
+  try {
+    return await sendEach(
+      recipients.map((r) => ({
+        to: r.email,
+        subject: announcement.title,
+        html: buildAnnouncementHtml(r.name, announcement.title, announcement.message, announcement.adminName),
+        replyTo: announcement.replyTo,
+      })),
+    );
+  } catch (err) {
+    console.error("Failed to email the announcement:", err);
+    return { sent: 0, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
 /**
  * Someone asking the dev team for an account from the public contact form.
  * Accounts are no longer self-service, so this mail is the whole request: the

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBell,
+  faBullhorn,
   faCheckDouble,
   faChevronRight,
   faCircleCheck,
@@ -46,6 +47,12 @@ const TYPE_META: Record<FacultyNotification["type"], { icon: IconDefinition; chi
     icon: faCircleInfo,
     chip: "bg-blue-500/10 text-blue-600 dark:text-blue-300",
   },
+};
+
+/** An Admin's announcement wears a bullhorn, so it doesn't read as a routine alert. */
+const ANNOUNCEMENT_META = {
+  icon: faBullhorn,
+  chip: "bg-teal-500/10 text-teal-600 dark:text-teal-300",
 };
 
 const PANEL_HEIGHT = 430;
@@ -254,7 +261,11 @@ export default function NotificationsPopover({
                   </div>
                 ) : (
                   preview.map((notification, i) => {
-                    const meta = TYPE_META[notification.type] ?? TYPE_META.info;
+                    const meta = notification.announcement
+                      ? ANNOUNCEMENT_META
+                      : (TYPE_META[notification.type] ?? TYPE_META.info);
+                    // An announcement is cut off here, so it opens in full on the notifications page.
+                    const href = notification.href ?? (notification.announcement ? allHref : undefined);
                     const button = (
                       <button
                         key={notification.id}
@@ -263,10 +274,10 @@ export default function NotificationsPopover({
                           if (notification.access_request?.status === "pending") {
                             setOpen(false);
                             openAccessRequest(notification.id, notification.access_request);
-                          } else if (notification.href) {
+                          } else if (href) {
                             void markRead(notification.id);
                             setOpen(false);
-                            router.push(notification.href);
+                            router.push(href);
                           } else {
                             void markRead(notification.id);
                           }

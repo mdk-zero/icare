@@ -28,6 +28,7 @@ test.describe('Admin portal', () => {
     const nav = page.getByRole('navigation').first();
     for (const [link, heading] of [
       ['Users', 'Users'],
+      ['Announcements', 'Announcements'],
       ['System Performance', 'System Performance'],
       ['System Tests', 'System Tests'],
       ['Settings', 'Settings'],

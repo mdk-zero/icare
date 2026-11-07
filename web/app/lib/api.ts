@@ -1326,6 +1326,8 @@ export interface FacultyNotification {
   grade_edit_request?: GradeEditRequestInfo;
   /** Where clicking it goes: a support request opens on Support Requests. */
   href?: string;
+  /** An Admin's announcement to everyone, some roles, or chosen people. */
+  announcement?: boolean;
 }
 
 export interface GradeEditRequestInfo {
@@ -2833,6 +2835,7 @@ export function toFacultyNotification(n: ServerNotification): FacultyNotificatio
     student_id: typeof n.data?.student_id === 'string' ? n.data.student_id : undefined,
     access_request: toAccessRequest(n.data),
     grade_edit_request: toGradeEditRequest(n.data),
+    announcement: n.data?.kind === 'announcement' || undefined,
     href:
       n.data?.kind === 'support_request' && typeof n.data.request_id === 'string'
         ? `/admin/support?request=${encodeURIComponent(n.data.request_id)}`

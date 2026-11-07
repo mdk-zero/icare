@@ -8,6 +8,16 @@ import { audit } from "./shared";
 import { auditTrail } from "./admin";
 import { DAY_MS, checklistAnswers } from "./derive";
 import { sectionName, userById } from "./scope";
+import {
+  ANNOUNCEMENT_ACTION,
+  ANNOUNCEMENT_MESSAGE_LIMIT,
+  ANNOUNCEMENT_TITLE_LIMIT,
+  announcementData,
+  describeAudience,
+  inAudience,
+  parseAudience,
+  toAnnouncementSummary,
+} from "../../announcements";
 
 /** The Admin portal: accounts, sign-up requests, system metrics and test results. */
 
@@ -266,6 +276,72 @@ route("POST", "/api/super-admin/support/:id/reply", (ctx) => {
   };
 });
 
+
+// ---------------------------------------------------------------------------
+// Announcements: sent to the demo's accounts as notifications, never emailed.
+// ---------------------------------------------------------------------------
+
+route("GET", "/api/super-admin/announcements", (ctx) => {
+  if (!adminOnly(ctx)) return forbidden();
+  const announcements = ctx.db.audit
+    .filter((a) => a.action === ANNOUNCEMENT_ACTION)
+    .map(toAnnouncementSummary)
+    .filter((a) => a !== null)
+    .map((a) => ({
+      ...a,
+      read: ctx.db.notifications.filter((n) => n.data?.announcement_id === a.id && n.read_at).length,
+    }));
+  return { announcements };
+});
+
+route("POST", "/api/super-admin/announcements", (ctx) => {
+  if (!adminOnly(ctx)) return forbidden();
+  const { db, body, viewer } = ctx;
+  const title = typeof body?.title === "string" ? body.title.replace(/\s+/g, " ").trim() : "";
+  const message = typeof body?.message === "string" ? body.message.trim() : "";
+  if (!title) return json({ error: "Give the announcement a title." }, 400);
+  if (title.length > ANNOUNCEMENT_TITLE_LIMIT) return json({ error: `Keep the title under ${ANNOUNCEMENT_TITLE_LIMIT} characters.` }, 400);
+  if (!message) return json({ error: "Write the message first." }, 400);
+  if (message.length > ANNOUNCEMENT_MESSAGE_LIMIT) return json({ error: `Keep the message under ${ANNOUNCEMENT_MESSAGE_LIMIT} characters.` }, 400);
+  const parsed = parseAudience(body?.audience);
+  if ("error" in parsed) return json({ error: parsed.error }, 400);
+  const recipients = db.users.filter((u) => inAudience(parsed.audience, u));
+  if (recipients.length === 0) return json({ error: "Nobody matches who you picked." }, 400);
+
+  const id = newId();
+  const now = new Date().toISOString();
+  const data = announcementData(id, viewer.name);
+  for (const r of recipients) {
+    db.notifications.unshift({ id: newId(), user_id: r.id, type: "system", title, body: message, data, read_at: null, created_at: now });
+  }
+  const withEmail = body?.email === true;
+  const audienceLabel = describeAudience(parsed.audience);
+  audit(
+    db,
+    viewer,
+    ANNOUNCEMENT_ACTION,
+    "notifications",
+    {
+      message: `Sent the announcement "${title}" to ${recipients.length} ${recipients.length === 1 ? "person" : "people"} (${audienceLabel})`,
+      title,
+      text: message,
+      audience: audienceLabel,
+      audience_kind: parsed.audience.kind,
+      recipients: recipients.length,
+      email: withEmail,
+      emailed: withEmail ? 0 : null,
+      by_name: viewer.name,
+    },
+    id,
+  );
+  return {
+    id,
+    recipients: recipients.length,
+    notified: recipients.length,
+    emailed: withEmail ? 0 : null,
+    notice: withEmail ? "This is a demo, so no email was sent." : undefined,
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Metrics: a plausible day-and-night traffic curve, the same every time for a moment
