@@ -109,8 +109,6 @@ export interface DemoTask {
   system_trigger: "vitals" | "charting" | null;
   sort_order: number;
   skill_id: string | null;
-  /** An instructor's own skill's chapter (093). */
-  chapter?: number | null;
 }
 
 export interface DemoStep {
@@ -119,8 +117,6 @@ export interface DemoStep {
   title: string;
   source: string;
   position: number;
-  /** The catalog step it cites, while worded as the book's. */
-  skill_step_id?: string | null;
 }
 
 export interface DemoAssignment {

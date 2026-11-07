@@ -36,12 +36,12 @@ import {
   fetchScenarioSkillTasks,
   fetchFacultyScenarios,
   updateScenario,
-  saveScenarioSkills,
+  addScenarioSkills,
+  removeScenarioTask,
 } from "../../../lib/api";
 import { DEFAULT_RUBRIC, resolveRubric, type Rubric } from "../../../lib/task-ratings";
 import RubricEditor, { rubricToStore } from "../rubric-editor";
 import SkillPicker from "../skill-picker";
-import { CHAPTERS_NOT_SAVED, chapterOf, checklistIssue, taskSelection } from "../skill-checklist";
 import { roomStatus, ROOM_STATUS_LABEL, ROOM_STATUS_TONE } from "../../../lib/rooms";
 import PageHeader from "../../../components/PageHeader";
 import { usePageData } from "../../../lib/use-page-data";
@@ -182,7 +182,7 @@ export default function NewScenarioClient({ editId }: { editId?: string } = {}) 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Editing: the case as saved and its skills, each with its steps.
+  // Editing: the case as saved, its skill tasks (by skill) and its other tasks.
   const { data: editData, loading: loadingEdit } = usePageData(editId ? `faculty:scenario-edit:${editId}` : null, async () => {
     const [scenario, tasks, roster, list] = await Promise.all([
       fetchScenarioById(editId!),
@@ -192,15 +192,21 @@ export default function NewScenarioClient({ editId }: { editId?: string } = {}) 
     ]);
     return {
       scenario,
-      // Null when they couldn't be read: then the save leaves them alone rather than saving none.
-      tasks,
+      tasks: tasks ?? [],
       patientRoom: roster.patients.find((p) => p.id === scenario?.patient_id)?.room_id ?? "",
       assigned: list.find((x) => x.id === editId)?.student_count ?? 0,
     };
   });
   const [rubric, setRubric] = useState<Rubric>(DEFAULT_RUBRIC);
+  // Starter (non-skill) tasks marked for removal, removed on save.
+  const [removedTasks, setRemovedTasks] = useState<string[]>([]);
   const [filledFor, setFilledFor] = useState<string | null>(null);
   const editScenario = editData?.scenario ?? null;
+  const originalTaskBySkill = useMemo(
+    () => new Map((editData?.tasks ?? []).flatMap((t) => (t.skill_id ? [[t.skill_id, t.id] as const] : []))),
+    [editData?.tasks],
+  );
+  const otherTasks = (editData?.tasks ?? []).filter((t) => !t.skill_id);
   // The form starts from the saved case, once it has loaded.
   if (editId && editScenario && filledFor !== editId) {
     setFilledFor(editId);
@@ -212,8 +218,7 @@ export default function NewScenarioClient({ editId }: { editId?: string } = {}) 
       roomId: editData?.patientRoom ?? "",
       offeringId: editScenario.offering_id ?? "",
     });
-    // Tasks not from a Taylor's skill (the general starter list) load as skills of your own.
-    setSkills((editData?.tasks ?? []).map(taskSelection));
+    setSkills([...originalTaskBySkill.keys()].map((id) => ({ id })));
     setRubric(resolveRubric(editScenario.rubric));
   }
 
@@ -340,11 +345,6 @@ export default function NewScenarioClient({ editId }: { editId?: string } = {}) 
       setError("Choose the room the patient is in.");
       return;
     }
-    const skillIssue = checklistIssue(skills);
-    if (skillIssue) {
-      setError(skillIssue);
-      return;
-    }
     setSaving(true);
     setError(null);
     const progress = loadingToast(`Saving ${form.title.trim()}…`);
@@ -408,8 +408,7 @@ export default function NewScenarioClient({ editId }: { editId?: string } = {}) 
       if (res.error) console.error("Room assignment failed:", res.error);
     }
 
-    if (newScenario.chapters_saved) progress.success(`${newScenario.title} saved`);
-    else progress.success(CHAPTERS_NOT_SAVED, 8000);
+    progress.success(`${newScenario.title} saved`);
     // Back to the list, loaded fresh so the new case is there from the first
     // frame; Back won't reopen the form.
     forgetPage("faculty:scenarios");
@@ -440,14 +439,24 @@ export default function NewScenarioClient({ editId }: { editId?: string } = {}) 
       return;
     }
 
-    // The whole skill list as edited: new skills added, kept ones renamed or
-    // given their edited steps, and the rest removed.
-    const savedSkills = editData?.tasks
-      ? await saveScenarioSkills(editId!, skills)
-      : { error: "they couldn't be loaded, so they were left as they were. Open the case again to edit them." };
-    if ("error" in savedSkills) {
-      setError(`The details were saved, but the skills weren't: ${savedSkills.error}`);
-      progress.error("The skills weren't saved");
+    // A skill removed, or one whose route or steps changed, loses its task;
+    // the changed and new ones are added back as they now stand.
+    const picked = new Map(skills.map((sk) => [sk.id, sk]));
+    const remove = [
+      ...[...originalTaskBySkill].filter(([skillId]) => {
+        const sel = picked.get(skillId);
+        return !sel || sel.sections !== undefined || sel.skipped !== undefined;
+      }).map(([, taskId]) => taskId),
+      ...removedTasks,
+    ];
+    const add = skills.filter(
+      (sk) => !originalTaskBySkill.has(sk.id) || sk.sections !== undefined || sk.skipped !== undefined,
+    );
+    const removed = await Promise.all(remove.map((taskId) => removeScenarioTask(editId!, taskId)));
+    const added = add.length > 0 ? await addScenarioSkills(editId!, add) : { added: 0 };
+    if (removed.includes(false) || "error" in added) {
+      setError("The details were saved, but some skills weren't updated. Open the case again to check its skills.");
+      progress.error("Some skills weren't updated");
       setSaving(false);
       return;
     }
@@ -480,8 +489,7 @@ export default function NewScenarioClient({ editId }: { editId?: string } = {}) 
       });
     }
 
-    if (savedSkills.chaptersSaved) progress.success(`${updated.title} saved`);
-    else progress.success(CHAPTERS_NOT_SAVED, 8000);
+    progress.success(`${updated.title} saved`);
     forgetPage("faculty:scenarios");
     forgetPage(`faculty:scenario-edit:${editId}`);
     router.replace("/instructor/scenarios");
@@ -499,8 +507,8 @@ export default function NewScenarioClient({ editId }: { editId?: string } = {}) 
     : [];
   const selectedRoom = rooms.find((r) => r.id === form.roomId) ?? null;
   const chapterFocus = lesson ? lessonChapters : chapters;
-  // The chapters the case's skills are filed under ("1-6" is Chapter 1), for the summary.
-  const skillChapters = [...new Set(skills.flatMap((s) => chapterOf(s) ?? []))].sort((a, b) => a - b);
+  // The chapters the case's skills come from ("1-6" is Chapter 1), for the summary.
+  const skillChapters = [...new Set(skills.map((s) => Number(s.id.split("-")[0])))].sort((a, b) => a - b);
   const canGenerate =
     !generating && !analyzing && !!form.patientId && (!!aiPrompt.trim() || !!lesson);
   const ready = !!form.title.trim() && !!form.patientId && !!form.roomId && (offerings.length === 0 || !!offeringId);
@@ -916,6 +924,29 @@ export default function NewScenarioClient({ editId }: { editId?: string } = {}) 
                 lesson_text: lessonText ?? null,
               })}
             />
+            {otherTasks.filter((t) => !removedTasks.includes(t.id)).length > 0 && (
+              <div className="mt-3 rounded-xl border border-hairline p-3">
+                <p className="text-sm font-semibold text-gray-800">Other tasks</p>
+                <p className="text-xs text-gray-500">Tasks not from a Taylor&apos;s skill. Remove any you no longer want.</p>
+                <ul className="mt-2 space-y-1">
+                  {otherTasks
+                    .filter((t) => !removedTasks.includes(t.id))
+                    .map((t) => (
+                      <li key={t.id} className="flex items-center gap-2 rounded-lg bg-subtle px-3 py-1.5 text-sm text-gray-800">
+                        <span className="min-w-0 flex-1 truncate">{t.title}</span>
+                        <button
+                          type="button"
+                          onClick={() => setRemovedTasks((prev) => [...prev, t.id])}
+                          aria-label={`Remove ${t.title}`}
+                          className="grid h-6 w-6 place-items-center rounded-md text-gray-500 hover:bg-red-50 hover:text-red-600"
+                        >
+                          <FontAwesomeIcon icon={faXmark} className="h-3 w-3" />
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            )}
           </SheetStep>
 
           {editing && (
@@ -1001,7 +1032,7 @@ export default function NewScenarioClient({ editId }: { editId?: string } = {}) 
                       className="inline-flex items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--hue)_35%,transparent)] bg-[color-mix(in_srgb,var(--hue)_8%,transparent)] px-2 py-0.5 text-[11px] font-medium text-gray-700"
                     >
                       <span className="h-2 w-2 rounded-sm bg-[var(--hue)]" />
-                      Ch. {c} · {skills.filter((s) => chapterOf(s) === c).length}
+                      Ch. {c} · {skills.filter((s) => s.id.startsWith(`${c}-`)).length}
                     </span>
                   ))}
                 </div>

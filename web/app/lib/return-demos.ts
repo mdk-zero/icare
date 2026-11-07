@@ -1,12 +1,10 @@
 import type { Parsed } from './course-progress';
 import type { FacultyTeam, TeamsOverview } from './api';
-import { checklistProblem, parseSkillSelections, type SkillSelection } from './skill-checklists';
 
 /**
  * The rules of a Return Demonstration (migration 072): a scenario with no
- * patient, made of one or more skills (Taylor's or the instructor's own) whose
- * checklist steps the student demonstrates and the instructor grades on the
- * Patient Case scale.
+ * patient, made of one or more Taylor's skills whose checklist steps the
+ * student demonstrates and the instructor grades on the Patient Case scale.
  *
  * Pure, so the API routes, the instructor pages and the demo share it.
  */
@@ -14,8 +12,33 @@ import { checklistProblem, parseSkillSelections, type SkillSelection } from './s
 export const RETURN_DEMO_CATEGORY = 'Return Demonstration';
 export const MAX_RETURN_DEMO_TITLE = 200;
 
-// Selections are parsed in skill-checklists.ts, shared with Patient Cases.
-export { parseSkillSelections, type SkillSelection } from './skill-checklists';
+/** A Taylor's skill picked for a scenario, and which of its variants. */
+export interface SkillSelection {
+  skillId: string;
+  /** Variant headings to include; omitted means the skill's defaults. */
+  sections?: string[];
+  /** Checklist steps left out (their positions), when the setting doesn't call for them. */
+  skipped?: number[];
+}
+
+/** Selections from a request body; unknown shapes are dropped. */
+export function parseSkillSelections(value: unknown): SkillSelection[] {
+  if (!Array.isArray(value)) return [];
+  const out: SkillSelection[] = [];
+  for (const item of value) {
+    if (typeof item === 'string') out.push({ skillId: item });
+    else if (item && typeof item === 'object' && typeof (item as { id?: unknown }).id === 'string') {
+      const sections = (item as { sections?: unknown }).sections;
+      const skipped = (item as { skipped?: unknown }).skipped;
+      out.push({
+        skillId: (item as { id: string }).id,
+        sections: Array.isArray(sections) ? sections.filter((x): x is string => typeof x === 'string') : undefined,
+        skipped: Array.isArray(skipped) ? skipped.filter((x): x is number => Number.isInteger(x)) : undefined,
+      });
+    }
+  }
+  return out;
+}
 
 export interface ReturnDemoInput {
   title: string;
@@ -43,10 +66,9 @@ export function parseReturnDemoInput(body: unknown, opts: { partial?: boolean } 
   if (has('description')) value.description = typeof b.description === 'string' ? b.description.trim() : '';
   if (has('offering_id')) value.offering_id = typeof b.offering_id === 'string' && b.offering_id.trim() ? b.offering_id.trim() : null;
   if (has('skills')) {
-    const skills = parseSkillSelections(b.skills);
+    const seen = new Set<string>();
+    const skills = parseSkillSelections(b.skills).filter((s) => !seen.has(s.skillId) && seen.add(s.skillId));
     if (skills.length === 0) return { ok: false, error: 'Pick at least one skill' };
-    const problem = checklistProblem(skills);
-    if (problem) return { ok: false, error: problem };
     value.skills = skills;
   }
   return { ok: true, value };
@@ -76,6 +98,26 @@ export function mergeAssignees(input: {
   for (const [teamId, members] of input.teamMembers) for (const id of members) add(id, teamId);
   for (const id of input.studentIds) add(id, input.teamOf.get(id) ?? null);
   return { rows, skipped };
+}
+
+/**
+ * An edit's skill changes against the tasks it has: skills to add, ungraded
+ * tasks to remove, and the titles of graded tasks the edit would drop, which
+ * are refused rather than removed (their grades would go with them).
+ */
+export function skillDiff(
+  current: readonly { id: string; skill_id: string | null; title: string }[],
+  wanted: readonly SkillSelection[],
+  graded: ReadonlySet<string>,
+): { add: SkillSelection[]; remove: string[]; blocked: string[] } {
+  const have = new Set(current.map((t) => t.skill_id).filter((id): id is string => !!id));
+  const want = new Set(wanted.map((s) => s.skillId));
+  const dropped = current.filter((t) => !t.skill_id || !want.has(t.skill_id));
+  return {
+    add: wanted.filter((s) => !have.has(s.skillId)),
+    remove: dropped.filter((t) => !graded.has(t.id)).map((t) => t.id),
+    blocked: dropped.filter((t) => graded.has(t.id)).map((t) => t.title),
+  };
 }
 
 /**

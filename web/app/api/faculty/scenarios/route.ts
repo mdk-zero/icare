@@ -9,7 +9,6 @@ import { ofKind, scenarioKinds } from '@/app/lib/scenario-kind';
 import { ensureCategories } from '@/app/lib/scenario-categories';
 import { viewerDeanId } from '@/app/lib/dean-scope';
 import { addSkillTasks, parseSkillSelections } from '@/app/lib/skill-tasks';
-import { checklistProblem } from '@/app/lib/skill-checklists';
 import {
   getFacultyStudentIdSet,
   scenarioVisibleToFaculty,
@@ -183,9 +182,6 @@ export async function POST(request: NextRequest) {
   if (typeof title !== 'string' || title.trim().length === 0) {
     return NextResponse.json({ error: 'Title is required' }, { status: 400 });
   }
-  const selections = parseSkillSelections(skills);
-  const skillProblem = checklistProblem(selections);
-  if (skillProblem) return NextResponse.json({ error: skillProblem }, { status: 400 });
 
 
   const sanitizedLearningObjectives = Array.isArray(learning_objectives)
@@ -255,14 +251,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unable to create patient case' }, { status: 500 });
     }
 
-    // Its tasks are the skills faculty confirmed or wrote, each with its
-    // checklist steps. A scenario saved without any gets the default task
-    // list, so it still works; skills can be added afterwards.
+    // Its tasks are the Taylor's skills faculty confirmed, each with the
+    // skill's checklist steps. A scenario saved without any gets the default
+    // task list, so it still works; skills can be added afterwards.
+    const selections = parseSkillSelections(skills);
     const built = selections.length > 0 ? await addSkillTasks(supabase, scenario.id, selections) : null;
     if (built?.error) console.error('Failed to build skill tasks', built.error);
     if (!built || built.tasks === 0) await seedScenarioTasks(supabase, scenario.id);
 
-    return NextResponse.json({ scenario, chapters_saved: !built?.noChapters }, { status: 201 });
+    return NextResponse.json({ scenario }, { status: 201 });
   } catch (err) {
     console.error('Create patient case failed', err);
     return NextResponse.json({ error: 'Unable to create patient case' }, { status: 500 });

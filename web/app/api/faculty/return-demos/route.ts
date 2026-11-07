@@ -12,13 +12,12 @@ import { listReturnDemos, needsMigration, returnDemosReady } from '@/app/lib/ret
 const RETIRED_DIFFICULTY = 'intermediate';
 
 /**
- * Return Demonstrations (072): skill checklists with no patient.
+ * Return Demonstrations (072): Taylor's skill checklists with no patient.
  *
  * GET: every one the viewer may see, newest first, with `enabled: false`
  * (and none) before 070 and 072 so the page can say what is missing.
  * POST { title, description?, offering_id, skills }: make one. Its tasks are
- * the picked Taylor's skills and the instructor's own, each with its
- * checklist steps as the instructor left them (skill-checklists.ts).
+ * the picked skills, each with the skill's checklist steps word for word.
  */
 export async function GET() {
   const session = await readSession();
@@ -102,14 +101,11 @@ export async function POST(request: NextRequest) {
         action: 'return_demo.create',
         entityType: 'scenarios',
         entityId: demo.id as string,
-        details: {
-          message: `Created Return Demonstration “${input.title}”`,
-          skills: (input.skills ?? []).map((s) => s.skillId ?? s.title),
-        },
+        details: { message: `Created Return Demonstration “${input.title}”`, skills: (input.skills ?? []).map((s) => s.skillId) },
       },
       request,
     );
-    return NextResponse.json({ return_demo: { id: demo.id }, chapters_saved: !built.noChapters }, { status: 201 });
+    return NextResponse.json({ return_demo: { id: demo.id } }, { status: 201 });
   } catch (err) {
     console.error('Create Return Demonstration failed', err);
     return NextResponse.json({ error: 'Unable to create the Return Demonstration' }, { status: 500 });
