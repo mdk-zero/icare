@@ -4,14 +4,15 @@ import { json, notFound, route, type DemoContext } from "../router";
 import { newId } from "../store";
 import type { DemoScenario } from "../fixtures/school";
 import { audit } from "./shared";
-import { addSkillTasks, caseGroupsOf, myStudentIds, newAssignment } from "./faculty";
+import { addSkillTasks, caseGroupsOf, demoSkillTasks, myStudentIds, newAssignment, saveSkillTasks } from "./faculty";
 import { parseDeadline } from "@/app/lib/deadline-input";
-import { mergeAssignees, parseReturnDemoInput, RETURN_DEMO_CATEGORY, returnDemoVisibleTo, skillDiff } from "@/app/lib/return-demos";
+import { mergeAssignees, parseReturnDemoInput, RETURN_DEMO_CATEGORY, returnDemoVisibleTo } from "@/app/lib/return-demos";
 
 /**
  * Return Demonstrations (072) on the demo store, in the shapes the real
- * /api/faculty/return-demos routes answer with: Taylor's skill checklists
- * with no patient, graded on the Patient Case review page.
+ * /api/faculty/return-demos routes answer with: skill checklists (Taylor's
+ * or the instructor's own) with no patient, graded on the Patient Case
+ * review page.
  */
 
 type Ctx = DemoContext;
@@ -108,7 +109,7 @@ route("POST", "/api/faculty/return-demos", async (ctx) => {
     kind: "return_demo",
   };
   ctx.db.scenarios.push(demo);
-  const added = await addSkillTasks(ctx, demo.id, input.skills ?? []);
+  const added = await addSkillTasks(ctx, demo.id, ctx.body?.skills ?? []);
   if (added === 0) {
     ctx.db.scenarios = ctx.db.scenarios.filter((s) => s.id !== demo.id);
     return json({ error: "None of those skills are in the catalog" }, 400);
@@ -121,21 +122,16 @@ route("GET", "/api/faculty/return-demos/:id", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   const demo = findDemo(ctx, ctx.params.id);
   if (!demo) return notFound(NOT_FOUND);
-  const tasks = tasksOf(ctx, demo.id);
-  const graded = gradedTaskIds(ctx, tasks.map((t) => t.id));
   return {
     return_demo: {
       ...summary(ctx, demo),
-      tasks: tasks.map((t) => ({
+      tasks: demoSkillTasks(ctx, demo.id).map((t) => ({
         id: t.id,
         skill_id: t.skill_id,
         title: t.title,
-        steps: ctx.db.steps.filter((st) => st.task_id === t.id).length,
-        step_titles: ctx.db.steps
-          .filter((st) => st.task_id === t.id)
-          .sort((a, b) => a.position - b.position)
-          .map((st) => st.title),
-        graded: graded.has(t.id),
+        chapter: t.chapter,
+        checklist: t.steps.map((st) => ({ id: st.id, title: st.title, skill_step_id: st.skill_step_id })),
+        graded: t.graded > 0,
       })),
     },
   };
@@ -150,29 +146,23 @@ route("PATCH", "/api/faculty/return-demos/:id", async (ctx) => {
   if (!demo) return notFound(NOT_FOUND);
   if (!canEdit(ctx, demo)) return json({ error: "Only its maker can change this Return Demonstration" }, 403);
 
-  const tasks = tasksOf(ctx, demo.id);
-  const diff = input.skills ? skillDiff(tasks, input.skills, gradedTaskIds(ctx, tasks.map((t) => t.id))) : null;
-  if (diff && diff.blocked.length > 0) {
-    return json({ error: `Students have been graded on ${diff.blocked.join(", ")}, so it can't be removed.` }, 409);
-  }
   if (input.offering_id !== undefined) {
     const courseProblem = courseError(ctx, input.offering_id);
     if (courseProblem) return json({ error: courseProblem }, 400);
-    demo.offering_id = input.offering_id;
   }
+  let saved = { added: 0, changed: 0, removed: 0 };
+  if (input.skills) {
+    const result = await saveSkillTasks(ctx, demo.id, ctx.body?.skills, { requireOne: true });
+    if (!result.ok) return json({ error: result.error }, result.status);
+    saved = result;
+  }
+  if (input.offering_id !== undefined) demo.offering_id = input.offering_id;
   if (input.title !== undefined) demo.title = input.title;
   if (input.description !== undefined) demo.description = input.description;
   demo.updated_at = new Date().toISOString();
 
-  let added = 0;
-  if (diff) {
-    if (diff.add.length > 0) added = await addSkillTasks(ctx, demo.id, diff.add);
-    const removed = new Set(diff.remove);
-    ctx.db.tasks = ctx.db.tasks.filter((t) => !removed.has(t.id));
-    ctx.db.steps = ctx.db.steps.filter((st) => !removed.has(st.task_id));
-  }
   audit(ctx.db, ctx.viewer, "return_demo.update", "scenarios", { message: `Edited Return Demonstration “${demo.title}”` }, demo.id);
-  return { ok: true, added, removed: diff?.remove.length ?? 0 };
+  return { ok: true, added: saved.added, changed: saved.changed, removed: saved.removed, chapters_saved: true };
 });
 
 route("DELETE", "/api/faculty/return-demos/:id", (ctx) => {

@@ -3,6 +3,7 @@
 import { json, ndjson, notFound, route, type DemoContext } from "../router";
 import { newId } from "../store";
 import type { DemoAssignment, DemoScenario } from "../fixtures/school";
+import type { SkillSelection } from "@/app/lib/skill-checklists";
 import { audit } from "./shared";
 import { courseActivityIds, courseDb, linkActivityCourses } from "./courses";
 import { parseDeadline } from "@/app/lib/deadline-input";
@@ -954,30 +955,118 @@ route("GET", "/api/scenarios/:id", (ctx) => {
   return { scenario: s };
 });
 
-export async function addSkillTasks(ctx: Ctx, scenarioId: string, skills: unknown): Promise<number> {
-  if (!Array.isArray(skills) || skills.length === 0) return 0;
-  const [{ getSkills }, { parseSkillSelections, skillTaskFields, skillTaskSteps }] = await Promise.all([
-    import("@/app/lib/taylor-skills"),
-    import("@/app/lib/skill-tasks"),
-  ]);
-  const picks = parseSkillSelections(skills);
-  const existing = new Set(ctx.db.tasks.filter((t) => t.scenario_id === scenarioId).map((t) => t.skill_id));
+/** A scenario's tasks with their steps and grades, in the shape skill-checklists.ts plans with. */
+export function demoSkillTasks(ctx: Ctx, scenarioId: string) {
+  return ctx.db.tasks
+    .filter((t) => t.scenario_id === scenarioId)
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((t) => ({
+      id: t.id,
+      skill_id: t.skill_id,
+      title: t.title,
+      chapter: t.chapter ?? null,
+      sort_order: t.sort_order,
+      steps: ctx.db.steps
+        .filter((st) => st.task_id === t.id)
+        .sort((a, b) => a.position - b.position)
+        .map((st) => ({ id: st.id, title: st.title, sort_order: st.position, skill_step_id: st.skill_step_id ?? null })),
+      graded: new Set(ctx.db.completions.filter((c) => c.task_id === t.id).map((c) => c.assignment_id)).size,
+    }));
+}
+
+const skillModules = () =>
+  Promise.all([import("@/app/lib/taylor-skills"), import("@/app/lib/skill-tasks"), import("@/app/lib/skill-checklists")]);
+
+/** The real insertSkillTasks on the demo store: Taylor's skills the catalog lacks are skipped. */
+async function insertSkillTasks(
+  ctx: Ctx,
+  scenarioId: string,
+  items: readonly { selection: SkillSelection; sortOrder: number }[],
+): Promise<number> {
+  const [{ getSkills }, { ownTaskFields, selectionSteps, skillTaskFields }, { skillTaskTitle }] = await skillModules();
+  const ids = items.flatMap((i) => (i.selection.skillId ? [i.selection.skillId] : []));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the catalog falls back to its bundled JSON on a failing client
-  const details = await getSkills(failingClient as any, picks.map((p) => p.skillId));
-  let order = ctx.db.tasks.filter((t) => t.scenario_id === scenarioId).length;
+  const details = ids.length ? await getSkills(failingClient as any, ids) : [];
   let added = 0;
-  for (const skill of details) {
-    if (existing.has(skill.id)) continue;
-    const pick = picks.find((p) => p.skillId === skill.id);
-    const fields = skillTaskFields(skill);
+  for (const { selection, sortOrder } of items) {
+    const skill = selection.skillId ? details.find((d) => d.id === selection.skillId) : null;
+    if (selection.skillId && !skill) continue;
     const taskId = newId();
-    ctx.db.tasks.push({ id: taskId, scenario_id: scenarioId, ...fields, sort_order: order++, skill_id: skill.id });
-    skillTaskSteps(skill.id, skill.steps, pick?.sections, pick?.skipped).forEach((st, i) => {
-      ctx.db.steps.push({ id: newId(), task_id: taskId, title: st.title, source: st.source, position: i + 1 });
+    const fields = skill
+      ? { ...skillTaskFields(skill), ...(selection.title ? { title: skillTaskTitle(selection.title, skill.id) } : {}) }
+      : ownTaskFields(selection.title ?? "");
+    ctx.db.tasks.push({
+      id: taskId,
+      scenario_id: scenarioId,
+      ...fields,
+      sort_order: sortOrder,
+      skill_id: skill?.id ?? null,
+      chapter: skill ? null : (selection.chapter ?? null),
+    });
+    selectionSteps(selection, skill ?? null).forEach((st, i) => {
+      ctx.db.steps.push({ id: newId(), task_id: taskId, title: st.title, source: st.source, position: i + 1, skill_step_id: st.skill_step_id });
     });
     added += 1;
   }
   return added;
+}
+
+/** A new scenario's skills, after any tasks it has. */
+export async function addSkillTasks(ctx: Ctx, scenarioId: string, skills: unknown): Promise<number> {
+  const { parseSkillSelections } = await import("@/app/lib/skill-checklists");
+  const picks = parseSkillSelections(skills);
+  if (picks.length === 0) return 0;
+  const after = ctx.db.tasks.filter((t) => t.scenario_id === scenarioId).length;
+  return insertSkillTasks(ctx, scenarioId, picks.map((selection, i) => ({ selection, sortOrder: after + i + 1 })));
+}
+
+/** The real saveSkillTasks on the demo store: the whole skill list as edited, in order. */
+export async function saveSkillTasks(
+  ctx: Ctx,
+  scenarioId: string,
+  skills: unknown,
+  opts: { requireOne?: boolean } = {},
+): Promise<{ ok: true; added: number; changed: number; removed: number } | { ok: false; status: number; error: string }> {
+  const [{ getSkills }, { selectionSteps }, { checklistProblem, parseSkillSelections, planSkillTasks, planStepChanges }] =
+    await skillModules();
+  const wanted = parseSkillSelections(skills);
+  const problem = checklistProblem(wanted);
+  if (problem) return { ok: false, status: 400, error: problem };
+  const current = demoSkillTasks(ctx, scenarioId);
+  const plan = planSkillTasks(current, wanted, new Set(current.filter((t) => t.graded > 0).map((t) => t.id)));
+  if (plan.refused) return { ok: false, ...plan.refused };
+  if (opts.requireOne && wanted.length === 0) return { ok: false, status: 400, error: "Pick at least one skill" };
+
+  const added = await insertSkillTasks(ctx, scenarioId, plan.add);
+  for (const change of plan.update) {
+    const task = ctx.db.tasks.find((t) => t.id === change.taskId)!;
+    if (change.title !== undefined) task.title = change.title;
+    if (change.chapter !== undefined) task.chapter = change.chapter;
+    if (!change.steps) continue;
+    const steps = planStepChanges(current.find((t) => t.id === task.id)!.steps, change.steps);
+    const gone = new Set(steps.remove);
+    ctx.db.steps = ctx.db.steps.filter((st) => !gone.has(st.id));
+    for (const u of steps.update) {
+      const row = ctx.db.steps.find((st) => st.id === u.id)!;
+      // A reworded step is the instructor's now, so it stops citing the book.
+      if (row.title !== u.title) Object.assign(row, { title: u.title, source: "", skill_step_id: null });
+      row.position = u.sortOrder;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the catalog falls back to its bundled JSON on a failing client
+    const skill = task.skill_id ? ((await getSkills(failingClient as any, [task.skill_id]))[0] ?? null) : null;
+    const rows = selectionSteps({ skillId: task.skill_id, steps: steps.insert.map((i) => i.step) }, skill);
+    steps.insert.forEach(({ sortOrder }, i) => {
+      ctx.db.steps.push({ id: newId(), task_id: task.id, title: rows[i].title, source: rows[i].source, position: sortOrder, skill_step_id: rows[i].skill_step_id });
+    });
+  }
+  const removed = new Set(plan.remove);
+  ctx.db.tasks = ctx.db.tasks.filter((t) => !removed.has(t.id));
+  ctx.db.steps = ctx.db.steps.filter((st) => !removed.has(st.task_id));
+  for (const move of plan.reorder) {
+    const task = ctx.db.tasks.find((t) => t.id === move.taskId);
+    if (task) task.sort_order = move.sortOrder;
+  }
+  return { ok: true, added, changed: plan.update.length, removed: plan.remove.length };
 }
 
 /** Every query fails, so the skills catalog code reads its bundled JSON. */
@@ -1084,35 +1173,27 @@ route("PATCH", "/api/faculty/scenarios/:id/assign", (ctx) => {
 
 route("GET", "/api/faculty/scenarios/:id/skills", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
-  const { db, params } = ctx;
   return {
-    tasks: db.tasks
-      .filter((t) => t.scenario_id === params.id)
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map((t) => ({
-        id: t.id,
-        title: t.title,
-        skill_id: t.skill_id,
-        graded: new Set(db.completions.filter((c) => c.task_id === t.id).map((c) => c.assignment_id)).size,
-      })),
+    tasks: demoSkillTasks(ctx, ctx.params.id).map((t) => ({
+      id: t.id,
+      title: t.title,
+      skill_id: t.skill_id,
+      chapter: t.chapter,
+      graded: t.graded,
+      checklist: t.steps.map((s) => ({ id: s.id, title: s.title, skill_step_id: s.skill_step_id })),
+    })),
   };
 });
 
-route("POST", "/api/faculty/scenarios/:id/skills", async (ctx) => {
+route("PUT", "/api/faculty/scenarios/:id/skills", async (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
-  if (!ctx.db.scenarios.some((s) => s.id === ctx.params.id)) return notFound("Patient case not found");
-  return { added: await addSkillTasks(ctx, ctx.params.id, ctx.body?.skills) };
-});
-
-route("DELETE", "/api/faculty/scenarios/:id/skills", (ctx) => {
-  if (!staffOnly(ctx)) return forbidden();
-  const { db, query } = ctx;
-  const taskId = query.get("task_id");
-  if (!db.tasks.some((t) => t.id === taskId && t.scenario_id === ctx.params.id)) return notFound("Task not found");
-  db.tasks = db.tasks.filter((t) => t.id !== taskId);
-  db.steps = db.steps.filter((s) => s.task_id !== taskId);
-  db.completions = db.completions.filter((c) => c.task_id !== taskId);
-  return { success: true };
+  const scenario = ctx.db.scenarios.find((s) => s.id === ctx.params.id && s.kind !== "return_demo");
+  if (!scenario) return notFound("Patient case not found");
+  if (!Array.isArray(ctx.body?.skills)) return json({ error: "skills is required" }, 400);
+  const saved = await saveSkillTasks(ctx, scenario.id, ctx.body.skills);
+  if (!saved.ok) return json({ error: saved.error }, saved.status);
+  audit(ctx.db, ctx.viewer, "scenario.skills_update", "scenarios", { message: `Edited the skills of “${scenario.title}”` }, scenario.id);
+  return { added: saved.added, changed: saved.changed, removed: saved.removed, chapters_saved: true };
 });
 
 // ---------------------------------------------------------------------------

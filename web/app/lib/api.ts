@@ -1962,9 +1962,10 @@ export async function fetchFacultyScenarios(): Promise<SimulationScenario[]> {
   }
 }
 
+/** The new case; `chapters_saved` is false when own skills' chapters were left off (before migration 093). */
 export async function createScenario(
   scenario: Partial<SimulationScenario> & { skills?: SkillSelection[] },
-): Promise<SimulationScenario | null> {
+): Promise<(SimulationScenario & { chapters_saved: boolean }) | null> {
   try {
     const res = await apiFetch('/api/faculty/scenarios', {
       method: 'POST',
@@ -1972,12 +1973,12 @@ export async function createScenario(
       credentials: 'include',
       body: JSON.stringify(scenario),
     });
-    const json = (await res.json()) as { scenario?: SimulationScenario; error?: string };
+    const json = (await res.json()) as { scenario?: SimulationScenario; chapters_saved?: boolean; error?: string };
     if (!res.ok || !json.scenario) {
       console.error('createScenario() failed', json.error);
       return null;
     }
-    return json.scenario;
+    return { ...json.scenario, chapters_saved: json.chapters_saved !== false };
   } catch (err) {
     console.error('createScenario() failed', err);
     return null;
@@ -2373,12 +2374,14 @@ export interface ReturnDemoSummary {
 
 export interface ReturnDemoTask {
   id: string;
+  /** The Taylor's skill it is; null for the instructor's own. */
   skill_id: string | null;
   title: string;
-  steps: number;
-  /** The stored checklist, in order; an edit can't change a kept skill's variant. */
-  step_titles?: string[];
-  /** A student has a grade on it, so it can't be removed. */
+  /** An own skill's chapter, 1–18, or null. */
+  chapter: number | null;
+  /** Its stored steps, in order. */
+  checklist: ChecklistStep[];
+  /** A student has a grade on it: it can't be removed and its steps can't change. */
   graded: boolean;
 }
 
@@ -2434,7 +2437,10 @@ export async function fetchReturnDemo(id: string): Promise<ReturnDemoDetail | nu
   }
 }
 
-export async function createReturnDemo(input: ReturnDemoInput): Promise<{ id?: string; error?: string }> {
+/** `chaptersSaved` is false when own skills' chapters were left off (before migration 093). */
+export async function createReturnDemo(
+  input: ReturnDemoInput,
+): Promise<{ id?: string; chaptersSaved?: boolean; error?: string }> {
   try {
     const res = await apiFetch('/api/faculty/return-demos', {
       method: 'POST',
@@ -2443,15 +2449,18 @@ export async function createReturnDemo(input: ReturnDemoInput): Promise<{ id?: s
       body: JSON.stringify(input),
     });
     if (!res.ok) return { error: await errorOf(res, 'Unable to create the Return Demonstration') };
-    const json = (await res.json()) as { return_demo?: { id: string } };
-    return { id: json.return_demo?.id };
+    const json = (await res.json()) as { return_demo?: { id: string }; chapters_saved?: boolean };
+    return { id: json.return_demo?.id, chaptersSaved: json.chapters_saved !== false };
   } catch (err) {
     console.error('createReturnDemo() failed', err);
     return { error: 'Unable to create the Return Demonstration' };
   }
 }
 
-export async function updateReturnDemo(id: string, patch: Partial<ReturnDemoInput>): Promise<{ error?: string }> {
+export async function updateReturnDemo(
+  id: string,
+  patch: Partial<ReturnDemoInput>,
+): Promise<{ chaptersSaved?: boolean; error?: string }> {
   try {
     const res = await apiFetch(`/api/faculty/return-demos/${id}`, {
       method: 'PATCH',
@@ -2460,7 +2469,8 @@ export async function updateReturnDemo(id: string, patch: Partial<ReturnDemoInpu
       body: JSON.stringify(patch),
     });
     if (!res.ok) return { error: await errorOf(res, 'Unable to update the Return Demonstration') };
-    return {};
+    const json = (await res.json()) as { chapters_saved?: boolean };
+    return { chaptersSaved: json.chapters_saved !== false };
   } catch (err) {
     console.error('updateReturnDemo() failed', err);
     return { error: 'Unable to update the Return Demonstration' };
@@ -3610,12 +3620,40 @@ export interface SkillDetail extends SkillSummary {
   variants: { sections: string[]; alternatives: boolean; defaults: string[] };
 }
 
-/** A skill chosen for a scenario, with the variants to include (defaults when omitted). */
+/** One checklist step as the skill editor holds it. */
+export interface SkillStepDraft {
+  text: string;
+  /** The catalog step it was taken from, by position in its skill. */
+  position?: number;
+  /** The stored sub-task it is, when editing. */
+  id?: string;
+  /** The catalog step a stored sub-task links to, for working out its variant. */
+  skill_step_id?: string | null;
+}
+
+/**
+ * A skill on a scenario as the form holds it: a Taylor's skill with the
+ * variants to include (defaults when omitted), or the instructor's own
+ * (`own`, keyed "own:…"). Either can be renamed and have its steps edited.
+ */
 export interface SkillSelection {
+  /** The Taylor's skill ("1-7"), or a key for an own skill. */
   id: string;
   sections?: string[];
   /** Checklist steps left out, by position, when the setting doesn't call for them. */
   skipped?: number[];
+  /** The instructor's own skill, not from the catalog. */
+  own?: boolean;
+  /** Its name: a Taylor's skill renamed (without its number), or an own skill's. */
+  title?: string;
+  /** An own skill's chapter, 1–18, or null for one outside the book. */
+  chapter?: number | null;
+  /** The checklist as edited; replaces what `sections` and `skipped` give. */
+  steps?: SkillStepDraft[];
+  /** The stored task it is, when editing. */
+  task_id?: string;
+  /** Students are graded on it: it stays on, and its steps stay as they are. */
+  locked?: boolean;
 }
 
 export interface SkillSuggestion {
@@ -3670,12 +3708,22 @@ export async function suggestScenarioSkills(input: {
   }
 }
 
+/** A stored checklist step (sub-task). */
+export interface ChecklistStep {
+  id: string;
+  title: string;
+  skill_step_id: string | null;
+}
+
 export interface ScenarioSkillTask {
   id: string;
   title: string;
   skill_id: string | null;
+  /** An own skill's chapter, 1–18, or null. */
+  chapter: number | null;
   /** How many students already have a grade on it. */
   graded: number;
+  checklist: ChecklistStep[];
 }
 
 export async function fetchScenarioSkillTasks(scenarioId: string): Promise<ScenarioSkillTask[] | null> {
@@ -3689,35 +3737,26 @@ export async function fetchScenarioSkillTasks(scenarioId: string): Promise<Scena
   }
 }
 
-export async function addScenarioSkills(
+/**
+ * Save a patient case's whole skill list as edited, in order. `chaptersSaved`
+ * is false when own skills' chapters were left off (before migration 093).
+ */
+export async function saveScenarioSkills(
   scenarioId: string,
   skills: SkillSelection[],
-): Promise<{ added: number } | { error: string }> {
+): Promise<{ chaptersSaved: boolean } | { error: string }> {
   try {
     const res = await apiFetch(`/api/faculty/scenarios/${scenarioId}/skills`, {
-      method: 'POST',
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({ skills }),
     });
-    const json = (await res.json()) as { added?: number; error?: string };
-    return res.ok ? { added: json.added ?? 0 } : { error: json.error ?? 'Unable to add the skills' };
+    const json = (await res.json()) as { chapters_saved?: boolean; error?: string };
+    return res.ok ? { chaptersSaved: json.chapters_saved !== false } : { error: json.error ?? 'Unable to save the skills' };
   } catch (err) {
-    console.error('addScenarioSkills() failed', err);
-    return { error: 'Unable to add the skills' };
-  }
-}
-
-export async function removeScenarioTask(scenarioId: string, taskId: string): Promise<boolean> {
-  try {
-    const res = await apiFetch(`/api/faculty/scenarios/${scenarioId}/skills?task_id=${encodeURIComponent(taskId)}`, {
-      method: 'DELETE',
-      credentials: 'include',
-    });
-    return res.ok;
-  } catch (err) {
-    console.error('removeScenarioTask() failed', err);
-    return false;
+    console.error('saveScenarioSkills() failed', err);
+    return { error: 'Unable to save the skills' };
   }
 }
 

@@ -38,12 +38,13 @@ export interface ReturnDemoSummary extends ReturnDemoRow {
 
 export interface ReturnDemoTask {
   id: string;
+  /** The Taylor's skill it is; null for the instructor's own. */
   skill_id: string | null;
   title: string;
-  /** Checklist steps (sub-tasks) under it. */
-  steps: number;
-  /** Their words, in order: the checklist as stored, variants and all. */
-  step_titles: string[];
+  /** An own skill's chapter (093). */
+  chapter: number | null;
+  /** Its checklist steps (sub-tasks) as stored, in order. */
+  checklist: { id: string; title: string; skill_step_id: string | null }[];
   /** Whether any student has a grade on it. */
   graded: boolean;
 }

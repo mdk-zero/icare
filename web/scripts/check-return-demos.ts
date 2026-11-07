@@ -18,7 +18,8 @@ import {
   scenarioKindsReady,
   type ScenarioKind,
 } from '../app/lib/scenario-kind';
-import { assignableStudents, mergeAssignees, parseReturnDemoInput, returnDemoVisibleTo, skillDiff } from '../app/lib/return-demos';
+import { assignableStudents, mergeAssignees, parseReturnDemoInput, returnDemoVisibleTo } from '../app/lib/return-demos';
+import { checklistProblem, parseSkillSelections, planSkillTasks, planStepChanges } from '../app/lib/skill-checklists';
 import { existsSync, readFileSync } from 'node:fs';
 import { autoSplit } from '../app/lib/course-grading';
 import { requirementNames, skillCoverage } from '../app/lib/course-progress';
@@ -26,7 +27,7 @@ import { loadActivityItems } from '../app/lib/courses';
 import { seed } from '../app/lib/demo/fixtures';
 import { studentTaskSteps } from '../app/lib/scenario-tasks';
 import { returnDemosReady } from '../app/lib/return-demos-server';
-import { editedSkills } from '../app/instructor/return-demos/edit-skills';
+import { chapterOf, isEdited, sectionsOf, taskSelection } from '../app/instructor/scenarios/skill-checklist';
 import { join } from 'node:path';
 
 let failures = 0;
@@ -113,6 +114,11 @@ async function main() {
   eq('a partial edit carries only what it names', parseReturnDemoInput({ description: 'x' }, { partial: true }), { ok: true, value: { description: 'x' } });
   eq('a partial edit cannot empty the skills', parseReturnDemoInput({ skills: [] }, { partial: true }), { ok: false, error: 'Pick at least one skill' });
   eq('a partial edit cannot blank the title', parseReturnDemoInput({ title: '  ' }, { partial: true }), { ok: false, error: 'Title is required' });
+  eq(
+    'an own skill needs a name',
+    parseReturnDemoInput({ title: 'VS', skills: [{ own: true, id: 'own:1', steps: [{ text: 'Check the band' }] }] }),
+    { ok: false, error: 'Give each of your own skills a name.' },
+  );
 
   const merged = mergeAssignees({
     teamMembers: new Map([['t1', ['s1', 's2']]]),
@@ -127,20 +133,71 @@ async function main() {
   ]);
   eq('students who already have it are skipped once', merged.skipped, 1);
 
-  const diff = skillDiff(
+  console.log('\nskills and steps');
+  eq(
+    'selections: own skills, renames, edited steps; blank steps and bad chapters dropped',
+    parseSkillSelections([
+      { own: true, id: 'own:x', title: ' My skill ', chapter: 19, steps: [{ text: ' a ' }, { text: '  ' }], task_id: 't1' },
+      { id: '1-1', title: 'Temp', steps: [{ text: 'x', position: 2, id: 's' }] },
+      '1-1',
+    ]),
     [
-      { id: 'k1', skill_id: '1-1', title: 'Assessing Body Temperature (Skill 1-1)' },
-      { id: 'k2', skill_id: '1-4', title: 'Pulse (Skill 1-4)' },
-      { id: 'k3', skill_id: '1-6', title: 'Respiration (Skill 1-6)' },
+      { skillId: null, title: 'My skill', chapter: null, steps: [{ text: 'a' }], taskId: 't1' },
+      { skillId: '1-1', title: 'Temp', steps: [{ text: 'x', position: 2, id: 's' }] },
     ],
-    [{ skillId: '1-4' }, { skillId: '1-7' }],
+  );
+  eq('a new own skill needs a step', checklistProblem([{ skillId: null, title: 'X', steps: [] }]), 'Add at least one step to “X”.');
+  eq('a saved own skill with no steps (a starter task) can stay', checklistProblem([{ skillId: null, title: 'X', steps: [], taskId: 't' }]), null);
+  eq("a Taylor's skill keeps a step", checklistProblem([{ skillId: '1-1', steps: [] }]), 'Keep at least one step in Skill 1-1.');
+
+  const stored = [
+    { id: 'k1', skill_id: '1-1', title: 'Assessing Body Temperature (Skill 1-1)', chapter: null, sort_order: 1, steps: [{ id: 's1', title: 'Wash' }] },
+    { id: 'k2', skill_id: '1-4', title: 'Pulse (Skill 1-4)', chapter: null, sort_order: 2, steps: [{ id: 's3', title: 'Count' }] },
+    { id: 'k3', skill_id: '1-6', title: 'Respiration (Skill 1-6)', chapter: null, sort_order: 3, steps: [{ id: 's4', title: 'Watch' }] },
+    { id: 'k4', skill_id: null, title: 'ID band check', chapter: 3, sort_order: 4, steps: [{ id: 's5', title: 'Read the band' }] },
+  ];
+  const ownSteps = [{ id: 's5', text: 'Read the band aloud' }, { text: 'Compare it with the chart' }];
+  const plan = planSkillTasks(
+    stored,
+    [
+      { skillId: '1-4', taskId: 'k2', title: 'Radial Pulse' },
+      { skillId: null, taskId: 'k4', title: 'ID band check', chapter: 4, steps: ownSteps },
+      { skillId: '1-6', taskId: 'k3', title: 'Respiration', steps: [{ id: 's4', text: 'Watch' }] },
+      { skillId: '1-7' },
+    ],
     new Set(['k3']),
   );
-  eq('adds new skills, removes ungraded dropped ones, blocks graded ones', diff, {
-    add: [{ skillId: '1-7' }],
-    remove: ['k1'],
-    blocked: ['Respiration (Skill 1-6)'],
-  });
+  eq('new skills go in at their place', plan.add, [{ selection: { skillId: '1-7' }, sortOrder: 4 }]);
+  eq('a rename keeps the skill number; an own skill is refiled and its steps edited', plan.update, [
+    { taskId: 'k2', title: 'Radial Pulse (Skill 1-4)' },
+    { taskId: 'k4', chapter: 4, steps: ownSteps },
+  ]);
+  eq('a dropped skill nobody is graded on is removed', plan.remove, ['k1']);
+  eq('kept skills move to where they are listed', plan.reorder, [{ taskId: 'k2', sortOrder: 1 }, { taskId: 'k4', sortOrder: 2 }]);
+  eq('nothing refused', plan.refused, null);
+  eq(
+    'a graded skill can be renamed',
+    planSkillTasks([stored[2]], [{ skillId: '1-6', taskId: 'k3', title: 'Breathing', steps: [{ id: 's4', text: 'Watch' }] }], new Set(['k3'])).update,
+    [{ taskId: 'k3', title: 'Breathing (Skill 1-6)' }],
+  );
+  check(
+    "…but its steps can't change",
+    planSkillTasks([stored[2]], [{ skillId: '1-6', taskId: 'k3', steps: [{ id: 's4', text: 'Watch the chest' }] }], new Set(['k3'])).refused?.status === 409,
+  );
+  check("…and it can't be dropped", planSkillTasks([stored[2]], [{ skillId: '1-7' }], new Set(['k3'])).refused?.status === 409);
+  check('an edit naming a task that is gone is refused', planSkillTasks(stored, [{ skillId: null, taskId: 'gone', title: 'X' }], new Set()).refused?.status === 409);
+  eq(
+    'steps are kept by id, reworded, moved, added and deleted',
+    planStepChanges(
+      [{ id: 'a', title: 'One', sort_order: 1 }, { id: 'b', title: 'Two', sort_order: 2 }, { id: 'c', title: 'Three', sort_order: 3 }],
+      [{ id: 'c', text: 'Three' }, { id: 'a', text: 'One, reworded' }, { text: 'New' }],
+    ),
+    {
+      insert: [{ step: { text: 'New' }, sortOrder: 3 }],
+      update: [{ id: 'c', title: 'Three', sortOrder: 1 }, { id: 'a', title: 'One, reworded', sortOrder: 2 }],
+      remove: ['b'],
+    },
+  );
 
   const overview = {
     viewer_id: 'f1',
@@ -255,15 +312,35 @@ async function main() {
   check('…but not one held only by other students', !returnDemoVisibleTo({ created_by: 'fa' }, ['s9'], instructorB, mineOnly));
   check('an admin sees every one', returnDemoVisibleTo({ created_by: 'fa' }, [], { uid: 'd1', role: 'admin' }, new Set()));
 
-  // I3: an edit can't quietly change a kept skill's variant.
-  eq(
-    'an edit keeps existing skills as they are and adds only new picks, with their variants',
-    editedSkills([{ skill_id: '1-1' }, { skill_id: '1-4' }], new Set(['1-4']), [
-      { id: '1-7', sections: ['Using a Manual Sphygmomanometer'] },
-      { id: '1-1', sections: ['Assessing Rectal Temperature'] },
-    ]),
-    [{ id: '1-1' }, { id: '1-7', sections: ['Using a Manual Sphygmomanometer'] }],
-  );
+  // The skill editor reads a saved skill back as it was saved.
+  const detail = {
+    id: '1-1',
+    chapter: 1,
+    chapterId: 'c1',
+    area: 'Vital Signs',
+    title: 'Assessing Body Temperature',
+    goal: '',
+    steps: [
+      { id: 'a', position: 1, stepNo: 1, section: null, text: 'Wash' },
+      { id: 'b', position: 2, stepNo: 2, section: 'Oral', text: 'Oral' },
+      { id: 'c', position: 3, stepNo: 2, section: 'Rectal', text: 'Rectal' },
+    ],
+    variants: { sections: ['Oral', 'Rectal'], alternatives: true, defaults: ['Oral'] },
+  };
+  const loaded = taskSelection({
+    id: 'k',
+    title: 'Temperature (Skill 1-1)',
+    skill_id: '1-1',
+    chapter: null,
+    checklist: [{ id: 's1', title: 'Wash', skill_step_id: 'a' }, { id: 's2', title: 'Rectal', skill_step_id: 'c' }],
+    graded: 0,
+  });
+  eq('a saved skill loads with its own name, task and steps', [loaded.title, loaded.task_id, loaded.steps?.length, loaded.locked], ['Temperature', 'k', 2, undefined]);
+  eq('its route is read from its steps', sectionsOf(loaded, detail), ['Rectal']);
+  check('…and it still follows the book', !isEdited(loaded, detail));
+  check('a reworded step is an edit', isEdited({ ...loaded, steps: [{ text: 'Wash hands' }, { text: 'Rectal' }] }, detail));
+  const own = taskSelection({ id: 'k9', title: 'Mine', skill_id: null, chapter: 3, checklist: [], graded: true });
+  eq('an own skill loads under its chapter, locked once graded', [own.own, chapterOf(own), own.locked], [true, 3, true]);
 
   console.log('\nroutes');
   const methods = (file: string) => {
@@ -273,7 +350,13 @@ async function main() {
   };
   eq('list and create', methods('route.ts'), ['GET', 'POST']);
   eq('read, edit and delete one', methods('[id]/route.ts'), ['GET', 'PATCH', 'DELETE']);
-  eq('assign one', methods('[id]/assign/route.ts'), ['POST']);
+  eq('assign one, and move its date', methods('[id]/assign/route.ts'), ['POST', 'PATCH']);
+  const caseSkills = readFileSync(join(__dirname, '../app/api/faculty/scenarios/[id]/skills/route.ts'), 'utf8');
+  eq(
+    "a patient case's skills are read and saved whole",
+    [...caseSkills.matchAll(/export async function (GET|POST|PUT|PATCH|DELETE)\b/g)].map((m) => m[1]),
+    ['GET', 'PUT'],
+  );
 
   console.log(failures ? `\n${failures} check(s) failed` : '\nAll checks passed');
   process.exit(failures ? 1 : 0);
