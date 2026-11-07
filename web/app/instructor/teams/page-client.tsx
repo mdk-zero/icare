@@ -13,6 +13,7 @@ import {
   faUsers,
   faCircleCheck,
   faTriangleExclamation,
+  faUserPlus,
   faFolderOpen,
   faBookOpen,
 } from "@fortawesome/free-solid-svg-icons";
@@ -36,6 +37,8 @@ import { loadingToast, toast } from "../../components/Toast";
 import { usePageData } from "../../lib/use-page-data";
 import { termStatus } from "../../lib/course-progress";
 import SectionGroups from "../../dean/student-management/SectionGroups";
+import RegisterStudentModal from "../../components/enroll/RegisterStudentModal";
+import BulkEnrollModal from "../../components/enroll/BulkEnrollModal";
 import { AppLinkCard } from "../../components/AppLink";
 import { isStudentDrag, leftTarget, readStudentDrag, startStudentDrag } from "../../dean/student-management/drag";
 import {
@@ -146,6 +149,8 @@ export default function TeamsClient() {
   }, [courseId, sectionId, editing]);
   const [query, setQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [registering, setRegistering] = useState(false);
+  const [bulkEnrolling, setBulkEnrolling] = useState(false);
   const [tableDropActive, setTableDropActive] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [anchorId, setAnchorId] = useState<string | null>(null);
@@ -226,6 +231,10 @@ export default function TeamsClient() {
   const hasGroups = sectionGroups.length > 0;
   // Editing a grouped section, the table is who is left to drag onto a card.
   const placing = editing && hasGroups;
+  // New students go into one of the instructor's own groups here (the
+  // students API needs one), so they land on their roster.
+  const enrollGroups = sectionGroups.map((t) => ({ id: t.id, name: t.name, size: t.members.length }));
+  const enrollBlocked = enrollGroups.length === 0 ? "Make a group in this section first; new students join one of your groups." : undefined;
   const shows = (s: Member) =>
     matchesFilter(s.id) &&
     (!q || s.name.toLowerCase().includes(q) || (details.get(s.id)?.email ?? "").toLowerCase().includes(q));
@@ -490,6 +499,29 @@ export default function TeamsClient() {
 
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <RosterModeToggle editing={editing} onChange={setEditing} />
+            {/* Adding students is part of editing the section's groups. */}
+            {editing && (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setBulkEnrolling(true)}
+                  disabled={!!enrollBlocked}
+                  title={enrollBlocked}
+                  className="disabled:cursor-not-allowed disabled:opacity-50 flex items-center gap-2 rounded-lg border border-gray-200 bg-surface px-4 py-2 text-sm font-medium text-gray-700 transition-all hover:border-brand-300 hover:text-brand-700"
+                >
+                  <FontAwesomeIcon icon={faUsers} className="h-3.5 w-3.5" />
+                  Bulk enroll
+                </button>
+                <button
+                  onClick={() => setRegistering(true)}
+                  disabled={!!enrollBlocked}
+                  title={enrollBlocked}
+                  className="disabled:cursor-not-allowed disabled:opacity-50 flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-brand-700"
+                >
+                  <FontAwesomeIcon icon={faUserPlus} className="h-3.5 w-3.5" />
+                  Register student
+                </button>
+              </div>
+            )}
           </div>
 
           {editing && (
@@ -717,6 +749,32 @@ export default function TeamsClient() {
         </>
       )}
 
+      {bulkEnrolling && section && (
+        <BulkEnrollModal
+          sectionId={section.id}
+          sectionName={section.name}
+          groups={enrollGroups}
+          asInstructor
+          onClose={() => setBulkEnrolling(false)}
+          onFinished={(created) => {
+            if (created > 0) void refreshRoster();
+            void refreshTeams();
+          }}
+        />
+      )}
+      {registering && section && (
+        <RegisterStudentModal
+          sectionId={section.id}
+          sectionName={section.name}
+          groups={enrollGroups}
+          asInstructor
+          onClose={() => setRegistering(false)}
+          onRegistered={() => {
+            void refreshRoster();
+            void refreshTeams();
+          }}
+        />
+      )}
     </div>
   );
 }
