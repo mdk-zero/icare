@@ -3353,18 +3353,23 @@ export type StudentSex = 'male' | 'female' | '';
  * account goes into that group's section. The temporary password comes back
  * too, with a `warning` when the invitation email didn't go out.
  */
+/**
+ * Registers a student into one of the instructor's groups, or with `teamId`
+ * null into one of their sections alone, under "Not in a group".
+ */
 export async function createFacultyStudent(
   name: string,
   email: string,
-  teamId: string,
+  teamId: string | null,
   sex: StudentSex = '',
+  sectionId?: string,
 ): Promise<{ data?: CreateStudentResponse; error?: string }> {
   try {
     const res = await apiFetch('/api/faculty/students', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ name, email, team_id: teamId, sex }),
+      body: JSON.stringify(teamId ? { name, email, team_id: teamId, sex } : { name, email, section_id: sectionId, sex }),
     });
 
     const json = await res.json() as { student?: CreateStudentResponse['student']; password?: string; warning?: string; error?: string };
