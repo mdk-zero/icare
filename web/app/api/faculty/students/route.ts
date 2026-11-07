@@ -112,11 +112,13 @@ export async function GET() {
 /**
  * POST { name, email, sex?, team_id?, section_id? }: register a student.
  *
- * An instructor registers into one of the groups they supervise (`team_id`,
- * required): the account goes into that group's section and the group in one
- * step, since a student in no group of theirs is not on their roster. An
- * admin may give a section alone. The temporary password is emailed to the
- * student and also returned, in case the email doesn't land.
+ * An instructor registers into one of the groups they supervise (`team_id`):
+ * the account goes into that group's section and the group in one step. Or
+ * into one of their own sections alone (`section_id`), where the student waits
+ * under "Not in a group" until the instructor places them; a bulk enroll does
+ * this for a row with no group. An admin may give a section alone too. The
+ * temporary password is emailed to the student and also returned, in case the
+ * email doesn't land.
  */
 export async function POST(request: NextRequest) {
   const session = await readSession();
@@ -151,12 +153,12 @@ export async function POST(request: NextRequest) {
   }
 
   const teamId = typeof team_id === 'string' && team_id.trim() ? team_id.trim() : null;
-  if (session.role === 'faculty' && !teamId) {
-    return NextResponse.json({ error: 'Choose one of your groups for the student' }, { status: 400 });
-  }
   const givenSectionId = typeof section_id === 'string' ? section_id.trim() : '';
   if (!teamId && !givenSectionId) {
-    return NextResponse.json({ error: 'Section is required' }, { status: 400 });
+    return NextResponse.json(
+      { error: session.role === 'faculty' ? 'Choose one of your groups or sections for the student' : 'Section is required' },
+      { status: 400 },
+    );
   }
 
   const trimmedName = name.trim();

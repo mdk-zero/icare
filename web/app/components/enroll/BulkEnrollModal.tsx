@@ -148,7 +148,8 @@ const inputClass =
  * their password so it can be handed over.
  *
  * An instructor enrolls into their own groups only: a named group must be one
- * of `groups`, and a student without one joins the smallest. No group is made.
+ * of `groups`, and a student without one goes into the section under "Not in
+ * a group". No group is made.
  */
 export default function BulkEnrollModal({
   sectionId,
@@ -171,10 +172,10 @@ export default function BulkEnrollModal({
   const [importNote, setImportNote] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [importing, setImporting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  // Students the file leaves without a group are grouped automatically: into
-  // the section's smallest groups when it has some, or into new groups of
-  // `groupSize` when it has none.
-  const [autoGroup, setAutoGroup] = useState(true);
+  // Students the file leaves without a group stay under "Not in a group"
+  // unless this is ticked: then they go into the section's smallest groups
+  // when it has some, or into new groups of `groupSize` when it has none.
+  const [autoGroup, setAutoGroup] = useState(false);
   const [groupSize, setGroupSize] = useState("2");
 
   const filled = rows.filter((r) => !isBlank(r));
@@ -495,9 +496,7 @@ export default function BulkEnrollModal({
 
           {asInstructor && filled.some((r) => !r.group.trim()) && (
             <p className="rounded-xl border border-hairline bg-subtle/50 p-4 text-sm text-gray-500">
-              {groups.length === 1
-                ? `Students with no group go into ${groups[0].name}.`
-                : `Students with no group join the smallest of your ${groups.length} groups, keeping them even.`}
+              Students with no group go under Not in a group, where you can drag them into one.
             </p>
           )}
 
