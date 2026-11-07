@@ -27,6 +27,7 @@
     "db:seed:review-accounts": "tsx scripts/seed-review-accounts.ts",
     "test:e2e": "playwright test",
     "test:e2e:report": "node tests/with-report.mjs npx playwright test",
+    "test:e2e:live": "node tests/live.mjs npx playwright test",
     "test:api": "node tests/api/run.mjs",
     "test:api:report": "node tests/with-report.mjs node tests/api/run.mjs"
   },
@@ -54,7 +55,7 @@
   },
   "devDependencies": {
     "@faker-js/faker": "file:tests/api/faker-stub",
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.65.0",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",

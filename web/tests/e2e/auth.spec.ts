@@ -22,8 +22,8 @@ test.describe('Sign-in page', () => {
     await expect(page.getByRole('textbox').first()).toBeVisible();
   });
 
-  // Signing in through the form lives with the signed-in tests of its role
-  // (formSignInTest in helpers.ts), so it can't sign them out mid-run.
+  // Signing in through the form is TC-AUTH-01 in auth.setup.ts, whose session
+  // the signed-in tests then share.
 });
 
 test.describe('Signed-out access', () => {

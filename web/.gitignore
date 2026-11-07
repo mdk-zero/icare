@@ -67,3 +67,6 @@ firebase-service-account.json
 .env.test
 /test-results/
 /playwright-report/
+# Playwright's saved sign-ins, and test screenshots (they show real names)
+/tests/.auth/
+/qa/evidence/

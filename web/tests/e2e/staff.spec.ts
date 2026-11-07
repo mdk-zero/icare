@@ -1,15 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
-import { formSignInTest, requireAccount, signIn } from './helpers';
+import { signedInAs, signIn } from './helpers';
+import { chooseAction } from './qa-helpers';
 
 test.describe('Dean portal', () => {
-  // In order: each test's sign-in replaces the one before it.
-  test.describe.configure({ mode: 'default' });
+  signedInAs('admin');
   test.beforeEach(async ({ page }) => {
-    requireAccount('admin');
     await signIn(page, 'admin');
   });
-
-  formSignInTest('admin');
 
   test('has no Users page any more', async ({ page }) => {
     await expect(page.getByRole('navigation').first().getByRole('link', { name: 'Users', exact: true })).toHaveCount(0);
@@ -133,8 +130,7 @@ test.describe('Program Chairs page', () => {
     const row = page.getByRole('row', { name: /Test Chair/ });
     await expect(row).toBeVisible();
 
-    await row.getByRole('button', { name: 'Actions for Test Chair' }).click();
-    await page.getByRole('menuitem', { name: 'Edit Account' }).click();
+    await chooseAction(row, 'Edit Account');
     const edit = page.getByRole('dialog', { name: 'Edit Program Chair Account' });
     await expect(edit.getByLabel(/Gender/)).toHaveValue('female');
     await edit.getByLabel('Full Name').fill('Renamed Chair');
@@ -142,8 +138,7 @@ test.describe('Program Chairs page', () => {
     const renamed = page.getByRole('row', { name: /Renamed Chair/ });
     await expect(renamed).toBeVisible();
 
-    await renamed.getByRole('button', { name: 'Actions for Renamed Chair' }).click();
-    await page.getByRole('menuitem', { name: 'Delete Account' }).click();
+    await chooseAction(renamed, 'Delete Account');
     await page.getByRole('button', { name: 'Delete Account' }).click();
     await expect(renamed).toHaveCount(0);
   });
@@ -159,14 +154,10 @@ test.describe('Program Chairs page', () => {
 });
 
 test.describe('Instructor portal', () => {
-  // In order: each test's sign-in replaces the one before it.
-  test.describe.configure({ mode: 'default' });
+  signedInAs('faculty');
   test.beforeEach(async ({ page }) => {
-    requireAccount('faculty');
     await signIn(page, 'faculty');
   });
-
-  formSignInTest('faculty');
 
   test('dashboard loads', async ({ page }) => {
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { chooseAction } from './qa-helpers';
 
 /**
  * The Dean's instructor accounts. These do create, edit and delete, unlike the
@@ -8,11 +9,6 @@ import { expect, test, type Page } from '@playwright/test';
 
 function firstRow(page: Page) {
   return page.locator('tbody tr').first();
-}
-
-async function chooseAction(page: Page, name: string) {
-  await firstRow(page).getByRole('button', { name: /^Actions for / }).click();
-  await page.getByRole('menuitem', { name }).click();
 }
 
 test.describe('Dean: instructor accounts', () => {
@@ -35,8 +31,7 @@ test.describe('Dean: instructor accounts', () => {
 
     const row = page.locator('tbody tr', { hasText: 'test.instructor@example.com' });
     await expect(row).toBeVisible();
-    await row.getByRole('button', { name: /^Actions for / }).click();
-    await page.getByRole('menuitem', { name: 'Edit Account' }).click();
+    await chooseAction(row, 'Edit Account');
     await expect(page.getByLabel('Gender')).toHaveValue('female');
   });
 
@@ -49,13 +44,12 @@ test.describe('Dean: instructor accounts', () => {
 
     const row = page.locator('tbody tr', { hasText: 'no.gender@example.com' });
     await expect(row).toBeVisible();
-    await row.getByRole('button', { name: /^Actions for / }).click();
-    await page.getByRole('menuitem', { name: 'Edit Account' }).click();
+    await chooseAction(row, 'Edit Account');
     await expect(page.getByLabel('Gender')).toHaveValue('');
   });
 
   test('edits one', async ({ page }) => {
-    await chooseAction(page, 'Edit Account');
+    await chooseAction(firstRow(page), 'Edit Account');
     await page.getByLabel('Full Name').fill('Renamed Instructor');
     await page.getByLabel('Gender').selectOption('female');
     await page.getByRole('button', { name: 'Save Changes' }).click();
@@ -64,14 +58,13 @@ test.describe('Dean: instructor accounts', () => {
 
     const row = page.locator('tbody tr', { hasText: 'Renamed Instructor' });
     await expect(row).toBeVisible();
-    await row.getByRole('button', { name: /^Actions for / }).click();
-    await page.getByRole('menuitem', { name: 'Edit Account' }).click();
+    await chooseAction(row, 'Edit Account');
     await expect(page.getByLabel('Full Name')).toHaveValue('Renamed Instructor');
     await expect(page.getByLabel('Gender')).toHaveValue('female');
   });
 
   test('will not save an empty name', async ({ page }) => {
-    await chooseAction(page, 'Edit Account');
+    await chooseAction(firstRow(page), 'Edit Account');
     await page.getByLabel('Full Name').fill('   ');
     await page.getByRole('button', { name: 'Save Changes' }).click();
 
@@ -81,7 +74,7 @@ test.describe('Dean: instructor accounts', () => {
 
   test('deletes one, after saying what that changes', async ({ page }) => {
     const email = (await firstRow(page).locator('td').first().locator('p').nth(1).textContent())!;
-    await chooseAction(page, 'Delete Account');
+    await chooseAction(firstRow(page), 'Delete Account');
 
     const dialog = page.getByRole('heading', { name: /^Delete .* account\?$/ }).locator('xpath=ancestor::div[contains(@class, "max-w-md")]');
     await expect(dialog).toContainText(email);
@@ -91,7 +84,7 @@ test.describe('Dean: instructor accounts', () => {
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(page.getByRole('cell', { name: new RegExp(email) })).toBeVisible();
 
-    await chooseAction(page, 'Delete Account');
+    await chooseAction(firstRow(page), 'Delete Account');
     await dialog.getByRole('button', { name: 'Delete Account' }).click();
     await expect(page.getByText(/account was deleted/)).toBeVisible();
     await expect(page.getByRole('cell', { name: new RegExp(email) })).toHaveCount(0);

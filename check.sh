@@ -147,7 +147,8 @@ secret_scan() {
     'AWS access key||\bAKIA[0-9A-Z]{16}\b'
     'Slack token||xox[baprs]-[A-Za-z0-9-]{10,}'
     'Anthropic/OpenAI key||\bsk-(ant-)?[A-Za-z0-9_-]{20,}'
-    'hardcoded credential|-i|(password|passwd|secret|api_?key|auth_?token)["'\'']?[[:space:]]*[:=][[:space:]]*["'\''][^"'\'']{8,}["'\'']'
+    # A value with a space in it is prose ("Show password", a message), not a credential.
+    'hardcoded credential|-i|(password|passwd|secret|api_?key|auth_?token)["'\'']?[[:space:]]*[:=][[:space:]]*["'\''][^"'\''[:space:]]{8,}["'\'']'
   )
   local f found=0 rule rest name flag pattern hits
   while IFS= read -r f; do
