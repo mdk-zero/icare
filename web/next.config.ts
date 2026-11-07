@@ -1,6 +1,32 @@
 import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
+import { execSync } from "child_process";
 import path from "path";
+
+/**
+ * Which web code this build is, for UpdateToast: the last commit that changed
+ * web/. Vercel deploys every push to main, docs- and mobile-only ones too, and
+ * those change nothing a browser runs, so they shouldn't ask anyone to
+ * refresh. Falls back to the pushed commit if git can't say, and to the
+ * deployment off git; empty off Vercel, which turns the check off. (In a
+ * shallow clone with no web change in reach, git names the clone's oldest
+ * commit, which costs at most an extra prompt.)
+ */
+function webBuildId(): string {
+  const commit = process.env.VERCEL_GIT_COMMIT_SHA;
+  if (!commit) return process.env.VERCEL_DEPLOYMENT_ID || "";
+  try {
+    const lastWebChange = execSync("git log -1 --format=%H -- .", {
+      cwd: __dirname,
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .toString()
+      .trim();
+    return lastWebChange || commit;
+  } catch {
+    return commit;
+  }
+}
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -10,12 +36,12 @@ const nextConfig: NextConfig = {
   // `next dev` is live leaves the dev server serving a half-updated CSS chunk.
   distDir: process.env.NEXT_DIST_DIR || ".next",
   env: {
-    // Which code this build is, baked into the browser bundle and the
-    // server alike. /api/version answers with the live deployment's, and an
-    // open tab holding an older one offers a refresh (UpdateToast). The
-    // commit, so a redeploy of the same code (an env var change) prompts
-    // nobody. Empty off Vercel, which turns the check off.
-    ICARE_BUILD_ID: process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || "",
+    // Baked into the browser bundle and the server alike. /api/version
+    // answers with the live deployment's, and an open tab holding an older
+    // one offers a refresh (UpdateToast). A commit rather than the
+    // deployment, so a redeploy of the same code (an env var change) prompts
+    // nobody either.
+    ICARE_BUILD_ID: webBuildId(),
   },
   typescript: {
     // check.sh type-checks first, with tsconfig.check.json, and its build

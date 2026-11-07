@@ -82,6 +82,8 @@ export default function UpdateToast() {
     } catch {
       // Without storage it can come back on the next check, which is fine.
     }
+    // Keep checking: this build stays waved off, but a later one still shows.
+    found.current = false;
     setLatest(null);
   };
 
