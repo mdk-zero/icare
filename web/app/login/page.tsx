@@ -67,13 +67,6 @@ export default function LoginPage() {
   const [googleButtonWidth, setGoogleButtonWidth] = useState(0);
   const [demoOpen, setDemoOpen] = useState(false);
 
-  useEffect(() => {
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, []);
-
   const redirectAfterAuth = useCallback(
     (user: User) => {
       // The web has no student portal; students sign in on the mobile app.

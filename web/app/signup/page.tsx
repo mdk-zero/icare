@@ -112,13 +112,6 @@ export default function ContactUsPage() {
     void fetch("/api/auth/google/pending", { method: "DELETE" });
   };
 
-  useEffect(() => {
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, []);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
