@@ -77,7 +77,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="f6" edge="1" parent="1" source="P0" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.0469;exitY=0;exitDx=0;exitDy=0;entryX=1;entryY=0.7778;entryDx=0;entryDy=0;" target="DEAN" value="ANALYTICS AND COMPETENCY REPORT">
+        <mxCell id="f6" edge="1" parent="1" source="P0" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.0469;exitY=0;exitDx=0;exitDy=0;entryX=1;entryY=0.7778;entryDx=0;entryDy=0;" target="DEAN" value="ANALYTICS REPORT">
           <mxGeometry relative="1" x="0.2042" as="geometry">
             <mxPoint y="-8" as="offset" />
             <Array as="points">
@@ -210,7 +210,7 @@
             <mxPoint x="680" y="209" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="f19" edge="1" parent="1" source="DEAN" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.3125;exitY=1.0;exitDx=0;exitDy=0;entryX=0.0;entryY=0.4091;entryDx=0;entryDy=0;" target="P0" value="CURRICULUM FILE AND REVISION">
+        <mxCell id="f19" edge="1" parent="1" source="DEAN" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.3125;exitY=1.0;exitDx=0;exitDy=0;entryX=0.0;entryY=0.4091;entryDx=0;entryDy=0;" target="P0" value="CURRICULUM FILE">
           <mxGeometry relative="1" x="0.2213" as="geometry">
             <mxPoint y="-8" as="offset" />
             <Array as="points">
@@ -218,12 +218,29 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="f20" edge="1" parent="1" source="P0" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.0;exitY=0.3182;exitDx=0;exitDy=0;entryX=0.5625;entryY=1.0;entryDx=0;entryDy=0;" target="DEAN" value="ANALYZED CURRICULUM">
+        <mxCell id="f20" edge="1" parent="1" source="P0" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.0;exitY=0.3182;exitDx=0;exitDy=0;entryX=0.5625;entryY=1.0;entryDx=0;entryDy=0;" target="DEAN" value="FINALIZED CURRICULUM">
           <mxGeometry relative="1" x="-0.1972" as="geometry">
             <mxPoint y="-8" as="offset" />
             <Array as="points">
               <mxPoint x="150" y="300" />
             </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="rmDPlAf_WmBvrGlnFG6B-1" edge="1" parent="1" source="DEAN" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.138;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="P0" value="CURRICULUM REVISION">
+          <mxGeometry relative="1" x="0.3257" y="10" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="82.1" y="340" />
+            </Array>
+            <mxPoint x="400" y="310" as="sourcePoint" />
+            <mxPoint x="470" y="360" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="COb2lUtuK9Bfw-Ju1GIA-1" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;entryX=0.75;entryY=1;entryDx=0;entryDy=0;" target="DEAN" value="COMPETENCY REPORT">
+          <mxGeometry relative="1" x="-0.0504" y="-11" as="geometry">
+            <mxPoint as="offset" />
+            <mxPoint x="470" y="280" as="sourcePoint" />
+            <mxPoint x="350" y="200" as="targetPoint" />
           </mxGeometry>
         </mxCell>
       </root>
