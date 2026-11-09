@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!--
+      The student web app's page (web/app/lib/student-web.ts). Expo uses this
+      file only for web builds; scripts/publish-web.mjs serves the result at
+      /student on the web portal, which is why the links below start there.
+    -->
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <!-- maximum-scale stops iPhones zooming into a focused input; pinch zoom still works there. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+    <title>iCARE++</title>
+    <meta name="theme-color" content="#1B6B7B" />
+    <meta name="description" content="iCARE++ for nursing students, in your browser." />
+    <link rel="manifest" href="/student/manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="/student/icon-192.png" />
+    <link rel="apple-touch-icon" href="/student/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="iCARE++" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        overflow: hidden;
+        overscroll-behavior: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+  <link rel="icon" href="/student/favicon.ico"/></head>
+
+  <body>
+    <noscript>iCARE++ needs JavaScript. Turn it on in your browser's settings, then reload.</noscript>
+    <div id="root"></div>
+  <script src="/student/_expo/static/js/web/__expo-metro-runtime-8c088df87a31e4e6accd81c554ec290d.js" defer></script><script src="/student/_expo/static/js/web/__common-b073189d4d5065989ef42ca9afafaad8.js" defer></script><script src="/student/_expo/static/js/web/entry-5186d9d6c707df74e501d93ac2066336.js" defer></script>
+</body>
+</html>
