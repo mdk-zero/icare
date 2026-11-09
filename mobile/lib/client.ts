@@ -20,8 +20,14 @@ import { AppState, AppStateStatus, Platform } from "react-native";
 
 // Android emulators reach the host machine at 10.0.2.2, not localhost.
 // Physical devices still need EXPO_PUBLIC_API_URL set to the host's LAN IP.
+// The student web app (scripts/publish-web.mjs) is built without one and is
+// served by the web portal itself, so it calls the site it was loaded from.
 const DEFAULT_API_URL =
-  Platform.OS === "android" ? "http://10.0.2.2:3000" : "http://localhost:3000";
+  Platform.OS === "web" && typeof window !== "undefined"
+    ? window.location.origin
+    : Platform.OS === "android"
+      ? "http://10.0.2.2:3000"
+      : "http://localhost:3000";
 
 // `||` not `??`: an EXPO_PUBLIC_API_URL left empty in .env would otherwise
 // override the platform default with "" and every request would fail.
@@ -345,6 +351,25 @@ async function parseResponse<T>(response: Response): Promise<T> {
     throw new ApiError(message, response.status, json);
   }
   return json as T;
+}
+
+/**
+ * Adds a local image to a multipart form. React Native's FormData takes the
+ * file as a {uri,name,type} object and reads it itself; a browser needs the
+ * bytes, so on the web the picker's blob: or data: URL is read first.
+ */
+export async function appendFile(
+  form: FormData,
+  field: string,
+  file: { uri: string; name: string; type: string },
+): Promise<void> {
+  if (Platform.OS === "web") {
+    const blob = await (await fetch(file.uri)).blob();
+    form.append(field, new File([blob], file.name, { type: file.type }));
+    return;
+  }
+  // The DOM typings only know about Blob, hence the cast.
+  form.append(field, file as unknown as Blob);
 }
 
 /** A photo over a slow campus connection needs more room than a JSON call. */

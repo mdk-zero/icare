@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { BackHandler, Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { BackHandler, Image, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -58,6 +58,12 @@ export default function WelcomeScreen() {
 
   const openSheet = () => {
     if (!agreed) return;
+    // The student web app has nothing to ask for here: a browser asks for
+    // the camera when a photo is taken, and notifications come by email.
+    if (Platform.OS === "web") {
+      void goToSignIn();
+      return;
+    }
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSheetOpen(true);
     if (reduceMotion) {

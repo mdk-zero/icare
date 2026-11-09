@@ -346,6 +346,8 @@ export function AppHeader({
                 ]}
                 onPress={() => router.push("/notifications")}
                 hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={notificationCount > 0 ? `Notifications, ${notificationCount} unread` : "Notifications"}
               >
                 <View style={styles.notificationIconBox}>
                   <FontAwesome6 name="bell" size={17} color="#FFFFFF" />

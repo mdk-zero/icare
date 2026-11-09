@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { DarkTheme, DefaultTheme, ThemeProvider, Stack, useRouter } from 'expo-router';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -8,10 +8,14 @@ import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { ThemePreferenceProvider } from '@/hooks/useThemePreference';
 import { useUpdatePrompt } from '@/hooks/useUpdatePrompt';
+import { useWebUpdatePrompt } from '@/hooks/useWebUpdatePrompt';
 import { BootLoader } from '@/components/ui/BootLoader';
 import { ConnectionToast } from '@/components/ui/ConnectionToast';
+import { StudentWebOff } from '@/components/web/StudentWebOff';
+import { WebAlertHost } from '@/components/web/WebAlertHost';
 import { startConnectivityMonitor } from '@/lib/client';
 import { hasOnboarded } from '@/lib/permissions';
+import { isStudentWeb, studentWebOn } from '@/lib/student-web';
 import { configureSystemNotifications, onSystemNotificationTap } from '@/lib/system-notify';
 
 function AuthStack() {
@@ -77,6 +81,11 @@ function AuthNavigator() {
   const [minDisplayElapsed, setMinDisplayElapsed] = useState(false);
   // Whether this device has seen the welcome screen; null until read.
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
+  // The student web app only: whether an Admin has it on (lib/student-web),
+  // null until read. Always on for the phone app, and for a signed-in
+  // student: the server signs web sessions out while it's off.
+  const [webSwitch, setWebSwitch] = useState<boolean | null>(null);
+  const webOn = !isStudentWeb || isAuthenticated ? true : webSwitch;
 
   useEffect(() => {
     const timer = setTimeout(() => setMinDisplayElapsed(true), MIN_BOOT_DISPLAY_MS);
@@ -84,17 +93,27 @@ function AuthNavigator() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Asked at start and again whenever nobody is signed in: turning it off
+  // signs web students out, and they should land on why, not a sign-in form.
+  useEffect(() => {
+    if (!isStudentWeb || isBootstrapping || isAuthenticated) return;
+    void studentWebOn().then(setWebSwitch);
+  }, [isBootstrapping, isAuthenticated]);
+
   // A tapped notification banner opens the feed.
   useEffect(() => onSystemNotificationTap(() => router.push('/notifications')), [router]);
 
-  const showBootLoader = isBootstrapping || !minDisplayElapsed || onboarded === null;
+  const showBootLoader = isBootstrapping || !minDisplayElapsed || onboarded === null || webOn === null;
   // Accounts an admin provisioned carry a temporary password. The web app
   // forces the change before anything else; mobile used to let them straight
   // in and keep the temp password indefinitely.
   const mustChangePassword = Boolean(user?.force_password_change);
 
   useEffect(() => {
-    if (!showBootLoader) {
+    // Nothing to route while the web version's "turned off" screen stands
+    // in for the navigator: in a browser, routing with no navigator mounted
+    // reloads the page, and the check that follows routes again.
+    if (!showBootLoader && webOn) {
       if (!isAuthenticated) {
         // First launch: the welcome screen asks for permissions, then hands over to sign-in.
         router.replace(onboarded ? '/login' : '/welcome');
@@ -102,7 +121,7 @@ function AuthNavigator() {
         router.replace('/change-password');
       }
     }
-  }, [showBootLoader, isAuthenticated, mustChangePassword, onboarded, router]);
+  }, [showBootLoader, webOn, isAuthenticated, mustChangePassword, onboarded, router]);
 
   // Only gate on the initial session restore; a login attempt in progress
   // must not unmount the login screen (it would wipe form and error state).
@@ -110,19 +129,31 @@ function AuthNavigator() {
     return <BootLoader />;
   }
 
+  if (!webOn && !isAuthenticated) {
+    return <StudentWebOff onCheckAgain={async () => setWebSwitch(await studentWebOn())} />;
+  }
+
   return <AuthStack />;
 }
 
 // Consumes useTheme, so it must render inside ThemePreferenceProvider for the
 // nav theme and status bar to follow an explicit Light/Dark override.
+/**
+ * The student web app on a wide window: the phone layout stretched across a
+ * desktop screen reads badly, so it sits in a column no wider than a tablet
+ * (the Library's video player already stops at 900).
+ */
+const WEB_COLUMN = Platform.OS === 'web' ? ({ width: '100%', maxWidth: 900, alignSelf: 'center', overflow: 'hidden' } as const) : null;
+
 function ThemedApp() {
-  const { scheme, isDark } = useTheme();
+  const { scheme, isDark, Palette } = useTheme();
 
   // App-lifetime reachability heartbeat: without it the app only learns it is
   // offline when a request the student made happens to fail.
   useEffect(() => startConnectivityMonitor(), []);
   useEffect(() => configureSystemNotifications(), []);
   useUpdatePrompt();
+  useWebUpdatePrompt();
 
   return (
     <ThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
@@ -130,9 +161,12 @@ function ThemedApp() {
       {/* The toast is a sibling of the navigator so it floats over every
           screen — boot loader and login included — instead of each one
           having to make room for it. */}
-      <View style={{ flex: 1 }}>
-        <AuthNavigator />
-        <ConnectionToast />
+      <View style={{ flex: 1, backgroundColor: WEB_COLUMN ? Palette.border : undefined }}>
+        <View style={[{ flex: 1 }, WEB_COLUMN, WEB_COLUMN && { backgroundColor: Palette.background }]}>
+          <AuthNavigator />
+          <ConnectionToast />
+        </View>
+        <WebAlertHost />
       </View>
     </ThemeProvider>
   );

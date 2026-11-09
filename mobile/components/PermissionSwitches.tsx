@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, AppState, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert, AppState, Platform, StyleSheet, Switch, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
-import { getToken } from "@/lib/client";
+import { getToken, isNetworkError } from "@/lib/client";
+import { emailNotificationsOn, setEmailNotifications } from "@/lib/student-web";
 import { registerForPush, unregisterFromPush } from "@/lib/push";
 import {
   notificationPermission,
@@ -42,8 +43,71 @@ function askForSettings(what: string, turningOn: boolean) {
  * in Profile show them. A switch reads the phone's permission (and, for
  * notifications, the user's own on/off), asks the phone when turned on, and
  * sends the user to Settings where only the phone can make the change.
+ *
+ * The student web app has neither: a browser gets no push and asks for the
+ * camera itself when a photo is taken. Its notifications come by email, with
+ * that switch in their place (lib/student-web).
  */
 export default function PermissionSwitches({ inset = 0 }: { inset?: number }) {
+  return Platform.OS === "web" ? <EmailSwitch inset={inset} /> : <PhoneSwitches inset={inset} />;
+}
+
+function EmailSwitch({ inset }: { inset: number }) {
+  const { Palette, Accent } = useTheme();
+  const styles = useMemo(() => createStyles(Palette, inset), [Palette, inset]);
+  const [on, setOn] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    emailNotificationsOn()
+      .then((value) => !cancelled && setOn(value))
+      .catch(() => !cancelled && setOn(null));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const toggle = async (next: boolean) => {
+    setBusy(true);
+    setOn(next);
+    try {
+      setOn(await setEmailNotifications(next));
+    } catch (err) {
+      setOn(!next);
+      Alert.alert(
+        "Couldn't change it",
+        isNetworkError(err) ? "You appear to be offline. Try again once you reconnect." : "Please try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <View style={styles.row}>
+      <View style={[styles.icon, { backgroundColor: Accent.amber.bg }]}>
+        <Ionicons name="mail-outline" size={18} color={Accent.amber.fg} />
+      </View>
+      <View style={styles.text}>
+        <Text style={styles.title}>Email notifications</Text>
+        <Text style={styles.detail}>
+          {"A browser can't notify you, so each new grade, case or message is also emailed to you while you use iCARE++ on the web."}
+        </Text>
+      </View>
+      <Switch
+        value={!!on}
+        onValueChange={(value) => void toggle(value)}
+        disabled={on === null || busy}
+        trackColor={{ false: Palette.border, true: Palette.primary }}
+        thumbColor="#FFFFFF"
+        accessibilityLabel="Email notifications"
+      />
+    </View>
+  );
+}
+
+function PhoneSwitches({ inset }: { inset: number }) {
   const { Palette, Accent } = useTheme();
   const styles = useMemo(() => createStyles(Palette, inset), [Palette, inset]);
   const [state, setState] = useState<SwitchState>({ notifications: null, camera: null });

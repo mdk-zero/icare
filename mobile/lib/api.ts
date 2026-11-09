@@ -8,6 +8,7 @@
 import {
   api,
   apiUpload,
+  appendFile,
   cachedGet,
   CachedResult,
   clearCache,
@@ -46,7 +47,11 @@ export interface User {
 export async function login(email: string, password: string, rememberMe: boolean = true): Promise<User> {
   const result = await api<{ user: User; sessionToken: string }>('/api/auth/login', {
     method: 'POST',
-    body: { email, password },
+    // The student web app says so: the server lets students only, and only
+    // while an Admin has it turned on (web/app/lib/student-web.ts).
+    body: Platform.OS === 'web'
+      ? { email, password, client: 'student-web', remember: rememberMe }
+      : { email, password },
     auth: false,
   });
   // Cached GETs are keyed by path only, not by user — drop any reads left
@@ -800,7 +805,7 @@ export const SUPPORT_MAX_IMAGES = 4;
  */
 export async function uploadSupportImage(uri: string, name: string): Promise<SupportAttachment> {
   const form = new FormData();
-  form.append('file', { uri, name, type: 'image/jpeg' } as unknown as Blob);
+  await appendFile(form, 'file', { uri, name, type: 'image/jpeg' });
   const result = await apiUpload<{ attachment: SupportAttachment }>('/api/support/attachments', form);
   return result.attachment;
 }
@@ -818,7 +823,7 @@ export async function sendSupportRequest(input: {
 }): Promise<void> {
   await api<{ ok: true }>('/api/support', {
     method: 'POST',
-    body: { ...input, client: `Mobile app · ${Platform.OS}` },
+    body: { ...input, client: Platform.OS === 'web' ? 'Student web app' : `Mobile app · ${Platform.OS}` },
   });
 }
 
@@ -855,9 +860,7 @@ export async function completeForcedPasswordChange(
  */
 export async function uploadAvatar(uri: string): Promise<string> {
   const form = new FormData();
-  // React Native's FormData takes a file as this {uri,name,type} shape; the
-  // DOM typings only know about Blob, hence the cast.
-  form.append('avatar', { uri, name: 'avatar.jpg', type: 'image/jpeg' } as unknown as Blob);
+  await appendFile(form, 'avatar', { uri, name: 'avatar.jpg', type: 'image/jpeg' });
   const result = await apiUpload<{ path: string }>('/api/users/avatar', form);
   return result.path;
 }

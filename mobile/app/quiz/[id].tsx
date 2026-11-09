@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert, AppState, TextInput, type ScrollViewInstance } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, TouchableOpacity, Alert, AppState, Platform, TextInput, type ScrollViewInstance } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useLocalSearchParams, useNavigation, usePreventRemove, useRouter } from 'expo-router';
 import { setStatusBarHidden } from 'expo-status-bar';
@@ -348,8 +348,21 @@ export default function QuizInterfaceScreen() {
     );
   });
 
+  // The student web app: closing or reloading the tab would drop the quiz
+  // with nothing submitted, so the browser asks first.
+  useEffect(() => {
+    if (!taking || Platform.OS !== 'web') return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [taking]);
+
   // Home button or app switcher. Only 'background' counts: pulling down the
   // notification shade or an incoming call only makes the app 'inactive'.
+  // In a browser, switching tabs or minimizing counts the same way.
   useEffect(() => {
     if (!taking) return;
     const sub = AppState.addEventListener('change', (status) => {
