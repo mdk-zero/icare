@@ -13,6 +13,14 @@ export const SESSION_COOKIE = 'icare_session';
 /** Each platform holds one live session per account (migration 079). */
 export type SessionPlatform = 'web' | 'mobile';
 
+/**
+ * The student web app (the mobile app built for browsers, served at /student).
+ * Its sessions hold the web slot, since students have no portal there, carry
+ * a bearer token like the app's, and stop working while an Admin has the
+ * student web turned off (lib/student-web-server).
+ */
+export type SessionClient = 'student-web';
+
 export interface SessionPayload {
   uid: string;
   role: UserRole;
@@ -29,6 +37,8 @@ export interface SessionPayload {
    * session ends when its last tab closes (endsWithTab).
    */
   remember?: boolean;
+  /** Set on student web app sessions; absent everywhere else. */
+  client?: SessionClient;
   /** When the token was issued, in seconds (the standard claim). */
   iat?: number;
   /**
@@ -60,7 +70,7 @@ export function endsWithTab(claims: SessionPayload): boolean {
 export async function signSession(payload: SessionPayload): Promise<string> {
   // Only the identity claims: callers pass a read session back in, and its
   // old iat must not ride along. The sign-in it belongs to does.
-  const { uid, role, email, sessionId, platform, remember } = payload;
+  const { uid, role, email, sessionId, platform, remember, client } = payload;
   return await new SignJWT({
     uid,
     role,
@@ -69,6 +79,7 @@ export async function signSession(payload: SessionPayload): Promise<string> {
     ...(sessionId ? { sid: sessionId } : {}),
     ...(platform ? { pf: platform } : {}),
     ...(remember === undefined ? {} : { rem: remember }),
+    ...(client ? { cl: client } : {}),
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -93,6 +104,7 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
         sessionId: typeof payload.sid === 'string' ? payload.sid : undefined,
         platform: payload.pf === 'web' || payload.pf === 'mobile' ? payload.pf : undefined,
         remember: typeof payload.rem === 'boolean' ? payload.rem : undefined,
+        client: payload.cl === 'student-web' ? 'student-web' : undefined,
       };
     }
     return null;

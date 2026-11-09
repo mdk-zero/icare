@@ -4,6 +4,7 @@ import { getAdminScope } from './admin-scope';
 import { manageableSectionIds } from './teams';
 import { activityOfferings } from './activity-course';
 import { viewerDeanId } from './dean-scope';
+import { insertNotifications } from './notify';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -338,7 +339,7 @@ export async function notifyPublished(
     const students = studentIds.map((id) => ({ id }));
     if (!students.length) return;
     const noun = { video: 'video', note: 'note', pdf: 'handout', slides: 'presentation', link: 'link' }[material.kind];
-    const { error: insertError } = await supabase.from('notifications').insert(
+    const { error: insertError } = await insertNotifications(supabase,
       students.map((s) => ({
         user_id: s.id as string,
         type: 'system',

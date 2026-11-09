@@ -10,6 +10,7 @@ import {
   type VitalSignsInput,
 } from '@/app/lib/vitals/rules';
 import { isPatientAssigned } from '@/app/lib/assigned-patients';
+import { insertNotifications } from '@/app/lib/notify';
 
 export async function GET(request: NextRequest) {
   const session = await readSession();
@@ -223,7 +224,7 @@ async function notifyRosterFaculty(
       },
     }));
 
-    const { error } = await supabase.from('notifications').insert(rows);
+    const { error } = await insertNotifications(supabase, rows);
     if (error) console.error('vitals anomaly notification insert failed', error);
   } catch (err) {
     console.error('vitals anomaly notification failed', err);

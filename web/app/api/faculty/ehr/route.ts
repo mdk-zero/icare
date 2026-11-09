@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { viewerDeanId } from '@/app/lib/dean-scope';
+import { insertNotifications } from '@/app/lib/notify';
 
 const TABLES = { tpr: 'tpr_records', ivf: 'ivf_records', note: 'progress_notes' } as const;
 type EhrType = keyof typeof TABLES;
@@ -106,7 +107,7 @@ export async function PATCH(request: NextRequest) {
 
     const patientName =
       (note as unknown as { patients: { name: string } | null }).patients?.name ?? 'a patient';
-    const { error: notifyError } = await supabase.from('notifications').insert({
+    const { error: notifyError } = await insertNotifications(supabase, {
       user_id: note.author_id,
       type: 'performance_validated',
       title: 'Progress note reviewed',

@@ -20,6 +20,7 @@ import { ownsRow, viewerDeanId } from './dean-scope';
 import { isMissingKindColumn } from './scenario-kind';
 import { autoSplit, gradingSignature, readStoredSplit, type GradingSplit } from './course-grading';
 import { MigrationNeeded, isMissingGradingSchema, normaliseRequirement, requirementQuery } from './course-schema';
+import { insertNotifications } from './notify';
 
 export { parseCourse, parseTerm, type CourseInput, type TermInput } from './course-progress';
 export {
@@ -495,7 +496,7 @@ export async function notifyCourseAssigned(
   const next = sectionNames.length
     ? 'Set up its requirements checklist.'
     : 'Add the sections you teach it in, then set up its requirements checklist.';
-  const { error } = await supabase.from('notifications').insert({
+  const { error } = await insertNotifications(supabase, {
     user_id: facultyId,
     type: 'assignment_created',
     title: 'New course assignment',

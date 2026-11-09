@@ -4,6 +4,7 @@ import { sendAccessRequestEmail } from '@/app/lib/auth/email';
 import { clientIp, consumeRateLimit } from '@/app/lib/auth/rate-limit';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { DEV_TEAM_EMAILS } from '@/app/lib/dev-team';
+import { insertNotifications } from '@/app/lib/notify';
 
 const MAX_MESSAGE = 2000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
     const { data: admins, error } = await supabase.from('users').select('id').eq('role', 'super_admin');
     if (error) throw error;
     if (admins?.length) {
-      const { error: insertError } = await supabase.from('notifications').insert(
+      const { error: insertError } = await insertNotifications(supabase,
         admins.map((admin) => ({
           user_id: admin.id,
           type: 'system' as const,

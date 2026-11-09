@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { mobileAppTarget } from '@/app/lib/mobile-app';
+import { studentWebEnabled } from '@/app/lib/student-web-server';
+import { STUDENT_WEB_PATH } from '@/app/lib/student-web';
 
 /**
  * The app download link every email and portal hands out: redirects to the
@@ -7,7 +9,15 @@ import { mobileAppTarget } from '@/app/lib/mobile-app';
  * have ever signed in. No caching, so changing the variable takes effect on
  * the next deployment without a stale redirect lingering in browsers.
  */
-export function GET(request: NextRequest) {
+export async function GET(request: NextRequest) {
+  const iPhone = /iPhone|iPad|iPod/i.test(request.headers.get('user-agent') ?? '');
+  // No iOS build yet, so iPhones get the student web app while an Admin has
+  // it on (lib/student-web).
+  if (iPhone && (await studentWebOn())) {
+    const response = NextResponse.redirect(new URL(STUDENT_WEB_PATH, request.url), 302);
+    response.headers.set('Cache-Control', 'no-store');
+    return response;
+  }
   const target = mobileAppTarget();
   if (!target) {
     return page(
@@ -17,7 +27,7 @@ export function GET(request: NextRequest) {
     );
   }
   // An APK can't be installed on an iPhone or iPad, and there is no iOS build.
-  if (/iPhone|iPad|iPod/i.test(request.headers.get('user-agent') ?? '')) {
+  if (iPhone) {
     return page(
       'iCARE++ is for Android phones',
       'There’s no iPhone version yet. Open this link on an Android phone to install the app, or ask your instructor.',
@@ -27,6 +37,16 @@ export function GET(request: NextRequest) {
   const response = NextResponse.redirect(target, 302);
   response.headers.set('Cache-Control', 'no-store');
   return response;
+}
+
+/** The switch, or off when it can't be read: the APK page is the safe answer. */
+async function studentWebOn(): Promise<boolean> {
+  try {
+    return await studentWebEnabled();
+  } catch (err) {
+    console.error('Download: reading the student web switch failed', err);
+    return false;
+  }
 }
 
 function page(heading: string, body: string, status: number) {

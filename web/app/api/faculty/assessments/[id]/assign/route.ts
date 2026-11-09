@@ -7,6 +7,7 @@ import { manageableSectionIds, manageableTeam } from '@/app/lib/teams';
 import { parseDeadline } from '@/app/lib/deadline-input';
 import { assessmentPublishBlockers } from '@/app/lib/assessment-validation';
 import { quizInDeanScope } from '@/app/lib/assessment-access';
+import { insertNotifications } from '@/app/lib/notify';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -275,7 +276,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const newlyAssigned = targetIds.filter((id) => !existingIds.has(id));
     if (newlyAssigned.length > 0) {
       // In-app notification for each student (FCM delivery comes later).
-      const { error: notifyError } = await supabase.from('notifications').insert(
+      const { error: notifyError } = await insertNotifications(supabase,
         newlyAssigned.map((user_id) => ({
           user_id,
           type: 'assignment_created',

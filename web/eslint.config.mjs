@@ -18,6 +18,8 @@ const eslintConfig = defineConfig([
     ".next-build*/**",
     "playwright-report/**",
     "test-results/**",
+    // The student web app's bundles, published from mobile/ (lib/student-web).
+    "public/student/**",
   ]),
   {
     rules: {

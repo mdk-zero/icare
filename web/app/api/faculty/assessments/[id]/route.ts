@@ -6,6 +6,7 @@ import { logAudit } from '@/app/lib/audit';
 import { assessmentPublishBlockers } from '@/app/lib/assessment-validation';
 import { guardAssessmentEdit, quizInDeanScope } from '@/app/lib/assessment-access';
 import { activityCourse, activityOfferings, parseOfferingId } from '@/app/lib/activity-course';
+import { insertNotifications } from '@/app/lib/notify';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -99,7 +100,7 @@ async function notifyPublished(
     const already = new Set((assigned ?? []).map((a) => a.student_id as string));
     const recipients = (students ?? []).map((u) => u.id as string).filter((uid) => !already.has(uid));
     if (recipients.length === 0) return;
-    const { error } = await supabase.from('notifications').insert(
+    const { error } = await insertNotifications(supabase,
       recipients.map((user_id) => ({
         user_id,
         type: 'assignment_created',

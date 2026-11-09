@@ -8,6 +8,7 @@ import {
   faFlaskVial,
   faGaugeHigh,
   faGear,
+  faGlobe,
   faHouse,
   faLifeRing,
   faUsers,
@@ -22,6 +23,7 @@ const navItems: NavItem[] = [
   { id: "audit", label: "Activity Log", href: "/admin/audit", icon: faClockRotateLeft, section: "System" },
   { id: "performance", label: "System Performance", href: "/admin/performance", icon: faGaugeHigh, section: "System" },
   { id: "tests", label: "System Tests", href: "/admin/tests", icon: faFlaskVial, section: "System" },
+  { id: "student-web", label: "Student Web App", href: "/admin/student-web", icon: faGlobe, section: "System" },
   { id: "settings", label: "Settings", href: "/admin/settings", icon: faGear, section: "Account" },
   { id: "support", label: "Support Requests", href: "/admin/support", icon: faLifeRing, section: "Support" },
 ];

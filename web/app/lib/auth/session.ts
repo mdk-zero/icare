@@ -3,12 +3,13 @@ import { cookies, headers } from 'next/headers';
 import { getSupabaseAdmin } from '../supabase/server';
 import { isMissingColumn, liveSession } from './live-user';
 import { SESSION_COOKIE, getSecret, signSession, verifySession } from './jwt';
-import type { SessionPayload, SessionPlatform } from './jwt';
+import type { SessionClient, SessionPayload, SessionPlatform } from './jwt';
+import { studentWebEnabled } from '../student-web-server';
 
 // Signing and verification live in ./jwt so middleware can share them without
 // pulling in next/headers. Re-exported here so existing importers are unaffected.
 export { SESSION_COOKIE, signSession, verifySession } from './jwt';
-export type { SessionPayload, SessionPlatform } from './jwt';
+export type { SessionClient, SessionPayload, SessionPlatform } from './jwt';
 
 export const GOOGLE_ONBOARDING_COOKIE = 'icare_google_onboarding';
 const SEVEN_DAYS_SECONDS = 60 * 60 * 24 * 7;
@@ -33,10 +34,15 @@ export async function setSessionCookie(token: string, remember = true): Promise<
   });
 }
 
-/** Signs a token for this session and sets it as the cookie. */
+/**
+ * Signs a token for this session and sets it as the cookie. The student web
+ * app gets no cookie: it keeps its bearer token itself, and a student's
+ * cookie on this site would only meet the portal's "students use the app"
+ * gate.
+ */
 export async function startSession(session: SessionPayload): Promise<string> {
   const token = await signSession(session);
-  await setSessionCookie(token, session.remember === true);
+  if (session.client !== 'student-web') await setSessionCookie(token, session.remember === true);
   return token;
 }
 
@@ -47,7 +53,7 @@ export async function startSession(session: SessionPayload): Promise<string> {
  */
 export async function openSession(
   user: Pick<SessionPayload, 'uid' | 'role' | 'email'>,
-  { platform, remember }: { platform: SessionPlatform; remember: boolean },
+  { platform, remember, client }: { platform: SessionPlatform; remember: boolean; client?: SessionClient },
 ): Promise<string> {
   const sessionId = crypto.randomUUID();
   const column = platform === 'mobile' ? 'mobile_session_id' : 'web_session_id';
@@ -57,7 +63,7 @@ export async function openSession(
     .eq('id', user.uid);
   if (error && !isMissingColumn(error)) throw error;
   if (error) console.warn(`users.${column} is missing (apply migration 079); earlier sessions stay signed in`);
-  return startSession({ uid: user.uid, role: user.role, email: user.email, sessionId, platform, remember });
+  return startSession({ uid: user.uid, role: user.role, email: user.email, sessionId, platform, remember, client });
 }
 
 export async function clearSessionCookie(): Promise<void> {
@@ -73,10 +79,16 @@ export async function clearSessionCookie(): Promise<void> {
   });
 }
 
-/** The signed-in user, checked against their live row (see liveSession). */
+/**
+ * The signed-in user, checked against their live row (see liveSession). A
+ * student web app session counts as signed out while an Admin has the
+ * student web turned off.
+ */
 export async function readSession(): Promise<SessionPayload | null> {
   const claims = await readTokenClaims();
-  return claims ? await liveSession(claims) : null;
+  if (!claims) return null;
+  if (claims.client === 'student-web' && !(await studentWebEnabled())) return null;
+  return await liveSession(claims);
 }
 
 /**

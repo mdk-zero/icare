@@ -10,6 +10,7 @@
 import type { getSupabaseAdmin } from './supabase/server';
 import { getScopedStudentIds } from './admin-scope';
 import { manageableSectionIds } from './teams';
+import { insertNotifications } from './notify';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 type Session = { uid: string; role: string };
@@ -177,7 +178,7 @@ export async function assignCasePresentation(
       return { ok: false, status: 500, error: 'Unable to assign the case presentation' };
     }
 
-    const { error: notifyError } = await supabase.from('notifications').insert(
+    const { error: notifyError } = await insertNotifications(supabase,
       added.map((user_id) => ({
         user_id,
         type: 'assignment_created',

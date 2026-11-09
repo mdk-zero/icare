@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import type { EmailAttachment } from '@/app/lib/auth/email';
 import { SUPPORT_ATTACHMENTS, type SupportAttachment, type SupportStatus } from '@/app/lib/support';
+import { insertNotifications } from './notify';
 
 /**
  * Help & Support requests, kept the way account requests are: one
@@ -174,7 +175,7 @@ export async function fileSupportRequest(
       replies: [],
     };
     const images = request.attachments.length;
-    const { error: insertError } = await supabase.from('notifications').insert(
+    const { error: insertError } = await insertNotifications(supabase,
       admins.map((admin) => ({
         user_id: admin.id,
         type: 'system' as const,
@@ -243,15 +244,18 @@ export async function notifyRequester(
     body = `${event.adminName} marked your request resolved. If something is still wrong, send a new message from Help & Support.`;
   }
   try {
-    const { error } = await getSupabaseAdmin()
-      .from('notifications')
-      .insert({
+    // A reply went out by email already; a resolve didn't.
+    const { error } = await insertNotifications(
+      getSupabaseAdmin(),
+      {
         user_id: request.user_id,
         type: 'system',
         title,
         body,
         data: { kind: 'support_update', event: event.kind, request_id: request.request_id, subject: request.subject },
-      });
+      },
+      { emailCopies: event.kind !== 'replied' },
+    );
     if (error) throw error;
   } catch (err) {
     console.error('Failed to notify the requester of a support update', err);

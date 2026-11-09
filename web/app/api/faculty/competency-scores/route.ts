@@ -5,6 +5,7 @@ import { canSeeStudent } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 
 import { isActiveSkillArea } from '@/scripts/taylors-chapters';
+import { insertNotifications } from '@/app/lib/notify';
 
 export async function GET(request: NextRequest) {
   const session = await readSession();
@@ -113,7 +114,7 @@ export async function POST(request: NextRequest) {
       request,
     );
 
-    const { error: notifyError } = await supabase.from('notifications').insert({
+    const { error: notifyError } = await insertNotifications(supabase, {
       user_id: student_id,
       type: 'performance_validated',
       title: 'Skill area score recorded',

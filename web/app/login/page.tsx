@@ -28,6 +28,23 @@ import { endDemo } from "../lib/demo/session";
 import { holdTabPresence } from "../lib/tab-presence";
 
 const STUDENT_MESSAGE = "Students sign in on the iCARE++ mobile app. The web portal is for instructors, deans, program chairs and admins.";
+
+/**
+ * What a student who signs in here is told: the app, and the student web app
+ * too while an Admin has it on (lib/student-web).
+ */
+async function studentMessage(): Promise<string> {
+  try {
+    const res = await fetch("/api/student-web", { cache: "no-store" });
+    const { on } = (await res.json()) as { on?: boolean };
+    if (on) {
+      return `Students sign in on the iCARE++ mobile app, or in a browser at ${window.location.origin}/student. The web portal is for instructors, deans, program chairs and admins.`;
+    }
+  } catch {
+    // Unknown: the app is the answer that always holds.
+  }
+  return STUDENT_MESSAGE;
+}
 const REPLACED_MESSAGE =
   "You were signed out because someone signed in to your account on another browser. If that wasn't you, sign in and change your password.";
 /** What the proxy's `?reason=` means, said on arrival. */
@@ -63,6 +80,7 @@ export default function LoginPage() {
       if (user.role === "student") {
         void logout();
         setError(STUDENT_MESSAGE);
+        void studentMessage().then(setError);
         return;
       }
       if (user.force_password_change) {
@@ -105,6 +123,7 @@ export default function LoginPage() {
     const message = reason ? REASON_MESSAGES[reason] : undefined;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (message) setError(message);
+    if (reason === "student") void studentMessage().then(setError);
     if (!isAuthenticated()) return;
     // The stored flag outlives the session cookie, so confirm with the server
     // before bouncing away. Trusting localStorage here would ping-pong against

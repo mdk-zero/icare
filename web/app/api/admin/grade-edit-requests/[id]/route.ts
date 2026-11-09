@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { GRADE_EDIT_DECISION, GRADE_EDIT_REQUEST, type GradeEditRequestData } from '@/app/lib/grade-edit-requests';
+import { insertNotifications } from '@/app/lib/notify';
 
 /**
  * Accept or decline a faculty member's request to change a saved grade. Every
@@ -65,7 +66,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (failed?.error) throw failed.error;
 
     const accepted = status === 'accepted';
-    const { error: notifyError } = await supabase.from('notifications').insert({
+    const { error: notifyError } = await insertNotifications(supabase, {
       user_id: current.faculty_id,
       type: accepted ? 'performance_validated' : 'system',
       title: accepted ? 'Grade change approved' : 'Grade change declined',

@@ -12,6 +12,7 @@ import {
   type GradeEditRequestData,
 } from '@/app/lib/grade-edit-requests';
 import { deanOwnershipLive } from '@/app/lib/dean-scope';
+import { insertNotifications } from '@/app/lib/notify';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -143,7 +144,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       reason,
       requested_at: new Date().toISOString(),
     };
-    const { error } = await supabase.from('notifications').insert(
+    const { error } = await insertNotifications(supabase,
       approvers.map((user_id) => ({
         user_id,
         type: 'system',

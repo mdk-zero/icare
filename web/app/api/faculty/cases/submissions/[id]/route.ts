@@ -11,6 +11,7 @@ import {
 } from '@/app/lib/cases';
 import { CASE_CRITERIA, caseScore, allCriteriaRated, isCaseCriterion, isLateSubmission } from '@/app/lib/case-rubric';
 import { isTaskRating, MAX_REMARKS_LENGTH, scoreDescriptor, type TaskRating } from '@/app/lib/task-ratings';
+import { insertNotifications } from '@/app/lib/notify';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -182,7 +183,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         .select('title')
         .eq('id', submission.presentation_id)
         .single();
-      const { error: notifyError } = await supabase.from('notifications').insert({
+      const { error: notifyError } = await insertNotifications(supabase, {
         user_id: submission.student_id,
         type: 'performance_validated',
         title: 'Case presentation graded',

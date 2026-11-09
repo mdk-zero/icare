@@ -6,6 +6,7 @@ import type { SessionPayload } from '@/app/lib/auth/session';
 import { MAX_REASON_LENGTH } from '@/app/lib/grade-edit-requests';
 import { isMissingTeamTables, manageableSectionIds, manageableTeam, TEAMS_NEED_MIGRATION } from '@/app/lib/teams';
 import { deanOwnershipLive } from '@/app/lib/dean-scope';
+import { insertNotifications } from '@/app/lib/notify';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -171,7 +172,7 @@ async function moveBetweenOwnGroups(
   const studentName = student?.name ?? 'A student';
   const where = section?.name ? `${section.name} · ` : '';
   if (deans.length > 0) {
-    const { error: notifyError } = await supabase.from('notifications').insert(
+    const { error: notifyError } = await insertNotifications(supabase,
       deans.map((user_id) => ({
         user_id,
         type: 'system',

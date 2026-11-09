@@ -6,6 +6,7 @@ import { findPendingAccessRequest } from '@/app/lib/access-requests';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { clearGoogleOnboardingCookie, readGoogleOnboarding } from '@/app/lib/auth/session';
 import { CONTACT_EMAIL, DEV_TEAM_EMAILS } from '@/app/lib/dev-team';
+import { insertNotifications } from '@/app/lib/notify';
 
 const MAX_REQUESTS = 3;
 const WINDOW_MS = 60 * 60 * 1000; // an hour
@@ -47,7 +48,7 @@ async function notifySuperAdmins(req: AccessRequest): Promise<boolean> {
     // One id across every admin's copy, so whoever accepts or declines it
     // settles it for all of them.
     const requestId = randomUUID();
-    const { error: insertError } = await supabase.from('notifications').insert(
+    const { error: insertError } = await insertNotifications(supabase,
       admins.map((admin) => ({
         user_id: admin.id,
         type: 'system' as const,

@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { isPatientAssigned } from '@/app/lib/assigned-patients';
 import { getStudentSupervisorIds, isStudentInFacultySections } from '@/app/lib/roster';
+import { insertNotifications } from '@/app/lib/notify';
 
 /**
  * Student help flag raised during simulation (ERD `assistance_requests`,
@@ -150,7 +151,7 @@ async function notifySectionFaculty(
     const facultyIds = await getStudentSupervisorIds(supabase, studentId);
     if (facultyIds.length === 0) return;
 
-    await supabase.from('notifications').insert(
+    await insertNotifications(supabase,
       facultyIds.map((facultyId) => ({
         user_id: facultyId,
         type: 'assistance_request' as const,

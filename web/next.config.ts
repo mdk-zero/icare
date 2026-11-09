@@ -84,6 +84,21 @@ const nextConfig: NextConfig = {
   // LAN origins allowed to reach the dev server (phones/emulators testing
   // the mobile app against this machine).
   allowedDevOrigins: ["192.168.1.100", "192.168.1.11"],
+  // The student web app (lib/student-web) is a single-page app published into
+  // public/student by mobile/scripts/publish-web.mjs. Its own router handles
+  // every address under /student, so a path there that isn't a file gets its
+  // index.html. Fallback rewrites run after public files, so the app's
+  // scripts and images are served as they are.
+  async rewrites() {
+    return {
+      beforeFiles: [],
+      afterFiles: [],
+      fallback: [
+        { source: "/student", destination: "/student/index.html" },
+        { source: "/student/:path*", destination: "/student/index.html" },
+      ],
+    };
+  },
 };
 
 export default withSentryConfig(nextConfig, {

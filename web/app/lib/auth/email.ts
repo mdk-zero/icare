@@ -781,6 +781,42 @@ export async function sendAnnouncementEmails(
   }
 }
 
+function buildNotificationCopyHtml(name: string, title: string, body: string, openUrl: string): string {
+  const safeUrl = htmlEscape(openUrl);
+  return `
+    <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px; color: #0f172a;">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #0d7377; margin: 0 0 8px;">iCARE++ notification</p>
+      <h2 style="color: #0f172a; margin: 0 0 16px; line-height: 1.3;">${htmlEscape(title)}</h2>
+      <p style="line-height: 1.6; margin: 0 0 12px;">Hi ${htmlEscape(name)},</p>
+      ${body ? `<div style="line-height: 1.6; margin: 0 0 24px;">${htmlEscape(body).replace(/\n/g, "<br/>")}</div>` : ""}
+      <p style="margin: 0 0 24px;"><a href="${safeUrl}" style="display: inline-block; padding: 12px 28px; background: #0d7377; color: #ffffff; text-decoration: none; border-radius: 10px; font-weight: 600;">Open iCARE++</a></p>
+      <p style="font-size: 13px; color: #64748b; line-height: 1.5;">You're getting this email because you use iCARE++ on the web, which can't send notifications to your phone. To stop these emails, open iCARE++ on the web and turn off Email notifications in Profile &gt; Settings.</p>
+    </div>`;
+}
+
+/**
+ * A notification, emailed to students who use the student web app (browsers
+ * get no push notifications). One message per notification; `openUrl` is the
+ * web app's notifications screen.
+ */
+export async function sendNotificationCopies(
+  copies: { email: string; name: string; title: string; body: string }[],
+  openUrl: string,
+): Promise<{ sent: number; error?: string }> {
+  try {
+    return await sendEach(
+      copies.map((c) => ({
+        to: c.email,
+        subject: c.title,
+        html: buildNotificationCopyHtml(c.name, c.title, c.body, openUrl),
+      })),
+    );
+  } catch (err) {
+    console.error("Failed to email notification copies:", err);
+    return { sent: 0, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
 /**
  * Someone asking the dev team for an account from the public contact form.
  * Accounts are no longer self-service, so this mail is the whole request: the

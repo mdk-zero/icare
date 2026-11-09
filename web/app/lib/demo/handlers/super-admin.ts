@@ -18,6 +18,7 @@ import {
   parseAudience,
   toAnnouncementSummary,
 } from "../../announcements";
+import { STUDENT_WEB_OFF, STUDENT_WEB_ON, type StudentWebSummary } from "../../student-web";
 
 /** The Admin portal: accounts, sign-up requests, system metrics and test results. */
 
@@ -553,3 +554,36 @@ route("POST", "/api/super-admin/dw-benchmark", async (ctx) => {
 });
 
 route("GET", "/api/super-admin/probe", (ctx) => (adminOnly(ctx) ? { ok: true, target: ctx.query.get("target") } : forbidden()));
+
+// ---------------------------------------------------------------------------
+// Student web app: the switch is the latest on/off entry in the audit trail,
+// as on the server. Nobody in the demo uses the web version.
+// ---------------------------------------------------------------------------
+
+function studentWebSummary(ctx: Ctx): StudentWebSummary {
+  const changes = ctx.db.audit.filter((a) => a.action === STUDENT_WEB_ON || a.action === STUDENT_WEB_OFF);
+  return {
+    on: changes[0]?.action === STUDENT_WEB_ON,
+    history: changes.slice(0, 20).map((a) => ({
+      on: a.action === STUDENT_WEB_ON,
+      at: a.created_at,
+      by: a.actor_id ? (userById(ctx.db, a.actor_id)?.name ?? null) : null,
+    })),
+    signedIn: 0,
+    emailed: 0,
+  };
+}
+
+route("GET", "/api/super-admin/student-web", (ctx) => {
+  if (!adminOnly(ctx)) return forbidden();
+  return studentWebSummary(ctx);
+});
+
+route("POST", "/api/super-admin/student-web", (ctx) => {
+  if (!adminOnly(ctx)) return forbidden();
+  if (typeof ctx.body?.on !== "boolean") return json({ error: "Say on: true or false" }, 400);
+  audit(ctx.db, ctx.viewer, ctx.body.on ? STUDENT_WEB_ON : STUDENT_WEB_OFF, "settings", {
+    message: ctx.body.on ? "Turned on the student web app" : "Turned off the student web app",
+  }, "student_web");
+  return studentWebSummary(ctx);
+});

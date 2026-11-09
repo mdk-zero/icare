@@ -17,6 +17,7 @@ import {
   toAnnouncementSummary,
   type AnnouncementSummary,
 } from '@/app/lib/announcements';
+import { insertNotifications } from '@/app/lib/notify';
 
 // A send to everyone writes a notification per account and emails each one.
 export const maxDuration = 60;
@@ -110,7 +111,8 @@ export async function POST(request: NextRequest) {
       const rows = recipients
         .slice(i, i + INSERT_CHUNK)
         .map((r) => ({ user_id: r.id, type: 'system', title, body: message, data }));
-      const { error } = await supabase.from('notifications').insert(rows);
+      // Emailed below when the Admin asked; otherwise web students get the usual copy.
+      const { error } = await insertNotifications(supabase, rows, { emailCopies: !withEmail });
       if (error) {
         console.error('Announcement: notifications insert failed', error);
         if (notified === 0) {

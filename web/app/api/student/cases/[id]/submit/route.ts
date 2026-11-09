@@ -5,6 +5,7 @@ import { logAudit } from '@/app/lib/audit';
 import { getStudentSupervisorIds } from '@/app/lib/roster';
 import { isMissingCaseTables, CASES_NOT_READY, SUBMISSION_COLUMNS } from '@/app/lib/cases';
 import { missingCaseFields } from '@/app/lib/case-rubric';
+import { insertNotifications } from '@/app/lib/notify';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (row.case_presentations.created_by) recipients.add(row.case_presentations.created_by);
     if (recipients.size > 0) {
       const { data: student } = await supabase.from('users').select('name').eq('id', session.uid).single();
-      const { error: notifyError } = await supabase.from('notifications').insert(
+      const { error: notifyError } = await insertNotifications(supabase,
         [...recipients].map((user_id) => ({
           user_id,
           type: 'system',

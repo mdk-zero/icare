@@ -1,4 +1,5 @@
 import type { getSupabaseAdmin } from './supabase/server';
+import { insertNotifications } from './notify';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -20,7 +21,7 @@ export async function notifyCaseAssigned(
   deadline: Date,
 ): Promise<void> {
   if (assignments.length === 0) return;
-  const { error } = await supabase.from('notifications').insert(
+  const { error } = await insertNotifications(supabase,
     assignments.map((a) => ({
       user_id: a.student_id,
       type: 'assignment_created',
@@ -45,7 +46,7 @@ export async function notifyReturnDemoAssigned(
 ): Promise<void> {
   if (assignments.length === 0) return;
   const day = deadline.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric' });
-  const { error } = await supabase.from('notifications').insert(
+  const { error } = await insertNotifications(supabase,
     assignments.map((a) => ({
       user_id: a.student_id,
       type: 'assignment_created',
