@@ -1,107 +1,125 @@
 /**
- * Hospital case presentations (migration 056): the rubric faculty grade a
- * case on, what a student must fill in before handing it in, and the shape
- * the observations are held to.
+ * Case presentations by group (migration 093): the rubric a group's
+ * presentation is graded on, and the files a leader may hand in.
  *
- * Criteria use the same three-level scale as scenario tasks, and are scored
- * through gradedScore so a rating is worth the same everywhere.
+ * The rubric is the clinical instructors' Case Presentation rubric: six
+ * weighted criteria, each rated on four levels. A criterion earns its weight
+ * times level ÷ 4, so all Excellent is 100.
  */
-import { gradedScore, type TaskRating } from './task-ratings';
+
+export type CaseLevel = 1 | 2 | 3 | 4;
+
+export const CASE_LEVELS: readonly { value: CaseLevel; label: string }[] = [
+  { value: 4, label: 'Excellent' },
+  { value: 3, label: 'Proficient' },
+  { value: 2, label: 'Developing' },
+  { value: 1, label: 'Beginning' },
+];
 
 export interface CaseCriterion {
   key: string;
   label: string;
-  description: string;
+  /** Percent of the grade; the six add up to 100. */
+  weight: number;
+  /** What each level looks like, by level. */
+  levels: Record<CaseLevel, string>;
 }
 
-/** Equally weighted; the keys are stored in case_submission_ratings.criterion. */
+/** The keys are stored in case_group_ratings.criterion. */
 export const CASE_CRITERIA: readonly CaseCriterion[] = [
   {
-    key: 'profile',
-    label: 'Patient profile & history',
-    description: 'Presents the anonymised patient, chief complaint and relevant history clearly.',
-  },
-  {
     key: 'assessment',
-    label: 'Assessment findings',
-    description: 'Reports the observed vital signs, TPR, IV fluids and other findings accurately.',
+    label: 'Patient Assessment & Baseline Data',
+    weight: 15,
+    levels: {
+      4: 'Comprehensive physical assessment and history. Accurately identifies all critical baseline data (hemodynamics, GCS, ABCs) specific to the high-acuity setting.',
+      3: 'Thorough assessment with minor omissions. Most critical baseline data is identified and accurately presented.',
+      2: 'Incomplete assessment. Misses some key critical care parameters or baseline data relevant to the emergency/ICU context.',
+      1: 'Poor/inaccurate assessment. Fails to identify life-threatening baseline parameters.',
+    },
   },
   {
-    key: 'diagnoses',
-    label: 'Nursing diagnoses',
-    description: 'Derives appropriate, prioritised nursing diagnoses from the assessment.',
+    key: 'pathophysiology',
+    label: 'Pathophysiology',
+    weight: 20,
+    levels: {
+      4: "Traces the disease process down to the cellular/systemic level with a highly accurate, customized schematic diagram linking to the patient's exact multi-organ manifestations.",
+      3: 'Accurately traces the disease process using a diagram but lacks some patient-specific clinical manifestations or multi-organ links.',
+      2: "Generic pathophysiology presented. Not customized to the patient's specific critical condition or clinical presentation.",
+      1: 'Inaccurate or severely fragmented pathophysiology. Fails to explain the life-threatening mechanism of the disease.',
+    },
   },
   {
-    key: 'interventions',
-    label: 'Interventions & rationale',
-    description: 'Explains the nursing care given and why, tied to each diagnosis.',
+    key: 'diagnostics',
+    label: 'Diagnostics & Medical Management',
+    weight: 15,
+    levels: {
+      4: "Comprehensively analyzes labs, diagnostics (ECG, ABG, etc.), and pharmacology. Correlates all medical/surgical interventions with the patient's acute status.",
+      3: "Analyzes most labs and medications accurately. Minor gaps in correlating medical management with the patient's critical condition.",
+      2: "Lists labs and medications without providing adequate analysis or correlation to the patient's high-acuity needs.",
+      1: 'Missing or inaccurate interpretation of critical diagnostics and life-saving medical management.',
+    },
   },
   {
-    key: 'delivery',
-    label: 'Presentation delivery',
-    description: 'Organised, confident delivery that answers questions and protects patient privacy.',
+    key: 'care_plan',
+    label: 'Nursing Care Plan (Prioritization & Interventions)',
+    weight: 30,
+    levels: {
+      4: 'NCP is flawless. Prioritizes life-threatening problems (e.g., airway, hemodynamics). Interventions are evidence-based, highly specific to critical care, with SMART goals fully evaluated.',
+      3: 'NCP is good. Prioritizes appropriately but some interventions lack critical care specificity. Goals are SMART and evaluated.',
+      2: 'NCP lacks appropriate high-acuity prioritization. Goals are vague; interventions are generic and not suited for emergency/ICU settings.',
+      1: 'NCP is poorly constructed, prioritizes incorrectly (e.g., prioritizes pain over airway), and lacks evidence-based rationale.',
+    },
+  },
+  {
+    key: 'presentation',
+    label: 'Presentation Skills & Use of AV Materials',
+    weight: 10,
+    levels: {
+      4: 'Delivery is confident, clear, and perfectly timed. Audiovisual materials (slides, charts) are highly professional, visually engaging, and enhance understanding.',
+      3: 'Delivery is mostly clear and on time. AV materials are good but may have minor formatting or text-density issues.',
+      2: 'Delivery is hesitant or read directly from notes. Time management is poor. AV materials are distracting or hard to read.',
+      1: 'Disorganized, lacks professionalism, exceeds time limits significantly, or AV materials are missing/illegible.',
+    },
+  },
+  {
+    key: 'critical_thinking',
+    label: 'Critical Thinking (Q&A/Defense)',
+    weight: 10,
+    levels: {
+      4: 'Defends the case flawlessly. Demonstrates exceptional clinical judgment and depth of knowledge regarding emergency/intensive care concepts when questioned.',
+      3: 'Answers most questions accurately. Shows solid understanding of critical care concepts with only minor hesitations.',
+      2: 'Struggles to answer questions. Demonstrates superficial understanding of the critical care implications of the case.',
+      1: "Unable to answer clinical questions. Lacks fundamental understanding of the patient's life-threatening condition.",
+    },
   },
 ];
 
 const CRITERION_KEYS = new Set(CASE_CRITERIA.map((c) => c.key));
-const CRITERION_POINTS = 10;
 
 export function isCaseCriterion(key: unknown): key is string {
   return typeof key === 'string' && CRITERION_KEYS.has(key);
 }
 
-/** 0–100; a criterion nobody rated earns nothing. */
-export function caseScore(ratings: ReadonlyMap<string, TaskRating>): number {
-  const tasks = CASE_CRITERIA.map((c) => ({ id: c.key, points: CRITERION_POINTS }));
-  const completions = new Map(
-    [...ratings].filter(([key]) => CRITERION_KEYS.has(key)).map(([key, rating]) => [key, { rating }]),
-  );
-  return gradedScore(tasks, completions);
+export function isCaseLevel(value: unknown): value is CaseLevel {
+  return value === 1 || value === 2 || value === 3 || value === 4;
 }
 
-export function allCriteriaRated(ratings: ReadonlyMap<string, TaskRating>): boolean {
-  return CASE_CRITERIA.every((c) => ratings.has(c.key));
+export function caseLevelLabel(level: number): string {
+  return CASE_LEVELS.find((l) => l.value === level)?.label ?? '';
 }
 
-/** The fields a case must have before it can be handed in, with their labels. */
-export const REQUIRED_CASE_FIELDS = [
-  ['patient_initials', 'Patient initials'],
-  ['age', 'Age'],
-  ['sex', 'Sex'],
-  ['admitting_diagnosis', 'Admitting diagnosis'],
-  ['chief_complaint', 'Chief complaint'],
-  ['nursing_diagnoses', 'Nursing diagnoses'],
-  ['interventions', 'Interventions'],
-] as const;
+/** 0–100, to two decimals; a criterion nobody rated earns nothing. */
+export function caseScore(ratings: ReadonlyMap<string, number>): number {
+  const total = CASE_CRITERIA.reduce((sum, c) => {
+    const level = ratings.get(c.key);
+    return sum + (isCaseLevel(level) ? (c.weight * level) / 4 : 0);
+  }, 0);
+  return Math.round(total * 100) / 100;
+}
 
-export type CaseTextField =
-  | 'hospital'
-  | 'ward'
-  | 'admitting_diagnosis'
-  | 'chief_complaint'
-  | 'history'
-  | 'medications'
-  | 'nursing_diagnoses'
-  | 'interventions';
-
-export const CASE_TEXT_FIELDS: readonly CaseTextField[] = [
-  'hospital',
-  'ward',
-  'admitting_diagnosis',
-  'chief_complaint',
-  'history',
-  'medications',
-  'nursing_diagnoses',
-  'interventions',
-];
-
-/** Labels of the required fields still empty; [] when the case can be submitted. */
-export function missingCaseFields(row: Record<string, unknown>): string[] {
-  return REQUIRED_CASE_FIELDS.filter(([key]) => {
-    const value = row[key];
-    if (value === null || value === undefined) return true;
-    return typeof value === 'string' && value.trim().length === 0;
-  }).map(([, label]) => label);
+export function allCriteriaRated(ratings: ReadonlyMap<string, number>): boolean {
+  return CASE_CRITERIA.every((c) => isCaseLevel(ratings.get(c.key)));
 }
 
 export function isLateSubmission(submittedAt: string | null, deadline: string | null): boolean {
@@ -109,103 +127,23 @@ export function isLateSubmission(submittedAt: string | null, deadline: string | 
   return new Date(submittedAt).getTime() > new Date(deadline).getTime();
 }
 
-// ─── Observations ────────────────────────────────────────────────────────────
+// ─── The group's file ────────────────────────────────────────────────────────
 
-export interface VitalsObservation {
-  heart_rate: number | null;
-  bp_systolic: number | null;
-  bp_diastolic: number | null;
-  temperature_c: number | null;
-  respiratory_rate: number | null;
-  oxygen_saturation: number | null;
-  pain_score: number | null;
-  notes: string;
-  observed_at: string | null;
-}
+export const CASE_BUCKET = 'case-presentations';
 
-export interface TprObservation {
-  temperature_c: number | null;
-  pulse: number | null;
-  respiration: number | null;
-  remarks: string;
-  observed_at: string | null;
-}
+/** Largest upload, matching the bucket's file_size_limit. */
+export const MAX_CASE_FILE_BYTES = 50 * 1024 * 1024;
 
-export interface IvfObservation {
-  solution: string;
-  volume_ml: number | null;
-  rate_ml_hr: number | null;
-  site: string;
-  remarks: string;
-  observed_at: string | null;
-}
+export type CaseFileType = 'pdf' | 'pptx';
 
-export interface CaseObservations {
-  vitals: VitalsObservation[];
-  tpr: TprObservation[];
-  ivf: IvfObservation[];
-}
+const CASE_FILE_MIMES: Record<string, CaseFileType> = {
+  'application/pdf': 'pdf',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+};
 
-export const MAX_OBSERVATIONS = 50;
-const MAX_OBSERVATION_TEXT = 500;
-
-function num(value: unknown): number | null {
-  const n = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
-  return typeof n === 'number' && Number.isFinite(n) ? n : null;
-}
-
-function text(value: unknown): string {
-  return typeof value === 'string' ? value.trim().slice(0, MAX_OBSERVATION_TEXT) : '';
-}
-
-function when(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length === 0) return null;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
-
-function list(value: unknown): Record<string, unknown>[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .filter((v): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v))
-    .slice(0, MAX_OBSERVATIONS);
-}
-
-/**
- * Keeps only the known fields of each entry. Anything else is dropped, so a
- * free-form key — a patient's name, say — can't ride along into storage.
- */
-export function sanitizeObservations(input: unknown): CaseObservations {
-  const src = typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
-  return {
-    vitals: list(src.vitals).map((v) => ({
-      heart_rate: num(v.heart_rate),
-      bp_systolic: num(v.bp_systolic),
-      bp_diastolic: num(v.bp_diastolic),
-      temperature_c: num(v.temperature_c),
-      respiratory_rate: num(v.respiratory_rate),
-      oxygen_saturation: num(v.oxygen_saturation),
-      pain_score: num(v.pain_score),
-      notes: text(v.notes),
-      observed_at: when(v.observed_at),
-    })),
-    tpr: list(src.tpr).map((v) => ({
-      temperature_c: num(v.temperature_c),
-      pulse: num(v.pulse),
-      respiration: num(v.respiration),
-      remarks: text(v.remarks),
-      observed_at: when(v.observed_at),
-    })),
-    ivf: list(src.ivf)
-      .map((v) => ({
-        solution: text(v.solution),
-        volume_ml: num(v.volume_ml),
-        rate_ml_hr: num(v.rate_ml_hr),
-        site: text(v.site),
-        remarks: text(v.remarks),
-        observed_at: when(v.observed_at),
-      }))
-      // The solution is the one thing an IVF entry can't do without.
-      .filter((v) => v.solution.length > 0),
-  };
+/** The type of a hand-in from its MIME type or, failing that, its extension; null when it isn't PDF or PPTX. */
+export function caseFileTypeOf(mime: string, fileName: string): CaseFileType | null {
+  if (mime && CASE_FILE_MIMES[mime]) return CASE_FILE_MIMES[mime];
+  const ext = /\.([a-z0-9]+)$/i.exec(fileName)?.[1]?.toLowerCase();
+  return ext === 'pdf' || ext === 'pptx' ? ext : null;
 }

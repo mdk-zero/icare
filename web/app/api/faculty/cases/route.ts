@@ -4,30 +4,26 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { activityCourse, activityOfferings, parseOfferingId } from '@/app/lib/activity-course';
 import { logAudit } from '@/app/lib/audit';
 import {
-  assignCasePresentation,
+  assignCaseGroups,
+  loadCaseGroups,
+  loadTeams,
+  parseCaseGroups,
   scopedCaseStudents,
   isMissingCaseTables,
   CASES_NOT_READY,
   PRESENTATION_COLUMNS,
 } from '@/app/lib/cases';
-import { loadTeams, presentationGroups } from '@/app/lib/cases';
-import { isLateSubmission } from '@/app/lib/case-rubric';
 import { parseDeadline } from '@/app/lib/deadline-input';
 import { viewerDeanId } from '@/app/lib/dean-scope';
 
 const MAX_TITLE = 200;
 const MAX_INSTRUCTIONS = 4000;
 
-function uniqueStrings(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return [...new Set(value.filter((v): v is string => typeof v === 'string' && v.trim().length > 0))];
-}
-
-type SubmissionSummary = { presentation_id: string; student_id: string; status: string; submitted_at: string | null };
+type SubmissionSummary = { presentation_id: string; student_id: string; group_id: string | null };
 
 // GET /api/faculty/cases
 // The presentations this session can see — ones they created, or that any of
-// their students were given — each with a roster tally over their own students.
+// their students were given — each with a tally of its groups.
 export async function GET() {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -41,7 +37,7 @@ export async function GET() {
 
     let submissions: SubmissionSummary[] = [];
     if (scope === null || scope.size > 0) {
-      let query = supabase.from('case_submissions').select('presentation_id, student_id, status, submitted_at');
+      let query = supabase.from('case_submissions').select('presentation_id, student_id, group_id');
       if (scope) query = query.in('student_id', [...scope]);
       const { data, error } = await query.limit(10000);
       if (error) {
@@ -76,23 +72,36 @@ export async function GET() {
     const sectionName = new Map((sections ?? []).map((s) => [s.id, s.name]));
     // The course each was made for (070), for grouping by course.
     const offeringOf = await activityOfferings(supabase, 'case_presentations', (presentations ?? []).map((p) => p.id as string));
-    const groupsOf = await presentationGroups(supabase, (presentations ?? []).map((p) => p.id as string));
+    const loaded = await loadCaseGroups(
+      supabase,
+      new Map((presentations ?? []).map((p) => [p.id as string, p.deadline as string | null])),
+    );
+    if (loaded.error) {
+      if (isMissingCaseTables(loaded.error)) return NextResponse.json({ error: CASES_NOT_READY }, { status: 503 });
+      throw loaded.error;
+    }
+    // A group counts when one of the viewer's students is in it, or the presentation is theirs.
+    const visibleGroups = new Set(submissions.map((s) => s.group_id).filter((g): g is string => !!g));
 
     const result = (presentations ?? []).map((p) => {
-      const roster = submissions.filter((s) => s.presentation_id === p.id);
-      const count = (status: string) => roster.filter((s) => s.status === status).length;
+      const groups = (loaded.groups.get(p.id as string) ?? []).filter(
+        (g) => scope === null || p.created_by === session.uid || visibleGroups.has(g.id),
+      );
+      const count = (status: string) => groups.filter((g) => g.status === status).length;
       return {
         ...p,
         sections: ((p.section_ids as string[]) ?? []).map((id) => ({ id, name: sectionName.get(id) ?? 'Unknown' })),
         offering_id: offeringOf.get(p.id as string) ?? null,
-        groups: groupsOf.get(p.id as string) ?? [],
+        groups: groups.map((g) => ({ id: g.id, name: g.name, section_name: g.section_name })),
+        student_count: groups.reduce((n, g) => n + g.members.length, 0),
+        // Counted per group, since a group hands in and is graded as one.
         counts: {
-          total: roster.length,
-          not_started: count('not_started'),
-          draft: count('draft'),
+          total: groups.length,
+          not_started: count('not_started') + count('draft'),
+          draft: 0,
           submitted: count('submitted'),
           graded: count('graded'),
-          late: roster.filter((s) => isLateSubmission(s.submitted_at, p.deadline as string | null)).length,
+          late: groups.filter((g) => g.late).length,
         },
       };
     });
@@ -104,8 +113,8 @@ export async function GET() {
   }
 }
 
-// POST /api/faculty/cases  { title, instructions?, deadline?, section_ids }
-// Creates the presentation and gives it to the caller's students in those sections.
+// POST /api/faculty/cases  { title, instructions?, deadline, groups: [{ team_id, leader_id }], offering_id? }
+// Creates the presentation and gives it to those groups, each with its leader.
 export async function POST(request: NextRequest) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -119,7 +128,7 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
-  const { title, instructions, deadline, section_ids, team_ids, student_ids } = body as Record<string, unknown>;
+  const { title, instructions, deadline, groups: groupsInput } = body as Record<string, unknown>;
 
   const titleValue = typeof title === 'string' ? title.trim() : '';
   if (!titleValue) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
@@ -130,14 +139,11 @@ export async function POST(request: NextRequest) {
   // Every activity has a deadline: it is what late and overdue work is measured against.
   const deadlineCheck = parseDeadline(deadline);
   if (!deadlineCheck.ok) return NextResponse.json({ error: deadlineCheck.error }, { status: 400 });
-  // Given to groups (075), to whole sections where the instructor has no
-  // group, and to students added to the course by hand.
-  const sectionIds = uniqueStrings(section_ids);
-  const teamIds = uniqueStrings(team_ids);
-  const studentIds = uniqueStrings(student_ids);
-  if (sectionIds.length === 0 && teamIds.length === 0 && studentIds.length === 0) {
-    return NextResponse.json({ error: 'Choose who gets this case presentation' }, { status: 400 });
-  }
+  // A group reports it (093): each needs a leader, who hands in the slides.
+  const groups = parseCaseGroups(groupsInput);
+  if (!groups) return NextResponse.json({ error: 'Choose a leader for each group' }, { status: 400 });
+  if (groups.length === 0) return NextResponse.json({ error: 'Choose the groups that report this case' }, { status: 400 });
+  const teamIds = groups.map((g) => g.team_id);
 
   try {
     const supabase = getSupabaseAdmin();
@@ -150,9 +156,9 @@ export async function POST(request: NextRequest) {
     );
     if ('error' in course) return NextResponse.json({ error: course.error }, { status: 400 });
 
-    // Every section it reaches, groups' sections included, as before 075.
+    // The groups' sections, for the course grouping and the cards.
     const teams = await loadTeams(supabase, teamIds);
-    const reachedSections = [...new Set([...sectionIds, ...teams.map((t) => t.section_id)])];
+    const reachedSections = [...new Set(teams.map((t) => t.section_id))];
     const row: Record<string, unknown> = {
       title: titleValue,
       instructions: instructionsValue,
@@ -161,27 +167,18 @@ export async function POST(request: NextRequest) {
       created_by: session.uid,
       ...course.value,
     };
-    let inserted = await supabase
+    const { data: presentation, error } = await supabase
       .from('case_presentations')
-      .insert(teamIds.length ? { ...row, team_ids: teamIds } : row)
+      .insert({ ...row, team_ids: teamIds })
       .select(PRESENTATION_COLUMNS)
       .single();
-    // Before 075 there is no team_ids column: the groups' members still get it.
-    if (inserted.error && (inserted.error.code === '42703' || inserted.error.code === 'PGRST204')) {
-      inserted = await supabase.from('case_presentations').insert(row).select(PRESENTATION_COLUMNS).single();
-    }
-    const { data: presentation, error } = inserted;
     if (error || !presentation) {
       if (isMissingCaseTables(error)) return NextResponse.json({ error: CASES_NOT_READY }, { status: 503 });
       console.error('Failed to create case presentation', error);
       return NextResponse.json({ error: 'Unable to create the case presentation' }, { status: 500 });
     }
 
-    const assigned = await assignCasePresentation(supabase, session, presentation as unknown as { id: string; title: string }, {
-      sectionIds,
-      teamIds,
-      studentIds,
-    });
+    const assigned = await assignCaseGroups(supabase, session, presentation as unknown as { id: string; title: string }, groups);
     if (!assigned.ok) {
       // Nobody could be given it, so don't leave an empty shell behind.
       await supabase.from('case_presentations').delete().eq('id', (presentation as unknown as { id: string }).id);
@@ -195,7 +192,7 @@ export async function POST(request: NextRequest) {
         action: 'case.create',
         entityType: 'case_presentations',
         entityId: created.id,
-        details: { title: titleValue, section_ids: reachedSections, team_ids: teamIds, student_count: assigned.total },
+        details: { title: titleValue, section_ids: reachedSections, groups, student_count: assigned.total },
       },
       request,
     );

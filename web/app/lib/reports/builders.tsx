@@ -18,12 +18,12 @@ import {
 } from './data';
 import { ofKind, scenarioKinds } from '../scenario-kind';
 import { isActiveSkillArea } from '@/scripts/taylors-chapters';
-import { CASE_CRITERIA, isLateSubmission, type CaseObservations } from '../case-rubric';
+import { CASE_CRITERIA, caseLevelLabel, isLateSubmission } from '../case-rubric';
 import { isLateSubmission as isLateAttempt } from '../assessment-timing';
 import { quizGrade } from '../quiz-attempts';
 import { activityOfferings } from '../activity-course';
 import { readMatching } from '../fetch-all';
-import { ratingLabel, scoreDescriptor, type TaskRating } from '../task-ratings';
+import { scoreDescriptor } from '../task-ratings';
 import { loadStudentStandings, type StudentCourseStanding } from '../course-requirements';
 import { isMissingCourseSchema } from '../courses';
 
@@ -46,7 +46,7 @@ export const REPORT_NEEDS_TARGET: Record<ReportType, boolean> = {
   // Targets one stored summary, not a patient: a re-admitted patient has more
   // than one, and each closes a different stay.
   discharge: true,
-  // One graded hospital case presentation (a case_submissions id).
+  // One group's graded case presentation (a group id, or a member's case_submissions id).
   case: true,
 };
 
@@ -1017,142 +1017,121 @@ export async function buildDischargeReport(
 }
 
 // ---------------------------------------------------------------------------
-// Case presentation — one student's hospital case and how it was graded
+// Case presentation — one group's presentation and how it was graded
 // ---------------------------------------------------------------------------
 
 /**
- * The patient appears by initials only, exactly as stored: the record never
- * held more, so the printout can't either.
+ * A group's graded case presentation: who was in it, the slides it handed
+ * in, and the rubric. The target is the group (093), or any member's
+ * case_submissions id, which points at it.
  */
 export async function buildCaseReport(
   supabase: Supabase,
   meta: ReportMeta,
-  submissionId: string,
+  targetId: string,
   scope: StudentScope,
 ): Promise<BuildResult> {
+  let groupId = targetId;
+  const { data: direct } = await supabase.from('case_presentation_groups').select('id').eq('id', targetId).maybeSingle();
+  if (!direct) {
+    const { data: sub } = await supabase.from('case_submissions').select('group_id').eq('id', targetId).maybeSingle();
+    const viaMember = (sub as { group_id: string | null } | null)?.group_id;
+    if (!viaMember) return { error: 'Case not found', status: 404 };
+    groupId = viaMember;
+  }
+
   const { data: row } = await supabase
-    .from('case_submissions')
+    .from('case_presentation_groups')
     .select(
-      'id, student_id, status, patient_initials, age, sex, hospital, ward, admitting_diagnosis, chief_complaint, ' +
-        'history, medications, nursing_diagnoses, interventions, observations, submitted_at, graded_at, score, remarks, ' +
-        'case_presentations(title, deadline), student:users!case_submissions_student_id_fkey(name)',
+      'id, team_name, section_name, leader_id, status, file_name, file_type, submitted_at, graded_at, score, remarks, ' +
+        'case_presentations(title, deadline)',
     )
-    .eq('id', submissionId)
+    .eq('id', groupId)
     .maybeSingle();
   if (!row) return { error: 'Case not found', status: 404 };
-
-  const c = row as unknown as {
-    student_id: string;
+  const g = row as unknown as {
+    id: string;
+    team_name: string;
+    section_name: string;
+    leader_id: string | null;
     status: string;
-    patient_initials: string | null;
-    age: number | null;
-    sex: string | null;
-    hospital: string;
-    ward: string;
-    admitting_diagnosis: string;
-    chief_complaint: string;
-    history: string;
-    medications: string;
-    nursing_diagnoses: string;
-    interventions: string;
-    observations: CaseObservations;
+    file_name: string | null;
+    file_type: string | null;
     submitted_at: string | null;
     graded_at: string | null;
-    score: number | null;
+    score: number | string | null;
     remarks: string;
     case_presentations: { title: string; deadline: string | null } | null;
-    student: { name: string | null } | null;
   };
-  if (scope && !scope.includes(c.student_id)) return { error: 'Case not found', status: 404 };
-  if (c.status !== 'graded') return { error: 'This case has not been graded yet', status: 409 };
 
-  const { data: ratingRows } = await supabase
-    .from('case_submission_ratings')
-    .select('criterion, rating, remarks')
-    .eq('submission_id', submissionId);
-  const ratings = new Map((ratingRows ?? []).map((r) => [r.criterion as string, r as { rating: TaskRating; remarks: string }]));
+  const [{ data: memberRows }, { data: ratingRows }] = await Promise.all([
+    supabase
+      .from('case_submissions')
+      .select('student_id, student:users!case_submissions_student_id_fkey(name)')
+      .eq('group_id', groupId),
+    supabase.from('case_group_ratings').select('criterion, level, remarks').eq('group_id', groupId),
+  ]);
+  const members = ((memberRows ?? []) as unknown as { student_id: string; student: { name: string | null } | null }[])
+    .map((m) => ({ id: m.student_id, name: m.student?.name ?? 'Unknown student', leader: m.student_id === g.leader_id }))
+    .sort((a, b) => Number(b.leader) - Number(a.leader) || a.name.localeCompare(b.name));
+  if (scope && !members.some((m) => scope.includes(m.id))) return { error: 'Case not found', status: 404 };
+  if (g.status !== 'graded') return { error: 'This group has not been graded yet', status: 409 };
 
-  const studentName = c.student?.name ?? 'Unknown student';
-  const title = c.case_presentations?.title ?? 'Case presentation';
-  const score = c.score === null ? null : Number(c.score);
-  const late = isLateSubmission(c.submitted_at, c.case_presentations?.deadline ?? null);
-  const obs = c.observations ?? { vitals: [], tpr: [], ivf: [] };
-  const patient = [c.patient_initials ?? '—', c.age != null ? `${c.age} y/o` : null, c.sex].filter(Boolean).join(', ');
-  const n = (v: number | null) => (v === null ? '—' : v);
-
-  const narrative: [string, string][] = [
-    ['Chief complaint', c.chief_complaint],
-    ['History', c.history],
-    ['Medications', c.medications],
-    ['Nursing diagnoses', c.nursing_diagnoses],
-    ['Interventions & rationale', c.interventions],
-  ];
+  const ratings = new Map(
+    ((ratingRows ?? []) as { criterion: string; level: number; remarks: string }[]).map((r) => [r.criterion, r]),
+  );
+  const title = g.case_presentations?.title ?? 'Case presentation';
+  const score = g.score === null ? null : Number(g.score);
+  const late = isLateSubmission(g.submitted_at, g.case_presentations?.deadline ?? null);
+  const leader = members.find((m) => m.leader);
 
   const rubricRows = CASE_CRITERIA.map((cr) => {
     const r = ratings.get(cr.key);
-    return [cr.label, r ? ratingLabel(r.rating) : '—', r?.remarks || ''];
+    const earned = r ? Math.round(((cr.weight * r.level) / 4) * 100) / 100 : null;
+    return [
+      cr.label,
+      `${cr.weight}%`,
+      r ? `${caseLevelLabel(r.level)} (${r.level})` : '—',
+      earned === null ? '—' : String(earned),
+      r?.remarks || '',
+    ];
   });
 
   const pdf = (
     <ReportShell
-      title={`Case Presentation — ${studentName}`}
+      title={`Case Presentation — ${g.team_name}`}
       heading="Case Presentation"
       meta={meta}
       metaRows={[
-        { label: 'Student', value: studentName },
+        { label: 'Group', value: [g.team_name, g.section_name].filter(Boolean).join(' · ') },
         { label: 'Presentation', value: title },
-        { label: 'Patient', value: patient },
-        { label: 'Hospital / ward', value: [c.hospital, c.ward].filter(Boolean).join(', ') || '—' },
-        { label: 'Admitting diagnosis', value: c.admitting_diagnosis || '—' },
-        { label: 'Submitted', value: `${date(c.submitted_at)}${late ? ' (late)' : ''}` },
-        { label: 'Graded', value: date(c.graded_at) },
+        { label: 'Leader', value: leader?.name ?? '—' },
+        { label: 'Slides', value: g.file_name ?? '—' },
+        { label: 'Handed in', value: `${date(g.submitted_at)}${late ? ' (late)' : ''}` },
+        { label: 'Graded', value: date(g.graded_at) },
       ]}
     >
       <Text style={styles.sectionTitle}>Result</Text>
       <StatGrid
         items={[
-          { label: 'Score', value: score === null ? '—' : `${score}%` },
+          { label: 'Group score', value: score === null ? '—' : `${score}%` },
           { label: 'Rating', value: score === null ? '—' : scoreDescriptor(score) },
+          { label: 'Members', value: String(members.length) },
         ]}
       />
-      <Table head={['Criterion', 'Rating', 'Remarks']} rows={rubricRows} />
-      {c.remarks ? <Text style={{ marginTop: 6 }}>Instructor remarks: {c.remarks}</Text> : null}
+      <Table head={['Criterion', 'Weight', 'Level', 'Points', 'Remarks']} widths={[3, 0.8, 1.4, 0.8, 2]} rows={rubricRows} />
+      {g.remarks ? <Text style={{ marginTop: 6 }}>Instructor remarks: {g.remarks}</Text> : null}
 
-      {narrative.map(([label, text]) => (
-        <View key={label} wrap={false}>
-          <Text style={styles.sectionTitle}>{label}</Text>
-          <Text>{text || '—'}</Text>
-        </View>
-      ))}
-
-      <Text style={styles.sectionTitle}>Vital signs observed</Text>
+      <Text style={styles.sectionTitle}>Members</Text>
+      <Text style={{ marginBottom: 4 }}>Graded as a group: every member receives the group score.</Text>
       <Table
-        head={['Observed', 'HR', 'BP', 'Temp °C', 'RR', 'SpO2 %', 'Pain']}
-        rows={obs.vitals.map((v) => [
-          v.observed_at ? date(v.observed_at) : '—',
-          n(v.heart_rate),
-          v.bp_systolic != null && v.bp_diastolic != null ? `${v.bp_systolic}/${v.bp_diastolic}` : '—',
-          n(v.temperature_c),
-          n(v.respiratory_rate),
-          n(v.oxygen_saturation),
-          n(v.pain_score),
-        ])}
-        emptyText="No vital signs were recorded for this case."
-      />
-      <Text style={styles.sectionTitle}>TPR</Text>
-      <Table
-        head={['Observed', 'Temp °C', 'Pulse', 'Resp', 'Remarks']}
-        rows={obs.tpr.map((t) => [t.observed_at ? date(t.observed_at) : '—', n(t.temperature_c), n(t.pulse), n(t.respiration), t.remarks || ''])}
-        emptyText="No TPR entries were recorded for this case."
-      />
-      <Text style={styles.sectionTitle}>IV fluids</Text>
-      <Table
-        head={['Solution', 'Volume mL', 'Rate mL/hr', 'Site', 'Remarks']}
-        rows={obs.ivf.map((f) => [f.solution, n(f.volume_ml), n(f.rate_ml_hr), f.site || '—', f.remarks || ''])}
-        emptyText="No IV fluids were recorded for this case."
+        head={['Member', 'Role']}
+        widths={[3, 1]}
+        rows={members.map((m) => [m.name, m.leader ? 'Group leader' : 'Member'])}
+        emptyText="No members are recorded for this group."
       />
     </ReportShell>
   );
 
-  return { subject: `${studentName} ${title}`, pdf };
+  return { subject: `${g.team_name} ${title}`, pdf };
 }
