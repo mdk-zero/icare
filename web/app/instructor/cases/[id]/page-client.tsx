@@ -2,11 +2,19 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowLeft, faPen, faTimes, faTrash } from "@fortawesome/free-solid-svg-icons";
+import {
+  faArrowLeft,
+  faFilePrescription,
+  faMagnifyingGlass,
+  faPen,
+  faTimes,
+  faTrash,
+  faUserGraduate,
+} from "@fortawesome/free-solid-svg-icons";
+import Avatar from "../../../components/Avatar";
 import ConfirmModal from "../../../components/ConfirmModal";
-import { SkeletonTable } from "../../../components/skeletons";
 import { toast } from "../../../components/Toast";
 import { usePageData } from "../../../lib/use-page-data";
 import {
@@ -21,6 +29,7 @@ import {
 } from "../../../lib/api";
 import { scoreDescriptor } from "../../../lib/task-ratings";
 import { CaseStatusBadge, formatDue, inputClassName, labelClassName, toLocalInput } from "../case-ui";
+import CaseGrader from "../case-grader";
 import { deadlineFromInput } from "../../../lib/deadline-input";
 import AudiencePicker, { audiencePayload, useCourseAudience } from "../../../components/AudiencePicker";
 
@@ -41,13 +50,31 @@ export default function CasePresentationClient({ presentationId }: { presentatio
   const presentation = data?.detail?.presentation;
   const roster = useMemo(() => data?.detail?.roster ?? [], [data]);
 
+  const searchParams = useSearchParams();
   const [filter, setFilter] = useState<CaseSubmissionStatus | "all">("all");
-  const [editing, setEditing] = useState(false);
+  const [query, setQuery] = useState("");
+  // ?submission= opens a student's case straight away; ?edit=1 opens the edit form (the card's Edit).
+  const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get("submission"));
+  const [editing, setEditing] = useState(() => searchParams.get("edit") === "1");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const shown = filter === "all" ? roster : roster.filter((r) => r.status === filter);
+  const q = query.trim().toLowerCase();
+  const shown = roster.filter(
+    (r) =>
+      (filter === "all" || r.status === filter) &&
+      (!q || r.student_name.toLowerCase().includes(q) || (r.section_name ?? "").toLowerCase().includes(q)),
+  );
+  const selected = roster.find((r) => r.submission_id === selectedId) ?? null;
+  const select = (id: string) => {
+    setSelectedId(id);
+    // Kept in the address so a reload or a shared link reopens the same student.
+    const url = new URL(window.location.href);
+    url.searchParams.set("submission", id);
+    url.searchParams.delete("edit");
+    window.history.replaceState(null, "", url);
+  };
   const handedIn = roster.some((r) => r.status === "submitted" || r.status === "graded");
 
   const doDelete = async () => {
@@ -112,57 +139,96 @@ export default function CasePresentationClient({ presentationId }: { presentatio
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filter by status">
-        {FILTERS.map((f) => {
-          const count = f.key === "all" ? roster.length : roster.filter((r) => r.status === f.key).length;
-          const active = filter === f.key;
-          return (
-            <button
-              key={f.key}
-              role="tab"
-              aria-selected={active}
-              onClick={() => setFilter(f.key)}
-              className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
-                active
-                  ? "bg-brand-600 border-brand-600 text-white"
-                  : "bg-surface border-gray-300 text-gray-700 hover:bg-gray-50"
-              }`}
-            >
-              {f.label} <span className="tabular-nums opacity-80">{count}</span>
-            </button>
-          );
-        })}
-      </div>
+      {/* Like Patient Case review: the students down the side, the chosen one's case and rubric beside them. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] lg:items-start">
+        <aside className="lg:sticky lg:top-0 lg:self-start">
+          <div className="relative mb-3">
+            <FontAwesomeIcon
+              icon={faMagnifyingGlass}
+              className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+            />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search a student…"
+              aria-label="Search students"
+              className="w-full rounded-xl border border-gray-200 bg-surface py-2.5 pl-10 pr-3.5 text-sm text-gray-900 shadow-tile outline-none transition-colors placeholder:text-gray-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/30"
+            />
+          </div>
 
-      {loading ? (
-        <SkeletonTable rows={6} cols={5} />
-      ) : (
-        <div className="bg-surface rounded-xl border border-hairline shadow-tile overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-subtle text-left text-xs uppercase tracking-wide text-gray-600">
-              <tr>
-                <th className="px-4 py-3 font-semibold">Student</th>
-                <th className="px-4 py-3 font-semibold">Patient</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Score</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-hairline">
-              {shown.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                    No students in this group.
-                  </td>
-                </tr>
-              )}
-              {shown.map((r) => (
-                <RosterRow key={r.submission_id} row={r} />
+          <div role="group" aria-label="Filter by status" className="mb-3 flex flex-wrap gap-1.5">
+            {FILTERS.map((f) => {
+              const count = f.key === "all" ? roster.length : roster.filter((r) => r.status === f.key).length;
+              const active = filter === f.key;
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => setFilter(f.key)}
+                  aria-pressed={active}
+                  className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                    active
+                      ? "border-brand-600 bg-brand-600 text-white"
+                      : "border-gray-200 bg-surface text-gray-600 hover:border-brand-300 hover:text-gray-900"
+                  }`}
+                >
+                  {f.label}
+                  <span className={`tabular-nums ${active ? "text-white/80" : "text-gray-400"}`}>{count}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="space-y-2">
+            {loading &&
+              [0, 1, 2, 3, 4].map((i) => (
+                <div key={i} className="flex animate-pulse items-center gap-3 rounded-xl border border-hairline bg-surface p-3 shadow-tile">
+                  <div className="h-10 w-10 shrink-0 rounded-full bg-gray-200" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3.5 w-2/3 rounded bg-gray-200" />
+                    <div className="h-2.5 w-1/3 rounded bg-gray-100" />
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            {!loading && shown.length === 0 && (
+              <p className="rounded-xl border border-dashed border-gray-300 px-4 py-6 text-center text-sm text-gray-500">
+                {q || filter !== "all" ? "No students match." : "No students have this case presentation yet."}
+              </p>
+            )}
+            {!loading &&
+              shown.map((r, i) => (
+                <RosterButton
+                  key={r.submission_id}
+                  row={r}
+                  index={i}
+                  active={r.submission_id === selectedId}
+                  onSelect={() => select(r.submission_id)}
+                />
+              ))}
+          </div>
+        </aside>
+
+        <section className="min-w-0">
+          {selected && (selected.status === "submitted" || selected.status === "graded") ? (
+            <CaseGrader key={selected.submission_id} submissionId={selected.submission_id} onChanged={refresh} />
+          ) : (
+            <div className="flex min-h-[380px] flex-col items-center justify-center rounded-2xl border border-dashed border-hairline bg-surface/60 px-6 py-16 text-center">
+              <div className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-brand-50 text-brand-600">
+                <FontAwesomeIcon icon={selected ? faFilePrescription : faUserGraduate} className="h-7 w-7" />
+              </div>
+              <p className="font-display text-lg font-semibold text-gray-900">
+                {selected ? `${selected.student_name} hasn't handed it in` : "Pick a student"}
+              </p>
+              <p className="mt-1 max-w-xs text-sm text-gray-500">
+                {selected
+                  ? selected.status === "draft"
+                    ? "Their write-up is still a draft. It opens here once they hand it in."
+                    : "They haven't started their write-up yet."
+                  : "Pick a student to open their case presentation and its rubric."}
+              </p>
+            </div>
+          )}
+        </section>
+      </div>
 
       {editing && presentation && (
         <EditModal
@@ -207,38 +273,53 @@ function BackLink() {
   );
 }
 
-function RosterRow({ row }: { row: CaseRosterEntry }) {
-  const canOpen = row.status === "submitted" || row.status === "graded";
+/** One student in the list: status or score at a glance, and a badge while it waits for grading. */
+function RosterButton({
+  row,
+  index,
+  active,
+  onSelect,
+}: {
+  row: CaseRosterEntry;
+  index: number;
+  active: boolean;
+  onSelect: () => void;
+}) {
   return (
-    <tr className="hover:bg-gray-50/60">
-      <td className="px-4 py-3">
-        <div className="font-medium text-gray-900">{row.student_name}</div>
-        {row.section_name && <div className="text-xs text-gray-500">Section {row.section_name}</div>}
-      </td>
-      <td className="px-4 py-3 font-mono text-gray-700">{row.patient_initials ?? "—"}</td>
-      <td className="px-4 py-3">
-        <CaseStatusBadge status={row.status} late={row.late} />
-      </td>
-      <td className="px-4 py-3 tabular-nums text-gray-700">
-        {row.score === null ? "—" : `${row.score}% · ${scoreDescriptor(row.score)}`}
-      </td>
-      <td className="px-4 py-3 text-right">
-        {canOpen ? (
-          <Link
-            href={`/instructor/cases/submissions/${row.submission_id}`}
-            className={`inline-block px-3 py-1.5 rounded-lg text-sm font-medium ${
-              row.status === "submitted"
-                ? "bg-brand-600 text-white hover:bg-brand-700"
-                : "border border-gray-200 text-gray-700 hover:bg-gray-50"
-            }`}
-          >
-            {row.status === "submitted" ? "Grade" : "View"}
-          </Link>
-        ) : (
-          <span className="text-xs text-gray-400">Not handed in</span>
-        )}
-      </td>
-    </tr>
+    <button
+      onClick={onSelect}
+      style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }}
+      aria-current={active ? "true" : undefined}
+      className={`flex w-full animate-rise items-center gap-3 rounded-xl border p-3 text-left shadow-tile transition-all hover:border-brand-300 hover:shadow-tile-hover ${
+        active
+          ? "border-brand-600/50 bg-brand-600/10 shadow-[inset_3px_0_0_0_var(--color-brand-600)]"
+          : "border-hairline bg-surface"
+      }`}
+    >
+      <Avatar name={row.student_name} userId={row.student_id} size="md" tone="solid" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-semibold text-gray-900">{row.student_name}</span>
+        <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+          {row.status === "graded" && row.score !== null ? (
+            <span className="tabular-nums">
+              {row.score}% · {scoreDescriptor(row.score)}
+            </span>
+          ) : (
+            <CaseStatusBadge status={row.status} late={row.late} />
+          )}
+          {row.section_name && <span className="truncate">· {row.section_name}</span>}
+        </span>
+      </span>
+      {row.status === "submitted" && (
+        <span
+          title="Handed in, not yet graded"
+          className="flex shrink-0 items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+          To grade
+        </span>
+      )}
+    </button>
   );
 }
 

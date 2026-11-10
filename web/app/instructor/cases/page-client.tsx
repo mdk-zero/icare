@@ -1,21 +1,31 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
+  faCalendarDay,
   faClipboardCheck,
+  faClock,
   faFilePrescription,
   faHourglassHalf,
+  faListCheck,
+  faPenToSquare,
   faPlus,
   faSearch,
+  faTrash,
+  faUsers,
 } from "@fortawesome/free-solid-svg-icons";
+import ActionsMenu from "../../components/ActionsMenu";
+import ConfirmModal from "../../components/ConfirmModal";
 import PageHeader from "../../components/PageHeader";
+import { toast } from "../../components/Toast";
 import StatTile from "../../components/StatTile";
 import { SkeletonScenarioCard, SkeletonStatTile } from "../../components/skeletons";
 import { usePageData } from "../../lib/use-page-data";
 import {
+  deleteCasePresentation,
   fetchCasePresentations,
   fetchMyCourses,
   type CasePresentationSummary,
@@ -27,7 +37,11 @@ import CourseGroupHeading from "../../components/CourseGroupHeading";
 const NO_PRESENTATIONS: CasePresentationSummary[] = [];
 
 export default function FacultyCasesClient() {
-  const { data, loading } = usePageData("faculty:cases", async () => {
+  const router = useRouter();
+  const [toDelete, setToDelete] = useState<CasePresentationSummary | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const { data, loading, refresh } = usePageData("faculty:cases", async () => {
     const [list, courses] = await Promise.all([fetchCasePresentations(), fetchMyCourses()]);
     return {
       presentations: list.data?.presentations ?? NO_PRESENTATIONS,
@@ -54,6 +68,34 @@ export default function FacultyCasesClient() {
 
   // By the course each was made for, like Patient Cases and Quizzes.
   const groups = useMemo(() => groupByCourse(filtered, data?.offerings ?? []), [filtered, data?.offerings]);
+
+  // "Case Presentation #2" within its course, oldest first, like Patient Case numbers.
+  const caseNumber = useMemo(() => {
+    const byCourse = new Map<string, CasePresentationSummary[]>();
+    for (const p of presentations) {
+      const key = p.offering_id ?? "";
+      byCourse.set(key, [...(byCourse.get(key) ?? []), p]);
+    }
+    const numbers = new Map<string, number>();
+    for (const list of byCourse.values()) {
+      [...list]
+        .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
+        .forEach((p, i) => numbers.set(p.id, i + 1));
+    }
+    return numbers;
+  }, [presentations]);
+
+  const doDelete = async () => {
+    if (!toDelete) return;
+    setDeleting(true);
+    setDeleteError(null);
+    const res = await deleteCasePresentation(toDelete.id);
+    setDeleting(false);
+    if (res.error !== undefined) return setDeleteError(res.error);
+    toast("Case presentation deleted");
+    setToDelete(null);
+    refresh();
+  };
 
   const toGrade = presentations.reduce((n, p) => n + p.counts.submitted, 0);
   const graded = presentations.reduce((n, p) => n + p.counts.graded, 0);
@@ -149,36 +191,144 @@ export default function FacultyCasesClient() {
                 </p>
               ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {group.items.map((p) => (
-            <Link
-              key={p.id}
-              href={`/instructor/cases/${p.id}`}
-              className="bg-surface rounded-xl border border-hairline shadow-tile overflow-hidden flex flex-col hover:border-brand-600/40 transition-colors"
-            >
-              <div className="p-4 flex-1 space-y-2">
-                <h3 className="font-semibold text-gray-800">{p.title}</h3>
-                <p className="text-sm text-gray-500">Due {formatDue(p.deadline)}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {(p.groups?.length ? p.groups.map((g) => ({ id: g.id, label: `${g.section_name} · ${g.name}` })) : p.sections.map((x) => ({ id: x.id, label: `Section ${x.name}` }))).map((c) => (
-                    <span key={c.id} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
-                      {c.label}
+          {group.items.map((p) => {
+            const handedIn = p.counts.submitted + p.counts.graded;
+            const audience = p.groups?.length
+              ? p.groups.map((g) => ({ id: g.id, label: `${g.section_name} · ${g.name}` }))
+              : p.sections.map((x) => ({ id: x.id, label: `Section ${x.name}` }));
+            return (
+              <div
+                key={p.id}
+                className="group bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_0_rgba(0,0,0,0.06),0_2px_4px_-2px_rgba(0,0,0,0.06)] hover:border-gray-200 transition-all duration-200 overflow-hidden flex flex-col"
+              >
+                <div className="p-3 border-b border-hairline flex-1">
+                  <div className="mb-3 min-w-0">
+                    {caseNumber.has(p.id) && (
+                      <p className="mb-0.5 text-[11px] font-semibold uppercase tracking-wider text-brand-700">
+                        Case Presentation #{caseNumber.get(p.id)}
+                      </p>
+                    )}
+                    <h3 className="font-semibold text-gray-900 line-clamp-2">{p.title}</h3>
+                  </div>
+                  {p.instructions && <p className="text-sm text-gray-500 line-clamp-2 mb-4">{p.instructions}</p>}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-full flex items-center gap-1">
+                      <FontAwesomeIcon icon={faCalendarDay} className="w-3 h-3" />
+                      Due {formatDue(p.deadline)}
                     </span>
-                  ))}
+                    {audience.map((c) => (
+                      <span
+                        key={c.id}
+                        className="px-2.5 py-1 bg-teal-50 text-teal-700 text-xs font-medium rounded-full flex items-center gap-1"
+                      >
+                        <FontAwesomeIcon icon={faUsers} className="w-3 h-3" />
+                        {c.label}
+                      </span>
+                    ))}
+                    {p.counts.late > 0 && (
+                      <span className="px-2.5 py-1 bg-rose-50 text-rose-700 text-xs font-medium rounded-full">
+                        {p.counts.late} late
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="p-5 bg-subtle">
+                  <div className="flex items-center justify-between gap-3 text-sm mb-4">
+                    <span className="text-gray-500 flex shrink-0 items-center gap-1.5">
+                      <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />
+                      {p.counts.total} student{p.counts.total === 1 ? "" : "s"}
+                      {p.counts.graded > 0 && <span className="text-emerald-700">· {p.counts.graded} graded</span>}
+                    </span>
+                    <span
+                      className="text-gray-400 flex min-w-0 items-center gap-1.5 text-xs"
+                      title={new Date(p.created_at).toLocaleString("en-US", { dateStyle: "full", timeStyle: "short" })}
+                    >
+                      <FontAwesomeIcon icon={faClock} className="w-3 h-3 shrink-0" />
+                      <span className="truncate">
+                        Created{" "}
+                        {new Date(p.created_at).toLocaleString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </span>
+                  </div>
+                  {p.counts.total > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/instructor/cases/${p.id}`)}
+                      className={`mb-2 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                        p.counts.submitted > 0
+                          ? "bg-brand-600 text-white hover:bg-brand-700"
+                          : "border border-brand-600/40 bg-surface text-brand-700 hover:bg-brand-600/5"
+                      }`}
+                    >
+                      <FontAwesomeIcon icon={faListCheck} className="h-3.5 w-3.5" />
+                      {p.counts.submitted > 0 ? (
+                        <>
+                          Review
+                          <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs tabular-nums">
+                            {p.counts.submitted} to grade
+                          </span>
+                        </>
+                      ) : (
+                        "Review grades"
+                      )}
+                    </button>
+                  )}
+                  <ActionsMenu
+                    actions={[
+                      {
+                        label: "Edit",
+                        icon: faPenToSquare,
+                        onClick: () => router.push(`/instructor/cases/${p.id}?edit=1`),
+                      },
+                      {
+                        label: "Delete",
+                        icon: faTrash,
+                        danger: true,
+                        onClick: () => {
+                          setDeleteError(null);
+                          setToDelete(p);
+                        },
+                        // Handed-in work stays, as on its own page.
+                        disabled: handedIn > 0,
+                        disabledReason: `You can't delete this case presentation because ${handedIn} student${handedIn === 1 ? " has" : "s have"} handed it in.`,
+                      },
+                    ]}
+                  />
                 </div>
               </div>
-              <div className="px-4 py-3 bg-subtle border-t border-hairline flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 tabular-nums">
-                <span>{p.counts.total} students</span>
-                <span className="text-blue-700">{p.counts.submitted} to grade</span>
-                <span className="text-emerald-700">{p.counts.graded} graded</span>
-                {p.counts.late > 0 && <span className="text-rose-700">{p.counts.late} late</span>}
-              </div>
-            </Link>
-          ))}
+            );
+          })}
         </div>
               )}
             </section>
           ))}
         </div>
+      )}
+
+      {toDelete && (
+        <ConfirmModal
+          config={{
+            title: "Delete case presentation",
+            message: (
+              <>
+                <span className="font-medium text-gray-700">{toDelete.title}</span> and every student&apos;s draft will
+                be removed. This can&apos;t be undone.
+              </>
+            ),
+            loading: deleting,
+            error: deleteError,
+            onConfirm: doDelete,
+          }}
+          onClose={() => {
+            if (!deleting) setToDelete(null);
+          }}
+        />
       )}
     </div>
   );

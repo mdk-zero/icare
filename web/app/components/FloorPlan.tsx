@@ -8,6 +8,7 @@ import {
   faTrash,
   faUserPlus,
   faGripVertical,
+  faRotateRight,
 } from "@fortawesome/free-solid-svg-icons";
 import { WARD_FIXTURE_KINDS } from "../lib/api";
 import type { DoorSide, Room, WardFixture, WardFixtureKind } from "../lib/api";
@@ -370,6 +371,33 @@ const DOOR_CHOICES: { side: DoorSide; label: string }[] = [
 ];
 const SIDE_WORD: Record<DoorSide, string> = { n: "top", w: "left", e: "right", s: "bottom" };
 
+/** A quarter turn clockwise: the wall that ends up where each one was. */
+const TURNED: Record<DoorSide, DoorSide> = { n: "e", e: "s", s: "w", w: "n" };
+
+/**
+ * Where a room lands turned a quarter turn: width and height swap, centred on
+ * where it stood, or else the free spot nearest that centre (within its own
+ * length), so a room squeezed between others can still turn. Null when it
+ * fits nowhere close.
+ */
+function turnedRect(rect: Rect, fits: (r: Rect) => boolean): Rect | null {
+  const w = rect.h;
+  const h = rect.w;
+  if (w > GRID_COLS || h > GRID_ROWS) return null;
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h / 2;
+  const reach = Math.max(rect.w, rect.h);
+  const spots: Rect[] = [];
+  for (let y = 0; y + h <= GRID_ROWS; y++) {
+    for (let x = 0; x + w <= GRID_COLS; x++) {
+      if (Math.abs(x + w / 2 - cx) <= reach && Math.abs(y + h / 2 - cy) <= reach) spots.push({ x, y, w, h });
+    }
+  }
+  const dist = (r: Rect) => Math.hypot(r.x + w / 2 - cx, r.y + h / 2 - cy);
+  spots.sort((a, b) => dist(a) - dist(b) || a.y - b.y || a.x - b.x);
+  return spots.find(fits) ?? null;
+}
+
 /** A room outline with one wall picked out: which wall this choice means. */
 function SideGlyph({ side }: { side: DoorSide }) {
   const edge = { n: "border-t-[3px]", s: "border-b-[3px]", w: "border-l-[3px]", e: "border-r-[3px]" }[side];
@@ -689,6 +717,28 @@ export function FloorPlanEditor({
   const barButton =
     "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors";
 
+  /**
+   * Turn the selected room a quarter turn: a long room becomes a tall one
+   * (its beds follow the new shape) and its door turns with it. Refused when
+   * the turned room would land on something; like a move, it is saved with
+   * the layout.
+   */
+  const rotation = (room: Room): { blocked: string | null; turn: () => void } => {
+    const rect = plan.rooms[room.id]!;
+    const next = rect.w === rect.h ? rect : turnedRect(rect, (r) => !collides(r, plan, `r:${room.id}`));
+    return {
+      blocked: next ? null : "No free space nearby to turn it; move it or its neighbours first",
+      turn: () => {
+        if (!next) return;
+        onPlanChange({
+          ...plan,
+          rooms: { ...plan.rooms, [room.id]: next },
+          doors: { ...plan.doors, [room.id]: TURNED[plan.doors[room.id] ?? doorOf(room)] },
+        });
+      },
+    };
+  };
+
   return (
     <div className="space-y-3">
       {selectedRoom && (
@@ -710,6 +760,20 @@ export function FloorPlanEditor({
                 Students
               </button>
             )}
+            {(() => {
+              const { blocked, turn } = rotation(selectedRoom);
+              return (
+                <button
+                  onClick={turn}
+                  disabled={!!blocked}
+                  title={blocked ?? "Turn the room a quarter turn; its beds and door turn with it"}
+                  className={`${barButton} text-brand-700 hover:bg-brand-600/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent`}
+                >
+                  <FontAwesomeIcon icon={faRotateRight} className="h-3 w-3" />
+                  Rotate
+                </button>
+              );
+            })()}
             {onEditRoom && (
               <button
                 onClick={() => onEditRoom(selectedRoom)}
