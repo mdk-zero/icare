@@ -106,7 +106,7 @@ export default function FacultyCasesClient() {
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faFilePrescription} className="h-4 w-4" />, label: "Case Presentations" }}
         title="Case Presentations"
-        subtitle="Students write up their most interesting patient from hospital duty — by initials only — and you grade the presentation"
+        subtitle="Groups report a patient case from hospital duty. Each leader uploads the slides, and you grade the group as a whole"
       />
 
       {loading ? (
@@ -121,15 +121,15 @@ export default function FacultyCasesClient() {
             icon={faClipboardCheck}
             value={toGrade}
             label="Waiting for grading"
-            caption="Handed in, not yet graded"
+            caption="Groups that handed in, not yet graded"
             iconBg="bg-blue-50"
             iconColor="text-blue-600"
           />
           <StatTile
             icon={faHourglassHalf}
             value={outstanding}
-            label="Still being written"
-            caption="Not started or in draft"
+            label="Not handed in"
+            caption="Groups still preparing their slides"
             iconBg="bg-amber-50"
             iconColor="text-amber-600"
           />
@@ -178,7 +178,7 @@ export default function FacultyCasesClient() {
         <div className="bg-surface p-12 rounded-xl border border-hairline shadow-tile text-center text-gray-500">
           {search
             ? "No case presentations match your search."
-            : "No case presentations yet. Create one to have your students write up a case from their hospital duty."}
+            : "No case presentations yet. Create one to have your groups report a case from their hospital duty."}
         </div>
       ) : (
         <div className="space-y-6">
@@ -236,7 +236,8 @@ export default function FacultyCasesClient() {
                   <div className="flex items-center justify-between gap-3 text-sm mb-4">
                     <span className="text-gray-500 flex shrink-0 items-center gap-1.5">
                       <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />
-                      {p.counts.total} student{p.counts.total === 1 ? "" : "s"}
+                      {p.counts.total} group{p.counts.total === 1 ? "" : "s"}
+                      {p.student_count ? ` · ${p.student_count} students` : ""}
                       {p.counts.graded > 0 && <span className="text-emerald-700">· {p.counts.graded} graded</span>}
                     </span>
                     <span
@@ -296,7 +297,7 @@ export default function FacultyCasesClient() {
                         },
                         // Handed-in work stays, as on its own page.
                         disabled: handedIn > 0,
-                        disabledReason: `You can't delete this case presentation because ${handedIn} student${handedIn === 1 ? " has" : "s have"} handed it in.`,
+                        disabledReason: `You can't delete this case presentation because ${handedIn} group${handedIn === 1 ? " has" : "s have"} handed it in.`,
                       },
                     ]}
                   />
@@ -317,8 +318,8 @@ export default function FacultyCasesClient() {
             title: "Delete case presentation",
             message: (
               <>
-                <span className="font-medium text-gray-700">{toDelete.title}</span> and every student&apos;s draft will
-                be removed. This can&apos;t be undone.
+                <span className="font-medium text-gray-700">{toDelete.title}</span> will be removed from every group. This
+                can&apos;t be undone.
               </>
             ),
             loading: deleting,

@@ -2,9 +2,16 @@
 
 import { json, ndjson, notFound, notInDemo, route, sleep, type DemoContext } from "../router";
 import { newId } from "../store";
-import type { DemoCasePresentation, DemoMaterial } from "../fixtures/teaching";
-import { CASE_CRITERIA, isLateSubmission } from "@/app/lib/case-rubric";
-import { isTaskRating, type TaskRating } from "@/app/lib/task-ratings";
+import type { DemoCaseGroup, DemoCasePresentation, DemoMaterial } from "../fixtures/teaching";
+import {
+  CASE_CRITERIA,
+  allCriteriaRated,
+  caseScore,
+  isCaseCriterion,
+  isCaseLevel,
+  isLateSubmission,
+  type CaseLevel,
+} from "@/app/lib/case-rubric";
 import { audit } from "./shared";
 import { parseDeadline } from "@/app/lib/deadline-input";
 import { DAY_MS, hasWork, lastActivity, mean, skillMastery } from "./derive";
@@ -31,34 +38,59 @@ function presentationOut(ctx: Ctx, p: DemoCasePresentation) {
   return {
     ...p,
     sections: p.section_ids.map((id) => ({ id, name: sectionName(ctx.db, id) ?? "—" })),
-    groups: (p.team_ids ?? [])
-      .map((id) => ctx.db.teams.find((t) => t.id === id))
-      .filter((t): t is NonNullable<typeof t> => !!t)
-      .map((t) => ({ id: t.id, name: t.name, section_name: sectionName(ctx.db, t.section_id) ?? "" })),
+    groups: caseGroupsFor(ctx, p).map((g) => ({ id: g.id, name: g.team_name, section_name: g.section_name })),
   };
 }
 
-/** Who a presentation goes to: whole sections, an instructor's groups, students named one by one. */
-function presentationAudience(ctx: Ctx, body: Record<string, unknown> | undefined) {
-  const list = (v: unknown) => (Array.isArray(v) ? (v as unknown[]).filter((x): x is string => typeof x === "string") : []);
-  const sectionIds = list(body?.section_ids);
-  const teams = ctx.db.teams.filter((t) => list(body?.team_ids).includes(t.id));
-  if (ctx.role === "faculty" && teams.some((t) => t.faculty_id !== ctx.viewer.id)) return { error: "You can only give it to groups you supervise" };
-  const studentIds = list(body?.student_ids);
-  const people = new Map<string, { id: string }>();
-  for (const s of rosterFor(ctx, sectionIds)) people.set(s.id, s);
-  for (const u of ctx.db.users) if (u.role === "student" && u.team_id && teams.some((t) => t.id === u.team_id)) people.set(u.id, u);
-  for (const id of studentIds) people.set(id, { id });
-  return {
-    sectionIds: [...new Set([...sectionIds, ...teams.map((t) => t.section_id)])],
-    teamIds: teams.map((t) => t.id),
-    students: [...people.values()],
-  };
+/** Stores saved before groups (093) have no table yet. */
+function allCaseGroups(ctx: Ctx): DemoCaseGroup[] {
+  const db = ctx.db as typeof ctx.db & { caseGroups?: DemoCaseGroup[] };
+  if (!db.caseGroups) db.caseGroups = [];
+  return db.caseGroups;
 }
 
-function scopedSubmissions(ctx: Ctx, presentationId: string) {
+/** The groups of a presentation this viewer sees: all for its maker or an admin, else those with their students. */
+function caseGroupsFor(ctx: Ctx, p: DemoCasePresentation) {
   const mine = new Set(visibleStudents(ctx.db, ctx.role, ctx.viewer.id).map((s) => s.id));
-  return ctx.db.caseSubmissions.filter((s) => s.presentation_id === presentationId && mine.has(s.student_id));
+  const own = ctx.role === "admin" || p.created_by === ctx.viewer.id;
+  return allCaseGroups(ctx)
+    .filter((g) => g.presentation_id === p.id)
+    .filter((g) => own || ctx.db.caseSubmissions.some((s) => s.group_id === g.id && mine.has(s.student_id)))
+    .sort((a, b) => a.section_name.localeCompare(b.section_name) || a.team_name.localeCompare(b.team_name));
+}
+
+function groupOut(ctx: Ctx, g: DemoCaseGroup) {
+  const p = ctx.db.casePresentations.find((x) => x.id === g.presentation_id);
+  const name = (id: string | null) => (id ? userById(ctx.db, id)?.name ?? null : null);
+  return {
+    id: g.id,
+    presentation_id: g.presentation_id,
+    team_id: g.team_id,
+    name: g.team_name,
+    section_name: g.section_name,
+    leader_id: g.leader_id,
+    leader_name: name(g.leader_id),
+    status: g.status,
+    file: g.file ? { name: g.file.name, size: g.file.size, type: g.file.type, uploaded_by_name: name(g.file.uploaded_by) } : null,
+    submitted_at: g.submitted_at,
+    late: isLateSubmission(g.submitted_at, p?.deadline ?? null),
+    score: g.score,
+    remarks: g.remarks,
+    graded_at: g.graded_at,
+    members: ctx.db.caseSubmissions
+      .filter((s) => s.group_id === g.id)
+      .map((s) => {
+        const u = userById(ctx.db, s.student_id);
+        return {
+          student_id: s.student_id,
+          submission_id: s.id,
+          name: u?.name ?? "Unknown student",
+          picture_url: u?.picture_url ?? null,
+          is_leader: s.student_id === g.leader_id,
+        };
+      })
+      .sort((a, b) => Number(b.is_leader) - Number(a.is_leader) || a.name.localeCompare(b.name)),
+  };
 }
 
 function visiblePresentations(ctx: Ctx) {
@@ -72,53 +104,81 @@ route("GET", "/api/faculty/cases", (ctx) => {
     presentations: visiblePresentations(ctx)
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
       .map((p) => {
-        const subs = scopedSubmissions(ctx, p.id);
+        const groups = caseGroupsFor(ctx, p);
+        const count = (status: string) => groups.filter((g) => g.status === status).length;
         return {
           ...presentationOut(ctx, p),
+          student_count: ctx.db.caseSubmissions.filter((s) => groups.some((g) => g.id === s.group_id)).length,
           counts: {
-            total: subs.length,
-            not_started: subs.filter((s) => s.status === "not_started").length,
-            draft: subs.filter((s) => s.status === "draft").length,
-            submitted: subs.filter((s) => s.status === "submitted").length,
-            graded: subs.filter((s) => s.status === "graded").length,
-            late: subs.filter((s) => isLateSubmission(s.submitted_at, p.deadline)).length,
+            total: groups.length,
+            not_started: count("not_started") + count("draft"),
+            draft: 0,
+            submitted: count("submitted"),
+            graded: count("graded"),
+            late: groups.filter((g) => isLateSubmission(g.submitted_at, p.deadline)).length,
           },
         };
       }),
   };
 });
 
-function blankSubmission(presentationId: string, studentId: string) {
-  return {
-    id: newId(),
-    presentation_id: presentationId,
-    student_id: studentId,
-    status: "not_started" as const,
-    patient_initials: null,
-    age: null,
-    sex: null,
-    hospital: "",
-    ward: "",
-    admitting_diagnosis: "",
-    chief_complaint: "",
-    history: "",
-    medications: "",
-    nursing_diagnoses: "",
-    interventions: "",
-    observations: { vitals: [], tpr: [], ivf: [] },
-    submitted_at: null,
-    graded_at: null,
-    graded_by: null,
-    score: null,
-    remarks: "",
-    ratings: [],
-    updated_at: new Date().toISOString(),
-  };
-}
-
-function rosterFor(ctx: Ctx, sectionIds: string[]) {
-  const mine = visibleStudents(ctx.db, ctx.role, ctx.viewer.id);
-  return mine.filter((s) => s.section_id && sectionIds.includes(s.section_id));
+/** Gives a presentation to groups, each with its leader; groups that have it already are skipped. */
+function assignGroups(ctx: Ctx, p: DemoCasePresentation, input: unknown): { error: string; status: number } | { added: number; students: number } {
+  if (!Array.isArray(input)) return { error: "Choose a leader for each group", status: 400 };
+  const picks = input as { team_id?: unknown; leader_id?: unknown }[];
+  if (picks.some((x) => typeof x?.team_id !== "string" || typeof x?.leader_id !== "string" || !x.leader_id)) {
+    return { error: "Choose a leader for each group", status: 400 };
+  }
+  const { db } = ctx;
+  let added = 0;
+  let students = 0;
+  for (const pick of picks as { team_id: string; leader_id: string }[]) {
+    const team = db.teams.find((t) => t.id === pick.team_id);
+    if (!team) return { error: "Group not found", status: 400 };
+    if (ctx.role === "faculty" && team.faculty_id !== ctx.viewer.id) return { error: "You can only give it to groups you supervise", status: 403 };
+    if (allCaseGroups(ctx).some((g) => g.presentation_id === p.id && g.team_id === team.id)) continue;
+    const members = db.users.filter((u) => u.role === "student" && u.team_id === team.id);
+    if (members.length === 0) return { error: `${team.name} has no members yet`, status: 400 };
+    if (!members.some((m) => m.id === pick.leader_id)) return { error: "Each group leader must be a member of that group", status: 400 };
+    const group: DemoCaseGroup = {
+      id: newId(),
+      presentation_id: p.id,
+      team_id: team.id,
+      team_name: team.name,
+      section_name: sectionName(db, team.section_id) ?? "",
+      leader_id: pick.leader_id,
+      status: "not_started",
+      file: null,
+      submitted_at: null,
+      score: null,
+      remarks: "",
+      graded_by: null,
+      graded_at: null,
+      ratings: [],
+    };
+    allCaseGroups(ctx).push(group);
+    for (const m of members) {
+      db.caseSubmissions = db.caseSubmissions.filter((s) => !(s.presentation_id === p.id && s.student_id === m.id));
+      db.caseSubmissions.push({
+        id: newId(),
+        presentation_id: p.id,
+        student_id: m.id,
+        group_id: group.id,
+        status: "not_started",
+        submitted_at: null,
+        graded_at: null,
+        graded_by: null,
+        score: null,
+        remarks: "",
+        updated_at: new Date().toISOString(),
+      });
+    }
+    p.team_ids = [...new Set([...(p.team_ids ?? []), team.id])];
+    p.section_ids = [...new Set([...p.section_ids, team.section_id])];
+    added += 1;
+    students += members.length;
+  }
+  return { added, students };
 }
 
 route("POST", "/api/faculty/cases", (ctx) => {
@@ -126,55 +186,39 @@ route("POST", "/api/faculty/cases", (ctx) => {
   const { db, body, viewer } = ctx;
   const title = typeof body?.title === "string" ? body.title.trim() : "";
   if (!title) return json({ error: "Give the case presentation a title" }, 400);
-  const audience = presentationAudience(ctx, body);
-  if ("error" in audience) return json({ error: audience.error }, 403);
-  if (audience.students.length === 0) return json({ error: "Choose who gets this case presentation" }, 400);
   const deadlineCheck = parseDeadline(body?.deadline);
   if (!deadlineCheck.ok) return json({ error: deadlineCheck.error }, 400);
+  if (!Array.isArray(body?.groups) || body.groups.length === 0) return json({ error: "Choose the groups that report this case" }, 400);
   const now = new Date().toISOString();
   const p: DemoCasePresentation = {
     id: newId(),
     title,
     instructions: typeof body?.instructions === "string" ? body.instructions : "",
     deadline: deadlineCheck.value,
-    section_ids: audience.sectionIds,
-    team_ids: audience.teamIds,
+    section_ids: [],
+    team_ids: [],
     created_by: viewer.id,
     created_at: now,
     updated_at: now,
     offering_id: typeof body?.offering_id === "string" && body.offering_id ? body.offering_id : null,
   };
   db.casePresentations.push(p);
-  const roster = audience.students;
-  for (const s of roster) db.caseSubmissions.push(blankSubmission(p.id, s.id));
+  const assigned = assignGroups(ctx, p, body.groups);
+  if ("error" in assigned) {
+    db.casePresentations = db.casePresentations.filter((x) => x.id !== p.id);
+    return json({ error: assigned.error }, assigned.status);
+  }
   audit(db, viewer, "case_presentation.create", "case_presentations", { message: `Assigned case presentation “${title}”` }, p.id);
-  return json({ presentation: presentationOut(ctx, p), student_count: roster.length }, 201);
+  return json({ presentation: presentationOut(ctx, p), student_count: assigned.students }, 201);
 });
 
 route("GET", "/api/faculty/cases/:id", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
-  const { db } = ctx;
   const p = visiblePresentations(ctx).find((x) => x.id === ctx.params.id);
   if (!p) return notFound("Case presentation not found");
   return {
     presentation: { ...presentationOut(ctx, p), can_manage: ctx.role === "admin" || p.created_by === ctx.viewer.id },
-    roster: scopedSubmissions(ctx, p.id)
-      .map((s) => {
-        const student = userById(db, s.student_id);
-        return {
-          submission_id: s.id,
-          student_id: s.student_id,
-          student_name: student?.name ?? "Unknown student",
-          section_name: sectionName(db, student?.section_id),
-          status: s.status,
-          patient_initials: s.patient_initials,
-          submitted_at: s.submitted_at,
-          graded_at: s.graded_at,
-          score: s.score,
-          late: isLateSubmission(s.submitted_at, p.deadline),
-        };
-      })
-      .sort((a, b) => a.student_name.localeCompare(b.student_name)),
+    groups: caseGroupsFor(ctx, p).map((g) => groupOut(ctx, g)),
   };
 });
 
@@ -192,21 +236,24 @@ route("PATCH", "/api/faculty/cases/:id", (ctx) => {
     if (!deadlineCheck.ok) return json({ error: deadlineCheck.error }, 400);
     p.deadline = deadlineCheck.value;
   }
-  let added = 0;
-  if (Array.isArray(body?.section_ids) || Array.isArray(body?.team_ids) || Array.isArray(body?.student_ids)) {
-    const audience = presentationAudience(ctx, body);
-    if ("error" in audience) return json({ error: audience.error }, 403);
-    p.section_ids = [...new Set([...p.section_ids, ...audience.sectionIds])];
-    p.team_ids = [...new Set([...(p.team_ids ?? []), ...audience.teamIds])];
-    for (const s of audience.students) {
-      if (!db.caseSubmissions.some((x) => x.presentation_id === p.id && x.student_id === s.id)) {
-        db.caseSubmissions.push(blankSubmission(p.id, s.id));
-        added += 1;
-      }
+  const leaders = body?.leaders && typeof body.leaders === "object" ? (body.leaders as Record<string, string>) : {};
+  for (const [groupId, leaderId] of Object.entries(leaders)) {
+    const g = allCaseGroups(ctx).find((x) => x.id === groupId && x.presentation_id === p.id);
+    if (!g) return notFound("Group not found");
+    if (g.status === "graded") return json({ error: `${g.team_name} is already graded, so its leader can't change` }, 409);
+    if (!db.caseSubmissions.some((s) => s.group_id === g.id && s.student_id === leaderId)) {
+      return json({ error: `The leader must be a member of ${g.team_name}` }, 400);
     }
+    g.leader_id = leaderId;
+  }
+  let added = { added: 0, students: 0 };
+  if (Array.isArray(body?.groups) && body.groups.length > 0) {
+    const assigned = assignGroups(ctx, p, body.groups);
+    if ("error" in assigned) return json({ error: assigned.error }, assigned.status);
+    added = assigned;
   }
   p.updated_at = new Date().toISOString();
-  return { ok: true, students_added: added };
+  return { ok: true, groups_added: added.added, students_added: added.students };
 });
 
 route("DELETE", "/api/faculty/cases/:id", (ctx) => {
@@ -215,63 +262,70 @@ route("DELETE", "/api/faculty/cases/:id", (ctx) => {
   const p = db.casePresentations.find((x) => x.id === ctx.params.id);
   if (!p) return notFound("Case presentation not found");
   if (ctx.role !== "admin" && p.created_by !== ctx.viewer.id) return json({ error: "Only the instructor who assigned it can delete it" }, 403);
+  if (allCaseGroups(ctx).some((g) => g.presentation_id === p.id && (g.status === "submitted" || g.status === "graded"))) {
+    return json({ error: "Groups have already handed in this case presentation; it can no longer be deleted" }, 409);
+  }
   db.casePresentations = db.casePresentations.filter((x) => x.id !== p.id);
   db.caseSubmissions = db.caseSubmissions.filter((s) => s.presentation_id !== p.id);
+  const db2 = db as typeof db & { caseGroups?: DemoCaseGroup[] };
+  db2.caseGroups = allCaseGroups(ctx).filter((g) => g.presentation_id !== p.id);
   return { ok: true };
 });
 
-function loadSubmission(ctx: Ctx) {
-  const mine = new Set(visibleStudents(ctx.db, ctx.role, ctx.viewer.id).map((s) => s.id));
-  const s = ctx.db.caseSubmissions.find((x) => x.id === ctx.params.id);
-  return s && mine.has(s.student_id) ? s : null;
+function loadCaseGroup(ctx: Ctx) {
+  const g = allCaseGroups(ctx).find((x) => x.id === ctx.params.groupId);
+  const p = g && visiblePresentations(ctx).find((x) => x.id === g.presentation_id);
+  if (!g || !p || !caseGroupsFor(ctx, p).some((x) => x.id === g.id)) return null;
+  return { g, p };
 }
 
-route("GET", "/api/faculty/cases/submissions/:id", (ctx) => {
+route("GET", "/api/faculty/cases/groups/:groupId", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
-  const s = loadSubmission(ctx);
-  if (!s) return notFound("Submission not found");
-  const p = ctx.db.casePresentations.find((x) => x.id === s.presentation_id)!;
-  const student = userById(ctx.db, s.student_id);
-  const { ratings, ...submission } = s;
+  const found = loadCaseGroup(ctx);
+  if (!found) return notFound("Group not found");
+  const { g, p } = found;
   return {
-    submission: { ...submission, late: isLateSubmission(s.submitted_at, p.deadline) },
-    presentation: presentationOut(ctx, p),
-    student: student ? { id: student.id, name: student.name, section_id: student.section_id } : null,
-    ratings,
-    criteria: CASE_CRITERIA.map((c) => ({ key: c.key, label: c.label, description: c.description })),
+    group: groupOut(ctx, g),
+    presentation: { id: p.id, title: p.title, instructions: p.instructions, deadline: p.deadline },
+    // The demo keeps no files, so there is nothing to show in the page.
+    file_url: null,
+    ratings: g.ratings,
+    criteria: CASE_CRITERIA,
   };
 });
 
-route("PUT", "/api/faculty/cases/submissions/:id", (ctx) => {
+route("PUT", "/api/faculty/cases/groups/:groupId", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   const { db, body, viewer } = ctx;
-  const s = loadSubmission(ctx);
-  if (!s) return notFound("Submission not found");
-  if (s.status === "graded") return json({ error: "This case has already been graded" }, 409);
-  if (s.status !== "submitted") return json({ error: "The student has not handed this case in yet" }, 409);
-  const known = new Set(CASE_CRITERIA.map((c) => c.key));
-  for (const [key, rating] of Object.entries((body?.ratings ?? {}) as Record<string, TaskRating | null>)) {
-    if (!known.has(key)) return json({ error: `Unknown criterion: ${key}` }, 400);
-    if (rating !== null && !isTaskRating(rating)) return json({ error: `Invalid rating for ${key}` }, 400);
-    s.ratings = s.ratings.filter((r) => r.criterion !== key);
-    if (rating) s.ratings.push({ criterion: key, rating, remarks: "" });
+  const found = loadCaseGroup(ctx);
+  if (!found) return notFound("Group not found");
+  const { g } = found;
+  if (g.status === "graded") return json({ error: "This group has already been graded" }, 409);
+  if (g.status !== "submitted") return json({ error: "The group leader has not handed in the slides yet" }, 409);
+  for (const [key, level] of Object.entries((body?.ratings ?? {}) as Record<string, unknown>)) {
+    if (!isCaseCriterion(key)) return json({ error: `Unknown criterion: ${key}` }, 400);
+    if (level !== null && !isCaseLevel(level)) return json({ error: `Invalid level for ${key}` }, 400);
+    const keep = g.ratings.find((r) => r.criterion === key)?.remarks ?? "";
+    g.ratings = g.ratings.filter((r) => r.criterion !== key);
+    if (level !== null) g.ratings.push({ criterion: key, level: level as CaseLevel, remarks: keep });
   }
   for (const [key, text] of Object.entries((body?.rating_remarks ?? {}) as Record<string, string>)) {
-    const r = s.ratings.find((x) => x.criterion === key);
+    const r = g.ratings.find((x) => x.criterion === key);
     if (r) r.remarks = String(text ?? "");
   }
-  if (typeof body?.remarks === "string") s.remarks = body.remarks;
-  const credit = { excellent: 1, satisfactory: 2 / 3, needs_practice: 1 / 3 };
-  const score = Math.round((s.ratings.reduce((sum, r) => sum + credit[r.rating], 0) / CASE_CRITERIA.length) * 100);
+  if (typeof body?.remarks === "string") g.remarks = body.remarks;
+  const levels = new Map(g.ratings.map((r) => [r.criterion, r.level]));
+  const score = caseScore(levels);
   if (body?.finalize === true) {
-    if (s.ratings.length < CASE_CRITERIA.length) return json({ error: "Rate every criterion before finalizing" }, 400);
-    s.status = "graded";
-    s.score = score;
-    s.graded_by = viewer.id;
-    s.graded_at = new Date().toISOString();
-    audit(db, viewer, "case_submission.grade", "case_submissions", { message: `Graded ${userById(db, s.student_id)?.name}'s case presentation`, score }, s.id);
+    if (!allCriteriaRated(levels)) return json({ error: "Rate every criterion before finalizing" }, 400);
+    const now = new Date().toISOString();
+    Object.assign(g, { status: "graded", score, graded_by: viewer.id, graded_at: now });
+    for (const s of db.caseSubmissions.filter((x) => x.group_id === g.id)) {
+      Object.assign(s, { status: "graded", score, graded_by: viewer.id, graded_at: now, remarks: g.remarks });
+    }
+    audit(db, viewer, "case_group.grade", "case_presentation_groups", { message: `Graded ${g.team_name}'s case presentation`, score }, g.id);
   }
-  return { ok: true, ratings: s.ratings, score, status: s.status };
+  return { ok: true, ratings: g.ratings, score, status: g.status };
 });
 
 // ---------------------------------------------------------------------------

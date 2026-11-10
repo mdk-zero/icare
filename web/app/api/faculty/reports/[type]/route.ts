@@ -149,7 +149,15 @@ async function outsideDean(
   if (deanId === null || !id) return false;
   if (type === 'scenario') return !(await ownsRow(supabase, 'scenarios', id, deanId));
   if (type === 'assessment') return !(await ownsRow(supabase, 'assessments', id, deanId));
-  if (type === 'case') return !(await ownsRow(supabase, 'case_presentations', id, deanId));
+  if (type === 'case') {
+    // The target is a group (093) or a member's submission; either names its presentation.
+    const { data: group } = await supabase.from('case_presentation_groups').select('presentation_id').eq('id', id).maybeSingle();
+    const { data: submission } = group
+      ? { data: null }
+      : await supabase.from('case_submissions').select('presentation_id').eq('id', id).maybeSingle();
+    const presentationId = (group ?? submission)?.presentation_id as string | undefined;
+    return !presentationId || !(await ownsRow(supabase, 'case_presentations', presentationId, deanId));
+  }
   if (type === 'discharge') {
     const { data } = await supabase.from('discharge_summaries').select('patient_id').eq('id', id).maybeSingle();
     return !data || !(await ownsRow(supabase, 'patients', data.patient_id as string, deanId));

@@ -3,16 +3,18 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import {
-  assignCasePresentation,
+  assignCaseGroups,
+  loadCaseGroups,
+  loadTeams,
+  parseCaseGroups,
+  removeCaseFiles,
   scopedCaseStudents,
   canManagePresentation,
   isMissingCaseTables,
   CASES_NOT_READY,
   PRESENTATION_COLUMNS,
 } from '@/app/lib/cases';
-import { loadTeams, presentationGroups } from '@/app/lib/cases';
 import { activityOfferings } from '@/app/lib/activity-course';
-import { isLateSubmission } from '@/app/lib/case-rubric';
 import { parseDeadline } from '@/app/lib/deadline-input';
 import { ownsRow, viewerDeanId } from '@/app/lib/dean-scope';
 
@@ -56,7 +58,8 @@ async function loadPresentation(
   return { presentation: data as unknown as Presentation };
 }
 
-// GET /api/faculty/cases/:id — the presentation and the caller's students on it.
+// GET /api/faculty/cases/:id — the presentation and its groups: members,
+// leader, file and grade. An instructor sees the groups their students are in.
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   const auth = await authorize();
   if ('error' in auth) return auth.error;
@@ -68,17 +71,18 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     const loaded = await loadPresentation(supabase, session, id);
     if (loaded.response) return loaded.response;
     const presentation = loaded.presentation;
+    const canManage = canManagePresentation(session, presentation);
 
+    const result = await loadCaseGroups(supabase, new Map([[id, presentation.deadline]]));
+    if (result.error) {
+      if (isMissingCaseTables(result.error)) return NextResponse.json({ error: CASES_NOT_READY }, { status: 503 });
+      throw result.error;
+    }
     const scope = await scopedCaseStudents(supabase, session);
-    let query = supabase
-      .from('case_submissions')
-      .select('id, student_id, status, patient_initials, submitted_at, graded_at, score, users!case_submissions_student_id_fkey(name, section_id)')
-      .eq('presentation_id', id);
-    if (scope) query = query.in('student_id', [...scope]);
-    const { data: rows, error } = await query;
-    if (error) throw error;
-
-    if (scope && (rows ?? []).length === 0 && presentation.created_by !== session.uid) {
+    const groups = (result.groups.get(id) ?? []).filter(
+      (g) => !scope || canManage || g.members.some((m) => scope.has(m.student_id)),
+    );
+    if (scope && !canManage && groups.length === 0) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -87,33 +91,15 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       : { data: [] as { id: string; name: string }[] };
     const sectionName = new Map((sections ?? []).map((s) => [s.id as string, s.name as string]));
 
-    const roster = (rows ?? [])
-      .map((r) => {
-        const user = r.users as unknown as { name: string | null; section_id: string | null } | null;
-        return {
-          submission_id: r.id,
-          student_id: r.student_id,
-          student_name: user?.name ?? 'Unknown student',
-          section_name: user?.section_id ? sectionName.get(user.section_id) ?? null : null,
-          status: r.status,
-          patient_initials: r.patient_initials,
-          submitted_at: r.submitted_at,
-          graded_at: r.graded_at,
-          score: r.score === null ? null : Number(r.score),
-          late: isLateSubmission(r.submitted_at as string | null, presentation.deadline),
-        };
-      })
-      .sort((a, b) => a.student_name.localeCompare(b.student_name));
-
     return NextResponse.json({
       presentation: {
         ...presentation,
         sections: presentation.section_ids.map((sid) => ({ id: sid, name: sectionName.get(sid) ?? 'Unknown' })),
-        groups: (await presentationGroups(supabase, [id])).get(id) ?? [],
+        groups: groups.map((g) => ({ id: g.id, name: g.name, section_name: g.section_name })),
         offering_id: (await activityOfferings(supabase, 'case_presentations', [id])).get(id) ?? null,
-        can_manage: canManagePresentation(session, presentation),
+        can_manage: canManage,
       },
-      roster,
+      groups,
     });
   } catch (err) {
     console.error('Failed to load case presentation', err);
@@ -121,9 +107,10 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// PATCH /api/faculty/cases/:id  { title?, instructions?, deadline?, section_ids? }
-// Adding sections gives it to the caller's students there; sections are never
-// removed, since students there may already have written their case.
+// PATCH /api/faculty/cases/:id
+//   { title?, instructions?, deadline?, groups?: [{ team_id, leader_id }], leaders?: { [groupId]: studentId } }
+// More groups can be added; groups are never removed, since they may have
+// handed in already. A leader can be changed until the group is graded.
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const auth = await authorize();
   if ('error' in auth) return auth.error;
@@ -136,7 +123,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
-  const { title, instructions, deadline, section_ids, team_ids, student_ids } = body as Record<string, unknown>;
+  const { title, instructions, deadline, groups: groupsInput, leaders } = body as Record<string, unknown>;
 
   try {
     const supabase = getSupabaseAdmin();
@@ -163,61 +150,96 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       update.deadline = deadlineCheck.value;
     }
 
-    let addedSections: string[] = [];
-    if (section_ids !== undefined) {
-      const wanted = Array.isArray(section_ids)
-        ? [...new Set(section_ids.filter((v): v is string => typeof v === 'string' && v.length > 0))]
+    // New leaders are checked first, so a bad one stops the whole change.
+    const leaderChanges =
+      typeof leaders === 'object' && leaders !== null && !Array.isArray(leaders)
+        ? Object.entries(leaders as Record<string, unknown>).filter(
+            (e): e is [string, string] => typeof e[1] === 'string' && e[1].length > 0,
+          )
         : [];
-      addedSections = wanted.filter((sid) => !presentation.section_ids.includes(sid));
-      if (addedSections.length > 0) update.section_ids = [...presentation.section_ids, ...addedSections];
-    }
-
-    // More groups (075), and students added to the course by hand.
-    const strings = (v: unknown) =>
-      Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === 'string' && x.length > 0))] : [];
-    const { data: current } = await supabase.from('case_presentations').select('team_ids').eq('id', id).maybeSingle();
-    const currentTeams = ((current as { team_ids?: string[] | null } | null)?.team_ids ?? []) as string[];
-    const addedTeams = strings(team_ids).filter((t) => !currentTeams.includes(t));
-    const addedStudents = strings(student_ids);
-    if (addedTeams.length > 0) {
-      const teams = await loadTeams(supabase, addedTeams);
-      const newSections = teams.map((t) => t.section_id).filter((sid) => !presentation.section_ids.includes(sid) && !addedSections.includes(sid));
-      const sectionsNow = (update.section_ids as string[] | undefined) ?? presentation.section_ids;
-      if (newSections.length > 0) update.section_ids = [...new Set([...sectionsNow, ...newSections])];
-      if (current) update.team_ids = [...currentTeams, ...addedTeams];
-    }
-
-    let studentsAdded = 0;
-    if (addedSections.length > 0 || addedTeams.length > 0 || addedStudents.length > 0) {
-      const assigned = await assignCasePresentation(supabase, session, presentation, {
-        sectionIds: addedSections,
-        teamIds: addedTeams,
-        studentIds: addedStudents,
-      });
-      if (!assigned.ok) {
-        return NextResponse.json({ error: assigned.error, invalid: assigned.invalid }, { status: assigned.status });
+    if (leaderChanges.length > 0) {
+      const { data: rows, error } = await supabase
+        .from('case_presentation_groups')
+        .select('id, status, team_name')
+        .eq('presentation_id', id)
+        .in('id', leaderChanges.map(([g]) => g));
+      if (error) throw error;
+      const byId = new Map(((rows ?? []) as { id: string; status: string; team_name: string }[]).map((r) => [r.id, r]));
+      const { data: subs } = byId.size
+        ? await supabase.from('case_submissions').select('student_id, group_id').in('group_id', [...byId.keys()])
+        : { data: [] as { student_id: string; group_id: string }[] };
+      const memberOf = new Set(
+        ((subs ?? []) as { student_id: string; group_id: string }[]).map((s) => `${s.group_id}:${s.student_id}`),
+      );
+      for (const [groupId, leaderId] of leaderChanges) {
+        const row = byId.get(groupId);
+        if (!row) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+        if (row.status === 'graded') {
+          return NextResponse.json({ error: `${row.team_name} is already graded, so its leader can't change` }, { status: 409 });
+        }
+        if (!memberOf.has(`${groupId}:${leaderId}`)) {
+          return NextResponse.json({ error: `The leader must be a member of ${row.team_name}` }, { status: 400 });
+        }
       }
-      studentsAdded = assigned.added.length;
+    }
+
+    let added = { groups: 0, students: 0 };
+    if (groupsInput !== undefined) {
+      const groups = parseCaseGroups(groupsInput);
+      if (!groups) return NextResponse.json({ error: 'Choose a leader for each group' }, { status: 400 });
+      if (groups.length > 0) {
+        const assigned = await assignCaseGroups(supabase, session, presentation, groups);
+        if (!assigned.ok) {
+          return NextResponse.json({ error: assigned.error, invalid: assigned.invalid }, { status: assigned.status });
+        }
+        added = { groups: assigned.groups, students: assigned.added.length };
+        const { data: current } = await supabase.from('case_presentations').select('team_ids').eq('id', id).maybeSingle();
+        const currentTeams = ((current as { team_ids?: string[] | null } | null)?.team_ids ?? []) as string[];
+        const teams = await loadTeams(supabase, groups.map((g) => g.team_id));
+        update.team_ids = [...new Set([...currentTeams, ...teams.map((t) => t.id)])];
+        update.section_ids = [...new Set([...presentation.section_ids, ...teams.map((t) => t.section_id)])];
+      }
+    }
+
+    for (const [groupId, leaderId] of leaderChanges) {
+      const { error } = await supabase
+        .from('case_presentation_groups')
+        .update({ leader_id: leaderId })
+        .eq('id', groupId)
+        .neq('status', 'graded');
+      if (error) throw error;
     }
 
     if (Object.keys(update).length > 0) {
       const { error } = await supabase.from('case_presentations').update(update).eq('id', id);
       if (error) throw error;
+    }
+    if (Object.keys(update).length > 0 || leaderChanges.length > 0) {
       await logAudit(
         session,
-        { action: 'case.update', entityType: 'case_presentations', entityId: id, details: { ...update, students_added: studentsAdded } },
+        {
+          action: 'case.update',
+          entityType: 'case_presentations',
+          entityId: id,
+          details: {
+            ...update,
+            leaders: Object.fromEntries(leaderChanges),
+            groups_added: added.groups,
+            students_added: added.students,
+          },
+        },
         request,
       );
     }
 
-    return NextResponse.json({ ok: true, students_added: studentsAdded });
+    return NextResponse.json({ ok: true, groups_added: added.groups, students_added: added.students });
   } catch (err) {
     console.error('Failed to update case presentation', err);
     return NextResponse.json({ error: 'Unable to update the case presentation' }, { status: 500 });
   }
 }
 
-// DELETE /api/faculty/cases/:id — only while nobody has handed a case in.
+// DELETE /api/faculty/cases/:id — only while no group has handed it in.
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const auth = await authorize();
   if ('error' in auth) return auth.error;
@@ -232,21 +254,23 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Only the instructor who created this can delete it' }, { status: 403 });
     }
 
-    const { count, error: countError } = await supabase
-      .from('case_submissions')
-      .select('id', { count: 'exact', head: true })
-      .eq('presentation_id', id)
-      .in('status', ['submitted', 'graded']);
-    if (countError) throw countError;
-    if ((count ?? 0) > 0) {
+    const { data: groupRows, error: groupError } = await supabase
+      .from('case_presentation_groups')
+      .select('status, file_path')
+      .eq('presentation_id', id);
+    if (groupError && !isMissingCaseTables(groupError)) throw groupError;
+    const rows = (groupRows ?? []) as { status: string; file_path: string | null }[];
+    if (rows.some((g) => g.status === 'submitted' || g.status === 'graded')) {
       return NextResponse.json(
-        { error: 'Students have already handed in cases for this presentation; it can no longer be deleted' },
+        { error: 'Groups have already handed in this case presentation; it can no longer be deleted' },
         { status: 409 },
       );
     }
 
     const { error } = await supabase.from('case_presentations').delete().eq('id', id);
     if (error) throw error;
+    // A leader may have uploaded without it counting as handed in yet.
+    await removeCaseFiles(supabase, rows.map((g) => g.file_path));
 
     await logAudit(
       session,

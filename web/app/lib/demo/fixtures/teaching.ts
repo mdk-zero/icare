@@ -1,6 +1,5 @@
 import suggestions from "@/scripts/data/library-suggestions.json";
-import { CASE_CRITERIA } from "@/app/lib/case-rubric";
-import type { TaskRating } from "@/app/lib/task-ratings";
+import { CASE_CRITERIA, caseScore, type CaseLevel } from "@/app/lib/case-rubric";
 import {
   DEAN_ID,
   INSTRUCTOR_2_ID,
@@ -9,13 +8,18 @@ import {
   KIND,
   SECTION_A,
   SECTION_B,
+  TEAM_A1,
+  TEAM_A2,
+  TEAM_B1,
+  TEAM_B2,
   ago,
   ahead,
   demoId,
+  type DemoTeam,
   type DemoUser,
 } from "./people";
 
-/** Case presentations with the students' write-ups, and the Library's materials. */
+/** Case presentations reported by groups, and the Library's materials. */
 
 export interface DemoCasePresentation {
   /** The groups it was given to (075). */
@@ -32,44 +36,37 @@ export interface DemoCasePresentation {
   offering_id?: string | null;
 }
 
+/** A member's own record of a group's case presentation, carrying the group's status and grade. */
 export interface DemoCaseSubmission {
   id: string;
   presentation_id: string;
   student_id: string;
+  group_id: string | null;
   status: "not_started" | "draft" | "submitted" | "graded";
-  patient_initials: string | null;
-  age: number | null;
-  sex: "male" | "female" | null;
-  hospital: string;
-  ward: string;
-  admitting_diagnosis: string;
-  chief_complaint: string;
-  history: string;
-  medications: string;
-  nursing_diagnoses: string;
-  interventions: string;
-  observations: {
-    vitals: {
-      heart_rate: number | null;
-      bp_systolic: number | null;
-      bp_diastolic: number | null;
-      temperature_c: number | null;
-      respiratory_rate: number | null;
-      oxygen_saturation: number | null;
-      pain_score: number | null;
-      notes: string;
-      observed_at: string | null;
-    }[];
-    tpr: { temperature_c: number | null; pulse: number | null; respiration: number | null; remarks: string; observed_at: string | null }[];
-    ivf: { solution: string; volume_ml: number | null; rate_ml_hr: number | null; site: string; remarks: string; observed_at: string | null }[];
-  };
   submitted_at: string | null;
   graded_at: string | null;
   graded_by: string | null;
   score: number | null;
   remarks: string;
-  ratings: { criterion: string; rating: TaskRating; remarks: string }[];
   updated_at: string;
+}
+
+/** A group reporting a case presentation (093): its leader, slides and grade. */
+export interface DemoCaseGroup {
+  id: string;
+  presentation_id: string;
+  team_id: string | null;
+  team_name: string;
+  section_name: string;
+  leader_id: string | null;
+  status: "not_started" | "draft" | "submitted" | "graded";
+  file: { name: string; size: number; type: "pdf" | "pptx"; uploaded_by: string } | null;
+  submitted_at: string | null;
+  score: number | null;
+  remarks: string;
+  graded_by: string | null;
+  graded_at: string | null;
+  ratings: { criterion: string; level: CaseLevel; remarks: string }[];
 }
 
 export interface DemoMaterial {
@@ -96,34 +93,7 @@ export interface DemoMaterial {
   views: number;
 }
 
-const WRITEUPS = [
-  {
-    initials: "R.D.",
-    age: 21,
-    sex: "female" as const,
-    diagnosis: "Acute viral upper respiratory infection with fever",
-    complaint: "Fever and body aches for two days",
-    history: "Previously well. Onset of sore throat and fever two days before admission. No travel, no sick contacts at home.",
-    meds: "Paracetamol 500 mg PO q6h PRN for T > 38.0 °C",
-    dx: "1. Hyperthermia related to viral infection as evidenced by T 38.2 °C, flushed warm skin.\n2. Risk for deficient fluid volume related to fever and reduced intake.",
-    interventions:
-      "Monitored temperature, pulse and respirations q4h. Gave paracetamol as ordered and rechecked temperature after 1 hour (37.6 °C). Encouraged 2 L oral fluids. Taught the patient to report breathlessness.",
-  },
-  {
-    initials: "M.S.",
-    age: 34,
-    sex: "male" as const,
-    diagnosis: "Acute gastroenteritis with mild dehydration",
-    complaint: "Loose stools and vomiting for two days",
-    history: "Ate at a roadside eatery two days before admission. Six loose stools and three episodes of vomiting a day since.",
-    meds: "PNSS 1 L x 8 hours; oral rehydration salts after each loose stool",
-    dx: "1. Deficient fluid volume related to active fluid loss as evidenced by dry mucous membranes and HR 102.\n2. Risk for electrolyte imbalance related to diarrhoea (K 3.4).",
-    interventions:
-      "Assisted with IV insertion and monitored the site hourly for infiltration. Kept strict intake and output. Pulse and blood pressure q2h; HR settled to 88 by the end of the shift.",
-  },
-];
-
-export function seedTeaching(users: DemoUser[]) {
+export function seedTeaching(users: DemoUser[], teams: DemoTeam[]) {
   const presentations: DemoCasePresentation[] = [
     {
       id: demoId(KIND.casePresentation, 1),
@@ -132,6 +102,7 @@ export function seedTeaching(users: DemoUser[]) {
         "Choose one patient you cared for during your first ward week. Present them with initials only — no names, birthdays or hospital numbers. Cover the profile, your assessment findings, two prioritised nursing diagnoses and the care you gave.",
       deadline: ago(9, 23, 59),
       section_ids: [SECTION_A],
+      team_ids: [TEAM_A1, TEAM_A2],
       created_by: INSTRUCTOR_ID,
       created_at: ago(24),
       updated_at: ago(24),
@@ -143,87 +114,92 @@ export function seedTeaching(users: DemoUser[]) {
         "Present a patient on IV therapy. Include the IV fluid, rate and site, every site check you documented, and how the patient's vital signs responded.",
       deadline: ahead(5, 23, 59),
       section_ids: [SECTION_A, SECTION_B],
+      team_ids: [TEAM_A1, TEAM_A2, TEAM_B1, TEAM_B2],
       created_by: INSTRUCTOR_ID,
       created_at: ago(3),
       updated_at: ago(3),
     },
   ];
 
+  // Who reports what: the first presentation is done (one group graded, one
+  // waiting); the second is under way.
+  const PLAN: Record<string, Record<string, { status: DemoCaseGroup["status"]; levels?: CaseLevel[]; file?: string }>> = {
+    [presentations[0].id]: {
+      [TEAM_A1]: { status: "graded", levels: [4, 3, 3, 4, 3, 3], file: "Group A - Case Presentation (Pneumonia).pptx" },
+      [TEAM_A2]: { status: "submitted", file: "Group B - Acute Gastroenteritis Case.pdf" },
+    },
+    [presentations[1].id]: {
+      [TEAM_A1]: { status: "submitted", file: "Group A - Fluid Balance Case.pptx" },
+      [TEAM_A2]: { status: "not_started" },
+      [TEAM_B1]: { status: "not_started" },
+      [TEAM_B2]: { status: "submitted", file: "Group B - IV Therapy Case.pdf" },
+    },
+  };
+  const SECTION_NAME: Record<string, string> = { [SECTION_A]: "BSN 3101", [SECTION_B]: "BSN 3102" };
+
   const students = users.filter((u) => u.role === "student");
+  const groups: DemoCaseGroup[] = [];
   const submissions: DemoCaseSubmission[] = [];
   let n = 0;
-  const RATINGS: TaskRating[] = ["excellent", "satisfactory", "satisfactory", "excellent", "satisfactory"];
-
   for (const p of presentations) {
-    const roster = students.filter((s) => s.section_id && p.section_ids.includes(s.section_id));
-    roster.forEach((s, i) => {
+    for (const teamId of p.team_ids ?? []) {
+      const team = teams.find((t) => t.id === teamId);
+      const plan = PLAN[p.id]?.[teamId];
+      if (!team || !plan) continue;
+      const members = students.filter((u) => u.team_id === teamId).sort((x, y) => x.name.localeCompare(y.name));
+      if (members.length === 0) continue;
       n += 1;
-      const w = WRITEUPS[i % WRITEUPS.length];
-      const weak = s.risk_level === "at_risk";
+      const leader = members[0];
       const first = p === presentations[0];
-      // First presentation: almost all graded. Second: a mix of stages.
-      const status: DemoCaseSubmission["status"] = first
-        ? weak
-          ? "submitted"
-          : "graded"
-        : i % 4 === 0
-          ? "submitted"
-          : i % 4 === 1
-            ? "draft"
-            : weak
-              ? "not_started"
-              : i % 4 === 2
-                ? "draft"
-                : "not_started";
-      const filled = status !== "not_started";
-      const ratings =
-        status === "graded"
-          ? CASE_CRITERIA.map((c, k) => ({
-              criterion: c.key,
-              rating: (i + k) % 5 === 0 ? ("needs_practice" as TaskRating) : RATINGS[(i + k) % RATINGS.length],
-              remarks: k === 2 ? "Prioritise the diagnosis that threatens the patient first." : "",
-            }))
-          : [];
-      const credit = { excellent: 1, satisfactory: 2 / 3, needs_practice: 1 / 3 };
-      const score = ratings.length ? Math.round((ratings.reduce((sum, r) => sum + credit[r.rating], 0) / ratings.length) * 100) : null;
-      // The weaker students handed the first one in a day late.
-      const submittedAt =
-        status === "submitted" || status === "graded" ? (first ? (weak ? ago(8, 10) : ago(10 + (i % 3) * 0.3, 21)) : ago(1 + (i % 2), 20)) : null;
-      submissions.push({
-        id: demoId(KIND.caseSubmission, n),
+      const handedIn = plan.status === "submitted" || plan.status === "graded";
+      const submittedAt = handedIn ? (first ? ago(10 - (n % 2) * 0.5, 21) : ago(1 + (n % 2), 20)) : null;
+      const ratings = (plan.levels ?? []).map((level, k) => ({
+        criterion: CASE_CRITERIA[k].key,
+        level,
+        remarks: CASE_CRITERIA[k].key === "care_plan" ? "Put airway and breathing problems first in the NCP." : "",
+      }));
+      const score = plan.status === "graded" ? caseScore(new Map(ratings.map((r) => [r.criterion, r.level]))) : null;
+      const remarks = plan.status === "graded" ? "Clear pathophysiology diagram; strengthen the prioritisation in the NCP." : "";
+      const group: DemoCaseGroup = {
+        id: demoId(KIND.misc, 950 + n),
         presentation_id: p.id,
-        student_id: s.id,
-        status,
-        patient_initials: filled ? w.initials : null,
-        age: filled ? w.age : null,
-        sex: filled ? w.sex : null,
-        hospital: filled ? "Batangas Medical Center" : "",
-        ward: filled ? "Medical Ward 3B" : "",
-        admitting_diagnosis: filled ? w.diagnosis : "",
-        chief_complaint: filled ? w.complaint : "",
-        history: filled ? w.history : "",
-        medications: filled ? w.meds : "",
-        nursing_diagnoses: status === "draft" && i % 2 ? "" : filled ? w.dx : "",
-        interventions: status === "draft" ? "" : filled ? w.interventions : "",
-        observations: {
-          vitals: filled
-            ? [
-                { heart_rate: 96, bp_systolic: 118, bp_diastolic: 74, temperature_c: 38.2, respiratory_rate: 20, oxygen_saturation: 98, pain_score: 3, notes: "On admission", observed_at: ago(12, 8) },
-                { heart_rate: 88, bp_systolic: 116, bp_diastolic: 72, temperature_c: 37.4, respiratory_rate: 18, oxygen_saturation: 99, pain_score: 2, notes: "After paracetamol", observed_at: ago(12, 12) },
-              ]
-            : [],
-          tpr: [],
-          ivf: filled && i % 2 ? [{ solution: "PNSS", volume_ml: 1000, rate_ml_hr: 125, site: "Left forearm, 20G", remarks: "Site clean, no swelling", observed_at: ago(12, 9) }] : [],
-        },
+        team_id: teamId,
+        team_name: team.name,
+        section_name: SECTION_NAME[team.section_id] ?? "",
+        leader_id: leader.id,
+        status: plan.status,
+        file: plan.file
+          ? {
+              name: plan.file,
+              size: 4_200_000 + n * 730_000,
+              type: plan.file.endsWith(".pdf") ? "pdf" : "pptx",
+              uploaded_by: leader.id,
+            }
+          : null,
         submitted_at: submittedAt,
-        graded_at: status === "graded" ? ago(7, 15) : null,
-        graded_by: status === "graded" ? INSTRUCTOR_ID : null,
         score,
-        remarks: status === "graded" ? (score && score >= 80 ? "Clear, well-organised presentation." : "Good effort — tie each intervention back to a diagnosis.") : "",
+        remarks,
+        graded_by: plan.status === "graded" ? INSTRUCTOR_ID : null,
+        graded_at: plan.status === "graded" ? ago(7, 15) : null,
         ratings,
-        updated_at: submittedAt ?? ago(2),
-      });
-    });
+      };
+      groups.push(group);
+      for (const m of members) {
+        submissions.push({
+          id: demoId(KIND.caseSubmission, submissions.length + 1),
+          presentation_id: p.id,
+          student_id: m.id,
+          group_id: group.id,
+          status: plan.status,
+          submitted_at: submittedAt,
+          graded_at: group.graded_at,
+          graded_by: group.graded_by,
+          score,
+          remarks,
+          updated_at: submittedAt ?? ago(2),
+        });
+      }
+    }
   }
 
   // Library: a published video per active skill from the suggestions, plus notes and a link.
@@ -298,5 +274,5 @@ export function seedTeaching(users: DemoUser[]) {
     },
   );
 
-  return { casePresentations: presentations, caseSubmissions: submissions, materials };
+  return { casePresentations: presentations, caseSubmissions: submissions, caseGroups: groups, materials };
 }

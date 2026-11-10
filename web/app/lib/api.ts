@@ -4018,7 +4018,7 @@ export async function fetchStudentReflections(studentId: string): Promise<{ enab
   }
 }
 
-// ─── Case presentations (migration 056) ─────────────────────────────────────
+// ─── Case presentations (056; by group since 093) ───────────────────────────
 
 export type CaseSubmissionStatus = 'not_started' | 'draft' | 'submitted' | 'graded';
 
@@ -4029,7 +4029,7 @@ export interface CasePresentation {
   deadline: string | null;
   section_ids: string[];
   sections: { id: string; name: string }[];
-  /** The groups it was given to (075); empty for one given to whole sections. */
+  /** The groups that report it. */
   groups?: { id: string; name: string; section_name: string }[];
   /** The course it is for (070). */
   offering_id?: string | null;
@@ -4041,6 +4041,9 @@ export interface CasePresentation {
 export interface CasePresentationSummary extends CasePresentation {
   /** The course it was made for (070); null for none. */
   offering_id?: string | null;
+  /** Students across its groups. */
+  student_count?: number;
+  /** Counted per group: a group hands in and is graded as one. */
   counts: {
     total: number;
     not_started: number;
@@ -4051,77 +4054,54 @@ export interface CasePresentationSummary extends CasePresentation {
   };
 }
 
-export interface CaseRosterEntry {
-  submission_id: string;
+export interface CaseGroupMember {
   student_id: string;
-  student_name: string;
-  section_name: string | null;
-  status: CaseSubmissionStatus;
-  patient_initials: string | null;
-  submitted_at: string | null;
-  graded_at: string | null;
-  score: number | null;
-  late: boolean;
+  submission_id: string;
+  name: string;
+  picture_url: string | null;
+  is_leader: boolean;
 }
 
-export interface CaseObservationsData {
-  vitals: {
-    heart_rate: number | null;
-    bp_systolic: number | null;
-    bp_diastolic: number | null;
-    temperature_c: number | null;
-    respiratory_rate: number | null;
-    oxygen_saturation: number | null;
-    pain_score: number | null;
-    notes: string;
-    observed_at: string | null;
-  }[];
-  tpr: { temperature_c: number | null; pulse: number | null; respiration: number | null; remarks: string; observed_at: string | null }[];
-  ivf: { solution: string; volume_ml: number | null; rate_ml_hr: number | null; site: string; remarks: string; observed_at: string | null }[];
-}
-
-export interface CaseSubmission {
+/** A group reporting a case: members, leader, its slides and its grade. */
+export interface CaseGroup {
   id: string;
   presentation_id: string;
-  student_id: string;
+  team_id: string | null;
+  name: string;
+  section_name: string;
+  leader_id: string | null;
+  leader_name: string | null;
   status: CaseSubmissionStatus;
-  patient_initials: string | null;
-  age: number | null;
-  sex: 'male' | 'female' | null;
-  hospital: string;
-  ward: string;
-  admitting_diagnosis: string;
-  chief_complaint: string;
-  history: string;
-  medications: string;
-  nursing_diagnoses: string;
-  interventions: string;
-  observations: CaseObservationsData;
+  file: { name: string; size: number | null; type: 'pdf' | 'pptx'; uploaded_by_name: string | null } | null;
   submitted_at: string | null;
-  graded_at: string | null;
+  late: boolean;
   score: number | null;
   remarks: string;
-  late: boolean;
-  updated_at: string;
+  graded_at: string | null;
+  members: CaseGroupMember[];
 }
+
+export type CaseLevel = 1 | 2 | 3 | 4;
 
 export interface CaseCriterionInfo {
   key: string;
   label: string;
-  description: string;
+  weight: number;
+  levels: Record<CaseLevel, string>;
 }
 
-export interface CaseRating {
+export interface CaseGroupRating {
   criterion: string;
-  rating: TaskRating;
+  level: CaseLevel;
   remarks: string;
 }
 
-export interface CaseGradingData {
-  submission: CaseSubmission;
-  presentation: CasePresentation;
-  student: { id: string; name: string | null; section_id: string | null } | null;
-  ratings: CaseRating[];
+export interface CaseGroupGradingData {
+  group: CaseGroup;
+  presentation: { id: string; title: string; instructions: string; deadline: string | null };
+  /** Short-lived links to the slides; null before the leader uploads. */
+  file_url: { url: string; embed: string; download: string } | null;
+  ratings: CaseGroupRating[];
   criteria: CaseCriterionInfo[];
 }
 
@@ -4151,18 +4131,14 @@ export const createCasePresentation = (input: {
   title: string;
   instructions: string;
   deadline: string | null;
-  /** Whole sections; with a course, those where the instructor has no group. */
-  section_ids: string[];
-  /** Groups it goes to (075). */
-  team_ids?: string[];
-  /** Students added to the course by hand. */
-  student_ids?: string[];
+  /** The groups that report it, each with the member who leads. */
+  groups: { team_id: string; leader_id: string }[];
   /** The course it is made for (migration 070). */
   offering_id?: string;
 }) => caseRequest<{ presentation: CasePresentation; student_count: number }>('/api/faculty/cases', { method: 'POST', body: input });
 
 export const fetchCasePresentation = (id: string) =>
-  caseRequest<{ presentation: CasePresentation & { can_manage: boolean }; roster: CaseRosterEntry[] }>(`/api/faculty/cases/${id}`);
+  caseRequest<{ presentation: CasePresentation & { can_manage: boolean }; groups: CaseGroup[] }>(`/api/faculty/cases/${id}`);
 
 export const updateCasePresentation = (
   id: string,
@@ -4170,29 +4146,33 @@ export const updateCasePresentation = (
     title: string;
     instructions: string;
     deadline: string | null;
-    section_ids: string[];
-    team_ids: string[];
-    student_ids: string[];
+    groups: { team_id: string; leader_id: string }[];
+    /** A new leader per group id. */
+    leaders: Record<string, string>;
   }>,
-) => caseRequest<{ ok: true; students_added: number }>(`/api/faculty/cases/${id}`, { method: 'PATCH', body: patch });
+) =>
+  caseRequest<{ ok: true; groups_added: number; students_added: number }>(`/api/faculty/cases/${id}`, {
+    method: 'PATCH',
+    body: patch,
+  });
 
 export const deleteCasePresentation = (id: string) =>
   caseRequest<{ ok: true }>(`/api/faculty/cases/${id}`, { method: 'DELETE' });
 
-export const fetchCaseSubmission = (id: string) =>
-  caseRequest<CaseGradingData>(`/api/faculty/cases/submissions/${id}`);
+export const fetchCaseGroup = (groupId: string) =>
+  caseRequest<CaseGroupGradingData>(`/api/faculty/cases/groups/${groupId}`);
 
-export const gradeCaseSubmission = (
-  id: string,
+export const gradeCaseGroup = (
+  groupId: string,
   body: {
-    ratings?: Record<string, TaskRating | null>;
+    ratings?: Record<string, CaseLevel | null>;
     rating_remarks?: Record<string, string>;
     remarks?: string;
     finalize?: boolean;
   },
 ) =>
-  caseRequest<{ ok: true; ratings: CaseRating[]; score: number; status: CaseSubmissionStatus }>(
-    `/api/faculty/cases/submissions/${id}`,
+  caseRequest<{ ok: true; ratings: CaseGroupRating[]; score: number; status: CaseSubmissionStatus }>(
+    `/api/faculty/cases/groups/${groupId}`,
     { method: 'PUT', body },
   );
 

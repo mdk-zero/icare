@@ -22,7 +22,7 @@ import {
 } from './client';
 import { Platform } from 'react-native';
 import type { AnomalyReason } from './vitals-rules';
-import type { ChecklistRating, TaskRating } from './task-ratings';
+import type { ChecklistRating } from './task-ratings';
 
 // ---------------------------------------------------------------
 // Auth (5.1)
@@ -953,45 +953,10 @@ export async function setGoalStatus(goalId: string, status: 'open' | 'met'): Pro
 }
 
 // ---------------------------------------------------------------
-// Hospital case presentations (write up a real duty patient, initials only)
+// Case presentations: a group reports a duty patient; its leader uploads the slides
 // ---------------------------------------------------------------
 
 export type CaseStatus = 'not_started' | 'draft' | 'submitted' | 'graded';
-
-export interface CaseVitalsEntry {
-  heart_rate: number | null;
-  bp_systolic: number | null;
-  bp_diastolic: number | null;
-  temperature_c: number | null;
-  respiratory_rate: number | null;
-  oxygen_saturation: number | null;
-  pain_score: number | null;
-  notes: string;
-  observed_at: string | null;
-}
-
-export interface CaseTprEntry {
-  temperature_c: number | null;
-  pulse: number | null;
-  respiration: number | null;
-  remarks: string;
-  observed_at: string | null;
-}
-
-export interface CaseIvfEntry {
-  solution: string;
-  volume_ml: number | null;
-  rate_ml_hr: number | null;
-  site: string;
-  remarks: string;
-  observed_at: string | null;
-}
-
-export interface CaseObservations {
-  vitals: CaseVitalsEntry[];
-  tpr: CaseTprEntry[];
-  ivf: CaseIvfEntry[];
-}
 
 export interface CasePresentationInfo {
   id: string;
@@ -1001,9 +966,12 @@ export interface CasePresentationInfo {
 }
 
 export interface CaseListItem {
+  /** The student's own record of it; what /cases/:id opens. */
   id: string;
   status: CaseStatus;
-  patient_initials: string | null;
+  group_name: string;
+  is_leader: boolean;
+  file_name: string | null;
   submitted_at: string | null;
   graded_at: string | null;
   score: number | null;
@@ -1012,34 +980,42 @@ export interface CaseListItem {
   presentation: CasePresentationInfo;
 }
 
-/** The fields a student edits; the server whitelists exactly these. */
-export interface CaseDraft {
-  patient_initials: string | null;
-  age: number | null;
-  sex: 'male' | 'female' | null;
-  hospital: string;
-  ward: string;
-  admitting_diagnosis: string;
-  chief_complaint: string;
-  history: string;
-  medications: string;
-  nursing_diagnoses: string;
-  interventions: string;
-  observations: CaseObservations;
+export interface CaseGroupMember {
+  student_id: string;
+  submission_id: string;
+  name: string;
+  picture_url: string | null;
+  is_leader: boolean;
 }
 
-export interface CaseDetail extends CaseDraft {
+export interface CaseGroupInfo {
   id: string;
+  name: string;
+  section_name: string;
+  leader_id: string | null;
+  leader_name: string | null;
   status: CaseStatus;
+  file: { name: string; size: number | null; type: 'pdf' | 'pptx'; uploaded_by_name: string | null } | null;
   submitted_at: string | null;
-  graded_at: string | null;
+  late: boolean;
+  /** Only once graded. */
   score: number | null;
   remarks: string;
-  late: boolean;
-  updated_at: string;
+  graded_at: string | null;
+  members: CaseGroupMember[];
+}
+
+export type CaseLevel = 1 | 2 | 3 | 4;
+
+export interface CaseDetail {
+  id: string;
+  status: CaseStatus;
+  is_leader: boolean;
   presentation: CasePresentationInfo;
-  ratings: { criterion: string; rating: TaskRating; remarks: string }[];
-  criteria: { key: string; label: string; description: string }[];
+  group: CaseGroupInfo | null;
+  /** The rubric levels, once graded. */
+  ratings: { criterion: string; level: CaseLevel; remarks: string }[];
+  criteria: { key: string; label: string; weight: number; levels: Record<CaseLevel, string> }[];
 }
 
 export async function fetchMyCases(): Promise<CachedResult<CaseListItem[]>> {
@@ -1052,14 +1028,51 @@ export async function fetchCase(id: string): Promise<CachedResult<CaseDetail>> {
   return { ...result, data: result.data.case };
 }
 
-/** Saves the draft; not queued offline, since a later edit would race it. */
-export async function saveCaseDraft(id: string, patch: Partial<CaseDraft>): Promise<CaseDetail> {
-  const result = await api<{ case: CaseDetail }>(`/api/student/cases/${id}`, { method: 'PATCH', body: patch });
-  return result.case;
+/** Short-lived links to the group's slides, for any member. */
+export async function fetchCaseFile(id: string): Promise<{ url: string; embed: string; download: string }> {
+  return api(`/api/student/cases/${id}/file`);
 }
 
-export async function submitCase(id: string): Promise<void> {
-  await api(`/api/student/cases/${id}/submit`, { method: 'POST' });
+/** A file the leader picked to hand in. */
+export interface CaseUpload {
+  uri: string;
+  name: string;
+  mimeType: string;
+  size: number;
+}
+
+/**
+ * Hands in the group's slides (leader only): asks for a one-time Storage URL,
+ * sends the file straight there, then tells the API it is in. Replaces an
+ * earlier upload. Not queued offline: the file has to go now or not at all.
+ */
+export async function uploadCaseFile(id: string, file: CaseUpload): Promise<void> {
+  const ticket = await api<{ path: string; uploadUrl: string }>(`/api/student/cases/${id}/upload-url`, {
+    method: 'POST',
+    body: { fileName: file.name, mime: file.mimeType, size: file.size },
+  });
+
+  let ok = false;
+  try {
+    const form = new FormData();
+    form.append('cacheControl', '3600');
+    if (Platform.OS === 'web') {
+      form.append('', await (await fetch(file.uri)).blob(), file.name);
+    } else {
+      // React Native's FormData takes the file by its local uri.
+      form.append('', { uri: file.uri, name: file.name, type: file.mimeType } as unknown as Blob);
+    }
+    const res = await fetch(ticket.uploadUrl, { method: 'PUT', headers: { 'x-upsert': 'false' }, body: form });
+    ok = res.ok;
+  } catch {
+    ok = false;
+  }
+  if (!ok) throw new Error('The upload failed. Check your connection and try again.');
+
+  await api(`/api/student/cases/${id}/file`, {
+    method: 'POST',
+    body: { path: ticket.path, file_name: file.name, file_size: file.size, mime: file.mimeType },
+  });
 }
 
 // ---------------------------------------------------------------

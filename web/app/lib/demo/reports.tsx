@@ -2,8 +2,8 @@
 
 import { pdf, Text, View } from "@react-pdf/renderer";
 import { CourseCriteria, ReportShell, StatGrid, Table, type ReportDocument, type ReportMeta } from "../reports/kit-ui";
-import { CASE_CRITERIA } from "../case-rubric";
-import { ratingLabel } from "../task-ratings";
+import { CASE_CRITERIA, caseLevelLabel } from "../case-rubric";
+import type { DemoCaseGroup } from "./fixtures/teaching";
 import type { DemoContext } from "./router";
 import { caseAverage, lastActivity, mean, quizAverage, submittedAttempts } from "./handlers/derive";
 import { sectionName, teamLabel as teamLabelUi, userById, visibleSections, visibleStudents } from "./handlers/scope";
@@ -206,30 +206,33 @@ function rosterReport(ctx: Ctx): Built {
 
 function caseReport(ctx: Ctx, id: string): Built {
   const { db } = ctx;
-  const s = db.caseSubmissions.find((x) => x.id === id);
-  if (!s) return { error: "Not found", status: 404 };
-  const p = db.casePresentations.find((x) => x.id === s.presentation_id);
-  const student = userById(db, s.student_id);
+  const groups = (db as typeof db & { caseGroups?: DemoCaseGroup[] }).caseGroups ?? [];
+  // A group id, or a member's submission id that points at it.
+  const viaMember = db.caseSubmissions.find((x) => x.id === id)?.group_id;
+  const g = groups.find((x) => x.id === id || x.id === viaMember);
+  if (!g) return { error: "Not found", status: 404 };
+  const p = db.casePresentations.find((x) => x.id === g.presentation_id);
+  const members = db.caseSubmissions
+    .filter((s) => s.group_id === g.id)
+    .map((s) => ({ name: userById(db, s.student_id)?.name ?? "Student", leader: s.student_id === g.leader_id }))
+    .sort((a, b) => Number(b.leader) - Number(a.leader) || a.name.localeCompare(b.name));
   return {
-    subject: `${student?.name ?? "Student"} — ${p?.title ?? "Case"}`,
+    subject: `${g.team_name} — ${p?.title ?? "Case"}`,
     doc: (
       <Shell ctx={ctx} title="Case presentation" heading="Case Presentation" rows={[
-        { label: "Student", value: student?.name ?? "—" },
+        { label: "Group", value: `${g.team_name} · ${g.section_name}` },
         { label: "Presentation", value: p?.title ?? "—" },
-        { label: "Patient", value: `${s.patient_initials ?? "—"}, ${s.age ?? "—"}` },
+        { label: "Leader", value: members.find((m) => m.leader)?.name ?? "—" },
+        { label: "Slides", value: g.file?.name ?? "—" },
       ]}>
-        <StatGrid items={[{ label: "Score", value: pct(s.score) }, { label: "Status", value: s.status }]} />
-        <H>Admitting diagnosis</H>
-        <Text>{s.admitting_diagnosis || "—"}</Text>
-        <H>Nursing diagnoses</H>
-        <Text>{s.nursing_diagnoses || "—"}</Text>
-        <H>Interventions</H>
-        <Text>{s.interventions || "—"}</Text>
+        <StatGrid items={[{ label: "Group score", value: pct(g.score) }, { label: "Members", value: String(members.length) }]} />
         <H>Grading</H>
-        <Table head={["Criterion", "Rating"]} widths={[3, 1.4]} rows={CASE_CRITERIA.map((c) => {
-          const r = s.ratings.find((x) => x.criterion === c.key);
-          return [c.label, r ? ratingLabel(r.rating) : "—"];
+        <Table head={["Criterion", "Weight", "Level"]} widths={[3, 0.8, 1.4]} rows={CASE_CRITERIA.map((c) => {
+          const r = g.ratings.find((x) => x.criterion === c.key);
+          return [c.label, `${c.weight}%`, r ? `${caseLevelLabel(r.level)} (${r.level})` : "—"];
         })} />
+        <H>Members</H>
+        <Table head={["Member", "Role"]} widths={[3, 1]} rows={members.map((m) => [m.name, m.leader ? "Group leader" : "Member"])} />
       </Shell>
     ),
   };

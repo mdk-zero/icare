@@ -17,11 +17,12 @@ import SheetStep from "../../../components/SheetStep";
 import { toast } from "../../../components/Toast";
 import { EcgLoader } from "../../../components/EcgLoader";
 import CoursePicker, { resolveCourse, useActivityCourses } from "../../../components/CoursePicker";
-import AudiencePicker, { audiencePayload, useCourseAudience } from "../../../components/AudiencePicker";
+import { useCourseAudience } from "../../../components/AudiencePicker";
 import { forgetPage } from "../../../lib/request-cache";
 import { deadlineFromInput } from "../../../lib/deadline-input";
 import { createCasePresentation } from "../../../lib/api";
 import { formatDue, inputClassName, labelClassName } from "../case-ui";
+import CaseGroupPicker, { groupPayload, type GroupPick } from "../group-picker";
 
 export default function CaseNewClient() {
   const router = useRouter();
@@ -39,39 +40,38 @@ export default function CaseNewClient() {
   const offering = offerings.find((o) => o.id === offeringId) ?? null;
   const pickCourse = (id: string) => {
     setChosenCourse(id);
-    setAudience([]);
+    setPicks({});
   };
 
-  // With a course, it goes to its groups (and whole sections where you have none).
-  const [audience, setAudience] = useState<string[]>([]);
+  // A group reports it, and the leader you name for each uploads the slides.
+  const [picks, setPicks] = useState<GroupPick>({});
   const { roster } = useCourseAudience(offeringId || null);
-  const picked = audiencePayload(roster, audience);
+  const picked = groupPayload(picks, roster);
 
   // The API takes an instructor's case presentation only for one of their courses.
   const noCourses = !loadingCourses && offerings.length === 0;
 
   const audienceOk = !!offeringId && picked.count > 0;
+  const leadersOk = audienceOk && picked.leadersChosen;
 
   const submit = async () => {
     if (busy) return;
     if (!title.trim()) return toast("Give the presentation a title");
     if (!offeringId) return toast("Choose the course this is for");
     if (!deadline) return toast("Set a due date");
-    if (!audienceOk) return toast("Choose the groups this goes to");
+    if (!audienceOk) return toast("Choose the groups that report this case");
+    if (!leadersOk) return toast("Choose a leader for each group");
     setBusy(true);
     const res = await createCasePresentation({
       title: title.trim(),
       instructions,
       deadline: deadlineFromInput(deadline),
-      section_ids: picked.section_ids,
-      team_ids: picked.team_ids,
-      student_ids: picked.student_ids,
+      groups: picked.groups,
       offering_id: offeringId,
     });
     setBusy(false);
     if (res.error !== undefined) return toast(res.error);
-    const n = res.data.student_count;
-    toast(`Assigned to ${n} student${n === 1 ? "" : "s"}`);
+    toast(`Assigned to ${picked.count} group${picked.count === 1 ? "" : "s"}`);
     forgetPage("faculty:cases");
     router.push(`/instructor/cases/${res.data.presentation.id}`);
   };
@@ -81,6 +81,7 @@ export default function CaseNewClient() {
     { ok: !!title.trim(), label: "Title written" },
     { ok: !!deadline, label: "Due date set" },
     { ok: audienceOk, label: "Groups chosen" },
+    { ok: leadersOk, label: "A leader for each group" },
   ];
 
   let n = 0;
@@ -89,7 +90,7 @@ export default function CaseNewClient() {
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faFilePrescription} className="h-4 w-4" />, label: "Case Presentations" }}
         title="New Case Presentation"
-        subtitle="Students write up their most interesting patient from hospital duty — by initials only — and you grade the presentation"
+        subtitle="A group reports a patient case from hospital duty. Its leader uploads the slides, and you grade the group as a whole"
       />
 
       <button
@@ -149,14 +150,14 @@ export default function CaseNewClient() {
                   maxLength={4000}
                   onChange={(e) => setInstructions(e.target.value)}
                   disabled={busy}
-                  placeholder="What to include, how long the presentation should run, when you'll hold it…"
+                  placeholder="What the slides should cover, how long the report should run, when you'll hold it…"
                   className={inputClassName}
                 />
               </div>
             </div>
           </SheetStep>
 
-          <SheetStep n={++n} title="Due" hint="Late cases are still accepted, and marked Late." done={!!deadline}>
+          <SheetStep n={++n} title="Due" hint="Slides handed in late are still accepted, and marked Late." done={!!deadline}>
             <input
               id="case-deadline"
               type="datetime-local"
@@ -172,17 +173,18 @@ export default function CaseNewClient() {
           <SheetStep
             n={++n}
             last
-            title="Who writes it"
+            title="Groups and leaders"
             hint={
               <span className="inline-flex items-start gap-1.5">
                 <FontAwesomeIcon icon={faShieldHalved} className="mt-0.5 h-3 w-3 shrink-0" />
-                Each student you pick gets one case to write. The app only accepts the patient&apos;s initials.
+                Pick the groups that report, then the leader of each. Only the leader uploads the slides (PowerPoint or
+                PDF); the rest of the group can open them. Name the patient by initials only.
               </span>
             }
-            done={audienceOk}
+            done={leadersOk}
           >
             {offeringId ? (
-              <AudiencePicker offeringId={offeringId} value={audience} onChange={setAudience} />
+              <CaseGroupPicker offeringId={offeringId} value={picks} onChange={setPicks} disabled={busy} />
             ) : (
               <p className="rounded-xl border border-dashed border-gray-300 px-4 py-5 text-center text-sm text-gray-500">
                 {loadingCourses ? "Loading…" : "Choose a course first to see its groups."}
@@ -208,7 +210,9 @@ export default function CaseNewClient() {
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-subtle px-2 py-0.5">
                 <FontAwesomeIcon icon={faUserGroup} className="h-3 w-3 text-brand-600" />
-                {offeringId ? `${picked.count} student${picked.count === 1 ? "" : "s"}` : "No groups yet"}
+                {offeringId && picked.count > 0
+                  ? `${picked.count} group${picked.count === 1 ? "" : "s"} · ${picked.students} student${picked.students === 1 ? "" : "s"}`
+                  : "No groups yet"}
               </span>
             </div>
           </div>
@@ -228,7 +232,7 @@ export default function CaseNewClient() {
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-xs text-gray-500">You can grade each case once its student hands it in.</p>
+            <p className="mt-3 text-xs text-gray-500">You grade each group once its leader hands in the slides. Every member gets the group&apos;s score.</p>
             <button
               onClick={submit}
               disabled={busy || checklist.some((c) => !c.ok)}
