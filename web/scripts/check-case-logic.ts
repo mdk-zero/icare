@@ -1,7 +1,7 @@
 /**
  * Behavioural checks for the case-presentation helpers: initials
- * normalisation (the privacy line), rubric scoring, the submit gate and the
- * observations whitelist. There is no test runner in this repo.
+ * normalisation (the privacy line), the group rubric's weighted scoring, and
+ * which files a leader may hand in. There is no test runner in this repo.
  *
  *   npx tsx scripts/check-case-logic.ts
  *
@@ -9,14 +9,13 @@
  */
 import { normalizeInitials } from '../app/lib/case-privacy';
 import {
+  CASE_CRITERIA,
   caseScore,
   allCriteriaRated,
-  missingCaseFields,
-  sanitizeObservations,
+  caseFileTypeOf,
   isLateSubmission,
-  MAX_OBSERVATIONS,
+  type CaseLevel,
 } from '../app/lib/case-rubric';
-import type { TaskRating } from '../app/lib/task-ratings';
 
 let failures = 0;
 function check(label: string, ok: boolean, detail = '') {
@@ -35,58 +34,46 @@ eq('single letter rejected', normalizeInitials('J'), null);
 eq('digits only rejected', normalizeInitials('12'), null);
 eq('empty rejected', normalizeInitials(''), null);
 
+console.log('rubric');
+eq('six criteria', CASE_CRITERIA.length, 6);
+eq('weights add up to 100', CASE_CRITERIA.reduce((n, c) => n + c.weight, 0), 100);
+eq(
+  'every level described',
+  CASE_CRITERIA.every((c) => [1, 2, 3, 4].every((l) => c.levels[l as CaseLevel].length > 0)),
+  true,
+);
+
 console.log('caseScore');
-const all = (r: TaskRating) =>
-  new Map<string, TaskRating>(['profile', 'assessment', 'diagnoses', 'interventions', 'delivery'].map((k) => [k, r]));
-eq('all excellent = 100', caseScore(all('excellent')), 100);
-eq('all satisfactory = 75', caseScore(all('satisfactory')), 75);
-eq('all needs practice = 50', caseScore(all('needs_practice')), 50);
-const mixed = all('excellent');
-mixed.set('delivery', 'needs_practice');
-eq('4 excellent + 1 needs practice = 90', caseScore(mixed), 90);
-const partial = all('excellent');
-partial.delete('delivery');
-eq('unrated criterion earns 0 → 80', caseScore(partial), 80);
+const all = (level: CaseLevel) => new Map<string, number>(CASE_CRITERIA.map((c) => [c.key, level]));
+eq('all Excellent = 100', caseScore(all(4)), 100);
+eq('all Proficient = 75', caseScore(all(3)), 75);
+eq('all Developing = 50', caseScore(all(2)), 50);
+eq('all Beginning = 25', caseScore(all(1)), 25);
+const mixed = all(4);
+mixed.set('care_plan', 2);
+eq('care plan Developing costs 15 of its 30', caseScore(mixed), 85);
+const proficientPatho = all(4);
+proficientPatho.set('pathophysiology', 3);
+eq('pathophysiology Proficient costs 5 of its 20', caseScore(proficientPatho), 95);
+const partial = all(4);
+partial.delete('critical_thinking');
+eq('unrated criterion earns 0 → 90', caseScore(partial), 90);
 eq('partial is not fully rated', allCriteriaRated(partial), false);
-eq('all rated', allCriteriaRated(all('satisfactory')), true);
-eq('unknown criterion ignored', caseScore(new Map([['bogus', 'excellent' as TaskRating]])), 0);
+eq('all rated', allCriteriaRated(all(3)), true);
+eq('unknown criterion ignored', caseScore(new Map([['bogus', 4]])), 0);
+eq('out-of-range level ignored', caseScore(new Map([['care_plan', 5]])), 0);
 
-console.log('missingCaseFields');
-eq('empty row lists all 7', missingCaseFields({}).length, 7);
+console.log('caseFileTypeOf');
+eq('PDF by MIME', caseFileTypeOf('application/pdf', 'x'), 'pdf');
 eq(
-  'complete row → none',
-  missingCaseFields({
-    patient_initials: 'JD',
-    age: 0,
-    sex: 'male',
-    admitting_diagnosis: 'CAP',
-    chief_complaint: 'Cough',
-    nursing_diagnoses: 'Ineffective airway clearance',
-    interventions: 'Positioning',
-  }),
-  [],
+  'PPTX by MIME',
+  caseFileTypeOf('application/vnd.openxmlformats-officedocument.presentationml.presentation', 'x'),
+  'pptx',
 );
-eq('whitespace counts as missing', missingCaseFields({ chief_complaint: '   ' }).includes('Chief complaint'), true);
-
-console.log('sanitizeObservations');
-const cleaned = sanitizeObservations({
-  vitals: [{ heart_rate: '88', patient_name: 'Juan Dela Cruz', notes: 'ok', observed_at: 'nonsense' }],
-  tpr: 'not a list',
-  ivf: [{ solution: '' }, { solution: 'PNSS 1L', rate_ml_hr: 30 }],
-  extra: [1, 2, 3],
-});
-eq('unknown key dropped', Object.keys(cleaned.vitals[0]).includes('patient_name'), false);
-eq('numeric string coerced', cleaned.vitals[0].heart_rate, 88);
-eq('bad date → null', cleaned.vitals[0].observed_at, null);
-eq('non-list → []', cleaned.tpr, []);
-eq('IVF without a solution dropped', cleaned.ivf.length, 1);
-eq('only the three lists survive', Object.keys(cleaned), ['vitals', 'tpr', 'ivf']);
-eq(
-  'capped at MAX_OBSERVATIONS',
-  sanitizeObservations({ tpr: Array.from({ length: 80 }, () => ({ pulse: 70 })) }).tpr.length,
-  MAX_OBSERVATIONS,
-);
-eq('garbage input → empty lists', sanitizeObservations(null), { vitals: [], tpr: [], ivf: [] });
+eq('PPTX by extension', caseFileTypeOf('', 'Group L - Grand Case.PPTX'), 'pptx');
+eq('PDF by extension when the MIME is generic', caseFileTypeOf('application/octet-stream', 'deck.pdf'), 'pdf');
+eq('old .ppt refused', caseFileTypeOf('application/vnd.ms-powerpoint', 'deck.ppt'), null);
+eq('Word refused', caseFileTypeOf('', 'notes.docx'), null);
 
 console.log('isLateSubmission');
 eq('after deadline is late', isLateSubmission('2026-10-02T00:00:00Z', '2026-10-01T00:00:00Z'), true);

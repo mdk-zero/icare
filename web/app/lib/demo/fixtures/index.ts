@@ -20,7 +20,7 @@ export function seed() {
   const school = seedSchool(people.users, people.teams);
   seedReturnDemos(school, people.users, people.teams);
   const system = seedSystem();
-  const teaching = seedTeaching(people.users);
+  const teaching = seedTeaching(people.users, people.teams);
   return {
     ...base,
     ...school,
