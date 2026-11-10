@@ -109,7 +109,7 @@ export default function DemoPicker({ onClose }: { onClose: () => void }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="demo-title"
-        className="w-full max-w-[420px] rounded-3xl border border-white/20 bg-(--auth-bg-2) p-6 shadow-2xl shadow-black/50 sm:p-7"
+        className="max-h-[90dvh] w-full max-w-[420px] overflow-y-auto overscroll-contain rounded-3xl border border-white/20 bg-(--auth-bg-2) p-6 shadow-2xl shadow-black/50 sm:p-7"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-start justify-between gap-4">
