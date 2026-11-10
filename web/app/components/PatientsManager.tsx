@@ -991,8 +991,8 @@ export default function PatientsManager({
             <>
               <p className="mb-3 text-sm text-gray-500">
                 Drag rooms, corridors and stations onto the sheet from below, move them around, and
-                use the corner grip to resize. Click a room to turn its door, see its students, or
-                edit it. Changes to the plan apply after{" "}
+                use the corner grip to resize. Click a room to rotate it, turn its door, see its
+                students, or edit it. Changes to the plan apply after{" "}
                 <span className="font-medium text-gray-700">Save Layout</span>; room edits and
                 deletions apply immediately.
               </p>
