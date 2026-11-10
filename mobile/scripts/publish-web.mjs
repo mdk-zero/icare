@@ -59,10 +59,12 @@ delete env.EXPO_PUBLIC_API_URL;
 
 console.log('Building the student web app…');
 rmSync(outDir, { recursive: true, force: true });
+// On Windows npx is npx.cmd, which only runs through a shell.
 const result = spawnSync('npx', ['expo', 'export', '--platform', 'web', '--output-dir', 'web-build', '--clear'], {
   cwd: mobileDir,
   stdio: 'inherit',
   env,
+  shell: process.platform === 'win32',
 });
 if (result.error) fail(`Could not run expo export: ${result.error.message}`);
 if (result.status !== 0) fail('expo export failed; nothing was published.');

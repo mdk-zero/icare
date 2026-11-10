@@ -507,8 +507,8 @@ const CASE_STATUS: Record<
   CaseListItem["status"],
   { label: string; variant: "default" | "warning" | "info" | "success" }
 > = {
-  not_started: { label: "Not started", variant: "default" },
-  draft: { label: "Draft", variant: "warning" },
+  not_started: { label: "Not handed in", variant: "default" },
+  draft: { label: "Not handed in", variant: "default" },
   submitted: { label: "Handed in", variant: "info" },
   graded: { label: "Graded", variant: "success" },
 };
@@ -569,10 +569,10 @@ function CaseCard({ item, onPress }: { item: CaseListItem; onPress: () => void }
       style={({ pressed }) => [styles.tipCard, styles.caseCard, pressed && styles.pressedCard]}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${item.presentation.title}, ${status.label}`}
+      accessibilityLabel={`${item.presentation.title}, ${item.group_name}${item.is_leader ? ", you lead" : ""}, ${status.label}`}
     >
       <View style={[styles.bannerIcon, { backgroundColor: Accent.teal.bg }]}>
-        <Ionicons name="document-text-outline" size={17} color={Accent.teal.fg} />
+        <Ionicons name="people-outline" size={17} color={Accent.teal.fg} />
       </View>
       <View style={styles.tipBody}>
         <Text style={Type.itemTitle} numberOfLines={1}>
@@ -580,7 +580,9 @@ function CaseCard({ item, onPress }: { item: CaseListItem; onPress: () => void }
         </Text>
         <View style={styles.caseMeta}>
           <Badge label={status.label} variant={status.variant} size="sm" />
+          {item.is_leader ? <Badge label="Leader" variant="warning" size="sm" /> : null}
           {item.late ? <Badge label="Late" variant="danger" size="sm" /> : null}
+          <Text style={Type.caption} numberOfLines={1}>{item.group_name}</Text>
           {item.status === "graded" && item.score !== null ? (
             <Text style={Type.caption}>{item.score}%</Text>
           ) : due ? (
