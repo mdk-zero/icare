@@ -36,6 +36,12 @@
         height: 100%;
         flex: 1;
       }
+      /* Each field draws its own focus state on its frame; the browser's ring
+         inside it doubled it. Buttons and links keep theirs for the keyboard. */
+      input,
+      textarea {
+        outline: none !important;
+      }
     </style>
   </head>
 

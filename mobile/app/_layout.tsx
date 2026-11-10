@@ -14,7 +14,7 @@ import { ConnectionToast } from '@/components/ui/ConnectionToast';
 import { StudentWebOff } from '@/components/web/StudentWebOff';
 import { WebAlertHost } from '@/components/web/WebAlertHost';
 import { startConnectivityMonitor } from '@/lib/client';
-import { hasOnboarded } from '@/lib/permissions';
+import { hasOnboarded, markOnboarded } from '@/lib/permissions';
 import { isStudentWeb, studentWebOn } from '@/lib/student-web';
 import { configureSystemNotifications, onSystemNotificationTap } from '@/lib/system-notify';
 
@@ -86,6 +86,12 @@ function AuthNavigator() {
   // student: the server signs web sessions out while it's off.
   const [webSwitch, setWebSwitch] = useState<boolean | null>(null);
   const webOn = !isStudentWeb || isAuthenticated ? true : webSwitch;
+  // The welcome screen comes once, before a device's first sign-in. Signing
+  // in counts as having seen it, so signing out lands on sign-in. The value
+  // read at start can't say so: it was read before anyone signed in.
+  const [signedInHere, setSignedInHere] = useState(false);
+  if (isAuthenticated && !signedInHere) setSignedInHere(true);
+  const welcomeDone = Boolean(onboarded) || signedInHere;
 
   useEffect(() => {
     const timer = setTimeout(() => setMinDisplayElapsed(true), MIN_BOOT_DISPLAY_MS);
@@ -99,6 +105,11 @@ function AuthNavigator() {
     if (!isStudentWeb || isBootstrapping || isAuthenticated) return;
     void studentWebOn().then(setWebSwitch);
   }, [isBootstrapping, isAuthenticated]);
+
+  // Remembered on the device too, for after a restart.
+  useEffect(() => {
+    if (isAuthenticated) void markOnboarded();
+  }, [isAuthenticated]);
 
   // A tapped notification banner opens the feed.
   useEffect(() => onSystemNotificationTap(() => router.push('/notifications')), [router]);
@@ -116,12 +127,12 @@ function AuthNavigator() {
     if (!showBootLoader && webOn) {
       if (!isAuthenticated) {
         // First launch: the welcome screen asks for permissions, then hands over to sign-in.
-        router.replace(onboarded ? '/login' : '/welcome');
+        router.replace(welcomeDone ? '/login' : '/welcome');
       } else if (mustChangePassword) {
         router.replace('/change-password');
       }
     }
-  }, [showBootLoader, webOn, isAuthenticated, mustChangePassword, onboarded, router]);
+  }, [showBootLoader, webOn, isAuthenticated, mustChangePassword, welcomeDone, router]);
 
   // Only gate on the initial session restore; a login attempt in progress
   // must not unmount the login screen (it would wipe form and error state).

@@ -19,7 +19,8 @@ import Animated, {
 import { Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import PermissionSwitches from "@/components/PermissionSwitches";
-import { markOnboarded } from "@/lib/permissions";
+import { hasOnboarded, markOnboarded } from "@/lib/permissions";
+import { useAuth } from "@/hooks/useAuth";
 import { openPrivacy, openTerms } from "@/lib/legal";
 import logoImg from "@/assets/images/logo-pill.png";
 
@@ -48,6 +49,7 @@ export default function WelcomeScreen() {
   const styles = React.useMemo(() => createStyles(Palette), [Palette]);
   const reduceMotion = useReducedMotion();
 
+  const { isAuthenticated } = useAuth();
   const [agreed, setAgreed] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const leaving = useRef(false);
@@ -84,6 +86,18 @@ export default function WelcomeScreen() {
       }),
     );
   }, [backdrop, sheetY, height, reduceMotion]);
+
+  // Shown once per device, before its first sign-in. An old link or the
+  // browser's back button can still land here afterwards, so it steps aside.
+  useEffect(() => {
+    let cancelled = false;
+    void hasOnboarded().then((seen) => {
+      if (!cancelled && (seen || isAuthenticated)) router.replace(isAuthenticated ? "/" : "/login");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, router]);
 
   // Android's back button closes the sheet before it leaves the screen.
   useEffect(() => {
