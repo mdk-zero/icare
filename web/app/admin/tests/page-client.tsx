@@ -28,6 +28,7 @@ import { RUN_KINDS, STALE_RUN_MS, ago, runVerdict, type RunKind, type RunVerdict
 import {
   BENCHMARK_TARGETS,
   CONCURRENCY_LEVELS,
+  requestsAt,
   runBenchmark,
   type BenchmarkResult,
 } from "./benchmark";
@@ -508,7 +509,7 @@ function BenchmarkSection({ runs, onRun, loading }: { runs: BenchRun[]; onRun: (
   };
 
   const maxP95 = shown ? Math.max(1, ...shown.results.map((r) => r.p95_ms)) : 1;
-  const totalRequests = targets.length * levels.length * perLevel;
+  const totalRequests = targets.length * levels.reduce((sum, c) => sum + requestsAt(c, perLevel), 0);
 
   return (
     <section id="load" className={`${CARD} p-4 sm:p-5 scroll-mt-4`}>
@@ -567,8 +568,9 @@ function BenchmarkSection({ runs, onRun, loading }: { runs: BenchRun[]; onRun: (
         </label>
       </fieldset>
       <p className="text-xs text-gray-500 mb-4">
-        {totalRequests.toLocaleString()} read-only requests from this browser. Each counts toward Supabase usage; the
-        data warehouse target is the heaviest.
+        {totalRequests.toLocaleString()} read-only requests from this browser. A level never sends fewer requests than
+        it has users, so each user sends at least one. Each counts toward Supabase usage; the data warehouse target is
+        the heaviest.
       </p>
 
       {progress && (

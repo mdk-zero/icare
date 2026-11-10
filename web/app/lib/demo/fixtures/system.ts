@@ -69,14 +69,14 @@ export function seedSystem() {
   }
 
   const bench = ["health", "auth", "db", "dw"].flatMap((target, t) =>
-    [1, 5, 10, 25].map((concurrency) => {
+    [1, 5, 10, 25, 50].map((concurrency) => {
       const base = [12, 38, 64, 140][t];
       const p50 = Math.round(base * (1 + concurrency / 30));
       return {
         target,
         concurrency,
         requests: 50,
-        ok: concurrency === 25 && target === "dw" ? 49 : 50,
+        ok: concurrency === 50 && target === "dw" ? 49 : 50,
         p50_ms: p50,
         p95_ms: Math.round(p50 * 1.9),
         avg_ms: Math.round(p50 * 1.2),
@@ -88,7 +88,7 @@ export function seedSystem() {
     id: id(),
     kind: "benchmark",
     created_at: ago(1.1),
-    summary: { requests: 800, success_pct: 99.9, worst_p95_ms: Math.max(...bench.map((b) => b.p95_ms)), peak_rps: Math.max(...bench.map((b) => b.rps)), max_concurrency: 25 },
+    summary: { requests: 1000, success_pct: 99.9, worst_p95_ms: Math.max(...bench.map((b) => b.p95_ms)), peak_rps: Math.max(...bench.map((b) => b.rps)), max_concurrency: 50 },
     results: bench,
     run_by_name: "Andrea Villanueva",
   });

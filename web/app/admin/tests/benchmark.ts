@@ -1,8 +1,13 @@
 /**
  * The load benchmark, run from the super admin's browser so it isn't bound
  * by a serverless function's time limit. Each target is hit `perLevel` times
- * at each concurrency level; wall time over the level gives throughput, and
- * the spread of per-request times gives p50/p95.
+ * at each concurrency level, and never fewer times than there are users, so
+ * every user sends at least one request; wall time over the level gives
+ * throughput, and the spread of per-request times gives p50/p95.
+ *
+ * Production is served over HTTP/2, so the browser keeps every user's request
+ * in flight at once. Against a local `next dev` (HTTP/1.1) the browser caps
+ * each host at six connections and queues the rest.
  *
  * Requests go through plain fetch, not apiFetch: they must skip the response
  * cache, and they must not land in the live telemetry they would skew.
@@ -15,7 +20,11 @@ export const BENCHMARK_TARGETS = [
   { id: "dw", label: "Data warehouse query", url: "/api/super-admin/probe?target=dw" },
 ] as const;
 
-export const CONCURRENCY_LEVELS = [1, 5, 10, 25];
+// 50 covers the 47-student test class all working at once.
+export const CONCURRENCY_LEVELS = [1, 5, 10, 25, 50];
+
+/** Requests sent at one level: `perLevel`, or one per user if there are more users. */
+export const requestsAt = (concurrency: number, perLevel: number) => Math.max(perLevel, concurrency);
 
 export interface BenchmarkResult {
   target: string;
@@ -53,7 +62,7 @@ async function level(url: string, concurrency: number, total: number, signal: Ab
       times.push(performance.now() - t0);
     }
   };
-  await Promise.all(Array.from({ length: Math.min(concurrency, total) }, worker));
+  await Promise.all(Array.from({ length: concurrency }, worker));
   const wall = (performance.now() - started) / 1000;
   times.sort((a, b) => a - b);
   return {
@@ -81,7 +90,7 @@ export async function runBenchmark(options: {
     for (const concurrency of options.levels) {
       if (options.signal.aborted) return results;
       options.onProgress(done, steps, `${target.label} × ${concurrency}`);
-      const r = await level(target.url, concurrency, options.perLevel, options.signal);
+      const r = await level(target.url, concurrency, requestsAt(concurrency, options.perLevel), options.signal);
       results.push({ target: target.id, concurrency, ...r });
       done += 1;
     }
