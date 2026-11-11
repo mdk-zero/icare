@@ -8,6 +8,7 @@ import { endDemo, isDemo } from './demo/session';
 import { holdTabPresence, releaseTabPresence } from './tab-presence';
 import type { ItemProgress, OfferingSummary, RequirementInput, RequirementRow, TermStatus } from './course-progress';
 import type { GradingSplit } from './course-grading';
+import type { FormRow, ReturnDemoForm } from './return-demo-forms';
 import type { CatalogCourse, CurriculumAnalysis, CurriculumCourseInput, CurriculumCourseRow } from './curriculum';
 import type { ScenarioKind } from './scenario-kind';
 import type { WorkKind } from './work-kinds';
@@ -2384,6 +2385,8 @@ export interface ReturnDemoTask {
 
 export interface ReturnDemoDetail extends ReturnDemoSummary {
   tasks: ReturnDemoTask[];
+  /** The forms it includes (094), by key. */
+  forms?: string[];
 }
 
 export interface ReturnDemoInput {
@@ -2391,6 +2394,28 @@ export interface ReturnDemoInput {
   description: string;
   offering_id: string | null;
   skills: SkillSelection[];
+  /** Forms the student fills in alongside it (094), by key. */
+  forms?: string[];
+}
+
+/** A form on a student's Return Demonstration, with the rows they entered (094). */
+export type SubmittedForm = ReturnDemoForm & {
+  rows: FormRow[];
+  submitted_at: string | null;
+  updated_at: string | null;
+};
+
+/** The forms on one student's Return Demonstration, for the grading sheet; null when it can't be read. */
+export async function fetchAssignmentForms(assignmentId: string): Promise<SubmittedForm[] | null> {
+  try {
+    const res = await apiFetch(`/api/faculty/scenarios/assignments/${assignmentId}/forms`, { credentials: 'include' });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { forms?: SubmittedForm[] };
+    return json.forms ?? [];
+  } catch (err) {
+    console.error('fetchAssignmentForms() failed', err);
+    return null;
+  }
 }
 
 /** An error message from a failed write, or a fallback. */

@@ -6,7 +6,7 @@ import { activityCourse } from '@/app/lib/activity-course';
 import { addSkillTasks } from '@/app/lib/skill-tasks';
 import { ensureCategories } from '@/app/lib/scenario-categories';
 import { parseReturnDemoInput, RETURN_DEMO_CATEGORY } from '@/app/lib/return-demos';
-import { listReturnDemos, needsMigration, returnDemosReady } from '@/app/lib/return-demos-server';
+import { FORMS_NEED_MIGRATION, isMissingForms, listReturnDemos, needsMigration, returnDemosReady } from '@/app/lib/return-demos-server';
 
 // Difficulty is retired, but scenarios.difficulty is NOT NULL with no default.
 const RETIRED_DIFFICULTY = 'intermediate';
@@ -16,8 +16,9 @@ const RETIRED_DIFFICULTY = 'intermediate';
  *
  * GET: every one the viewer may see, newest first, with `enabled: false`
  * (and none) before 070 and 072 so the page can say what is missing.
- * POST { title, description?, offering_id, skills }: make one. Its tasks are
- * the picked skills, each with the skill's checklist steps word for word.
+ * POST { title, description?, offering_id, skills, forms? }: make one. Its tasks
+ * are the picked skills, each with the skill's checklist steps word for word;
+ * `forms` are the form keys the student fills in alongside it (094).
  */
 export async function GET() {
   const session = await readSession();
@@ -62,9 +63,12 @@ export async function POST(request: NextRequest) {
     const resolved = await ensureCategories(supabase, [RETURN_DEMO_CATEGORY], 'faculty', session.uid);
     if ('error' in resolved) return NextResponse.json({ error: resolved.error }, { status: resolved.status });
 
+    const forms = input.forms ?? [];
     const { data: demo, error } = await supabase
       .from('scenarios')
       .insert({
+        // Only named when there are forms, so a database without 094 can still make one without.
+        ...(forms.length ? { form_keys: forms } : {}),
         created_by: session.uid,
         ...course.value,
         kind: 'return_demo',
@@ -79,6 +83,9 @@ export async function POST(request: NextRequest) {
       })
       .select('id')
       .single();
+    if (error && forms.length && isMissingForms(error)) {
+      return NextResponse.json({ error: FORMS_NEED_MIGRATION }, { status: 503 });
+    }
     if (error || !demo) {
       console.error('Failed to create Return Demonstration', error);
       return NextResponse.json({ error: 'Unable to create the Return Demonstration' }, { status: 500 });
@@ -101,7 +108,7 @@ export async function POST(request: NextRequest) {
         action: 'return_demo.create',
         entityType: 'scenarios',
         entityId: demo.id as string,
-        details: { message: `Created Return Demonstration “${input.title}”`, skills: (input.skills ?? []).map((s) => s.skillId) },
+        details: { message: `Created Return Demonstration “${input.title}”`, skills: (input.skills ?? []).map((s) => s.skillId), forms },
       },
       request,
     );

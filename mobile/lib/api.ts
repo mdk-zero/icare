@@ -23,6 +23,7 @@ import {
 import { Platform } from 'react-native';
 import type { AnomalyReason } from './vitals-rules';
 import type { ChecklistRating } from './task-ratings';
+import type { FormRow, ReturnDemoForm } from './return-demo-forms';
 
 // ---------------------------------------------------------------
 // Auth (5.1)
@@ -478,6 +479,33 @@ export async function fetchScenarioTasks(
   assignmentId: string,
 ): Promise<CachedResult<ScenarioTasksResult>> {
   return cachedGet<ScenarioTasksResult>(`/api/student/scenarios/${assignmentId}/tasks`);
+}
+
+/** A form on a Return Demonstration (094), with what the student has entered on it. */
+export type FilledForm = ReturnDemoForm & {
+  rows: FormRow[];
+  /** When it was handed in; null while it is still a draft. */
+  submitted_at: string | null;
+  updated_at: string | null;
+};
+
+/** The forms on the student's Return Demonstration; `locked` once the instructor has graded it. */
+export async function fetchReturnDemoForms(assignmentId: string): Promise<CachedResult<{ forms: FilledForm[]; locked: boolean }>> {
+  return cachedGet<{ forms: FilledForm[]; locked: boolean }>(`/api/student/scenarios/${assignmentId}/forms`);
+}
+
+/** Saves one form's rows; `submit` hands it in. Not queued offline: it needs an answer. */
+export async function saveReturnDemoForm(
+  assignmentId: string,
+  formKey: string,
+  rows: FormRow[],
+  submit: boolean,
+): Promise<FilledForm> {
+  const result = await api<{ form: FilledForm }>(`/api/student/scenarios/${assignmentId}/forms`, {
+    method: 'POST',
+    body: { form_key: formKey, rows, submit },
+  });
+  return result.form;
 }
 
 /**

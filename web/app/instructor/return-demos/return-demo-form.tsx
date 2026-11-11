@@ -26,6 +26,7 @@ import { EcgLoader } from "../../components/EcgLoader";
 import { toast } from "../../components/Toast";
 import SkillPicker from "../scenarios/skill-picker";
 import SkillStepsPreview from "./skill-steps-preview";
+import FormsPicker from "./forms-picker";
 import { editedSkills } from "./edit-skills";
 
 const inputClass =
@@ -37,7 +38,8 @@ const inputClass =
  * steps are the skill's checklist, word for word. When editing, the skills
  * it already has are shown as stored and stay as they are (a variant can't
  * change under students who may have been graded on it); they can be
- * removed, unless graded, and new ones added.
+ * removed, unless graded, and new ones added. Forms (094) are optional
+ * sheets students fill in alongside the skills.
  */
 export default function ReturnDemoForm({ id }: { id?: string }) {
   const router = useRouter();
@@ -53,6 +55,8 @@ export default function ReturnDemoForm({ id }: { id?: string }) {
   const [skills, setSkills] = useState<SkillSelection[]>([]);
   /** Skill ids of existing tasks to take off. */
   const [removed, setRemoved] = useState<Set<string>>(() => new Set());
+  /** Form keys, in the order shown to students. */
+  const [forms, setForms] = useState<string[]>([]);
   const [openSkill, setOpenSkill] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +74,7 @@ export default function ReturnDemoForm({ id }: { id?: string }) {
       setTitle(demo.title);
       setDescription(demo.description);
       setChosenCourse(demo.offering_id ?? "");
+      setForms(demo.forms ?? []);
     });
     return () => {
       cancelled = true;
@@ -92,7 +97,7 @@ export default function ReturnDemoForm({ id }: { id?: string }) {
   const save = async () => {
     setSaving(true);
     setError(null);
-    const input = { title: title.trim(), description: description.trim(), offering_id: offeringId || null, skills: saved };
+    const input = { title: title.trim(), description: description.trim(), offering_id: offeringId || null, skills: saved, forms };
     if (editing && id) {
       const result = await updateReturnDemo(id, input);
       setSaving(false);
@@ -239,6 +244,8 @@ export default function ReturnDemoForm({ id }: { id?: string }) {
           existingLabel="Already on it"
         />
         <SkillStepsPreview value={skills} />
+
+        <FormsPicker value={forms} onChange={setForms} disabled={saving} />
 
         {error && <p className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-sm text-red-700">{error}</p>}
 

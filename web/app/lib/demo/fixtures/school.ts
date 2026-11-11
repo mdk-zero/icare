@@ -8,6 +8,7 @@
  * the same data; only the dates move, relative to the day the demo starts.
  */
 
+import type { FormRow } from "../../return-demo-forms";
 import caseTasks from "./case-tasks.json";
 import { CASES, WARD_ROOMS } from "./cases-data";
 
@@ -96,6 +97,8 @@ export interface DemoScenario {
   offering_id?: string | null;
   /** A Return Demonstration (072) has no patient; absent means a Patient Case. */
   kind?: "patient_case" | "return_demo";
+  /** A Return Demonstration's forms (094), by key; absent means none. */
+  form_keys?: string[];
 }
 
 export interface DemoTask {
@@ -135,6 +138,8 @@ export interface DemoAssignment {
   submitted_at: string | null;
   finalized_by: string | null;
   team_id: string | null;
+  /** What the student entered on a Return Demonstration's forms (094), by form key. */
+  forms?: Record<string, { rows: FormRow[]; submitted_at: string | null; updated_at: string }>;
 }
 
 export interface DemoCompletion {

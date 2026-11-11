@@ -1,4 +1,5 @@
 import type { Parsed } from './course-progress';
+import { parseFormKeys } from './return-demo-forms';
 import type { FacultyTeam, TeamsOverview } from './api';
 
 /**
@@ -45,6 +46,8 @@ export interface ReturnDemoInput {
   description: string;
   offering_id: string | null;
   skills: SkillSelection[];
+  /** Forms the student fills in alongside it (094), by key; optional. */
+  forms?: string[];
 }
 
 /**
@@ -71,6 +74,7 @@ export function parseReturnDemoInput(body: unknown, opts: { partial?: boolean } 
     if (skills.length === 0) return { ok: false, error: 'Pick at least one skill' };
     value.skills = skills;
   }
+  if ('forms' in b) value.forms = parseFormKeys(b.forms);
   return { ok: true, value };
 }
 

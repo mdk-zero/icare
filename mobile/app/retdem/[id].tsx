@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Badge, PrimaryButton, SkeletonBlock, EmptyState } from '@/components/ui';
 import { ScoreRing } from '@/components/ScoreRing';
+import { ReturnDemoForms } from '@/components/ReturnDemoForms';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useApiData, allCached } from '@/hooks/useApiData';
@@ -26,7 +27,8 @@ function splitSkillTitle(title: string): [string, string | null] {
  * the instructor, each with its checklist steps to prepare from. There is no
  * patient, no start and no timer: the instructor grades it in person. Once
  * graded, each step shows its rating (N/A steps are left out of the score)
- * and each skill the instructor's note.
+ * and each skill the instructor's note. Forms the instructor added, such as
+ * an IV fluid sheet, are filled in here and submitted.
  */
 export default function ReturnDemoScreen() {
   const { id } = useLocalSearchParams();
@@ -140,6 +142,9 @@ export default function ReturnDemoScreen() {
           />
         </Card>
       ) : null}
+
+      {/* Its forms (094), if the instructor added any: filled in on the app. */}
+      <ReturnDemoForms assignmentId={assignmentId} />
 
       {tasks.length === 0 ? (
         <EmptyState icon="list-outline" message="No skills have been set for this Return Demonstration yet." />
