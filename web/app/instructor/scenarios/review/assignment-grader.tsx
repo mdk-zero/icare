@@ -50,6 +50,7 @@ import { onNotificationArrival } from "../../../lib/notifications-live";
 import Avatar from "../../../components/Avatar";
 import { EcgLoader } from "../../../components/EcgLoader";
 import { usePageData } from "../../../lib/use-page-data";
+import SubmittedForms from "./submitted-forms";
 
 type Grading = NonNullable<
   Awaited<ReturnType<typeof fetchFacultyAssignmentTasks>>
@@ -666,6 +667,9 @@ export default function AssignmentGrader({
               {onCollapse && <Chevron open />}
             </div>
           </div>
+
+          {/* A Return Demonstration's forms (094), above the checklists so they stay in reach. */}
+          {selected.kind === "return_demo" && <SubmittedForms assignmentId={selectedId} />}
 
           {tasksLoading && (
             <div

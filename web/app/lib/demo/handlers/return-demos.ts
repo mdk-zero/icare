@@ -6,6 +6,7 @@ import type { DemoScenario } from "../fixtures/school";
 import { audit } from "./shared";
 import { addSkillTasks, caseGroupsOf, myStudentIds, newAssignment } from "./faculty";
 import { parseDeadline } from "@/app/lib/deadline-input";
+import { formByKey } from "@/app/lib/return-demo-forms";
 import { mergeAssignees, parseReturnDemoInput, RETURN_DEMO_CATEGORY, returnDemoVisibleTo, skillDiff } from "@/app/lib/return-demos";
 
 /**
@@ -106,6 +107,7 @@ route("POST", "/api/faculty/return-demos", async (ctx) => {
     difficulty: "intermediate",
     offering_id: input.offering_id ?? null,
     kind: "return_demo",
+    form_keys: input.forms ?? [],
   };
   ctx.db.scenarios.push(demo);
   const added = await addSkillTasks(ctx, demo.id, input.skills ?? []);
@@ -126,6 +128,7 @@ route("GET", "/api/faculty/return-demos/:id", (ctx) => {
   return {
     return_demo: {
       ...summary(ctx, demo),
+      forms: demo.form_keys ?? [],
       tasks: tasks.map((t) => ({
         id: t.id,
         skill_id: t.skill_id,
@@ -162,6 +165,7 @@ route("PATCH", "/api/faculty/return-demos/:id", async (ctx) => {
   }
   if (input.title !== undefined) demo.title = input.title;
   if (input.description !== undefined) demo.description = input.description;
+  if (input.forms !== undefined) demo.form_keys = input.forms;
   demo.updated_at = new Date().toISOString();
 
   let added = 0;
@@ -256,4 +260,20 @@ route("PATCH", "/api/faculty/return-demos/:id/assign", (ctx) => {
     updated += 1;
   }
   return { updated };
+});
+
+// A student's forms on a Return Demonstration (094), for the grading sheet.
+route("GET", "/api/faculty/scenarios/assignments/:id/forms", (ctx) => {
+  if (!staffOnly(ctx)) return forbidden();
+  const assignment = ctx.db.assignments.find((a) => a.id === ctx.params.id);
+  if (!assignment) return notFound("Assignment not found");
+  const scenario = ctx.db.scenarios.find((s) => s.id === assignment.scenario_id);
+  const forms = (scenario?.form_keys ?? [])
+    .map((key) => formByKey(key))
+    .filter((f): f is NonNullable<typeof f> => !!f)
+    .map((form) => {
+      const saved = assignment.forms?.[form.key];
+      return { ...form, rows: saved?.rows ?? [], submitted_at: saved?.submitted_at ?? null, updated_at: saved?.updated_at ?? null };
+    });
+  return { forms };
 });

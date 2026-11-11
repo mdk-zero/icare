@@ -63,6 +63,8 @@ export function seedReturnDemos(
       difficulty: "intermediate",
       offering_id: OFFERING_MAIN,
       kind: "return_demo",
+      // The vital signs one comes with its sheets (094).
+      ...(d === 0 ? { form_keys: ["vitals", "tpr"] } : {}),
     });
 
     const built = returnDemoTasks.find((r) => r.title === spec.title)?.tasks ?? [];
@@ -150,6 +152,23 @@ export function seedReturnDemos(
         completed_at: graded,
         finalized_by: INSTRUCTOR_ID,
       });
+      // The readings they took on their partner at the skills lab.
+      const handedIn = ago(4, 13, 40 + m * 3);
+      assignment.forms = {
+        vitals: {
+          rows: [
+            { time: "13:10", bp_systolic: 112 + m * 2, bp_diastolic: 72 + m, heart_rate: 78 + m * 3, respiratory_rate: 16 + (m % 3), temperature_c: 36.6, oxygen_saturation: 98, pain_score: 0, remarks: null },
+            { time: "13:25", bp_systolic: 110 + m * 2, bp_diastolic: 70 + m, heart_rate: 76 + m * 2, respiratory_rate: 16, temperature_c: 36.7, oxygen_saturation: 99, pain_score: 0, remarks: m === 0 ? "Retook BP on the left arm with a larger cuff." : null },
+          ],
+          submitted_at: handedIn,
+          updated_at: handedIn,
+        },
+        tpr: {
+          rows: [{ time: "13:10", temperature_c: 36.6, pulse: 78 + m * 3, respiration: 16 + (m % 3), remarks: null }],
+          submitted_at: m === 2 ? null : handedIn,
+          updated_at: handedIn,
+        },
+      };
     });
   });
 }

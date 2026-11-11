@@ -105,6 +105,23 @@ export async function loadReturnDemo(
   };
 }
 
+/** Whether an error means migration 094 (forms on a Return Demonstration) isn't applied yet. */
+export function isMissingForms(error: { code?: string } | null | undefined): boolean {
+  return error?.code === '42703' || error?.code === 'PGRST204' || error?.code === '42P01' || error?.code === 'PGRST205';
+}
+
+export const FORMS_NEED_MIGRATION = 'Forms on a Return Demonstration need database migration 094.';
+
+/** The forms a Return Demonstration includes, by key; none before 094. */
+export async function loadFormKeys(supabase: Supabase, scenarioId: string): Promise<string[]> {
+  const { data, error } = await supabase.from('scenarios').select('form_keys').eq('id', scenarioId).maybeSingle();
+  if (error) {
+    if (isMissingForms(error)) return [];
+    throw new Error(`Unable to read the forms: ${error.message}`);
+  }
+  return ((data as { form_keys?: string[] | null } | null)?.form_keys ?? []) as string[];
+}
+
 /** Only its maker, or an admin, may change or delete one. */
 export function canEdit(session: Pick<SessionPayload, 'uid' | 'role'>, demo: Pick<ReturnDemoRow, 'created_by'>): boolean {
   return session.role === 'admin' || demo.created_by === session.uid;

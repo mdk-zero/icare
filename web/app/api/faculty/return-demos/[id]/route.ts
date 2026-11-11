@@ -8,7 +8,10 @@ import { getFacultyStudentIdSet } from '@/app/lib/scenario-visibility';
 import { parseReturnDemoInput, skillDiff } from '@/app/lib/return-demos';
 import {
   canEdit,
+  FORMS_NEED_MIGRATION,
   gradedTaskIds,
+  isMissingForms,
+  loadFormKeys,
   loadReturnDemo,
   loadTasks,
   type ReturnDemoSummary,
@@ -42,13 +45,14 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
     const tasks = await loadTasks(supabase, [id]);
     const taskIds = tasks.map((t) => t.id);
-    const [stepsRes, graded, assignmentsRes, mine] = await Promise.all([
+    const [stepsRes, graded, assignmentsRes, mine, formKeys] = await Promise.all([
       taskIds.length
         ? supabase.from('scenario_task_steps').select('task_id, title, sort_order').in('task_id', taskIds).order('sort_order')
         : Promise.resolve({ data: [], error: null }),
       gradedTaskIds(supabase, taskIds),
       supabase.from('scenario_assignments').select('student_id, status').eq('scenario_id', id),
       session.role === 'admin' ? Promise.resolve(null) : getFacultyStudentIdSet(supabase, session.uid),
+      loadFormKeys(supabase, id),
     ]);
     if (stepsRes.error || assignmentsRes.error) throw stepsRes.error ?? assignmentsRes.error;
 
@@ -58,8 +62,9 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     }
     const own = ((assignmentsRes.data ?? []) as { student_id: string; status: string }[]).filter((a) => mine === null || mine.has(a.student_id));
 
-    const result: ReturnDemoSummary & { tasks: ReturnDemoTask[] } = {
+    const result: ReturnDemoSummary & { tasks: ReturnDemoTask[]; forms: string[] } = {
       ...loaded.demo,
+      forms: formKeys,
       skills: tasks.map((t) => ({ id: t.skill_id ?? '', title: t.title })),
       student_count: new Set(own.map((a) => a.student_id)).size,
       graded_count: new Set(own.filter((a) => a.status === 'completed').map((a) => a.student_id)).size,
@@ -81,7 +86,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 }
 
 /**
- * PATCH { title?, description?, offering_id?, skills? }: edit one. New
+ * PATCH { title?, description?, offering_id?, skills?, forms? }: edit one. New
  * skills are added after the others; a dropped skill is removed with its
  * steps, unless a student has been graded on it, which refuses the whole
  * edit (409) so nobody's grade is lost.
@@ -129,6 +134,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const update: Record<string, unknown> = {};
     if (input.title !== undefined) update.title = input.title;
     if (input.description !== undefined) update.description = input.description;
+    // A form taken off hides it from the student and the grading sheet; what
+    // students already entered on it is kept.
+    if (input.forms !== undefined && (input.forms.length > 0 || (await loadFormKeys(supabase, id)).length > 0)) {
+      update.form_keys = input.forms;
+    }
     if (input.offering_id !== undefined) {
       const course = await activityCourse(supabase, 'scenarios', session, input.offering_id);
       if ('error' in course) return NextResponse.json({ error: course.error }, { status: 400 });
@@ -136,6 +146,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
     if (Object.keys(update).length > 0) {
       const { error } = await supabase.from('scenarios').update({ ...update, updated_at: new Date().toISOString() }).eq('id', id);
+      if (error && 'form_keys' in update && isMissingForms(error)) {
+        return NextResponse.json({ error: FORMS_NEED_MIGRATION }, { status: 503 });
+      }
       if (error) throw error;
     }
 
