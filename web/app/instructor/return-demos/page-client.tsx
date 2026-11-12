@@ -154,7 +154,7 @@ export default function ReturnDemosClient() {
               <p className="mt-1 text-sm text-gray-500">
                 {search
                   ? "Try a different title or skill."
-                  : "Pick Taylor's skills or upload your own skills checklist, then assign it to a group."}
+                  : "Pick Taylor's skills or add your own checklist, then assign it to a group."}
               </p>
             </div>
           ) : (

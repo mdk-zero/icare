@@ -28,6 +28,7 @@ import { scoreDescriptor } from '../task-ratings';
 import { ChecklistSheet } from './checklist-sheet';
 import { loadChecklistRoster, loadSheetSkills, type Performer } from './checklist-data';
 import { parseTarget } from './targets';
+import { competencyRemark } from '../return-demo-remarks';
 import { loadActivityGrid } from './activity-data';
 import { ActivityTable, type GridMember } from './activity-sheet';
 import { loadGroupings } from './groupings';
@@ -165,6 +166,7 @@ export async function buildStudentReport(
         scenarioStatus(a),
         a.status === 'completed' && a.completed_at ? date(a.completed_at) : '—',
         grade(score),
+        competencyRemark(score),
       ],
       score,
     };
@@ -232,10 +234,17 @@ export async function buildStudentReport(
   ];
   const inBlock = (key: string, rows: Row[]) =>
     rows.filter((r) => (key === 'none' ? !r.offering || !known.has(r.offering) : r.offering === key));
-  const tables: { title: string; head: string[]; cols?: number[]; rows: Row[] }[] = [
+  const tables: { title: string; head: string[]; widths?: number[]; cols?: number[]; rows: Row[] }[] = [
     // The grade says whether a patient case is done, so its table leaves out the status.
     { title: 'Patient Cases', head: ['Patient Case', 'Performed', 'Grade'], cols: [0, 2, 3], rows: scenarioRows },
-    { title: 'Return Demonstrations', head: ['Return Demonstration', 'Status', 'Performed', 'Grade'], rows: returnDemoRows },
+    {
+      title: 'Return Demonstrations',
+      // The remark says whether it is done and good enough, so the status is left out.
+      head: ['Return Demonstration', 'Performed', 'Grade', 'Remarks'],
+      cols: [0, 2, 3, 4],
+      widths: [3, 1.4, 1.9, 1.6],
+      rows: returnDemoRows,
+    },
     { title: 'Case Presentations', head: ['Presentation', 'Status', 'Presented', 'Grade'], rows: caseRows },
     { title: 'Quizzes', head: ['Quiz', 'Status', 'Last submitted', 'Grade'], rows: quizRows },
   ];
@@ -282,7 +291,7 @@ export async function buildStudentReport(
                     <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, marginTop: 4, marginBottom: 2 }}>{t.title}</Text>
                     <Table
                       head={t.head}
-                      widths={t.cols ? [3, 1.6, 2.1] : [3, 1.3, 1.3, 1.9]}
+                      widths={t.widths ?? (t.cols ? [3, 1.6, 2.1] : [3, 1.3, 1.3, 1.9])}
                       rows={t.rows.map((r) => (t.cols ? t.cols.map((i) => r.cells[i]) : r.cells))}
                     />
                   </View>
@@ -1225,7 +1234,10 @@ export async function buildChecklistReport(
           items={[
             { label: 'Score', value: pct(p.score) },
             { label: 'Rating', value: p.score === null ? '—' : scoreDescriptor(p.score) },
-            { label: 'Status', value: statusOf(p) },
+            // A Return Demonstration's remark already says where it stands, so it has no status tile.
+            ...(kind === 'return_demo'
+              ? [{ label: 'Remarks', value: competencyRemark(p.score) }]
+              : [{ label: 'Status', value: statusOf(p) }]),
           ]}
         />
         <Text style={styles.sectionTitle}>Checklist and grades</Text>
@@ -1259,9 +1271,13 @@ export async function buildChecklistReport(
       />
       <Text style={styles.sectionTitle}>Members</Text>
       <Table
-        head={['Member', 'Date of performance', 'Status', 'Score']}
-        widths={[3, 1.6, 1.4, 1.6]}
-        rows={members.map((m) => [m.name, date(m.deadline), statusOf(m), grade(m.score)])}
+        head={kind === 'return_demo' ? ['Member', 'Date of performance', 'Score', 'Remarks'] : ['Member', 'Date of performance', 'Status', 'Score']}
+        widths={kind === 'return_demo' ? [3, 1.6, 1.8, 1.6] : [3, 1.6, 1.4, 1.6]}
+        rows={members.map((m) =>
+          kind === 'return_demo'
+            ? [m.name, date(m.deadline), grade(m.score), competencyRemark(m.score)]
+            : [m.name, date(m.deadline), statusOf(m), grade(m.score)],
+        )}
       />
       <Text style={styles.sectionTitle}>Checklist and grades</Text>
       <ChecklistSheet columns={members.map((m) => m.name)} skills={skills} />

@@ -66,7 +66,7 @@ export default function ChecklistPanel({
     <div className="rounded-xl border border-hairline bg-surface p-4">
       <div className="flex items-center gap-2">
         <FontAwesomeIcon icon={faListCheck} className="h-3.5 w-3.5 text-brand-600" />
-        <p className="text-sm font-bold text-gray-800">Skills checklist</p>
+        <p className="text-sm font-bold text-gray-800">Checklist</p>
       </div>
       <p className="mt-0.5 text-xs text-gray-500">
         Each section becomes a task, and its steps become the sub-tasks you grade on the usual scale.
