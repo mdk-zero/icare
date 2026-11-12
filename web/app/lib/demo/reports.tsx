@@ -6,6 +6,7 @@ import { CASE_CRITERIA, caseLevelLabel } from "../case-rubric";
 import { ChecklistSheet } from "../reports/checklist-sheet";
 import { buildSheetSkills } from "../reports/checklist-grades";
 import { parseTarget } from "../reports/targets";
+import { competencyRemark } from "../return-demo-remarks";
 import { ActivityTable, type GridEntry, type GridMember } from "../reports/activity-sheet";
 import { CriterionTable, QuizAnswers, QuizMatrix } from "../reports/quiz-sheet";
 import { answerRows, criterionForGroup, criterionForStudent, matrix, type QuizCriterion, type QuizQuestion, type QuizTry } from "../reports/quiz-model";
@@ -97,11 +98,11 @@ function studentReport(ctx: Ctx, id: string): Built {
           submitted(a),
         ])} />
         <H>Return Demonstrations</H>
-        <Table head={["Return Demonstration", "Status", "Score", "Performed"]} widths={[4, 1.4, 1, 1.4]} rows={returnDemos.map((a) => [
+        <Table head={["Return Demonstration", "Score", "Performed", "Remarks"]} widths={[4, 1, 1.4, 1.6]} rows={returnDemos.map((a) => [
           db.scenarios.find((x) => x.id === a.scenario_id)?.title ?? "—",
-          a.status === "completed" ? "Performed" : a.status === "overdue" ? "Overdue" : "Open",
           pct(a.score),
           a.status === "completed" ? date(a.completed_at) : "—",
+          competencyRemark(a.status === "completed" ? a.score : null),
         ])} />
         <H>Quizzes</H>
         <Table head={["Quiz", "Score", "Submitted"]} widths={[4, 1, 1.4]} rows={attempts.map((a) => [
@@ -244,7 +245,9 @@ function checklistReport(ctx: Ctx, kind: keyof typeof CHECKLIST, id: string): Bu
           <StatGrid items={[
             { label: "Score", value: pct(sc) },
             { label: "Rating", value: sc === null ? "—" : scoreDescriptor(sc) },
-            { label: "Status", value: a.status === "completed" ? "Performed" : "Not yet performed" },
+            ...(kind === "return_demo"
+              ? [{ label: "Remarks", value: competencyRemark(sc) }]
+              : [{ label: "Status", value: a.status === "completed" ? "Performed" : "Not yet performed" }]),
           ]} />
           <H>Checklist and grades</H>
           <ChecklistSheet columns={["Grade"]} skills={skills} />
@@ -269,9 +272,9 @@ function checklistReport(ctx: Ctx, kind: keyof typeof CHECKLIST, id: string): Bu
           { label: "Group average", value: pct(mean(scores)) },
         ]} />
         <H>Members</H>
-        <Table head={["Member", "Date of performance", "Status", "Score"]} widths={[3, 1.6, 1.4, 1.6]} rows={members.map((m) => [
-          m.student?.name ?? "—", date(m.a.deadline), m.a.status === "completed" ? "Performed" : "Not yet performed", pct(score(m.a)),
-        ])} />
+        <Table head={kind === "return_demo" ? ["Member", "Date of performance", "Score", "Remarks"] : ["Member", "Date of performance", "Status", "Score"]} widths={kind === "return_demo" ? [3, 1.6, 1.8, 1.6] : [3, 1.6, 1.4, 1.6]} rows={members.map((m) => kind === "return_demo"
+          ? [m.student?.name ?? "—", date(m.a.deadline), pct(score(m.a)), competencyRemark(score(m.a))]
+          : [m.student?.name ?? "—", date(m.a.deadline), m.a.status === "completed" ? "Performed" : "Not yet performed", pct(score(m.a))])} />
         <H>Checklist and grades</H>
         <ChecklistSheet columns={members.map((m) => m.student?.name ?? "—")} skills={skills} />
       </Shell>
