@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
-import { ScrollView, View, Text, StyleSheet, RefreshControl } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Modal, Pressable, ScrollView, View, Text, StyleSheet, RefreshControl } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Badge, PrimaryButton, SkeletonBlock, EmptyState } from '@/components/ui';
@@ -28,7 +29,9 @@ function splitSkillTitle(title: string): [string, string | null] {
  * patient, no start and no timer: the instructor grades it in person. Once
  * graded, each step shows its rating (N/A steps are left out of the score)
  * and each skill the instructor's note. Forms the instructor added, such as
- * an IV fluid sheet, are filled in here and submitted.
+ * the PhilPEN form, come first: filled in here and submitted. The skills'
+ * checklists open in a window of their own, so the form stays the first thing
+ * on the screen.
  */
 export default function ReturnDemoScreen() {
   const { id } = useLocalSearchParams();
@@ -36,6 +39,8 @@ export default function ReturnDemoScreen() {
   const assignmentId = id as string;
   const { Palette, Accent, Type } = useTheme();
   const styles = useMemo(() => createStyles(Palette, Type), [Palette, Type]);
+  const insets = useSafeAreaInsets();
+  const [skillsOpen, setSkillsOpen] = useState(false);
 
   const { data, loading, error, refreshing, refresh, reload } = useApiData(() =>
     allCached(fetchScenarioAssignments(), fetchScenarioTasks(assignmentId)),
@@ -97,7 +102,14 @@ export default function ReturnDemoScreen() {
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[Palette.primary]} tintColor={Palette.primary} />}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={refresh}
+          colors={[Palette.primary]}
+          tintColor={Palette.primary}
+        />
+      }
     >
       <Text style={styles.title}>{assignment.scenario_title}</Text>
       <Text style={styles.subtitle}>
@@ -105,21 +117,61 @@ export default function ReturnDemoScreen() {
         {tasks.length} skill{tasks.length === 1 ? '' : 's'} to demonstrate
       </Text>
 
-      {completed && score != null ? (
-        <Card style={styles.resultCard}>
-          <ScoreRing score={score} size={64} label="Score" color={Palette.primary} />
-          <Text style={styles.resultText}>
-            Graded by your instructor. See how you did on each step below.
-          </Text>
-        </Card>
-      ) : (
-        <Card style={styles.prepareCard}>
-          <Ionicons name="hand-left-outline" size={18} color={Accent.teal.fg} />
-          <Text style={styles.prepareText}>
-            You&apos;ll demonstrate each skill to your instructor, step by step. Read the steps below to prepare.
-          </Text>
-        </Card>
-      )}
+      {/* Its forms (094), such as the PhilPEN form: filled in first, before the skills. */}
+      <ReturnDemoForms assignmentId={assignmentId} />
+
+      <Text style={styles.sectionTitle}>Skills to demonstrate</Text>
+      <Card style={styles.skillsCard}>
+        {completed && score != null ? (
+          <View style={styles.resultRow}>
+            <ScoreRing score={score} size={56} label="Score" color={Palette.primary} />
+            <Text style={styles.resultText}>
+              Graded by your instructor. Open the checklist to see how you did on each step.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.resultRow}>
+            <Ionicons name="hand-left-outline" size={18} color={Accent.teal.fg} />
+            <Text style={styles.prepareText}>
+              You&apos;ll demonstrate each skill to your instructor, step by step. Open the checklist to prepare.
+            </Text>
+          </View>
+        )}
+        {tasks.length === 0 ? (
+          <Text style={styles.goal}>No skills have been set for this Return Demonstration yet.</Text>
+        ) : (
+          tasks.map((task, i) => {
+            const [skillTitle, skillNo] = splitSkillTitle(task.title);
+            const rating = task.rating ?? null;
+            return (
+              <View key={task.id} style={styles.summaryRow}>
+                <Text style={styles.skillNumber}>{String(i + 1).padStart(2, '0')}</Text>
+                <View style={styles.skillHeaderText}>
+                  {skillNo ? <Text style={styles.skillNo}>{skillNo}</Text> : null}
+                  <Text style={styles.summaryTitle}>{skillTitle}</Text>
+                  <Text style={styles.summarySteps}>
+                    {task.steps?.length ?? 0} step{task.steps?.length === 1 ? '' : 's'}
+                  </Text>
+                </View>
+                {rating ? (
+                  <Badge
+                    label={task.percent != null ? `${task.percent}%` : TASK_RATING_LABEL[rating]}
+                    variant={TASK_RATING_BADGE[rating]}
+                    size="sm"
+                  />
+                ) : null}
+              </View>
+            );
+          })
+        )}
+        {tasks.length > 0 ? (
+          <PrimaryButton
+            title={completed ? 'See your ratings' : 'Open the skills checklist'}
+            onPress={() => setSkillsOpen(true)}
+            style={{ marginTop: Spacing.md }}
+          />
+        ) : null}
+      </Card>
 
       {!completed && toReview.length > 0 ? (
         <Card style={styles.readyCard}>
@@ -143,51 +195,87 @@ export default function ReturnDemoScreen() {
         </Card>
       ) : null}
 
-      {/* Its forms (094), if the instructor added any: filled in on the app. */}
-      <ReturnDemoForms assignmentId={assignmentId} />
-
-      {tasks.length === 0 ? (
-        <EmptyState icon="list-outline" message="No skills have been set for this Return Demonstration yet." />
-      ) : (
-        tasks.map((task, i) => {
-          const [skillTitle, skillNo] = splitSkillTitle(task.title);
-          const rating = task.rating ?? null;
-          return (
-            <Card key={task.id} style={styles.skillCard}>
-              <View style={styles.skillHeader}>
-                <Text style={styles.skillNumber}>{String(i + 1).padStart(2, '0')}</Text>
-                <View style={styles.skillHeaderText}>
-                  {skillNo ? <Text style={styles.skillNo}>{skillNo}</Text> : null}
-                  <Text style={styles.skillTitle}>{skillTitle}</Text>
-                </View>
-                {rating ? (
-                  <Badge
-                    label={task.percent != null ? `${task.percent}%` : TASK_RATING_LABEL[rating]}
-                    variant={TASK_RATING_BADGE[rating]}
-                    size="sm"
-                  />
-                ) : null}
-              </View>
-              {task.description ? <Text style={styles.goal}>{task.description}</Text> : null}
-              {(task.steps ?? []).map((step, j) => (
-                <View key={step.id} style={styles.stepRow}>
-                  <Text style={styles.stepNumber}>{j + 1}.</Text>
-                  <Text style={styles.stepText}>{step.title}</Text>
-                  {step.rating ? (
-                    <Badge label={TASK_RATING_LABEL[step.rating]} variant={TASK_RATING_BADGE[step.rating]} size="sm" />
-                  ) : null}
-                </View>
-              ))}
-              {task.remarks ? (
-                <View style={styles.note}>
-                  <Ionicons name="chatbubble-ellipses-outline" size={13} color={Palette.textSecondary} />
-                  <Text style={styles.noteText}>{task.remarks}</Text>
-                </View>
-              ) : null}
-            </Card>
-          );
-        })
-      )}
+      <Modal
+        visible={skillsOpen}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setSkillsOpen(false)}
+      >
+        <View style={[styles.container, { paddingTop: insets.top }]}>
+          <View style={styles.windowHeader}>
+            <Pressable
+              onPress={() => setSkillsOpen(false)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              style={styles.close}
+            >
+              <Ionicons name="close" size={22} color={Palette.ink} />
+            </Pressable>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.windowTitle} numberOfLines={1}>
+                Skills checklist
+              </Text>
+              <Text style={styles.windowSubtitle} numberOfLines={1}>
+                {assignment.scenario_title}
+              </Text>
+            </View>
+          </View>
+          <ScrollView
+            contentContainerStyle={[
+              styles.content,
+              { paddingBottom: Math.max(insets.bottom, Spacing.lg) + Spacing.lg },
+            ]}
+          >
+            {tasks.length === 0 ? (
+              <EmptyState icon="list-outline" message="No skills have been set for this Return Demonstration yet." />
+            ) : (
+              tasks.map((task, i) => {
+                const [skillTitle, skillNo] = splitSkillTitle(task.title);
+                const rating = task.rating ?? null;
+                return (
+                  <Card key={task.id} style={styles.skillCard}>
+                    <View style={styles.skillHeader}>
+                      <Text style={styles.skillNumber}>{String(i + 1).padStart(2, '0')}</Text>
+                      <View style={styles.skillHeaderText}>
+                        {skillNo ? <Text style={styles.skillNo}>{skillNo}</Text> : null}
+                        <Text style={styles.skillTitle}>{skillTitle}</Text>
+                      </View>
+                      {rating ? (
+                        <Badge
+                          label={task.percent != null ? `${task.percent}%` : TASK_RATING_LABEL[rating]}
+                          variant={TASK_RATING_BADGE[rating]}
+                          size="sm"
+                        />
+                      ) : null}
+                    </View>
+                    {task.description ? <Text style={styles.goal}>{task.description}</Text> : null}
+                    {(task.steps ?? []).map((step, j) => (
+                      <View key={step.id} style={styles.stepRow}>
+                        <Text style={styles.stepNumber}>{j + 1}.</Text>
+                        <Text style={styles.stepText}>{step.title}</Text>
+                        {step.rating ? (
+                          <Badge
+                            label={TASK_RATING_LABEL[step.rating]}
+                            variant={TASK_RATING_BADGE[step.rating]}
+                            size="sm"
+                          />
+                        ) : null}
+                      </View>
+                    ))}
+                    {task.remarks ? (
+                      <View style={styles.note}>
+                        <Ionicons name="chatbubble-ellipses-outline" size={13} color={Palette.textSecondary} />
+                        <Text style={styles.noteText}>{task.remarks}</Text>
+                      </View>
+                    ) : null}
+                  </Card>
+                );
+              })
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
 
       <PrimaryButton title="Back" onPress={() => router.back()} size="lg" variant="outline" />
     </ScrollView>
@@ -202,9 +290,7 @@ function createStyles(Palette: ReturnType<typeof useTheme>['Palette'], Type: Ret
     header: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.lg },
     title: { ...Type.screenTitle, marginBottom: Spacing.xs },
     subtitle: { fontSize: 14, color: Palette.textSecondary, marginBottom: Spacing.lg },
-    resultCard: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.lg },
     resultText: { flex: 1, fontSize: 13, color: Palette.textSecondary, lineHeight: 19 },
-    prepareCard: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, marginBottom: Spacing.lg },
     prepareText: { flex: 1, fontSize: 13, color: Palette.text, lineHeight: 19 },
     readyCard: { marginBottom: Spacing.lg },
     readyHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.xs },
@@ -212,8 +298,47 @@ function createStyles(Palette: ReturnType<typeof useTheme>['Palette'], Type: Ret
     readyLine: { fontSize: 13, color: Palette.text, lineHeight: 19, marginTop: 4 },
     readySkill: { fontWeight: '700' },
     skillCard: { marginBottom: Spacing.lg },
+    sectionTitle: { ...Type.sectionTitle, marginBottom: Spacing.sm },
+    skillsCard: { marginBottom: Spacing.lg, gap: Spacing.sm },
+    resultRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.xs },
+    summaryRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Spacing.sm,
+      paddingTop: Spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: Palette.borderLight,
+    },
+    summaryTitle: { fontSize: 14, fontWeight: '700', color: Palette.ink },
+    summarySteps: { fontSize: 12, color: Palette.textSecondary, marginTop: 2 },
+    windowHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.md,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.md,
+      backgroundColor: Palette.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: Palette.border,
+    },
+    close: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: Palette.surfaceMuted,
+    },
+    windowTitle: { fontSize: 17, fontWeight: '700', color: Palette.ink },
+    windowSubtitle: { fontSize: 12, color: Palette.textSecondary, marginTop: 1 },
     skillHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, marginBottom: Spacing.sm },
-    skillNumber: { fontSize: 13, fontWeight: '700', color: Palette.textFaint, fontVariant: ['tabular-nums'], marginTop: 2 },
+    skillNumber: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: Palette.textFaint,
+      fontVariant: ['tabular-nums'],
+      marginTop: 2,
+    },
     skillHeaderText: { flex: 1 },
     skillNo: { ...Type.eyebrow },
     skillTitle: { fontSize: 15, fontWeight: '700', color: Palette.ink },
@@ -226,7 +351,13 @@ function createStyles(Palette: ReturnType<typeof useTheme>['Palette'], Type: Ret
       borderTopWidth: 1,
       borderTopColor: Palette.borderLight,
     },
-    stepNumber: { width: 22, fontSize: 12, color: Palette.textMuted, textAlign: 'right', fontVariant: ['tabular-nums'] },
+    stepNumber: {
+      width: 22,
+      fontSize: 12,
+      color: Palette.textMuted,
+      textAlign: 'right',
+      fontVariant: ['tabular-nums'],
+    },
     stepText: { flex: 1, fontSize: 13, color: Palette.text, lineHeight: 19 },
     note: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: Spacing.sm },
     noteText: { flex: 1, fontSize: 12, fontStyle: 'italic', color: Palette.textSecondary, lineHeight: 17 },
