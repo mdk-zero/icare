@@ -18,6 +18,7 @@ import { Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { SectionHeader } from "@/components/ui";
 import { GoalsList } from "@/components/GoalsList";
+import { MasteryHistory } from "@/components/MasteryHistory";
 import { useAuth } from "@/hooks/useAuth";
 import { useAvatarImage, useAvatarPicker } from "@/hooks/useAvatar";
 import { useApiData } from "@/hooks/useApiData";
@@ -234,6 +235,8 @@ export default function ProfileScreen() {
       </LinearGradient>
 
       <GoalsList />
+
+      <MasteryHistory />
 
       <View style={styles.section}>
         <SectionHeader title="Settings" />

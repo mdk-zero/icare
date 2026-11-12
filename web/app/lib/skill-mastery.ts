@@ -8,6 +8,7 @@ import {
   loadBktParameters,
   oldestFirst,
   traceMastery,
+  updateMastery,
   type SkillAnswer,
   type SkillMastery,
 } from './bkt';
@@ -196,4 +197,84 @@ export async function analyticsStudentIds(
   if (!allowed) return ids;
   const permitted = new Set(allowed);
   return ids.filter((id) => permitted.has(id));
+}
+
+/** One day on a skill's history: the estimate after that day's last answer. */
+export interface MasteryPoint {
+  /** The day, as YYYY-MM-DD in Philippine time. */
+  day: string;
+  /** The last answer of the day, as stored. */
+  at: string;
+  mastery: number;
+  /** Answers on the skill that day, and how many were right. */
+  answers: number;
+  correct: number;
+}
+
+export interface SkillMasteryHistory {
+  skill_id: string;
+  title: string;
+  /** Its Taylor's chapter and that chapter's skill area, e.g. 1 and "Vital Signs". */
+  chapter: number;
+  area: string;
+  /** Where the estimate stands now: the last point's mastery. */
+  mastery: number;
+  answers: number;
+  points: MasteryPoint[];
+}
+
+const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000;
+const dayOf = (iso: string) => new Date(Date.parse(iso) + MANILA_OFFSET_MS).toISOString().slice(0, 10);
+
+/**
+ * One student's mastery of each skill over time: the same answers, order and
+ * parameters as loadSkillMastery, traced one answer at a time and kept as the
+ * estimate at the end of each day. Nothing is stored; the history is rebuilt
+ * from the answers, so it always ends where the current estimate stands.
+ */
+export async function loadMasteryHistory(supabase: SupabaseClient, studentId: string): Promise<SkillMasteryHistory[]> {
+  const [quiz, checklist] = await Promise.all([
+    loadQuizAnswers(supabase, [studentId]),
+    loadChecklistAnswers(supabase, [studentId]),
+  ]);
+  const perSkill = new Map<string, { at: string; correct: boolean }[]>();
+  for (const a of oldestFirst([...quiz, ...checklist])) {
+    if (!a.at) continue;
+    perSkill.set(a.skill_id, [...(perSkill.get(a.skill_id) ?? []), { at: a.at, correct: a.correct }]);
+  }
+  if (perSkill.size === 0) return [];
+
+  const skillIds = [...perSkill.keys()];
+  const [fits, catalog] = await Promise.all([loadBktParameters(supabase, skillIds), listSkills(supabase)]);
+  const summaries = new Map(catalog.map((s) => [s.id, s]));
+
+  return skillIds
+    .map((skill): SkillMasteryHistory => {
+      const params = fits.get(skill) ?? DEFAULT_BKT;
+      const points: MasteryPoint[] = [];
+      let known = params.p_init;
+      for (const answer of perSkill.get(skill)!) {
+        known = updateMastery(known, answer.correct, params);
+        const day = dayOf(answer.at);
+        const last = points[points.length - 1];
+        if (last && last.day === day) {
+          Object.assign(last, { at: answer.at, mastery: known, answers: last.answers + 1, correct: last.correct + (answer.correct ? 1 : 0) });
+        } else {
+          points.push({ day, at: answer.at, mastery: known, answers: 1, correct: answer.correct ? 1 : 0 });
+        }
+      }
+      const summary = summaries.get(skill);
+      const chapter = summary?.chapter ?? (Number(skill.split('-')[0]) || 0);
+      return {
+        skill_id: skill,
+        title: summary?.title ?? `Skill ${skill}`,
+        chapter,
+        area: summary?.area ?? `Chapter ${chapter}`,
+        mastery: known,
+        answers: perSkill.get(skill)!.length,
+        points,
+      };
+    })
+    // Most practised first: the skills with the most history to show.
+    .sort((a, b) => b.answers - a.answers || a.skill_id.localeCompare(b.skill_id, undefined, { numeric: true }));
 }
