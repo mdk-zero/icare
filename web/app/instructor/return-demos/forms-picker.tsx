@@ -3,13 +3,13 @@
 import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faClipboardList, faEye, faXmark } from "@fortawesome/free-solid-svg-icons";
-import { RETURN_DEMO_FORMS, type ReturnDemoForm } from "../../lib/return-demo-forms";
-import { FormSheet } from "./form-sheet";
+import { formFields, RETURN_DEMO_FORMS, type ReturnDemoForm } from "../../lib/return-demo-forms";
+import { FormPage } from "./form-page";
 
 /**
- * The optional forms of a Return Demonstration (094): the sheets students
- * fill in alongside the skills, such as an IV fluid or TPR sheet. Listed like
- * the skill chapters; each can be opened to see the sheet before adding it.
+ * The optional forms of a Return Demonstration (094): printed forms such as
+ * the DOH PhilPEN form, which students fill in on the app before they
+ * demonstrate the skills. Each can be opened to see the form before adding it.
  */
 export default function FormsPicker({
   value,
@@ -31,7 +31,7 @@ export default function FormsPicker({
         Forms <span className="font-normal text-gray-500">(optional)</span>
       </p>
       <p className="mt-0.5 text-xs text-gray-500">
-        Sheets students fill in on the app alongside the skills. You read them while grading; they aren&apos;t scored.
+        Forms students fill in on the app before the skills. You see their answers on the form while grading; they aren&apos;t scored.
       </p>
 
       <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-hairline bg-subtle px-3 py-2.5">
@@ -67,7 +67,7 @@ export default function FormsPicker({
                 </span>
               </label>
               <span className="hidden shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-500 sm:inline">
-                {form.fields.length} fields
+                {formFields(form).length} fields
               </span>
               <button
                 type="button"
@@ -91,7 +91,7 @@ export default function FormsPicker({
             role="dialog"
             aria-modal="true"
             aria-labelledby="form-preview-title"
-            className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-hairline bg-surface shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
+            className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-hairline bg-surface shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3 border-b border-hairline bg-subtle px-5 py-3">
@@ -110,11 +110,25 @@ export default function FormsPicker({
                 <FontAwesomeIcon icon={faXmark} className="h-4 w-4" />
               </button>
             </div>
-            <div className="overflow-y-auto p-5">
-              <p className="mb-3 text-xs text-gray-500">
-                What students fill in, one row per {preview.rowLabel.toLowerCase()}. Fields marked * are required.
-              </p>
-              <FormSheet form={preview} rows={[]} blankRows={3} />
+            <div className="grid gap-5 overflow-y-auto p-5 md:grid-cols-[minmax(0,1fr)_16rem]">
+              <FormPage form={preview} className="mx-auto max-w-xl" />
+              <div>
+                <p className="text-xs font-bold text-gray-800">What students answer</p>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  On the app, as text boxes, dates and Yes/No choices. Their answers show on this page for you.
+                </p>
+                <ul className="mt-3 space-y-2">
+                  {preview.sections.map((section) => (
+                    <li key={section.title} className="rounded-lg border border-hairline px-3 py-2">
+                      <p className="text-sm font-semibold text-gray-800">{section.title}</p>
+                      <p className="text-xs text-gray-500">
+                        {section.fields.map((f) => f.label).join(", ")}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-3 text-xs text-gray-500">{preview.source}</p>
+              </div>
             </div>
             <div className="flex justify-end gap-2 border-t border-hairline px-5 py-3">
               <button
