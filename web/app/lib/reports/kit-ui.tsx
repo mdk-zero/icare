@@ -113,6 +113,7 @@ export function ReportShell({
   meta,
   metaRows,
   logo,
+  orientation = 'portrait',
   children,
 }: {
   title: string;
@@ -121,11 +122,13 @@ export function ReportShell({
   metaRows: { label: string; value: string }[];
   /** The letterhead wordmark: file bytes on the server, a URL in the browser. */
   logo?: Buffer | string | null;
+  /** Landscape for a wide table, such as a column per group member. */
+  orientation?: 'portrait' | 'landscape';
   children: ReactNode;
 }) {
   return (
     <Document title={title}>
-      <Page size="A4" style={styles.page} wrap>
+      <Page size="A4" orientation={orientation} style={styles.page} wrap>
         <View style={styles.header}>
           <View style={styles.headerText}>
             <Text style={styles.brand}>{heading}</Text>
@@ -155,7 +158,7 @@ export function ReportShell({
         {children}
 
         <Text style={styles.footer} fixed>
-          iCARE++  |  Generated live from current records  |  Confidential academic record
+          iCARE++  |  Confidential academic record
         </Text>
       </Page>
     </Document>

@@ -6,12 +6,16 @@ import { deanInstitution, ownsRow, viewerDeanId } from '@/app/lib/dean-scope';
 import { logAudit } from '@/app/lib/audit';
 import { renderReport, reportResponse, type ReportMeta } from '@/app/lib/reports/kit';
 import { slugify } from '@/app/lib/reports/data';
+import { parseTarget } from '@/app/lib/reports/targets';
 import { getFacultySectionIds, isStudentInFacultySections } from '@/app/lib/roster';
 import {
   REPORT_NEEDS_TARGET,
   buildAssessmentReport,
   buildCaseReport,
   buildDischargeReport,
+  buildChecklistReport,
+  buildQuizDetailReport,
+  buildSectionGroupReport,
   buildRosterReport,
   buildScenarioReport,
   buildSectionReport,
@@ -106,6 +110,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       case 'case':
         result = await buildCaseReport(supabase, meta, id, scope);
         break;
+      case 'return_demo':
+      case 'patient_case':
+        result = await buildChecklistReport(supabase, meta, type, id, scope);
+        break;
+      case 'quiz':
+        result = await buildQuizDetailReport(supabase, meta, id, scope);
+        break;
+      case 'section_group':
+        result = await buildSectionGroupReport(supabase, meta, id, scope);
+        break;
     }
 
     if ('error' in result) {
@@ -157,6 +171,14 @@ async function outsideDean(
       : await supabase.from('case_submissions').select('presentation_id').eq('id', id).maybeSingle();
     const presentationId = (group ?? submission)?.presentation_id as string | undefined;
     return !presentationId || !(await ownsRow(supabase, 'case_presentations', presentationId, deanId));
+  }
+  if (type === 'return_demo' || type === 'patient_case') {
+    const target = parseTarget(id);
+    return !target || !(await ownsRow(supabase, 'scenarios', target.parentId, deanId));
+  }
+  if (type === 'quiz') {
+    const target = parseTarget(id);
+    return !target || !(await ownsRow(supabase, 'assessments', target.parentId, deanId));
   }
   if (type === 'discharge') {
     const { data } = await supabase.from('discharge_summaries').select('patient_id').eq('id', id).maybeSingle();

@@ -72,6 +72,7 @@ export default function ReportPreviewModal({
               <p className="text-xs font-medium text-gray-500">{kind}</p>
               <h2
                 id="report-preview-title"
+                title={subject}
                 className="truncate font-display text-lg font-semibold text-gray-900"
               >
                 {subject}

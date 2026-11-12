@@ -55,7 +55,7 @@ export function isLate(submittedAt: string | null, deadline: string | null): boo
  * graded is "Awaiting grade", a graded one is "Graded".
  */
 export function scenarioStatus(a: { status: string; submitted_at: string | null }): string {
-  if (a.status === 'completed') return 'Graded';
+  if (a.status === 'completed') return 'Performed';
   if (a.submitted_at) return 'Awaiting grade';
   if (a.status === 'in_progress') return 'In progress';
   if (a.status === 'overdue') return 'Overdue';
@@ -66,7 +66,7 @@ export const CASE_STATUS_LABEL: Record<string, string> = {
   not_started: 'Not started',
   draft: 'Draft',
   submitted: 'Awaiting grade',
-  graded: 'Graded',
+  graded: 'Presented',
 };
 
 /** Each student's group name; students in none are left out. */

@@ -17,7 +17,7 @@ import { parseDeadline } from "@/app/lib/deadline-input";
 import { DAY_MS, hasWork, lastActivity, mean, skillMastery } from "./derive";
 import { summariseCohort } from "@/app/lib/bkt";
 import { listSkillSummaries } from "../fixtures/skills";
-import { byName, canSeeStudent, manageableSections, sectionName, userById, visibleSections, visibleStudents } from "./scope";
+import { byName, canSeeStudent, manageableSections, sectionName, teamLabel, userById, visibleSections, visibleStudents } from "./scope";
 import { courseActivityIds, courseDb, linkActivityCourses, offeringRoster } from "./courses";
 import { CASES } from "../fixtures/cases-data";
 import type { WorkKind } from "@/app/lib/work-kinds";
@@ -937,17 +937,114 @@ async function report(ctx: Ctx) {
   return response;
 }
 
+// What is inside one report folder (a section, a patient case, a return demonstration, a quiz), as the real route reads it.
+route("GET", "/api/faculty/reports/folder/:type/:id", (ctx) => {
+  if (!staffOnly(ctx)) return forbidden();
+  const { db } = ctx;
+  const { type, id } = ctx.params;
+  const mine = visibleStudents(db, ctx.role, ctx.viewer.id);
+  const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
+  const label = (teamId: string | null | undefined, section: string | null) => teamLabel(db, teamId) ?? section ?? "No group";
+  type Member = { id: string; name: string; team_id: string | null; flag: string | null; detail: string };
+  const group = (members: Member[], parent: string, itemType: string, status: (m: Member[]) => { text: string; flag: string | null }) => {
+    const teams = [...new Set(members.flatMap((m) => (m.team_id ? [m.team_id] : [])))];
+    return teams
+      .map((teamId) => {
+        const list = members.filter((m) => m.team_id === teamId);
+        const st = status(list);
+        return { id: `${parent}:group:${teamId}`, label: teamLabel(db, teamId) ?? "Group", sub: `${plural(list.length, "member")} · ${st.text} · ${list.map((m) => m.name).join(", ")}`, flag: st.flag };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+  };
+  const views = (parent: string, itemType: string, members: Member[], status: (m: Member[]) => { text: string; flag: string | null }) => [
+    { id: "student", label: "Per student", type: itemType, items: members.map((m) => ({ id: `${parent}:student:${m.id}`, label: m.name, sub: `${label(m.team_id, null)} · ${m.detail}`, flag: m.flag })) },
+    { id: "group", label: "Per group", type: itemType, items: group(members, parent, itemType, status) },
+  ];
+
+  if (type === "section") {
+    const name = sectionName(db, id);
+    if (!name) return notFound();
+    const students = mine.filter((s) => s.section_id === id).sort((a, b) => a.name.localeCompare(b.name));
+    const teams = [...new Set(students.flatMap((s) => (s.team_id ? [s.team_id] : [])))];
+    return {
+      title: name,
+      whole: { type: "section", id, label: "Whole section", sub: `${plural(students.length, "student")} · ${plural(teams.length, "group")}` },
+      views: [
+        { id: "student", label: "Per student", type: "student", items: students.map((s) => ({ id: s.id, label: s.name, sub: db.teams.find((t) => t.id === s.team_id)?.name ?? "No group", flag: null })) },
+        {
+          id: "group", label: "Per group", type: "section_group",
+          items: teams.map((teamId) => {
+            const list = students.filter((s) => s.team_id === teamId);
+            return { id: teamId, label: teamLabel(db, teamId) ?? "Group", sub: `${plural(list.length, "member")} · ${list.map((m) => m.name).join(", ")}`, flag: null };
+          }).sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true })),
+        },
+      ],
+    };
+  }
+
+  if (type === "return_demo" || type === "patient_case") {
+    const demo = db.scenarios.find((s) => s.id === id && (s.kind ?? "patient_case") === type);
+    if (!demo) return notFound();
+    const members: Member[] = db.assignments
+      .filter((a) => a.scenario_id === id)
+      .flatMap((a) => {
+        const s = mine.find((x) => x.id === a.student_id);
+        const graded = a.status === "completed";
+        return s ? [{ id: s.id, name: s.name, team_id: s.team_id ?? null, flag: graded ? null : "Not performed", detail: graded && a.score != null ? `Performed · ${a.score}%` : "Not yet performed", graded } as Member & { graded: boolean }] : [];
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return {
+      title: demo.title,
+      whole: type === "patient_case" ? { type: "scenario", id, label: "Whole class", sub: `Everyone given this patient case, ${plural(members.length, "student")}` } : null,
+      views: views(id, type, members, (list) => {
+        const pending = list.filter((m) => m.flag).length;
+        return { text: `${list.length - pending} performed`, flag: pending ? `${pending} not performed` : null };
+      }),
+    };
+  }
+
+  if (type === "quiz") {
+    const quiz = db.quizzes.find((q) => q.id === id);
+    if (!quiz) return notFound();
+    const members: Member[] = mine
+      .filter((s) => db.quizAssignments.some((a) => a.assessment_id === id && a.student_id === s.id) || db.attempts.some((a) => a.assessment_id === id && a.student_id === s.id))
+      .map((s) => {
+        const scores = db.attempts.filter((a) => a.assessment_id === id && a.student_id === s.id && a.status === "submitted" && a.score != null).map((a) => a.score!);
+        const grade = scores.length ? Math.round(mean(scores)!) : null;
+        return { id: s.id, name: s.name, team_id: s.team_id ?? null, flag: grade === null ? "Not taken" : null, detail: grade === null ? "Not taken" : `Grade ${grade}%` };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return {
+      title: quiz.title,
+      whole: { type: "assessment", id, label: "Whole class", sub: `Everyone given this quiz, ${plural(members.length, "student")}` },
+      views: views(id, "quiz", members, (list) => {
+        const waiting = list.filter((m) => m.flag).length;
+        return { text: `${list.length - waiting} submitted`, flag: waiting ? `${waiting} not taken` : null };
+      }),
+    };
+  }
+  return notFound();
+});
+
 route("GET", "/api/faculty/reports/:type", (ctx) => (staffOnly(ctx) ? report(ctx) : forbidden()));
 route("GET", "/api/admin/reports/:type", (ctx) => (ctx.role === "admin" ? report(ctx) : forbidden()));
 
-route("GET", "/api/reports/recent", (ctx) => ({
-  reports: ctx.db.audit
+// One entry per report, the newest pull of it, as /api/reports/recent answers.
+route("GET", "/api/reports/recent", (ctx) => {
+  const seen = new Set<string>();
+  const reports = ctx.db.audit
     .filter((r) => r.actor_id === ctx.viewer.id && r.action === "report.generate")
-    .slice(0, 10)
     .map((r) => ({
       type: r.entity_type ?? "",
       target_id: (r.details.target_id as string | null) ?? null,
       subject: String(r.details.subject ?? r.entity_type ?? "Report"),
       created_at: r.created_at,
-    })),
-}));
+    }))
+    .filter((r) => {
+      const key = `${r.type}:${r.target_id ?? "all"}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  return { reports: reports.slice(0, 10) };
+});

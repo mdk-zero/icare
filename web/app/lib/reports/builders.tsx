@@ -13,6 +13,7 @@ import {
   groupNames,
   isLate,
   pct,
+  plural,
   scenarioStatus,
   studentWork,
 } from './data';
@@ -24,12 +25,22 @@ import { quizGrade } from '../quiz-attempts';
 import { activityOfferings } from '../activity-course';
 import { readMatching } from '../fetch-all';
 import { scoreDescriptor } from '../task-ratings';
+import { ChecklistSheet } from './checklist-sheet';
+import { loadChecklistRoster, loadSheetSkills, type Performer } from './checklist-data';
+import { parseTarget } from './targets';
+import { loadActivityGrid } from './activity-data';
+import { ActivityTable, type GridMember } from './activity-sheet';
+import { loadGroupings } from './groupings';
+import { loadQuizCriteria, loadQuizQuestions, loadQuizRoster, loadQuizTries } from './quiz-data';
+import { answerRows, criterionForGroup, criterionForStudent, matrix } from './quiz-model';
+import { CriterionTable, QuizAnswers, QuizMatrix } from './quiz-sheet';
+import type { ScenarioKind } from '../scenario-kind';
 import { loadStudentStandings, type StudentCourseStanding } from '../course-requirements';
 import { isMissingCourseSchema } from '../courses';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
-export const REPORT_TYPES = ['student', 'section', 'scenario', 'assessment', 'roster', 'discharge', 'case'] as const;
+export const REPORT_TYPES = ['student', 'section', 'scenario', 'assessment', 'roster', 'discharge', 'case', 'return_demo', 'patient_case', 'quiz', 'section_group'] as const;
 export type ReportType = (typeof REPORT_TYPES)[number];
 
 export function isReportType(value: unknown): value is ReportType {
@@ -48,6 +59,14 @@ export const REPORT_NEEDS_TARGET: Record<ReportType, boolean> = {
   discharge: true,
   // One group's graded case presentation (a group id, or a member's case_submissions id).
   case: true,
+  // "<scenario>:student:<id>" or "<scenario>:group:<id>": one student's or one group's checklist grades.
+  return_demo: true,
+  // The same, for a Patient Case's checklist.
+  patient_case: true,
+  // "<quiz>:student:<id>" or "<quiz>:group:<id>": the questions and how each was answered.
+  quiz: true,
+  // One group of a section (a team id).
+  section_group: true,
 };
 
 export interface BuiltReport {
@@ -213,10 +232,11 @@ export async function buildStudentReport(
   ];
   const inBlock = (key: string, rows: Row[]) =>
     rows.filter((r) => (key === 'none' ? !r.offering || !known.has(r.offering) : r.offering === key));
-  const tables = [
-    { title: 'Patient Cases', head: ['Patient Case', 'Status', 'Submitted', 'Grade'], rows: scenarioRows },
-    { title: 'Return Demonstrations', head: ['Return Demonstration', 'Status', 'Graded', 'Grade'], rows: returnDemoRows },
-    { title: 'Case Presentations', head: ['Presentation', 'Status', 'Submitted', 'Grade'], rows: caseRows },
+  const tables: { title: string; head: string[]; cols?: number[]; rows: Row[] }[] = [
+    // The grade says whether a patient case is done, so its table leaves out the status.
+    { title: 'Patient Cases', head: ['Patient Case', 'Performed', 'Grade'], cols: [0, 2, 3], rows: scenarioRows },
+    { title: 'Return Demonstrations', head: ['Return Demonstration', 'Status', 'Performed', 'Grade'], rows: returnDemoRows },
+    { title: 'Case Presentations', head: ['Presentation', 'Status', 'Presented', 'Grade'], rows: caseRows },
     { title: 'Quizzes', head: ['Quiz', 'Status', 'Last submitted', 'Grade'], rows: quizRows },
   ];
 
@@ -260,7 +280,11 @@ export async function buildStudentReport(
                 own.map((t) => (
                   <View key={t.title} wrap={false} style={{ marginBottom: 4 }}>
                     <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, marginTop: 4, marginBottom: 2 }}>{t.title}</Text>
-                    <Table head={t.head} widths={[3, 1.3, 1.3, 1.9]} rows={t.rows.map((r) => r.cells)} />
+                    <Table
+                      head={t.head}
+                      widths={t.cols ? [3, 1.6, 2.1] : [3, 1.3, 1.3, 1.9]}
+                      rows={t.rows.map((r) => (t.cols ? t.cols.map((i) => r.cells[i]) : r.cells))}
+                    />
                   </View>
                 ))
               )}
@@ -344,12 +368,21 @@ export async function buildSectionReport(
     const key = r.group ?? 'No group';
     byGroup.set(key, [...(byGroup.get(key) ?? []), r]);
   }
-  const groupRows = [...byGroup.entries()]
-    .sort(([a], [b]) => (a === 'No group' ? 1 : b === 'No group' ? -1 : a.localeCompare(b, undefined, { numeric: true })))
-    .map(([name, members]) => {
-      const graded = members.flatMap((m) => (m.work.scenarioAverage === null ? [] : [m.work.scenarioAverage]));
-      return [name, members.length, `${graded.length}/${members.length}`, grade(avg(graded))];
-    });
+  // Each group on its own, with only the work given to its members, names A to Z.
+  const [grid, groupings] = await Promise.all([
+    loadActivityGrid(supabase, ids),
+    loadGroupings(supabase, students.map((s) => ({ id: s.id, section_id: sectionId }))),
+  ]);
+  const blocks = new Map<string, GridMember[]>();
+  for (const st of students) {
+    const name = groupings.get(st.id)?.groupName ?? 'Students not in a group';
+    blocks.set(name, [...(blocks.get(name) ?? []), { name: st.name, entries: grid.get(st.id) ?? [] }]);
+  }
+  const groupBlocks = [...blocks.entries()]
+    .sort(([a], [b]) =>
+      a === 'Students not in a group' ? 1 : b === 'Students not in a group' ? -1 : a.localeCompare(b, undefined, { numeric: true }),
+    )
+    .map(([name, members]) => ({ name, members: [...members].sort((x, y) => x.name.localeCompare(y.name)) }));
 
   const byArea = new Map<string, number[]>();
   for (const s of scores) {
@@ -365,6 +398,7 @@ export async function buildSectionReport(
     <ReportShell
       title={`Section Report - ${section.name}`}
       heading="Section Performance Report"
+      orientation="landscape"
       meta={meta}
       metaRows={[
         { label: 'Section', value: section.name },
@@ -384,28 +418,22 @@ export async function buildSectionReport(
       />
 
       <Text style={styles.sectionTitle}>Groups</Text>
-      <Table
-        head={['Group', 'Members', 'Graded', 'Patient case average']}
-        widths={[3, 1, 1, 2]}
-        rows={groupRows}
-        emptyText="No students in this section yet."
-      />
-
-      <Text style={styles.sectionTitle}>Students</Text>
-      <Table
-        head={['Student', 'Group', 'Patient Cases', 'Patient case grade', 'Return demo grade', 'Case grade', 'Quiz average']}
-        widths={[2.1, 1, 0.9, 1.8, 1.8, 0.9, 1.1]}
-        rows={roster.map((r) => [
-          r.name,
-          r.group ?? '—',
-          `${r.work.scenariosGraded}/${r.work.scenariosAssigned}`,
-          grade(r.work.scenarioAverage),
-          grade(r.work.returnDemoAverage),
-          pct(r.work.caseAverage),
-          pct(r.work.quizAverage),
-        ])}
-        emptyText="No students in this section yet."
-      />
+      {groupBlocks.length === 0 ? (
+        <Text style={styles.empty}>No students in this section yet.</Text>
+      ) : (
+        groupBlocks.map((g) => (
+          <ActivityTable
+            key={g.name}
+            members={g.members}
+            heading={
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4, marginBottom: 3 }}>
+                <Text style={{ fontFamily: 'Helvetica-Bold', color: TEAL }}>{g.name}</Text>
+                <Text style={{ fontSize: 8, color: '#6b7280' }}>{plural(g.members.length, 'member')}</Text>
+              </View>
+            }
+          />
+        ))
+      )}
 
       <Text style={styles.sectionTitle}>Skill areas (section mean)</Text>
       <Table
@@ -482,17 +510,17 @@ export async function buildScenarioReport(
         items={[
           { label: 'Assigned', value: rows.length },
           { label: 'Awaiting grade', value: awaiting },
-          { label: 'Graded', value: graded.length },
+          { label: 'Performed', value: graded.length },
           gradeTile('Average grade', avg(graded)),
         ]}
       />
 
       <Text style={styles.sectionTitle}>Grades</Text>
-      <Table head={['Level', 'Students']} rows={levels} emptyText="Nothing graded yet." />
+      <Table head={['Level', 'Students']} rows={levels} emptyText="Nothing performed yet." />
 
       <Text style={styles.sectionTitle}>Students</Text>
       <Table
-        head={['Student', 'Group', 'Status', 'Submitted', 'Grade']}
+        head={['Student', 'Group', 'Status', 'Performed', 'Grade']}
         widths={[2.4, 1, 1.4, 1.4, 1.9]}
         rows={rows.map((r) => [
           r.name,
@@ -667,7 +695,7 @@ export async function buildAssessmentReport(
           label: 'Time limit',
           value: assessment.time_limit_seconds ? `${Math.round(assessment.time_limit_seconds / 60)} min` : 'None',
         },
-        { label: 'Graded tries allowed', value: String(assessment.max_attempts ?? 1) },
+        { label: 'Tries allowed', value: String(assessment.max_attempts ?? 1) },
         { label: 'Passing grade', value: `${PASSING_SCORE}%` },
       ]}
     >
@@ -1107,8 +1135,7 @@ export async function buildCaseReport(
         { label: 'Presentation', value: title },
         { label: 'Leader', value: leader?.name ?? '—' },
         { label: 'Slides', value: g.file_name ?? '—' },
-        { label: 'Handed in', value: `${date(g.submitted_at)}${late ? ' (late)' : ''}` },
-        { label: 'Graded', value: date(g.graded_at) },
+        { label: 'Presented', value: `${date(g.submitted_at)}${late ? ' (late)' : ''}` },
       ]}
     >
       <Text style={styles.sectionTitle}>Result</Text>
@@ -1134,4 +1161,296 @@ export async function buildCaseReport(
   );
 
   return { subject: `${g.team_name} ${title}`, pdf };
+}
+
+// ---------------------------------------------------------------------------
+// Return Demonstration — the checklist and its grades, per student or per group
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Return Demonstration and Patient Case — the checklist and its grades, per student or per group
+// ---------------------------------------------------------------------------
+
+const statusOf = (p: Performer) => (p.status === 'completed' ? 'Performed' : p.status === 'in_progress' ? 'In progress' : 'Not yet performed');
+
+const CHECKLIST_REPORT: Record<ScenarioKind, { heading: string; noun: string }> = {
+  return_demo: { heading: 'Return Demonstration Report', noun: 'Return Demonstration' },
+  patient_case: { heading: 'Patient Case Report', noun: 'Patient Case' },
+};
+
+/**
+ * One scenario's checklist with the grade beside each step: for a single
+ * student, or for a group with a column per member. The target id says which
+ * (see parseTarget). A Return Demonstration and a Patient Case are graded the
+ * same way, so one builder lays out both.
+ */
+export async function buildChecklistReport(
+  supabase: Supabase,
+  meta: ReportMeta,
+  kind: ScenarioKind,
+  id: string,
+  scope: StudentScope,
+): Promise<BuildResult> {
+  const { heading, noun } = CHECKLIST_REPORT[kind];
+  const target = parseTarget(id);
+  if (!target) return { error: `${noun} not found`, status: 404 };
+  const roster = await loadChecklistRoster(supabase, kind, target.parentId, scope);
+  if (!roster) return { error: `${noun} not found`, status: 404 };
+
+  const members =
+    target.kind === 'student'
+      ? roster.performers.filter((p) => p.studentId === target.studentId)
+      : roster.performers.filter((p) => p.teamId === target.teamId);
+  if (members.length === 0) return { error: `${noun} not found`, status: 404 };
+
+  const skills = await loadSheetSkills(supabase, target.parentId, members.map((m) => m.assignmentId));
+
+  if (target.kind === 'student') {
+    const p = members[0];
+    const pdf = (
+      <ReportShell
+        title={`${noun} - ${roster.title} - ${p.name}`}
+        heading={heading}
+        meta={meta}
+        metaRows={[
+          { label: noun, value: roster.title },
+          { label: 'Student', value: p.name },
+          { label: 'Group', value: p.groupLabel },
+          { label: 'Date of performance', value: date(p.deadline) },
+          { label: 'Performed', value: date(p.completedAt) },
+        ]}
+      >
+        <Text style={styles.sectionTitle}>Result</Text>
+        <StatGrid
+          items={[
+            { label: 'Score', value: pct(p.score) },
+            { label: 'Rating', value: p.score === null ? '—' : scoreDescriptor(p.score) },
+            { label: 'Status', value: statusOf(p) },
+          ]}
+        />
+        <Text style={styles.sectionTitle}>Checklist and grades</Text>
+        <ChecklistSheet columns={['Grade']} skills={skills} />
+      </ReportShell>
+    );
+    return { subject: `${roster.title} ${p.name}`, pdf };
+  }
+
+  const graded = members.flatMap((m) => (m.score === null ? [] : [m.score]));
+  const groupLabel = members[0].groupLabel;
+  const pdf = (
+    <ReportShell
+      title={`${noun} - ${roster.title} - ${groupLabel}`}
+      heading={heading}
+      orientation="landscape"
+      meta={meta}
+      metaRows={[
+        { label: noun, value: roster.title },
+        { label: 'Group', value: groupLabel },
+        { label: 'Members', value: String(members.length) },
+      ]}
+    >
+      <Text style={styles.sectionTitle}>Summary</Text>
+      <StatGrid
+        items={[
+          { label: 'Members', value: members.length },
+          { label: 'Performed', value: graded.length },
+          gradeTile('Group average', avg(graded)),
+        ]}
+      />
+      <Text style={styles.sectionTitle}>Members</Text>
+      <Table
+        head={['Member', 'Date of performance', 'Status', 'Score']}
+        widths={[3, 1.6, 1.4, 1.6]}
+        rows={members.map((m) => [m.name, date(m.deadline), statusOf(m), grade(m.score)])}
+      />
+      <Text style={styles.sectionTitle}>Checklist and grades</Text>
+      <ChecklistSheet columns={members.map((m) => m.name)} skills={skills} />
+    </ReportShell>
+  );
+  return { subject: `${roster.title} ${groupLabel}`, pdf };
+}
+
+// ---------------------------------------------------------------------------
+// Section group — one group of a section, member by member
+// ---------------------------------------------------------------------------
+
+export async function buildSectionGroupReport(
+  supabase: Supabase,
+  meta: ReportMeta,
+  teamId: string,
+  scope: StudentScope = null,
+): Promise<BuildResult> {
+  const { data: team } = await supabase.from('teams').select('id, name, section_id, sections(name)').eq('id', teamId).maybeSingle();
+  if (!team) return { error: 'Group not found', status: 404 };
+  const sectionName = (team as unknown as { sections: { name: string } | null }).sections?.name ?? 'Section';
+
+  const { data: memberRows } = await supabase
+    .from('team_members')
+    .select('student_id, users:student_id(name)')
+    .eq('team_id', teamId);
+  const members = ((memberRows ?? []) as unknown as { student_id: string; users: { name: string | null } | null }[])
+    .filter((m) => !scope || scope.includes(m.student_id))
+    .map((m) => ({ id: m.student_id, name: m.users?.name ?? 'Unknown student' }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  if (members.length === 0) return { error: 'Group not found', status: 404 };
+
+  const [work, grid] = await Promise.all([
+    studentWork(supabase, members.map((m) => m.id)),
+    loadActivityGrid(supabase, members.map((m) => m.id)),
+  ]);
+  const rows = members.map((m) => ({ ...m, work: work.get(m.id)! }));
+  const gridMembers: GridMember[] = members.map((m) => ({ name: m.name, entries: grid.get(m.id) ?? [] }));
+  const caseAverages = rows.flatMap((r) => (r.work.scenarioAverage === null ? [] : [r.work.scenarioAverage]));
+  const demoAverages = rows.flatMap((r) => (r.work.returnDemoAverage === null ? [] : [r.work.returnDemoAverage]));
+  const quizAverages = rows.flatMap((r) => (r.work.quizAverage === null ? [] : [r.work.quizAverage]));
+
+  const pdf = (
+    <ReportShell
+      title={`Group Report - ${sectionName} - ${team.name}`}
+      heading="Group Performance Report"
+      orientation="landscape"
+      meta={meta}
+      metaRows={[
+        { label: 'Group', value: `${sectionName} · ${team.name}` },
+        { label: 'Members', value: String(rows.length) },
+      ]}
+    >
+      <Text style={styles.sectionTitle}>Summary</Text>
+      <StatGrid
+        items={[
+          { label: 'Members', value: rows.length },
+          gradeTile('Patient case average', avg(caseAverages)),
+          gradeTile('Return demo average', avg(demoAverages)),
+          { label: 'Quiz average', value: pct(avg(quizAverages)) },
+        ]}
+      />
+      <Text style={styles.sectionTitle}>Work given to this group</Text>
+      <ActivityTable members={gridMembers} />
+      <Text style={note}>
+        Only the work assigned to the group&apos;s members is listed. A dash means it is not done yet; a blank means
+        it was not given to that member.
+      </Text>
+    </ReportShell>
+  );
+  return { subject: `${sectionName} ${team.name}`, pdf };
+}
+
+// ---------------------------------------------------------------------------
+// Quiz — the questions, and how one student or a group answered them
+// ---------------------------------------------------------------------------
+
+export async function buildQuizDetailReport(
+  supabase: Supabase,
+  meta: ReportMeta,
+  id: string,
+  scope: StudentScope,
+): Promise<BuildResult> {
+  const target = parseTarget(id);
+  if (!target) return { error: 'Quiz not found', status: 404 };
+  const roster = await loadQuizRoster(supabase, target.parentId, scope);
+  if (!roster) return { error: 'Quiz not found', status: 404 };
+
+  const members =
+    target.kind === 'student'
+      ? roster.performers.filter((p) => p.studentId === target.studentId)
+      : roster.performers.filter((p) => p.teamId === target.teamId);
+  if (members.length === 0) return { error: 'Quiz not found', status: 404 };
+
+  const [questions, criteria, tries] = await Promise.all([
+    loadQuizQuestions(supabase, target.parentId),
+    loadQuizCriteria(supabase, target.parentId),
+    loadQuizTries(supabase, target.parentId, members.map((m) => m.studentId)),
+  ]);
+
+  if (target.kind === 'student') {
+    const p = members[0];
+    const taken = tries.get(p.studentId) ?? [];
+    const pdf = (
+      <ReportShell
+        title={`Quiz - ${roster.title} - ${p.name}`}
+        heading="Quiz Answers Report"
+        meta={meta}
+        metaRows={[
+          { label: 'Quiz', value: roster.title },
+          { label: 'Student', value: p.name },
+          { label: 'Group', value: p.groupLabel },
+          { label: 'Submitted tries', value: String(p.tries) },
+        ]}
+      >
+        <Text style={styles.sectionTitle}>Result</Text>
+        <StatGrid
+          items={[
+            { label: 'Grade', value: pct(p.grade) },
+            { label: 'Submitted tries', value: p.tries },
+            { label: 'Remarks', value: p.grade === null ? 'Not taken' : p.grade >= PASSING_SCORE ? 'Passed' : 'Below passing' },
+          ]}
+        />
+        <Text style={styles.sectionTitle}>Results by criterion</Text>
+        <CriterionTable columns={['Correct']} rows={criterionForStudent(questions, criteria, taken)} />
+        {taken.length === 0 ? (
+          <Text style={styles.empty}>{p.name} has not submitted a try yet.</Text>
+        ) : (
+          taken.map((t) => (
+            <View key={t.number}>
+              <Text style={styles.sectionTitle}>
+                {`Try ${t.number} - ${pct(t.score === null ? null : Math.round(t.score))}${t.submittedAt ? ` - ${date(t.submittedAt)}` : ''}`}
+              </Text>
+              <QuizAnswers rows={answerRows(questions, criteria, t)} />
+            </View>
+          ))
+        )}
+        <Text style={note}>
+          The grade is the average of the graded tries; review quizzes don&apos;t count. Each question is shown as the
+          student was served it.
+        </Text>
+      </ReportShell>
+    );
+    return { subject: `${roster.title} ${p.name}`, pdf };
+  }
+
+  const latest = members.map((m) => ({ name: m.name, latest: tries.get(m.studentId)?.at(-1) ?? null }));
+  const { columns, rows } = matrix(questions, criteria, latest);
+  const grades = members.flatMap((m) => (m.grade === null ? [] : [m.grade]));
+  const groupLabel = members[0].groupLabel;
+  const pdf = (
+    <ReportShell
+      title={`Quiz - ${roster.title} - ${groupLabel}`}
+      heading="Quiz Answers Report"
+      orientation="landscape"
+      meta={meta}
+      metaRows={[
+        { label: 'Quiz', value: roster.title },
+        { label: 'Group', value: groupLabel },
+        { label: 'Members', value: String(members.length) },
+      ]}
+    >
+      <Text style={styles.sectionTitle}>Summary</Text>
+      <StatGrid
+        items={[
+          { label: 'Members', value: members.length },
+          { label: 'Completed', value: grades.length },
+          { label: 'Group average', value: pct(avg(grades)) },
+        ]}
+      />
+      <Text style={styles.sectionTitle}>Members</Text>
+      <Table
+        head={['Member', 'Submitted tries', 'Grade', 'Remarks']}
+        widths={[3, 1.2, 1.2, 1.6]}
+        rows={members.map((m) => [
+          m.name,
+          m.tries || '—',
+          pct(m.grade),
+          m.grade === null ? 'Not taken' : m.grade >= PASSING_SCORE ? 'Passed' : 'Below passing',
+        ])}
+      />
+      <Text style={styles.sectionTitle}>Results by criterion</Text>
+      <CriterionTable columns={members.map((m) => m.name)} rows={criterionForGroup(questions, criteria, latest)} />
+      <Text style={styles.sectionTitle}>Questions</Text>
+      <QuizMatrix columns={columns} rows={rows} />
+      <Text style={note}>
+        Each member&apos;s latest graded try. A dash means the question was not served to that member.
+      </Text>
+    </ReportShell>
+  );
+  return { subject: `${roster.title} ${groupLabel}`, pdf };
 }
