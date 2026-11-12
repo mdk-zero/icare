@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { activityCourse } from '@/app/lib/activity-course';
 import { addSkillTasks } from '@/app/lib/skill-tasks';
+import { addChecklistTasks } from '@/app/lib/checklist-import-server';
 import { getFacultyStudentIdSet } from '@/app/lib/scenario-visibility';
 import { parseReturnDemoInput, skillDiff } from '@/app/lib/return-demos';
 import {
@@ -86,10 +87,11 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 }
 
 /**
- * PATCH { title?, description?, offering_id?, skills?, forms? }: edit one. New
- * skills are added after the others; a dropped skill is removed with its
- * steps, unless a student has been graded on it, which refuses the whole
- * edit (409) so nobody's grade is lost.
+ * PATCH { title?, description?, offering_id?, skills? | checklist?, forms? }:
+ * edit one. New skills are added after the others; a dropped skill is removed
+ * with its steps, unless a student has been graded on it, which refuses the
+ * whole edit (409) so nobody's grade is lost. A `checklist` replaces every
+ * task, so it is refused once anyone has a grade on it.
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const auth = await staff();
@@ -116,7 +118,18 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // Every check before any write, so a refused edit changes nothing.
     let diff: ReturnType<typeof skillDiff> | null = null;
     let lastSortOrder = 0;
-    if (input.skills) {
+    let replaced: string[] | null = null;
+    if (input.checklist) {
+      const tasks = await loadTasks(supabase, [id]);
+      lastSortOrder = Math.max(0, ...tasks.map((t) => t.sort_order));
+      if ((await gradedTaskIds(supabase, tasks.map((t) => t.id))).size > 0) {
+        return NextResponse.json(
+          { error: "Students have been graded on this checklist, so it can't be changed." },
+          { status: 409 },
+        );
+      }
+      replaced = tasks.map((t) => t.id);
+    } else if (input.skills) {
       const tasks = await loadTasks(supabase, [id]);
       lastSortOrder = Math.max(0, ...tasks.map((t) => t.sort_order));
       diff = skillDiff(tasks, input.skills, await gradedTaskIds(supabase, tasks.map((t) => t.id)));
@@ -153,6 +166,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     let added = 0;
+    if (replaced && input.checklist) {
+      // The new tasks first, so a failed write leaves the old checklist in place.
+      const built = await addChecklistTasks(supabase, id, input.checklist, input.title ?? loaded.demo.title, lastSortOrder);
+      if (built.error) throw built.error;
+      added = built.tasks;
+      if (replaced.length > 0) {
+        const { error } = await supabase.from('scenario_tasks').delete().in('id', replaced).eq('scenario_id', id);
+        if (error) throw error;
+      }
+    }
     if (diff) {
       if (diff.add.length > 0) {
         const built = await addSkillTasks(supabase, id, diff.add, lastSortOrder);
@@ -165,17 +188,18 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    const removed = replaced?.length ?? diff?.remove.length ?? 0;
     await logAudit(
       session,
       {
         action: 'return_demo.update',
         entityType: 'scenarios',
         entityId: id,
-        details: { message: `Edited Return Demonstration “${input.title ?? loaded.demo.title}”`, added, removed: diff?.remove.length ?? 0 },
+        details: { message: `Edited Return Demonstration “${input.title ?? loaded.demo.title}”`, added, removed },
       },
       request,
     );
-    return NextResponse.json({ ok: true, added, removed: diff?.remove.length ?? 0 });
+    return NextResponse.json({ ok: true, added, removed });
   } catch (err) {
     console.error('Update Return Demonstration failed', err);
     return NextResponse.json({ error: 'Unable to update the Return Demonstration' }, { status: 500 });

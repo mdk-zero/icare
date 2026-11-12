@@ -8,6 +8,7 @@ import { endDemo, isDemo } from './demo/session';
 import { holdTabPresence, releaseTabPresence } from './tab-presence';
 import type { ItemProgress, OfferingSummary, RequirementInput, RequirementRow, TermStatus } from './course-progress';
 import type { GradingSplit } from './course-grading';
+import type { ChecklistRow, ReadChecklist } from './checklist-import';
 import type { FormRow, ReturnDemoForm } from './return-demo-forms';
 import type { CatalogCourse, CurriculumAnalysis, CurriculumCourseInput, CurriculumCourseRow } from './curriculum';
 import type { ScenarioKind } from './scenario-kind';
@@ -2396,6 +2397,8 @@ export interface ReturnDemoInput {
   skills: SkillSelection[];
   /** Forms the student fills in alongside it (094), by key. */
   forms?: string[];
+  /** An uploaded skills checklist, sent in place of skills. */
+  checklist?: ChecklistRow[];
 }
 
 /** A form on a student's Return Demonstration, with the rows they entered (094). */
@@ -2473,6 +2476,21 @@ export async function createReturnDemo(input: ReturnDemoInput): Promise<{ id?: s
   } catch (err) {
     console.error('createReturnDemo() failed', err);
     return { error: 'Unable to create the Return Demonstration' };
+  }
+}
+
+/** Reads a skills checklist file (PDF or Excel) into rows to check; nothing is saved. */
+export async function readChecklistFile(file: File): Promise<{ checklist?: ReadChecklist; error?: string }> {
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await apiFetch('/api/faculty/return-demos/read-checklist', { method: 'POST', credentials: 'include', body: form });
+    if (!res.ok) return { error: await errorOf(res, "That file couldn't be read") };
+    const json = (await res.json()) as { checklist?: ReadChecklist };
+    return json.checklist ? { checklist: json.checklist } : { error: "That file couldn't be read" };
+  } catch (err) {
+    console.error('readChecklistFile() failed', err);
+    return { error: "That file couldn't be read. Check your connection and try again." };
   }
 }
 

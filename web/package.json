@@ -44,6 +44,7 @@
     "bcryptjs": "^3.0.3",
     "google-auth-library": "^10.7.0",
     "jose": "^6.2.3",
+    "jszip": "^3.10.2",
     "mammoth": "^1.12.3",
     "next": "16.4.2",
     "nodemailer": "^10.1.7",
