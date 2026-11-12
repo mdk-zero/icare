@@ -707,6 +707,33 @@ export async function fetchMySkillMastery(): Promise<CachedResult<SkillMastery[]
   return { ...result, data: result.data.skills ?? [] };
 }
 
+/** One day on a skill's history: the mastery estimate after that day's last answer. */
+export interface MasteryPoint {
+  /** YYYY-MM-DD, Philippine time. */
+  day: string;
+  at: string;
+  mastery: number;
+  answers: number;
+  correct: number;
+}
+
+export interface SkillMasteryHistory {
+  skill_id: string;
+  title: string;
+  /** Its Taylor's chapter and skill area. Absent from a server, or a cached read, from before they were sent. */
+  chapter?: number;
+  area?: string;
+  mastery: number;
+  answers: number;
+  points: MasteryPoint[];
+}
+
+/** The student's mastery of each skill over time, most practised skill first. */
+export async function fetchMasteryHistory(): Promise<CachedResult<SkillMasteryHistory[]>> {
+  const result = await cachedGet<{ skills: SkillMasteryHistory[] }>('/api/student/skill-mastery/history');
+  return { ...result, data: result.data.skills ?? [] };
+}
+
 /** A student's estimates for their instructor, weakest first. */
 export async function fetchStudentSkillMastery(studentId: string): Promise<CachedResult<SkillMastery[]>> {
   const result = await cachedGet<{ skills: SkillMastery[] }>(
