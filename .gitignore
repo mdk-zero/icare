@@ -15,3 +15,7 @@ dist/
 
 # Database snapshots (contain live user data — never commit)
 db-backups/
+
+# macOS folder icons ("Icon" + carriage return); Windows cannot check them out
+Icon[]
+.DS_Store
