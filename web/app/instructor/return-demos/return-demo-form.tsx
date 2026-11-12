@@ -45,8 +45,8 @@ const SOURCES = [
   {
     value: "checklist",
     icon: faListCheck,
-    label: "Skills checklist",
-    hint: "Upload your own checklist as a PDF or Excel file, or type it in.",
+    label: "Add Checklist",
+    hint: "Upload your own procedures or protocols as a PDF or Excel file, or type them in.",
   },
 ] as const;
 
@@ -194,7 +194,7 @@ export default function ReturnDemoForm({ id }: { id?: string }) {
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faHandHoldingMedical} className="w-3.5 h-3.5" />, label: "Return Demonstrations" }}
         title={editing ? "Edit Return Demonstration" : "New Return Demonstration"}
-        subtitle="Pick the Taylor's skills your students will demonstrate, or upload your own skills checklist. No patient or scenario: just the checklists."
+        subtitle="Pick the Taylor's skills your students will demonstrate, or add your own checklist. No patient or scenario: just the checklists."
       />
 
       <div className="space-y-5 rounded-xl border border-hairline bg-surface p-5 shadow-tile">

@@ -41,7 +41,8 @@ export default function ChecklistEditor({
   onClose: () => void;
 }) {
   const [rows, setRows] = useState<EditRow[]>(() =>
-    initial.length ? withKeys(initial) : withKeys([{ kind: "step", text: "" }]),
+    // Typing one in starts with a section heading, since every step sits under one.
+    initial.length ? withKeys(initial) : withKeys([{ kind: "section", text: "" }]),
   );
   /** A row just added, focused as it mounts. */
   const focusKey = useRef<number | null>(null);
@@ -96,7 +97,7 @@ export default function ChecklistEditor({
             </span>
             <div className="min-w-0">
               <h2 id="checklist-editor-title" className="font-display text-lg font-bold text-gray-900">
-                Skills checklist
+                Checklist
               </h2>
               <p className="truncate text-xs text-gray-500">
                 {fileName ? (
