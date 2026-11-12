@@ -4,6 +4,13 @@ import { isMissingForms, loadFormKeys } from './return-demos-server';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
+/**
+ * What an app from before the PhilPEN form reads off a form: a sheet's
+ * columns and what a row is called. Sent empty so an old install shows an
+ * empty card rather than crashing on a form it can't draw.
+ */
+export const LEGACY_SHEET = { fields: [] as never[], rowLabel: 'Form' };
+
 /** A form on an assignment, with what the student entered on it. */
 export interface FilledForm extends ReturnDemoForm {
   rows: FormRow[];
@@ -52,6 +59,7 @@ export async function loadAssignmentForms(supabase: Supabase, assignmentId: stri
       const saved = byKey.get(form.key);
       return {
         ...form,
+        ...LEGACY_SHEET,
         rows: Array.isArray(saved?.entries) ? saved.entries : [],
         submitted_at: saved?.submitted_at ?? null,
         updated_at: saved?.updated_at ?? null,

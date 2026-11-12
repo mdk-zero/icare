@@ -64,7 +64,7 @@ export function seedReturnDemos(
       offering_id: OFFERING_MAIN,
       kind: "return_demo",
       // The vital signs one comes with its sheets (094).
-      ...(d === 0 ? { form_keys: ["vitals", "tpr"] } : {}),
+      ...(d === 0 ? { form_keys: ["philpen"] } : {}),
     });
 
     const built = returnDemoTasks.find((r) => r.title === spec.title)?.tasks ?? [];
@@ -152,19 +152,52 @@ export function seedReturnDemos(
         completed_at: graded,
         finalized_by: INSTRUCTOR_ID,
       });
-      // The readings they took on their partner at the skills lab.
+      // The PhilPEN form they filled in on their partner at the skills lab.
       const handedIn = ago(4, 13, 40 + m * 3);
+      const clients = [
+        { name: "Reyes, Ana, Lopez", sex: "female" },
+        { name: "Garcia, Mark, Dizon", sex: "male" },
+        { name: "Santos, Liza, Ramos", sex: "female" },
+      ];
+      const client = clients[m % clients.length];
+      const bmi = Math.round(((58 + m * 3) / ((158 + m * 3) / 100) ** 2) * 10) / 10;
       assignment.forms = {
-        vitals: {
+        philpen: {
           rows: [
-            { time: "13:10", bp_systolic: 112 + m * 2, bp_diastolic: 72 + m, heart_rate: 78 + m * 3, respiratory_rate: 16 + (m % 3), temperature_c: 36.6, oxygen_saturation: 98, pain_score: 0, remarks: null },
-            { time: "13:25", bp_systolic: 110 + m * 2, bp_diastolic: 70 + m, heart_rate: 76 + m * 2, respiratory_rate: 16, temperature_c: 36.7, oxygen_saturation: 99, pain_score: 0, remarks: m === 0 ? "Retook BP on the left arm with a larger cuff." : null },
+            {
+              name: client.name,
+              assessed_on: graded.slice(0, 10),
+              address: "Brgy. Bucana, Nasugbu, Batangas",
+              birth_date: `${1981 + m}-0${(m % 9) + 1}-14`,
+              age: 45 - m,
+              sex: client.sex,
+              weight_kg: 58 + m * 3,
+              height_cm: 158 + m * 3,
+              bmi,
+              bmi_class: bmi < 18.5 ? "underweight" : bmi < 23 ? "normal" : bmi < 25 ? "overweight" : "obese",
+              waist_cm: 78 + m * 3,
+              cvd_ckd: "no",
+              family_cvd: m === 1 ? "yes" : "no",
+              hypertension: m === 1 ? "yes" : "no",
+              hypertension_meds: m === 1 ? "yes" : null,
+              diabetes: m === 2 ? "unsure" : "no",
+              diabetes_meds: null,
+              cholesterol: "no",
+              cholesterol_meds: null,
+              bp_1: `${124 + m * 4}/${80 + m * 2}`,
+              bp_2: `${120 + m * 4}/${78 + m * 2}`,
+              bp_3: `${118 + m * 4}/${78 + m * 2}`,
+              bp_average: `${119 + m * 4}/${78 + m * 2}`,
+              smoker: m === 1 ? "yes" : "no",
+              binge_drinking: "no",
+              physical_activity: m === 1 ? "no" : "yes",
+              low_fruit_vegetable: m === 0 ? "no" : "yes",
+              cvd_risk: m === 1 ? "orange" : "green",
+              counselling: m === 1 ? "healthy_diet,physical_activity,referred_bti" : "healthy_diet",
+              next_assessment: m === 1 ? "2027-05-12" : "2027-11-12",
+              assessed_by: null,
+            },
           ],
-          submitted_at: handedIn,
-          updated_at: handedIn,
-        },
-        tpr: {
-          rows: [{ time: "13:10", temperature_c: 36.6, pulse: 78 + m * 3, respiration: 16 + (m % 3), remarks: null }],
           submitted_at: m === 2 ? null : handedIn,
           updated_at: handedIn,
         },

@@ -6,13 +6,14 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faClipboardList, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { fetchAssignmentForms } from "../../../lib/api";
 import { usePageData } from "../../../lib/use-page-data";
-import { FormSheet } from "../../return-demos/form-sheet";
+import { FormAnswers, FormPage } from "../../return-demos/form-page";
 import { formatWhen } from "./assignment-list";
 
 /**
  * The forms on a student's Return Demonstration (094), kept at the top of the
  * grading sheet so they aren't buried under the skills' checklists: a line
- * saying how many are handed in, and a button that opens them.
+ * saying how many are handed in, and a button that opens them, each as the
+ * printed form with the student's answers written on it.
  * Renders nothing when the Return Demonstration has no forms.
  */
 export default function SubmittedForms({ assignmentId }: { assignmentId: string }) {
@@ -91,7 +92,10 @@ export default function SubmittedForms({ assignmentId }: { assignmentId: string 
                       </span>
                     </div>
                     {form.rows.length > 0 ? (
-                      <FormSheet form={form} rows={form.rows} />
+                      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+                        <FormPage form={form} answers={form.rows[0]} className="mx-auto max-w-2xl" />
+                        <FormAnswers form={form} answers={form.rows[0]} />
+                      </div>
                     ) : (
                       <p className="rounded-lg border border-dashed border-gray-300 px-4 py-5 text-center text-sm text-gray-500">
                         Nothing entered yet.

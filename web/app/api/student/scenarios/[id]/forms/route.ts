@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { formByKey, missingInRows, sanitizeRows } from '@/app/lib/return-demo-forms';
-import { loadAssignmentForms } from '@/app/lib/return-demo-forms-server';
+import { LEGACY_SHEET, loadAssignmentForms } from '@/app/lib/return-demo-forms-server';
 import { FORMS_NEED_MIGRATION, isMissingForms } from '@/app/lib/return-demos-server';
 
 interface RouteParams {
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       if (isMissingForms(error)) return NextResponse.json({ error: FORMS_NEED_MIGRATION }, { status: 503 });
       throw error;
     }
-    return NextResponse.json({ form: { ...form, rows: data.entries, submitted_at: data.submitted_at, updated_at: data.updated_at } });
+    return NextResponse.json({ form: { ...form, ...LEGACY_SHEET, rows: data.entries, submitted_at: data.submitted_at, updated_at: data.updated_at } });
   } catch (err) {
     console.error('Failed to save Return Demonstration form', err);
     return NextResponse.json({ error: 'Unable to save the form' }, { status: 500 });
