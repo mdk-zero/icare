@@ -3,9 +3,18 @@
 import { pdf, Text, View } from "@react-pdf/renderer";
 import { CourseCriteria, ReportShell, StatGrid, Table, type ReportDocument, type ReportMeta } from "../reports/kit-ui";
 import { CASE_CRITERIA, caseLevelLabel } from "../case-rubric";
+import { ChecklistSheet } from "../reports/checklist-sheet";
+import { buildSheetSkills } from "../reports/checklist-grades";
+import { parseTarget } from "../reports/targets";
+import { ActivityTable, type GridEntry, type GridMember } from "../reports/activity-sheet";
+import { CriterionTable, QuizAnswers, QuizMatrix } from "../reports/quiz-sheet";
+import { answerRows, criterionForGroup, criterionForStudent, matrix, type QuizCriterion, type QuizQuestion, type QuizTry } from "../reports/quiz-model";
+import type { DemoAttempt } from "./fixtures/school";
+import type { DemoDb } from "./store";
+import { scoreDescriptor } from "../task-ratings";
 import type { DemoCaseGroup } from "./fixtures/teaching";
 import type { DemoContext } from "./router";
-import { caseAverage, lastActivity, mean, quizAverage, submittedAttempts } from "./handlers/derive";
+import { caseAverage, mean, quizAverage, submittedAttempts } from "./handlers/derive";
 import { sectionName, teamLabel as teamLabelUi, userById, visibleSections, visibleStudents } from "./handlers/scope";
 import { DEMO_INSTITUTION } from "./fixtures/school";
 import { demoStudentStandings } from "./handlers/courses";
@@ -41,9 +50,9 @@ function meta(ctx: Ctx): ReportMeta {
   };
 }
 
-function Shell({ ctx, title, heading, rows, children }: { ctx: Ctx; title: string; heading: string; rows: { label: string; value: string }[]; children: React.ReactNode }) {
+function Shell({ ctx, title, heading, rows, orientation, children }: { ctx: Ctx; title: string; heading: string; rows: { label: string; value: string }[]; orientation?: "portrait" | "landscape"; children: React.ReactNode }) {
   return (
-    <ReportShell title={title} heading={heading} meta={meta(ctx)} metaRows={rows} logo={LOGO}>
+    <ReportShell title={title} heading={heading} meta={meta(ctx)} metaRows={rows} logo={LOGO} orientation={orientation}>
       {children}
       <Text style={note}>Demo report: built from sample data in your browser.</Text>
     </ReportShell>
@@ -77,21 +86,20 @@ function studentReport(ctx: Ctx, id: string): Built {
         <StatGrid items={[
           { label: "Patient case average", value: pct(caseAverage(db, id)) },
           { label: "Quiz average", value: pct(quizAverage(db, id)) },
-          { label: "Cases graded", value: cases.filter((a) => a.status === "completed").length },
+          { label: "Cases performed", value: cases.filter((a) => a.status === "completed").length },
         ]} />
         <H>Courses and assessment criteria</H>
         <CourseCriteria courses={demoStudentStandings(db, id)} />
         <H>Patient cases</H>
-        <Table head={["Case", "Status", "Score", "Submitted"]} widths={[4, 1.4, 1, 1.4]} rows={cases.map((a) => [
+        <Table head={["Case", "Score", "Performed"]} widths={[4, 1, 1.4]} rows={cases.map((a) => [
           db.scenarios.find((x) => x.id === a.scenario_id)?.title ?? "—",
-          a.status === "completed" ? "Graded" : a.submitted_at ? "Awaiting review" : a.status === "overdue" ? "Overdue" : "Open",
           pct(a.score),
           submitted(a),
         ])} />
         <H>Return Demonstrations</H>
-        <Table head={["Return Demonstration", "Status", "Score", "Graded"]} widths={[4, 1.4, 1, 1.4]} rows={returnDemos.map((a) => [
+        <Table head={["Return Demonstration", "Status", "Score", "Performed"]} widths={[4, 1.4, 1, 1.4]} rows={returnDemos.map((a) => [
           db.scenarios.find((x) => x.id === a.scenario_id)?.title ?? "—",
-          a.status === "completed" ? "Graded" : a.status === "overdue" ? "Overdue" : "Open",
+          a.status === "completed" ? "Performed" : a.status === "overdue" ? "Overdue" : "Open",
           pct(a.score),
           a.status === "completed" ? date(a.completed_at) : "—",
         ])} />
@@ -106,29 +114,57 @@ function studentReport(ctx: Ctx, id: string): Built {
   };
 }
 
+/** What the demo gave a student, with their grade: patient cases, return demonstrations and quizzes. */
+function demoGrid(db: DemoDb, studentId: string): GridEntry[] {
+  const out: GridEntry[] = [];
+  for (const a of db.assignments.filter((x) => x.student_id === studentId)) {
+    const sc = db.scenarios.find((x) => x.id === a.scenario_id);
+    if (!sc) continue;
+    const kind = sc.kind === "return_demo" ? "return_demo" : "patient_case";
+    out.push({ key: `${kind}:${sc.id}`, kind, title: sc.title, score: a.status === "completed" ? a.score : null });
+  }
+  const quizIds = new Set([
+    ...db.quizAssignments.filter((x) => x.student_id === studentId).map((x) => x.assessment_id),
+    ...db.attempts.filter((x) => x.student_id === studentId).map((x) => x.assessment_id),
+  ]);
+  for (const quizId of quizIds) {
+    const quiz = db.quizzes.find((q) => q.id === quizId);
+    if (!quiz) continue;
+    const scores = db.attempts.filter((x) => x.assessment_id === quizId && x.student_id === studentId && x.status === "submitted" && x.score != null).map((x) => x.score!);
+    out.push({ key: `quiz:${quizId}`, kind: "quiz", title: quiz.title, score: scores.length ? Math.round(mean(scores)!) : null });
+  }
+  return out;
+}
+
+const NO_GROUP = "Students not in a group";
+
 function sectionReport(ctx: Ctx, id: string): Built {
   const { db } = ctx;
   const name = sectionName(db, id);
   if (!name) return { error: "Not found", status: 404 };
   const students = visibleStudents(db, ctx.role, ctx.viewer.id).filter((s) => s.section_id === id);
+  const blocks = new Map<string, GridMember[]>();
+  for (const s of students) {
+    const group = db.teams.find((t) => t.id === s.team_id)?.name ?? NO_GROUP;
+    blocks.set(group, [...(blocks.get(group) ?? []), { name: s.name, entries: demoGrid(db, s.id) }]);
+  }
+  const groups = [...blocks.entries()]
+    .sort(([a], [b]) => (a === NO_GROUP ? 1 : b === NO_GROUP ? -1 : a.localeCompare(b, undefined, { numeric: true })))
+    .map(([group, members]) => ({ group, members: [...members].sort((x, y) => x.name.localeCompare(y.name)) }));
   return {
     subject: name,
     doc: (
-      <Shell ctx={ctx} title={`Section report — ${name}`} heading="Section Performance Report" rows={[{ label: "Section", value: name }]}>
+      <Shell ctx={ctx} title={`Section report — ${name}`} heading="Section Performance Report" orientation="landscape" rows={[{ label: "Section", value: name }]}>
         <StatGrid items={[
           { label: "Students", value: students.length },
           { label: "Case average", value: pct(mean(students.map((s) => caseAverage(db, s.id)).filter((x): x is number => x !== null))) },
           { label: "Quiz average", value: pct(mean(students.map((s) => quizAverage(db, s.id)).filter((x): x is number => x !== null))) },
           { label: "Low performing", value: students.filter((s) => s.risk_level === "at_risk").length },
         ]} />
-        <H>Students</H>
-        <Table head={["Student", "Group", "Cases", "Quizzes", "Last active"]} widths={[3, 1.6, 1, 1, 1.4]} rows={students.map((s) => [
-          s.name,
-          db.teams.find((t) => t.id === s.team_id)?.name ?? "—",
-          pct(caseAverage(db, s.id)),
-          pct(quizAverage(db, s.id)),
-          date(lastActivity(db, s.id)),
-        ])} />
+        <H>Groups</H>
+        {groups.map((g) => (
+          <ActivityTable key={g.group} members={g.members} heading={<Text style={{ fontWeight: 700, marginTop: 4, marginBottom: 3 }}>{g.group}</Text>} />
+        ))}
       </Shell>
     ),
   };
@@ -146,15 +182,237 @@ function scenarioReport(ctx: Ctx, id: string): Built {
       <Shell ctx={ctx} title={`Patient case report — ${sc.title}`} heading="Patient Case Report" rows={[{ label: "Patient case", value: sc.title }, { label: "Category", value: sc.category }]}>
         <StatGrid items={[
           { label: "Assigned", value: rows.length },
-          { label: "Graded", value: rows.filter((a) => a.status === "completed").length },
+          { label: "Performed", value: rows.filter((a) => a.status === "completed").length },
           { label: "Awaiting review", value: rows.filter((a) => a.submitted_at && a.status !== "completed").length },
           { label: "Average", value: pct(mean(rows.filter((a) => a.score != null).map((a) => a.score!))) },
         ]} />
         <H>Students</H>
-        <Table head={["Student", "Group", "Status", "Submitted", "Score"]} widths={[3, 2, 1.4, 1.4, 1]} rows={rows.map((a) => {
+        <Table head={["Student", "Group", "Status", "Performed", "Score"]} widths={[3, 2, 1.4, 1.4, 1]} rows={rows.map((a) => {
           const s = userById(db, a.student_id);
-          return [s?.name ?? "—", teamLabel(db, s?.team_id) ?? "—", a.status === "completed" ? "Graded" : a.submitted_at ? "Awaiting review" : a.status, submitted(a), pct(a.score)];
+          return [s?.name ?? "—", teamLabel(db, s?.team_id) ?? "—", a.status === "completed" ? "Performed" : a.submitted_at ? "Awaiting review" : a.status, submitted(a), pct(a.score)];
         })} />
+      </Shell>
+    ),
+  };
+}
+
+const CHECKLIST = {
+  return_demo: { noun: "Return Demonstration", heading: "Return Demonstration Report" },
+  patient_case: { noun: "Patient Case", heading: "Patient Case Report" },
+} as const;
+
+/** The checklist report of one student or group on a Return Demonstration or a Patient Case. */
+function checklistReport(ctx: Ctx, kind: keyof typeof CHECKLIST, id: string): Built {
+  const { db } = ctx;
+  const { noun, heading } = CHECKLIST[kind];
+  const target = parseTarget(id);
+  const demo = target && db.scenarios.find((s) => s.id === target.parentId && (s.kind ?? "patient_case") === kind);
+  if (!target || !demo) return { error: "Not found", status: 404 };
+  const mine = new Set(visibleStudents(db, ctx.role, ctx.viewer.id).map((s) => s.id));
+  const members = db.assignments
+    .filter((a) => a.scenario_id === demo.id && mine.has(a.student_id))
+    .map((a) => ({ a, student: userById(db, a.student_id) }))
+    .filter((m) => (target.kind === "student" ? m.a.student_id === target.studentId : m.student?.team_id === target.teamId))
+    .sort((x, y) => (x.student?.name ?? "").localeCompare(y.student?.name ?? ""));
+  if (members.length === 0) return { error: "Not found", status: 404 };
+
+  const tasks = db.tasks.filter((t) => t.scenario_id === demo.id).sort((a, b) => a.sort_order - b.sort_order);
+  const taskIds = new Set(tasks.map((t) => t.id));
+  const steps = db.steps.filter((st) => taskIds.has(st.task_id)).sort((a, b) => a.position - b.position);
+  const ids = members.map((m) => m.a.id);
+  const skills = buildSheetSkills({
+    tasks,
+    steps,
+    assignmentIds: ids,
+    completions: db.completions.filter((c) => ids.includes(c.assignment_id) && taskIds.has(c.task_id)),
+    stepRatings: db.stepRatings.filter((r) => ids.includes(r.assignment_id)),
+  });
+  const score = (a: (typeof members)[number]["a"]) => (a.status === "completed" ? a.score : null);
+
+  if (target.kind === "student") {
+    const { a, student } = members[0];
+    const sc = score(a);
+    return {
+      subject: `${demo.title} ${student?.name ?? ""}`.trim(),
+      doc: (
+        <Shell ctx={ctx} title={`${noun} — ${demo.title}`} heading={heading} rows={[
+          { label: noun, value: demo.title },
+          { label: "Student", value: student?.name ?? "—" },
+          { label: "Group", value: teamLabel(db, student?.team_id) ?? "—" },
+          { label: "Date of performance", value: date(a.deadline) },
+        ]}>
+          <StatGrid items={[
+            { label: "Score", value: pct(sc) },
+            { label: "Rating", value: sc === null ? "—" : scoreDescriptor(sc) },
+            { label: "Status", value: a.status === "completed" ? "Performed" : "Not yet performed" },
+          ]} />
+          <H>Checklist and grades</H>
+          <ChecklistSheet columns={["Grade"]} skills={skills} />
+        </Shell>
+      ),
+    };
+  }
+
+  const label = teamLabel(db, target.teamId) ?? "Group";
+  const scores = members.flatMap((m) => (score(m.a) === null ? [] : [score(m.a)!]));
+  return {
+    subject: `${demo.title} ${label}`,
+    doc: (
+      <Shell ctx={ctx} title={`${noun} — ${demo.title}`} heading={heading} orientation="landscape" rows={[
+        { label: noun, value: demo.title },
+        { label: "Group", value: label },
+        { label: "Members", value: String(members.length) },
+      ]}>
+        <StatGrid items={[
+          { label: "Members", value: members.length },
+          { label: "Performed", value: scores.length },
+          { label: "Group average", value: pct(mean(scores)) },
+        ]} />
+        <H>Members</H>
+        <Table head={["Member", "Date of performance", "Status", "Score"]} widths={[3, 1.6, 1.4, 1.6]} rows={members.map((m) => [
+          m.student?.name ?? "—", date(m.a.deadline), m.a.status === "completed" ? "Performed" : "Not yet performed", pct(score(m.a)),
+        ])} />
+        <H>Checklist and grades</H>
+        <ChecklistSheet columns={members.map((m) => m.student?.name ?? "—")} skills={skills} />
+      </Shell>
+    ),
+  };
+}
+
+function groupMembers(ctx: Ctx, teamId: string) {
+  const { db } = ctx;
+  return visibleStudents(db, ctx.role, ctx.viewer.id).filter((s) => s.team_id === teamId).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function sectionGroupReport(ctx: Ctx, teamId: string): Built {
+  const { db } = ctx;
+  const label = teamLabel(db, teamId);
+  const members = groupMembers(ctx, teamId);
+  if (!label || members.length === 0) return { error: "Not found", status: 404 };
+  return {
+    subject: label,
+    doc: (
+      <Shell ctx={ctx} title={`Group report — ${label}`} heading="Group Performance Report" orientation="landscape" rows={[
+        { label: "Group", value: label },
+        { label: "Members", value: String(members.length) },
+      ]}>
+        <StatGrid items={[
+          { label: "Members", value: members.length },
+          { label: "Case average", value: pct(mean(members.map((s) => caseAverage(db, s.id)).filter((x): x is number => x !== null))) },
+          { label: "Quiz average", value: pct(mean(members.map((s) => quizAverage(db, s.id)).filter((x): x is number => x !== null))) },
+        ]} />
+        <H>Work given to this group</H>
+        <ActivityTable members={members.map((s) => ({ name: s.name, entries: demoGrid(db, s.id) }))} />
+      </Shell>
+    ),
+  };
+}
+
+/** A stable number from text, so the demo's sample answers don't change between renders. */
+function hash(text: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+/** What a demo try answered: the demo records only the score, so right and wrong answers are drawn to fit it. */
+function demoTry(attempt: DemoAttempt, questions: QuizQuestion[], number: number): QuizTry {
+  const served = [...questions].sort((a, b) => hash(attempt.id + a.id) - hash(attempt.id + b.id)).slice(0, attempt.total_questions);
+  const right = new Set(served.slice(0, attempt.correct_answers ?? 0).map((q) => q.id));
+  const answers = new Map(
+    served.map((q) => {
+      const wrong = (q.correctIndex + 1 + (hash(attempt.id + q.id) % Math.max(1, q.options.length - 1))) % Math.max(1, q.options.length);
+      return [q.id, right.has(q.id) ? { selected: q.correctIndex, ok: true } : { selected: wrong, ok: false }] as const;
+    }),
+  );
+  return { number, submittedAt: attempt.submitted_at, score: attempt.score, served: served.map((q) => q.id), criteria: new Map(), answers };
+}
+
+function quizDetailReport(ctx: Ctx, id: string): Built {
+  const { db } = ctx;
+  const target = parseTarget(id);
+  const quiz = target && db.quizzes.find((q) => q.id === target.parentId);
+  if (!target || !quiz) return { error: "Not found", status: 404 };
+  const questions: QuizQuestion[] = db.questions
+    .filter((q) => q.assessment_id === quiz.id)
+    .sort((a, b) => a.position - b.position)
+    .map((q) => ({ id: q.id, text: q.content, options: q.options, correctIndex: q.correct_index, criteriaId: q.criteria_id }));
+  const criteria: QuizCriterion[] = db.criteria
+    .filter((c) => c.assessment_id === quiz.id)
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((c) => ({ id: c.id, name: c.name, weight: c.weight }));
+  const students = visibleStudents(db, ctx.role, ctx.viewer.id).filter(
+    (s) =>
+      db.quizAssignments.some((a) => a.assessment_id === quiz.id && a.student_id === s.id) ||
+      db.attempts.some((a) => a.assessment_id === quiz.id && a.student_id === s.id),
+  );
+  const members = (target.kind === "student" ? students.filter((s) => s.id === target.studentId) : students.filter((s) => s.team_id === target.teamId)).sort(
+    (a, b) => a.name.localeCompare(b.name),
+  );
+  if (members.length === 0) return { error: "Not found", status: 404 };
+
+  const triesOf = (studentId: string): QuizTry[] =>
+    db.attempts
+      .filter((a) => a.assessment_id === quiz.id && a.student_id === studentId && a.status === "submitted" && a.score !== null)
+      .sort((a, b) => (a.submitted_at ?? "").localeCompare(b.submitted_at ?? ""))
+      .map((a, i) => demoTry(a, questions, i + 1));
+  const gradeOf = (studentId: string) => {
+    const scores = triesOf(studentId).map((t) => t.score ?? 0);
+    return scores.length ? Math.round(mean(scores)!) : null;
+  };
+
+  if (target.kind === "student") {
+    const student = members[0];
+    const taken = triesOf(student.id);
+    const g = gradeOf(student.id);
+    return {
+      subject: `${quiz.title} ${student.name}`,
+      doc: (
+        <Shell ctx={ctx} title={`Quiz — ${quiz.title}`} heading="Quiz Answers Report" rows={[
+          { label: "Quiz", value: quiz.title },
+          { label: "Student", value: student.name },
+          { label: "Group", value: teamLabel(db, student.team_id) ?? "—" },
+          { label: "Submitted tries", value: String(taken.length) },
+        ]}>
+          <StatGrid items={[
+            { label: "Grade", value: pct(g) },
+            { label: "Submitted tries", value: taken.length },
+            { label: "Remarks", value: g === null ? "Not taken" : g >= 75 ? "Passed" : "Below passing" },
+          ]} />
+          <H>Results by criterion</H>
+          <CriterionTable columns={["Correct"]} rows={criterionForStudent(questions, criteria, taken)} />
+          {taken.length === 0 ? <Text style={note}>{student.name} has not submitted a try yet.</Text> : taken.map((t) => (
+            <View key={t.number}>
+              <H>{`Try ${t.number} - ${pct(t.score === null ? null : Math.round(t.score))}${t.submittedAt ? ` - ${date(t.submittedAt)}` : ""}`}</H>
+              <QuizAnswers rows={answerRows(questions, criteria, t)} />
+            </View>
+          ))}
+        </Shell>
+      ),
+    };
+  }
+
+  const label = teamLabel(db, target.teamId) ?? "Group";
+  const latest = members.map((m) => ({ name: m.name, latest: triesOf(m.id).at(-1) ?? null }));
+  const { columns, rows } = matrix(questions, criteria, latest);
+  const grades = members.flatMap((m) => (gradeOf(m.id) === null ? [] : [gradeOf(m.id)!]));
+  return {
+    subject: `${quiz.title} ${label}`,
+    doc: (
+      <Shell ctx={ctx} title={`Quiz — ${quiz.title}`} heading="Quiz Answers Report" orientation="landscape" rows={[
+        { label: "Quiz", value: quiz.title },
+        { label: "Group", value: label },
+        { label: "Members", value: String(members.length) },
+      ]}>
+        <StatGrid items={[
+          { label: "Members", value: members.length },
+          { label: "Completed", value: grades.length },
+          { label: "Group average", value: pct(mean(grades)) },
+        ]} />
+        <H>Results by criterion</H>
+        <CriterionTable columns={members.map((m) => m.name)} rows={criterionForGroup(questions, criteria, latest)} />
+        <H>Questions</H>
+        <QuizMatrix columns={columns} rows={rows} />
       </Shell>
     ),
   };
@@ -358,6 +616,10 @@ const BUILDERS: Record<string, (ctx: Ctx, id: string) => Built> = {
   section: sectionReport,
   scenario: scenarioReport,
   assessment: assessmentReport,
+  return_demo: (ctx, id) => checklistReport(ctx, "return_demo", id),
+  patient_case: (ctx, id) => checklistReport(ctx, "patient_case", id),
+  quiz: quizDetailReport,
+  section_group: sectionGroupReport,
   roster: (ctx) => rosterReport(ctx),
   case: caseReport,
   discharge: dischargeReport,

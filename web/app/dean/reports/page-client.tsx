@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBuilding,
-  faDoorOpen,
+  faBedPulse,
   faFileLines,
   faUserSlash,
   faUserTie,
@@ -127,7 +127,7 @@ function suggestFor(
   if (full.length === 1) {
     out.push({
       id: "rooms",
-      icon: faDoorOpen,
+      icon: faBedPulse,
       tone: "rose",
       title: `${full[0].label} is full`,
       detail: "Occupancy and current occupants in one report.",
@@ -137,7 +137,7 @@ function suggestFor(
   } else if (full.length > 1) {
     out.push({
       id: "rooms",
-      icon: faDoorOpen,
+      icon: faBedPulse,
       tone: "rose",
       title: `${full.length} rooms at capacity`,
       detail: "No beds left for new admissions in these rooms.",
@@ -280,7 +280,7 @@ export default function AdminReportsClient() {
     defineReportType<RoomTarget>({
       type: "rooms",
       label: "Rooms",
-      icon: faDoorOpen,
+      icon: faBedPulse,
       blurb: "A room's capacity, occupancy and who is in it now.",
       contents: ["Capacity and occupancy", "Current occupants"],
       noun: "rooms",

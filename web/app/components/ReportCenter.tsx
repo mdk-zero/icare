@@ -4,11 +4,14 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
+  faArrowLeft,
   faArrowRight,
   faClockRotateLeft,
   faDownload,
   faEye,
   faFilePdf,
+  faFolder,
+  faFolderOpen,
   faSearch,
 } from "@fortawesome/free-solid-svg-icons";
 import { usePageData } from "../lib/use-page-data";
@@ -44,6 +47,32 @@ export interface Target {
   badges?: { text: string; tone: Tone }[];
 }
 
+/** One way of slicing a folder's contents: "Per student", "Per group". */
+export interface FolderView {
+  id: string;
+  label: string;
+  /** The report type each item is asked of; a section's students are "student" reports. */
+  type: string;
+  /** Each item's id is the target id its report is asked for by. */
+  items: Target[];
+}
+
+/** What is in an opened folder: a report of the whole thing, and the views by student or group. */
+export interface FolderContents {
+  /** The report of the whole class or section, when there is one. */
+  whole: { type: string; id: string; label: string; sub: string } | null;
+  views: FolderView[];
+}
+
+/**
+ * Makes each listed item a folder: it is opened rather than previewed, and the
+ * reports are inside, one per student or per group. `load` reads what is in one.
+ */
+export interface ReportFolder {
+  noun: string;
+  load: (id: string) => Promise<FolderContents | null>;
+}
+
 export interface ReportList<T extends Target> {
   /** Undefined until the first load settles. */
   items: T[] | undefined;
@@ -61,6 +90,8 @@ export interface ReportList<T extends Target> {
   };
   /** A pinned row for the every-record version of the report, e.g. "All faculty". */
   all?: { label: string };
+  /** When set, each item is a folder button instead of a report row. */
+  folder?: ReportFolder;
 }
 
 export interface ReportTypeDef<T extends Target = Target> {
@@ -160,6 +191,15 @@ export default function ReportCenter({
     state: PreviewState;
   } | null>(null);
 
+  const [folder, setFolder] = useState<{
+    typeKey: string;
+    id: string;
+    label: string;
+    contents: FolderContents | null | undefined;
+  } | null>(null);
+  const [folderView, setFolderView] = useState<string | null>(null);
+  const folderSeq = useRef(0);
+
   const searchRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   // The blob on screen in the preview, so "Download PDF" saves it without a
@@ -237,7 +277,30 @@ export default function ReportCenter({
 
   /* --- actions ------------------------------------------------------- */
 
+  const closeFolder = () => {
+    folderSeq.current += 1;
+    setFolder(null);
+    setFolderView(null);
+    setSearch("");
+    setShown(PAGE);
+  };
+
+  const openFolder = (typeKey: string, loader: ReportFolder, item: Target) => {
+    const seq = ++folderSeq.current;
+    setFolder({ typeKey, id: item.id, label: item.label, contents: undefined });
+    setFolderView(null);
+    setSearch("");
+    setShown(PAGE);
+    void loader.load(item.id).then((contents) => {
+      if (seq !== folderSeq.current) return;
+      setFolder((f) => f && { ...f, contents });
+    });
+  };
+
   const selectType = (type: string) => {
+    folderSeq.current += 1;
+    setFolder(null);
+    setFolderView(null);
     setActiveType(type);
     setFilter("all");
     setFacetValue("all");
@@ -343,8 +406,8 @@ export default function ReportCenter({
     return last ? `Pulled ${sinceLabel(last.created_at)}` : null;
   };
 
-  const row = (t: Target, key: string, targetId: string | null) => {
-    const pulled = pulledNote(active.type, targetId);
+  const row = (t: Target, key: string, targetId: string | null, type = active.type) => {
+    const pulled = pulledNote(type, targetId);
     return (
       <li
         key={key}
@@ -352,7 +415,9 @@ export default function ReportCenter({
       >
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <p className="truncate font-semibold text-gray-800">{t.label}</p>
+            <p className="max-w-full truncate font-semibold text-gray-800" title={t.label}>
+              {t.label}
+            </p>
             {t.badges?.map((b) => (
               <span
                 key={b.text}
@@ -367,10 +432,51 @@ export default function ReportCenter({
             {pulled && <span className="text-gray-400"> · {pulled}</span>}
           </p>
         </div>
-        {actions(active.type, targetId, t.label)}
+        {actions(type, targetId, t.label)}
       </li>
     );
   };
+
+  const folderCard = (t: Target, loader: ReportFolder) => (
+    <li key={t.id}>
+      <button
+        type="button"
+        onClick={() => openFolder(active.type, loader, t)}
+        aria-label={`Open ${t.label}`}
+        className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-subtle sm:px-5"
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-500 transition-colors group-hover:bg-amber-100">
+          <FontAwesomeIcon icon={faFolder} className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="block max-w-full truncate font-semibold text-gray-800" title={t.label}>
+              {t.label}
+            </span>
+            {t.badges?.map((b) => (
+              <span
+                key={b.text}
+                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${TONES[b.tone].pill}`}
+              >
+                {b.text}
+              </span>
+            ))}
+          </span>
+          <span className="block truncate text-xs text-gray-500">{t.sub}</span>
+        </span>
+        <FontAwesomeIcon
+          icon={faArrowRight}
+          className="h-3 w-3 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-600"
+        />
+      </button>
+    </li>
+  );
+
+  const inFolder = list?.folder && folder && folder.typeKey === active.type ? folder : null;
+  const views = inFolder?.contents?.views ?? [];
+  const currentView = views.find((v) => v.id === folderView) ?? views[0];
+  const viewItems = (currentView?.items ?? []).filter(matches);
+  const whole = inFolder?.contents?.whole ?? null;
 
   /* --- render -------------------------------------------------------- */
 
@@ -499,6 +605,122 @@ export default function ReportCenter({
                 {actions(active.type, null, active.label, true)}
               </div>
             </div>
+          ) : inFolder ? (
+            <>
+              <div className="space-y-3 border-b border-hairline p-4 sm:px-5">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={closeFolder}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-hairline px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-subtle hover:text-gray-900"
+                  >
+                    <FontAwesomeIcon icon={faArrowLeft} className="h-3 w-3" />
+                    {active.label}
+                  </button>
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <p className="flex min-w-0 flex-1 items-center gap-2 font-semibold text-gray-800">
+                      <FontAwesomeIcon icon={faFolderOpen} className="h-4 w-4 shrink-0 text-amber-500" />
+                      <span className="truncate" title={inFolder.label}>
+                        {inFolder.label}
+                      </span>
+                    </p>
+                    {/* The report of the whole thing sits beside its name: the class, the section. */}
+                    {whole && (
+                      <span className="flex shrink-0 items-center gap-2">
+                        {actions(whole.type, whole.id, `${whole.label}: ${inFolder.label}`)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {views.length > 0 && (
+                    <div role="group" aria-label="Report by" className="flex rounded-lg border border-hairline p-0.5">
+                      {views.map((v) => (
+                        <button
+                          key={v.id}
+                          type="button"
+                          onClick={() => {
+                            setFolderView(v.id);
+                            setSearch("");
+                            setShown(PAGE);
+                          }}
+                          aria-pressed={currentView?.id === v.id}
+                          className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                            currentView?.id === v.id
+                              ? "bg-brand-600 text-white"
+                              : "text-gray-500 hover:bg-subtle hover:text-gray-900"
+                          }`}
+                        >
+                          {v.label}
+                          <span className={`ml-1.5 tabular-nums ${currentView?.id === v.id ? "opacity-80" : "text-gray-400"}`}>
+                            {v.items.length}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="relative min-w-[12rem] flex-1">
+                    <FontAwesomeIcon
+                      icon={faSearch}
+                      className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400"
+                    />
+                    <input
+                      type="search"
+                      placeholder={`Search ${currentView?.label.toLowerCase().replace("per ", "") ?? "students"}…`}
+                      value={search}
+                      onChange={(e) => {
+                        setSearch(e.target.value);
+                        setShown(PAGE);
+                      }}
+                      aria-label="Search this folder"
+                      className="w-full rounded-lg border border-gray-300 bg-surface py-2 pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="max-h-[32rem] overflow-y-auto">
+                {inFolder.contents === undefined ? (
+                  <ul className="divide-y divide-hairline" aria-hidden>
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <li key={i} className="flex animate-pulse items-center gap-4 px-4 py-4 sm:px-5">
+                        <div className="flex-1 space-y-2">
+                          <div className="h-4 w-1/3 rounded bg-gray-200" />
+                          <div className="h-3 w-1/2 rounded bg-gray-100" />
+                        </div>
+                        <div className="h-7 w-40 rounded bg-gray-100" />
+                      </li>
+                    ))}
+                  </ul>
+                ) : inFolder.contents === null ? (
+                  <p className="px-4 py-10 text-center text-sm text-rose-700 sm:px-5">
+                    Unable to open this folder. Go back and try again.
+                  </p>
+                ) : viewItems.length === 0 ? (
+                  <p className="px-4 py-10 text-center text-sm text-gray-500">
+                    {q
+                      ? `Nothing matches “${search.trim()}”.`
+                      : currentView?.id === "group"
+                        ? "None of the students on this are in a group yet."
+                        : "Nobody has been given this yet."}
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-hairline">
+                    {viewItems.slice(0, shown).map((t) => row(t, t.id, t.id, currentView?.type))}
+                  </ul>
+                )}
+                {viewItems.length > shown && (
+                  <div className="border-t border-hairline px-4 py-3 text-center sm:px-5">
+                    <button
+                      type="button"
+                      onClick={() => setShown((n) => n + PAGE)}
+                      className="text-sm font-medium text-brand-600 hover:text-brand-700"
+                    >
+                      Show {Math.min(PAGE, viewItems.length - shown)} more of {viewItems.length - shown}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
           ) : (
             <>
               <div className="space-y-3 border-b border-hairline p-4 sm:px-5">
@@ -640,7 +862,9 @@ export default function ReportCenter({
                     </li>
                   )}
 
-                  {visible.slice(0, shown).map((t) => row(t, t.id, t.id))}
+                  {visible
+                    .slice(0, shown)
+                    .map((t) => (list.folder ? folderCard(t, list.folder) : row(t, t.id, t.id)))}
 
                   {visible.length === 0 && (
                     <li className="px-4 py-10 text-center sm:px-5">

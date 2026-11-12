@@ -6,36 +6,32 @@ import {
   faFileLines,
   faFileMedical,
   faFilePrescription,
-  faLayerGroup,
+  faHandHoldingMedical,
+  faPeopleGroup,
   faListCheck,
   faNotesMedical,
-  faTriangleExclamation,
   faUser,
-  faUserClock,
   faUsers,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   apiFetch,
   fetchFacultyScenarios,
   fetchFacultySections,
+  fetchReturnDemos,
   fetchFacultyStudents,
 } from "../../lib/api";
 import { usePageData } from "../../lib/use-page-data";
-import type { RecentReport } from "../../lib/reports/types";
 import PageHeader from "../../components/PageHeader";
 import ReportCenter, {
   defineReportType,
   sinceLabel,
-  type Suggestion,
+  type FolderContents,
   type Target,
 } from "../../components/ReportCenter";
 import { daysSince, plural } from "../_overview/format";
 
 /** No recorded activity for this long reads as "inactive". */
 const INACTIVE_DAYS = 14;
-
-/** A whole-scope report older than this is worth suggesting again. */
-const STALE_DAYS = 7;
 
 interface AssessmentRow {
   id: string;
@@ -56,6 +52,52 @@ async function loadAssessments(): Promise<AssessmentRow[]> {
   return json.assessments ?? [];
 }
 
+const loadReturnDemos = async () => (await fetchReturnDemos())?.returnDemos ?? [];
+
+type FolderType = "section" | "patient_case" | "return_demo" | "quiz";
+
+/**
+ * What is inside one folder: a report of the whole thing where there is one,
+ * and a report each per student and per group. The server decides what a
+ * folder holds; this only dresses it as list rows.
+ */
+function folderLoader(type: FolderType): (id: string) => Promise<FolderContents | null> {
+  return async (id) => {
+    try {
+      const res = await apiFetch(`/api/faculty/reports/folder/${type}/${id}`, { credentials: "include" });
+      if (!res.ok) return null;
+      const json = (await res.json()) as {
+        whole: FolderContents["whole"];
+        views: {
+          id: string;
+          label: string;
+          type: string;
+          items: { id: string; label: string; sub: string; flag: string | null }[];
+        }[];
+      };
+      return {
+        whole: json.whole,
+        views: json.views.map((v) => ({
+          ...v,
+          items: v.items.map((it) => ({
+            id: it.id,
+            label: it.label,
+            sub: it.sub,
+            badges: it.flag ? [{ text: it.flag, tone: "slate" as const }] : [],
+          })),
+        })),
+      };
+    } catch {
+      return null;
+    }
+  };
+}
+
+const sectionFolder = folderLoader("section");
+const patientCaseFolder = folderLoader("patient_case");
+const returnDemoFolder = folderLoader("return_demo");
+const quizFolder = folderLoader("quiz");
+
 interface StudentTarget extends Target {
   risk: "safe" | "at_risk" | null;
   /** Days since last activity; null when there has never been any. */
@@ -73,112 +115,15 @@ interface DatedTarget extends Target {
   flag: boolean;
 }
 
-const isInactive = (t: StudentTarget) => t.idleDays === null || t.idleDays >= INACTIVE_DAYS;
 const byName = (a: Target, b: Target) => a.label.localeCompare(b.label);
 const newestFirst = (a: DatedTarget, b: DatedTarget) => b.createdAt.localeCompare(a.createdAt);
-
-/**
- * At risk first, then the longest quiet, then by name: the students a report
- * is most likely to be pulled for are at the top without being asked.
- */
-function byAttention(a: StudentTarget, b: StudentTarget): number {
-  const risk = (t: StudentTarget) => (t.risk === "at_risk" ? 0 : 1);
-  const idle = (t: StudentTarget) => t.idleDays ?? Number.MAX_SAFE_INTEGER;
-  return risk(a) - risk(b) || idle(b) - idle(a) || byName(a, b);
-}
-
-/** What's worth pulling now — from the lists already on the page, no AI. */
-function suggestFor(
-  students: StudentTarget[] | undefined,
-  sections: SectionTarget[] | undefined,
-  recent: RecentReport[] | undefined,
-): Suggestion[] {
-  if (!students || students.length === 0) return [];
-  const out: Suggestion[] = [];
-
-  const atRisk = students.filter((s) => s.risk === "at_risk");
-  if (atRisk.length === 1) {
-    out.push({
-      id: "at-risk",
-      icon: faTriangleExclamation,
-      tone: "rose",
-      title: `${atRisk[0].label} is low performing`,
-      detail: "Skill area profile, quiz history and clinical activity in one report.",
-      cta: "Preview their report",
-      action: { kind: "preview", type: "student", targetId: atRisk[0].id, subject: atRisk[0].label },
-    });
-  } else if (atRisk.length > 1) {
-    out.push({
-      id: "at-risk",
-      icon: faTriangleExclamation,
-      tone: "rose",
-      title: `${atRisk.length} students are low performing`,
-      detail: "Their reports are a ready brief for the next check-in.",
-      cta: "Show them",
-      action: { kind: "filter", type: "student", filter: "at-risk" },
-    });
-  }
-
-  // The section with the largest share at risk, not the largest count: a
-  // big section always has more of everything.
-  const worst = (sections ?? [])
-    .filter((s) => s.atRisk > 0)
-    .sort((a, b) => b.atRisk / b.students - a.atRisk / a.students)[0];
-  if (worst) {
-    out.push({
-      id: "section",
-      icon: faLayerGroup,
-      tone: "amber",
-      title: worst.label,
-      detail:
-        (sections?.length ?? 0) > 1
-          ? `${worst.atRisk} of ${worst.students} low performing — the highest share of your sections.`
-          : `${worst.atRisk} of ${worst.students} students are low performing.`,
-      cta: "Preview section report",
-      action: { kind: "preview", type: "section", targetId: worst.id, subject: worst.label },
-    });
-  }
-
-  const idle = students.filter(isInactive);
-  if (idle.length > 0) {
-    out.push({
-      id: "inactive",
-      icon: faUserClock,
-      tone: "amber",
-      title: `${plural(idle.length, "student")} inactive`,
-      detail: `No recorded activity in ${INACTIVE_DAYS}+ days.`,
-      cta: "Show them",
-      action: { kind: "filter", type: "student", filter: "inactive" },
-    });
-  }
-
-  // Wait for history before judging the roster stale, or it flashes "never".
-  if (recent) {
-    const last = recent.find((r) => r.type === "roster");
-    const age = last ? daysSince(last.created_at) : null;
-    if (!last || (age !== null && age >= STALE_DAYS)) {
-      out.push({
-        id: "roster",
-        icon: faUsers,
-        tone: "brand",
-        title: "Roster summary",
-        detail: last
-          ? `Last pulled ${sinceLabel(last.created_at)}.`
-          : "Every student you supervise, one row each.",
-        cta: "Preview",
-        action: { kind: "preview", type: "roster", targetId: null, subject: "Roster summary" },
-      });
-    }
-  }
-
-  return out;
-}
 
 export default function FacultyReportsClient() {
   const students = usePageData("faculty:reports:students", loadStudents);
   const sections = usePageData("faculty:sections", fetchFacultySections);
   const scenarios = usePageData("faculty:reports:scenarios", loadScenarios);
   const assessments = usePageData("faculty:reports:assessments", loadAssessments);
+  const returnDemos = usePageData("faculty:reports:return-demos", loadReturnDemos);
 
   const studentTargets = useMemo<StudentTarget[] | undefined>(
     () =>
@@ -255,39 +200,28 @@ export default function FacultyReportsClient() {
     [assessments.data],
   );
 
-  const sectionOptions = (sections.data ?? []).map((s) => ({ id: s.id, label: s.name }));
+  const returnDemoTargets = useMemo<DatedTarget[] | undefined>(
+    () =>
+      returnDemos.data?.map((d) => ({
+        id: d.id,
+        label: d.title,
+        sub: `${plural(d.skills.length, "skill")} · ${plural(d.student_count, "student")} assigned · ${d.graded_count} graded`,
+        badges: d.student_count === 0 ? [{ text: "Unassigned", tone: "slate" as const }] : [],
+        createdAt: d.created_at,
+        flag: d.student_count > 0,
+      })),
+    [returnDemos.data],
+  );
+
   const noSections = sections.data !== undefined && sections.data.length === 0;
 
   const types = [
-    defineReportType<StudentTarget>({
-      type: "student",
-      label: "Student",
-      icon: faUser,
-      blurb: "Everything one student has been graded on, and the criteria each of their courses is assessed on.",
-      contents: ["Averages", "Course criteria and grades", "Patient case grades", "Case presentations", "Quizzes", "Skill areas"],
-      noun: "students",
-      list: {
-        items: studentTargets,
-        loading: students.loading,
-        failed: Boolean(students.error),
-        filters: [
-          { id: "at-risk", label: "Low performing", test: (t) => t.risk === "at_risk" },
-          { id: "inactive", label: `Inactive ${INACTIVE_DAYS}d+`, test: isInactive },
-          { id: "unscored", label: "Not scored yet", test: (t) => t.risk === null },
-        ],
-        sorts: [
-          { id: "attention", label: "Needs attention", compare: byAttention },
-          { id: "name", label: "A–Z", compare: byName },
-        ],
-        facet: { label: "Section", options: sectionOptions, valueOf: (t) => t.sectionId },
-      },
-    }),
     defineReportType<SectionTarget>({
       type: "section",
       label: "Section",
-      icon: faLayerGroup,
-      blurb: "The whole class, by group and by student, with skill area means.",
-      contents: ["Class summary", "Group averages", "Every student's grades", "Skill area means"],
+      icon: faPeopleGroup,
+      blurb: "Open a section to pull the whole class, or the report of one group or one student in it.",
+      contents: ["Whole section", "Per group", "Per student: averages, course grades, quizzes, skill areas"],
       noun: "sections",
       list: {
         items: sectionTargets,
@@ -297,14 +231,15 @@ export default function FacultyReportsClient() {
           { id: "risk", label: "Most low performers", compare: (a, b) => b.atRisk - a.atRisk || byName(a, b) },
           { id: "name", label: "A–Z", compare: byName },
         ],
+        folder: { noun: "students and groups", load: sectionFolder },
       },
     }),
     defineReportType<DatedTarget>({
       type: "scenario",
       label: "Patient Case",
       icon: faNotesMedical,
-      blurb: "Who a patient case went to, what is awaiting a grade, and how it was graded.",
-      contents: ["Graded and awaiting", "Grades by level", "Every student with group"],
+      blurb: "Open a patient case to pull the whole class, or its checklist and grades for one student or a group.",
+      contents: ["Whole class", "Per student", "Per group, a column per member"],
       noun: "scenarios",
       list: {
         items: scenarioTargets,
@@ -318,14 +253,37 @@ export default function FacultyReportsClient() {
           { id: "newest", label: "Newest", compare: newestFirst },
           { id: "name", label: "A–Z", compare: byName },
         ],
+        folder: { noun: "students and groups", load: patientCaseFolder },
+      },
+    }),
+    defineReportType<DatedTarget>({
+      type: "return_demo",
+      label: "Return Demonstration",
+      icon: faHandHoldingMedical,
+      blurb: "Open a Return Demonstration to pull its checklist and grades, for one student or a whole group.",
+      contents: ["Checklist steps with the grade beside each", "Per student", "Per group, a column per member"],
+      noun: "return demonstrations",
+      list: {
+        items: returnDemoTargets,
+        loading: returnDemos.loading,
+        failed: Boolean(returnDemos.error),
+        filters: [
+          { id: "assigned", label: "Assigned", test: (t) => t.flag },
+          { id: "unassigned", label: "Unassigned", test: (t) => !t.flag },
+        ],
+        sorts: [
+          { id: "newest", label: "Newest", compare: newestFirst },
+          { id: "name", label: "A–Z", compare: byName },
+        ],
+        folder: { noun: "students and groups", load: returnDemoFolder },
       },
     }),
     defineReportType<DatedTarget>({
       type: "assessment",
       label: "Quiz",
       icon: faListCheck,
-      blurb: "How a quiz went for everyone given it: best scores, bands and pass rate.",
-      contents: ["Pass rate", "Score distribution", "Every student, late ones flagged"],
+      blurb: "Open a quiz to pull how the whole class did, or the questions and answers of one student or a group.",
+      contents: ["Whole class", "Per student: every question and the answer given", "Per group, a column per member"],
       noun: "assessments",
       list: {
         items: assessmentTargets,
@@ -339,19 +297,8 @@ export default function FacultyReportsClient() {
           { id: "newest", label: "Newest", compare: newestFirst },
           { id: "name", label: "A–Z", compare: byName },
         ],
+        folder: { noun: "students and groups", load: quizFolder },
       },
-    }),
-    defineReportType({
-      type: "roster",
-      label: "Roster summary",
-      icon: faUsers,
-      blurb: "Every student you supervise, one row each — nothing to pick.",
-      contents: ["Patient case and quiz averages", "Students with nothing graded", "Every student with section and group"],
-      noun: "students",
-      scope:
-        studentTargets && sections.data
-          ? `Covers ${plural(studentTargets.length, "student")} across ${plural(sections.data.length, "section")}.`
-          : undefined,
     }),
   ];
 
@@ -360,14 +307,17 @@ export default function FacultyReportsClient() {
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faFileLines} className="h-3 w-3" />, label: "Report Center" }}
         title="Reports"
-        subtitle="Preview and download PDF reports on your students, sections, scenarios and assessments"
+        subtitle="Preview and download PDF reports on your students, sections, scenarios, return demonstrations and assessments"
       />
       <ReportCenter
         endpoint="/api/faculty/reports"
         cachePrefix="faculty"
         types={types}
-        suggest={(recent) => suggestFor(studentTargets, sectionTargets, recent)}
         historyTypes={[
+          { type: "student", label: "Student", icon: faUser },
+          { type: "section_group", label: "Group", icon: faUsers },
+          { type: "patient_case", label: "Patient Case", icon: faNotesMedical },
+          { type: "quiz", label: "Quiz answers", icon: faListCheck },
           { type: "discharge", label: "Discharge summary", icon: faFileMedical },
           { type: "case", label: "Case presentation", icon: faFilePrescription },
         ]}
