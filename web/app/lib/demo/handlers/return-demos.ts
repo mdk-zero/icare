@@ -8,6 +8,7 @@ import { addSkillTasks, caseGroupsOf, myStudentIds, newAssignment } from "./facu
 import { parseDeadline } from "@/app/lib/deadline-input";
 import { formByKey } from "@/app/lib/return-demo-forms";
 import { mergeAssignees, parseReturnDemoInput, RETURN_DEMO_CATEGORY, returnDemoVisibleTo, skillDiff } from "@/app/lib/return-demos";
+import { checklistTasks, type ChecklistRow } from "@/app/lib/checklist-import";
 
 /**
  * Return Demonstrations (072) on the demo store, in the shapes the real
@@ -43,6 +44,33 @@ const gradedTaskIds = (ctx: Ctx, taskIds: string[]) =>
 
 const tasksOf = (ctx: Ctx, demoId: string) =>
   ctx.db.tasks.filter((t) => t.scenario_id === demoId).sort((a, b) => a.sort_order - b.sort_order);
+
+/** The real addChecklistTasks: one task per section of an uploaded checklist. */
+function addChecklistTasks(ctx: Ctx, demoId: string, rows: readonly ChecklistRow[], title: string): number {
+  let order = ctx.db.tasks.filter((t) => t.scenario_id === demoId).length;
+  let number = 0;
+  const tasks = checklistTasks(rows, title);
+  for (const task of tasks) {
+    const taskId = newId();
+    ctx.db.tasks.push({
+      id: taskId,
+      scenario_id: demoId,
+      title: task.title,
+      description: "",
+      category: "intervention",
+      points: 10,
+      verification: "faculty",
+      system_trigger: null,
+      sort_order: order++,
+      skill_id: null,
+    });
+    task.steps.forEach((text, i) => {
+      number += 1;
+      ctx.db.steps.push({ id: newId(), task_id: taskId, title: text, source: `${title.trim() || "Checklist"}, step ${number}`, position: i + 1 });
+    });
+  }
+  return tasks.length;
+}
 
 function summary(ctx: Ctx, demo: DemoScenario) {
   const mine = ctx.role === "admin" ? null : myStudentIds(ctx);
@@ -110,13 +138,21 @@ route("POST", "/api/faculty/return-demos", async (ctx) => {
     form_keys: input.forms ?? [],
   };
   ctx.db.scenarios.push(demo);
-  const added = await addSkillTasks(ctx, demo.id, input.skills ?? []);
+  const added = input.checklist
+    ? addChecklistTasks(ctx, demo.id, input.checklist, demo.title)
+    : await addSkillTasks(ctx, demo.id, input.skills ?? []);
   if (added === 0) {
     ctx.db.scenarios = ctx.db.scenarios.filter((s) => s.id !== demo.id);
-    return json({ error: "None of those skills are in the catalog" }, 400);
+    return json({ error: input.checklist ? "Add at least one step to the checklist" : "None of those skills are in the catalog" }, 400);
   }
   audit(ctx.db, ctx.viewer, "return_demo.create", "scenarios", { message: `Created Return Demonstration “${demo.title}”` }, demo.id);
   return json({ return_demo: { id: demo.id } }, 201);
+});
+
+// Files are read on the server (pdf.js), which the demo doesn't have.
+route("POST", "/api/faculty/return-demos/read-checklist", (ctx) => {
+  if (!staffOnly(ctx)) return forbidden();
+  return json({ error: "The demo can't read files. Type the checklist's steps in instead." }, 422);
 });
 
 route("GET", "/api/faculty/return-demos/:id", (ctx) => {
@@ -154,7 +190,10 @@ route("PATCH", "/api/faculty/return-demos/:id", async (ctx) => {
   if (!canEdit(ctx, demo)) return json({ error: "Only its maker can change this Return Demonstration" }, 403);
 
   const tasks = tasksOf(ctx, demo.id);
-  const diff = input.skills ? skillDiff(tasks, input.skills, gradedTaskIds(ctx, tasks.map((t) => t.id))) : null;
+  if (input.checklist && gradedTaskIds(ctx, tasks.map((t) => t.id)).size > 0) {
+    return json({ error: "Students have been graded on this checklist, so it can't be changed." }, 409);
+  }
+  const diff = !input.checklist && input.skills ? skillDiff(tasks, input.skills, gradedTaskIds(ctx, tasks.map((t) => t.id))) : null;
   if (diff && diff.blocked.length > 0) {
     return json({ error: `Students have been graded on ${diff.blocked.join(", ")}, so it can't be removed.` }, 409);
   }
@@ -169,6 +208,14 @@ route("PATCH", "/api/faculty/return-demos/:id", async (ctx) => {
   demo.updated_at = new Date().toISOString();
 
   let added = 0;
+  let replaced = 0;
+  if (input.checklist) {
+    const old = new Set(tasks.map((t) => t.id));
+    ctx.db.tasks = ctx.db.tasks.filter((t) => !old.has(t.id));
+    ctx.db.steps = ctx.db.steps.filter((st) => !old.has(st.task_id));
+    replaced = old.size;
+    added = addChecklistTasks(ctx, demo.id, input.checklist, demo.title);
+  }
   if (diff) {
     if (diff.add.length > 0) added = await addSkillTasks(ctx, demo.id, diff.add);
     const removed = new Set(diff.remove);
@@ -176,7 +223,7 @@ route("PATCH", "/api/faculty/return-demos/:id", async (ctx) => {
     ctx.db.steps = ctx.db.steps.filter((st) => !removed.has(st.task_id));
   }
   audit(ctx.db, ctx.viewer, "return_demo.update", "scenarios", { message: `Edited Return Demonstration “${demo.title}”` }, demo.id);
-  return { ok: true, added, removed: diff?.remove.length ?? 0 };
+  return { ok: true, added, removed: replaced || (diff?.remove.length ?? 0) };
 });
 
 route("DELETE", "/api/faculty/return-demos/:id", (ctx) => {

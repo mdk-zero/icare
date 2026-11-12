@@ -103,7 +103,7 @@ export default function ReturnDemosClient() {
           label: "Return Demonstrations",
         }}
         title="Return Demonstrations"
-        subtitle="Taylor's skill checklists your students demonstrate, graded step by step"
+        subtitle="Skill checklists your students demonstrate, graded step by step"
       />
 
       {data && !data.enabled ? (
@@ -154,7 +154,7 @@ export default function ReturnDemosClient() {
               <p className="mt-1 text-sm text-gray-500">
                 {search
                   ? "Try a different title or skill."
-                  : "Pick the Taylor's skills your students should demonstrate, then assign it to a group."}
+                  : "Pick Taylor's skills or upload your own skills checklist, then assign it to a group."}
               </p>
             </div>
           ) : (

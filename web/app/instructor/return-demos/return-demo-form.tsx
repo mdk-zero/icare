@@ -8,6 +8,7 @@ import {
   faChevronLeft,
   faFloppyDisk,
   faHandHoldingMedical,
+  faListCheck,
   faRotateLeft,
   faXmark,
 } from "@fortawesome/free-solid-svg-icons";
@@ -28,6 +29,26 @@ import SkillPicker from "../scenarios/skill-picker";
 import SkillStepsPreview from "./skill-steps-preview";
 import FormsPicker from "./forms-picker";
 import { editedSkills } from "./edit-skills";
+import ChecklistPanel from "./checklist-panel";
+import { checklistRowsFromTasks, stepCount, type ChecklistRow } from "../../lib/checklist-import";
+
+/** What students are graded on: Taylor's skills, or the school's own checklist. */
+type Source = "skills" | "checklist";
+
+const SOURCES = [
+  {
+    value: "skills",
+    icon: faHandHoldingMedical,
+    label: "Taylor's skills",
+    hint: "Pick skills from the catalog; their checklist steps are used word for word.",
+  },
+  {
+    value: "checklist",
+    icon: faListCheck,
+    label: "Skills checklist",
+    hint: "Upload your own checklist as a PDF or Excel file, or type it in.",
+  },
+] as const;
 
 const inputClass =
   "w-full rounded-xl border border-gray-300 bg-surface px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30";
@@ -38,7 +59,9 @@ const inputClass =
  * steps are the skill's checklist, word for word. When editing, the skills
  * it already has are shown as stored and stay as they are (a variant can't
  * change under students who may have been graded on it); they can be
- * removed, unless graded, and new ones added. Forms (094) are optional
+ * removed, unless graded, and new ones added. Instead of skills it can use a
+ * skills checklist the instructor uploads (PDF or Excel) or types in, which
+ * can't change once a student is graded on it. Forms (094) are optional
  * sheets students fill in alongside the skills.
  */
 export default function ReturnDemoForm({ id }: { id?: string }) {
@@ -58,6 +81,10 @@ export default function ReturnDemoForm({ id }: { id?: string }) {
   /** Form keys, in the order shown to students. */
   const [forms, setForms] = useState<string[]>([]);
   const [openSkill, setOpenSkill] = useState<string | null>(null);
+  const [source, setSource] = useState<Source>("skills");
+  const [checklist, setChecklist] = useState<ChecklistRow[]>([]);
+  /** The checklist was edited (or the source switched), so an edit sends it. */
+  const [checklistChanged, setChecklistChanged] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,6 +102,11 @@ export default function ReturnDemoForm({ id }: { id?: string }) {
       setDescription(demo.description);
       setChosenCourse(demo.offering_id ?? "");
       setForms(demo.forms ?? []);
+      // Tasks with no skill are an uploaded checklist's sections.
+      if (demo.tasks.length > 0 && demo.tasks.every((t) => !t.skill_id)) {
+        setSource("checklist");
+        setChecklist(checklistRowsFromTasks(demo.tasks));
+      }
     });
     return () => {
       cancelled = true;
@@ -84,8 +116,18 @@ export default function ReturnDemoForm({ id }: { id?: string }) {
   const offeringId = resolveCourse(offerings, chosenCourse);
   const needsCourse = offerings.length > 0 && !offeringId;
   const existingTasks = existing?.tasks ?? [];
-  const saved = editedSkills(existingTasks, removed, skills);
-  const canSave = title.trim().length > 0 && saved.length > 0 && !needsCourse && !saving;
+  const skillTasks = existingTasks.filter((t) => t.skill_id);
+  const anyGraded = existingTasks.some((t) => t.graded);
+  const savedSource: Source | null =
+    existingTasks.length === 0 ? null : existingTasks.every((t) => !t.skill_id) ? "checklist" : "skills";
+  const saved = editedSkills(skillTasks, removed, skills);
+  const ready = source === "skills" ? saved.length > 0 : stepCount(checklist) > 0;
+  const canSave = title.trim().length > 0 && ready && !needsCourse && !saving;
+  const switchSource = (next: Source) => {
+    if (next === source) return;
+    setSource(next);
+    setChecklistChanged(true);
+  };
   const toggleRemoved = (skillId: string) =>
     setRemoved((prev) => {
       const next = new Set(prev);
@@ -97,7 +139,14 @@ export default function ReturnDemoForm({ id }: { id?: string }) {
   const save = async () => {
     setSaving(true);
     setError(null);
-    const input = { title: title.trim(), description: description.trim(), offering_id: offeringId || null, skills: saved, forms };
+    const base = { title: title.trim(), description: description.trim(), offering_id: offeringId || null, forms };
+    // An edit leaves an untouched checklist alone, so a graded one can still be renamed.
+    const input =
+      source === "skills"
+        ? { ...base, skills: saved }
+        : editing && !checklistChanged
+          ? base
+          : { ...base, skills: [], checklist };
     if (editing && id) {
       const result = await updateReturnDemo(id, input);
       setSaving(false);
@@ -107,7 +156,7 @@ export default function ReturnDemoForm({ id }: { id?: string }) {
       }
       toast("Return Demonstration saved");
     } else {
-      const result = await createReturnDemo(input);
+      const result = await createReturnDemo({ skills: [], ...input });
       setSaving(false);
       if (result.error) {
         setError(result.error);
@@ -145,7 +194,7 @@ export default function ReturnDemoForm({ id }: { id?: string }) {
       <PageHeader
         badge={{ icon: <FontAwesomeIcon icon={faHandHoldingMedical} className="w-3.5 h-3.5" />, label: "Return Demonstrations" }}
         title={editing ? "Edit Return Demonstration" : "New Return Demonstration"}
-        subtitle="Pick the Taylor's skills your students will demonstrate. No patient or scenario: just the checklists."
+        subtitle="Pick the Taylor's skills your students will demonstrate, or upload your own skills checklist. No patient or scenario: just the checklists."
       />
 
       <div className="space-y-5 rounded-xl border border-hairline bg-surface p-5 shadow-tile">
@@ -176,14 +225,75 @@ export default function ReturnDemoForm({ id }: { id?: string }) {
           />
         </label>
 
-        {existingTasks.length > 0 && (
+        <fieldset>
+          <legend className="mb-1.5 block text-sm font-bold text-gray-800">What students are graded on</legend>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {SOURCES.map((option) => {
+              const on = source === option.value;
+              const locked = anyGraded || saving;
+              return (
+                <label
+                  key={option.value}
+                  className={`flex gap-3 rounded-xl border p-3 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand-600/40 ${
+                    on ? "border-brand-600 bg-brand-600/5 ring-1 ring-brand-600" : "border-gray-200 hover:bg-gray-50"
+                  } ${locked ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+                >
+                  <input
+                    type="radio"
+                    name="source"
+                    value={option.value}
+                    checked={on}
+                    disabled={locked}
+                    onChange={() => switchSource(option.value)}
+                    className="sr-only"
+                  />
+                  <span
+                    className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                      on ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-500"
+                    }`}
+                  >
+                    <FontAwesomeIcon icon={option.icon} className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-gray-900">{option.label}</span>
+                    <span className="block text-xs text-gray-500">{option.hint}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+          {anyGraded && (
+            <p className="mt-1.5 text-xs text-gray-500">Students have been graded on it, so this can&apos;t change.</p>
+          )}
+          {savedSource && source !== savedSource && (
+            <p className="mt-1.5 text-xs text-amber-700">
+              Saving replaces what it has now with the {source === "skills" ? "skills you pick" : "checklist"}.
+            </p>
+          )}
+        </fieldset>
+
+        {source === "checklist" && (
+          <ChecklistPanel
+            rows={checklist}
+            onChange={(rows) => {
+              setChecklist(rows);
+              setChecklistChanged(true);
+            }}
+            title={title}
+            onSuggestTitle={(found) => setTitle((cur) => (cur.trim() ? cur : found.slice(0, MAX_RETURN_DEMO_TITLE)))}
+            disabled={saving}
+            locked={anyGraded ? "Graded, so it stays as it is" : undefined}
+          />
+        )}
+
+        {source === "skills" && skillTasks.length > 0 && (
           <div className="rounded-xl border border-hairline bg-surface p-4">
             <p className="text-sm font-bold text-gray-800">Skills on this Return Demonstration</p>
             <p className="mt-0.5 text-xs text-gray-500">
               Kept as they are, steps and all. Remove one to take it off; one a student has been graded on stays.
             </p>
             <ul className="mt-3 space-y-2">
-              {existingTasks.map((task) => {
+              {skillTasks.map((task) => {
                 const skillId = task.skill_id ?? task.id;
                 const off = removed.has(skillId);
                 const open = openSkill === task.id;
@@ -236,14 +346,18 @@ export default function ReturnDemoForm({ id }: { id?: string }) {
           </div>
         )}
 
-        <SkillPicker
-          value={skills}
-          onChange={setSkills}
-          disabled={saving}
-          existingIds={existingTasks.map((t) => t.skill_id).filter((id): id is string => !!id)}
-          existingLabel="Already on it"
-        />
-        <SkillStepsPreview value={skills} />
+        {source === "skills" && (
+          <>
+            <SkillPicker
+              value={skills}
+              onChange={setSkills}
+              disabled={saving}
+              existingIds={skillTasks.map((t) => t.skill_id).filter((id): id is string => !!id)}
+              existingLabel="Already on it"
+            />
+            <SkillStepsPreview value={skills} />
+          </>
+        )}
 
         <FormsPicker value={forms} onChange={setForms} disabled={saving} />
 

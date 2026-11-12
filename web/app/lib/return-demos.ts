@@ -1,11 +1,13 @@
 import type { Parsed } from './course-progress';
 import { parseFormKeys } from './return-demo-forms';
+import { parseChecklistRows, stepCount, type ChecklistRow } from './checklist-import';
 import type { FacultyTeam, TeamsOverview } from './api';
 
 /**
  * The rules of a Return Demonstration (migration 072): a scenario with no
  * patient, made of one or more Taylor's skills whose checklist steps the
- * student demonstrates and the instructor grades on the Patient Case scale.
+ * student demonstrates and the instructor grades on the Patient Case scale,
+ * or of a skills checklist the instructor uploaded (checklist-import.ts).
  *
  * Pure, so the API routes, the instructor pages and the demo share it.
  */
@@ -48,12 +50,15 @@ export interface ReturnDemoInput {
   skills: SkillSelection[];
   /** Forms the student fills in alongside it (094), by key; optional. */
   forms?: string[];
+  /** An uploaded skills checklist, used in place of skills. */
+  checklist?: ChecklistRow[];
 }
 
 /**
  * A create (every field, title and a skill required) or, with `partial`, an
  * edit carrying only the fields the body names. Skills keep their first
- * mention, in order.
+ * mention, in order. A body with a `checklist` uses it in place of skills,
+ * and it needs at least one step.
  */
 export function parseReturnDemoInput(body: unknown, opts: { partial?: boolean } = {}): Parsed<Partial<ReturnDemoInput>> {
   const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
@@ -68,7 +73,11 @@ export function parseReturnDemoInput(body: unknown, opts: { partial?: boolean } 
   }
   if (has('description')) value.description = typeof b.description === 'string' ? b.description.trim() : '';
   if (has('offering_id')) value.offering_id = typeof b.offering_id === 'string' && b.offering_id.trim() ? b.offering_id.trim() : null;
-  if (has('skills')) {
+  if ('checklist' in b) {
+    const rows = parseChecklistRows(b.checklist);
+    if (stepCount(rows) === 0) return { ok: false, error: 'Add at least one step to the checklist' };
+    value.checklist = rows;
+  } else if (has('skills')) {
     const seen = new Set<string>();
     const skills = parseSkillSelections(b.skills).filter((s) => !seen.has(s.skillId) && seen.add(s.skillId));
     if (skills.length === 0) return { ok: false, error: 'Pick at least one skill' };
