@@ -32,13 +32,19 @@ you changed and the main session commits them.
 | `diagrams/*.drawio`, `diagrams/img/*.png` | Manuscript diagrams | See the diagram rules below |
 | `architecture/use-case-iCARE++.png` | Copy of `diagrams/img/use-case.png` | Keep the two identical |
 | `app-store-review-notes.md` | Notes pasted into App Store Connect | The pasted block must stay under 4000 bytes (`wc -c`). No passwords ever: the repo is public |
-| `student-web-app.md` | How the `/student` web app works | Update against `mobile/`, `web/app/api/student-web/`, `web/app/admin/student-web/` and `mobile/scripts/publish-web.mjs` |
+| `student-web-app.md` | How the `/student` web app works | Update against `mobile/`, `web/app/api/student-web/`, `web/app/admin/student-web/` and `mobile/scripts/publish-web.mjs`. Keep it clear that this is a backup, not the main channel (see below) |
 | `MoM-Sep-26.md` | Meeting minutes | Historical record. Do not change |
 | `superpowers/specs/*`, `superpowers/plans/*` | Dated design specs and plans | Historical records. Do not rewrite. Mention in your report when one no longer matches the code |
 | `Skill Checklists for Taylor_s ... .pdf` | Source textbook checklists | Never touch |
 
 Write plainly: short sentences, the names the UI uses, no marketing tone. Match the style of
 the document you are editing.
+
+**How students get the app.** Students use the native mobile app: the Android APK now, and the
+Apple App Store for iPhones. The student web portal at `/student` is only a backup. It goes
+live only if the panel agrees to deploy it on the web instead of the App Store. No document
+should present it as the way iPhone students get the app, and no diagram should draw it as a
+student channel unless the user says the panel approved it.
 
 ## Diagram rules
 

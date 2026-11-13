@@ -1,8 +1,11 @@
 # Student web app
 
-A backup for students who can't install the mobile app, such as iPhone users. It's the same app
-(`mobile/`) built for browsers and served by the web portal at `/student`. It stays off until an
-Admin turns it on.
+Students get iCARE++ as a mobile app: the APK on Android and the App Store on iPhones. The student
+web app is only a backup. It's the same app (`mobile/`) built for browsers and served by the web
+portal at `/student`.
+
+It goes live only if the panel agrees to deploying it on the web instead of the App Store. Until
+then it stays off, and an Admin turns it on only after that decision.
 
 ## Turning it on and off
 

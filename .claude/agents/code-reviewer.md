@@ -78,7 +78,12 @@ not a finding.
   reaches them, and a missing one fails silently.
 - The default avatar lists on web and mobile must match.
 - Disclosure headers: arrow points right when closed, down when open.
-- The same code runs in browsers at `/student`, so web-incompatible native APIs need a guard.
+- Students get iCARE++ as a native app: the Android APK now, and the Apple App Store for
+  iPhones. The student web portal at `/student` is the same code built for browsers, and it is
+  only a backup. It goes live only if the panel agrees to deploy it on the web instead of the
+  App Store. Review student features as native-app features first. Still flag anything that
+  would break the web build, such as a native-only API with no web guard, so the backup stays
+  usable. Flag a change that treats the web portal as the main way students get the app.
 
 **Checks**
 - `./check.sh` (or `./check.sh web`, `mobile`, `ml`) runs what CI runs. It takes minutes. Run
