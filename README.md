@@ -18,25 +18,25 @@ In this guide:
 ## Who uses iCARE++
 
 | Role | Who they are | Where they work | Guide |
-|---|---|---|---|
-| Admin | Runs accounts and the system; does no teaching | Admin portal on the web (labelled "System Administration") | [admin.md](admin.md) |
-| Dean | Heads a nursing program: instructors, students, courses, wards, analytics | Dean portal on the web | [dean.md](dean.md) |
-| Program Chair | Runs their own part of a program with the Dean's tools, under a Dean | Dean portal, titled "Program Chair Portal" | [program-chair.md](program-chair.md), then [dean.md](dean.md) |
-| Instructor | Clinical instructor: groups, Patient Cases, Return Demonstrations, Quizzes, Case Presentations, grading | Instructor portal on the web; the iCARE++ app for course checklists | [instructor.md](instructor.md) |
-| Student | Nursing student | iCARE++ app on an Android phone | [student.md](student.md) |
+| --- | --- | --- | --- |
+| Admin | Runs accounts and the system; does no teaching | Admin portal on the web (labelled "System Administration") | [admin.md](./docs/manual/admin.md) |
+| Dean | Heads a nursing program: instructors, students, courses, wards, analytics | Dean portal on the web | [dean.md](./docs/manual/dean.md) |
+| Program Chair | Runs their own part of a program with the Dean's tools, under a Dean | Dean portal, titled "Program Chair Portal" | [program-chair.md](./docs/manual/program-chair.md), then [dean.md](./docs/manual/dean.md) |
+| Instructor | Clinical instructor: groups, Patient Cases, Return Demonstrations, Quizzes, Case Presentations, grading | Instructor portal on the web; the iCARE++ app for course checklists | [instructor.md](./docs/manual/instructor.md) |
+| Student | Nursing student | iCARE++ app on an Android phone | [student.md](./docs/manual/student.md) |
 
 ## Which guide to read
 
-1. Everyone starts with [Getting started with iCARE++](setup-1-getting-started.md). It covers
+1. Everyone starts with [Getting started with iCARE++](./docs/manual/setup-1-getting-started.md). It covers
    your account, your first sign-in, and installing the app.
 2. Then read the guide for your role, from the table above.
 3. Admins, Deans, Program Chairs and Instructors also use
-   [Common tasks in the web portal](common-tasks.md). It covers what every web portal shares:
+   [Common tasks in the web portal](./docs/manual/common-tasks.md). It covers what every web portal shares:
    signing in and out, notifications, your settings, analytics filters, reports and Help & Support.
-4. Program Chairs read [program-chair.md](program-chair.md) for what differs, then
-   [dean.md](dean.md) for the tasks they share with the Dean.
+4. Program Chairs read [program-chair.md](./docs/manual/program-chair.md) for what differs, then
+   [dean.md](./docs/manual/dean.md) for the tasks they share with the Dean.
 5. The people who install and run iCARE++ read
-   [Setting up and running iCARE++](setup-2-technical.md).
+   [Setting up and running iCARE++](./docs/manual/setup-2-technical.md).
 
 ## How to read this manual
 
@@ -66,7 +66,7 @@ Some things have more than one name on screen. This manual uses one name for eac
 lists the other names, so you can match what you see to what you read.
 
 | On-screen name | Where it appears | What it means |
-|---|---|---|
+| --- | --- | --- |
 | "Activity Log", "Audit Trail" | "Activity Log" is the sidebar link for Deans, Program Chairs and Admins; the page it opens is titled "Audit Trail". The Instructor sidebar says "Audit Trail". | The read-only record of actions taken in iCARE++ |
 | "System Administration" | Under the logo in the Admin's sidebar | The Admin portal |
 | "Wards", "Ward Management", "Ward Monitoring", "Monitoring" | Sidebar link, page titles and labels, and the back link from a patient chart | The same Wards page |
@@ -121,12 +121,12 @@ lists the other names, so you can match what you see to what you read.
   at the top and the phone's own message boxes look a little different.
 - All screenshots use the light theme.
 - The screenshots can be taken again after a change to the screens, with the tools in
-  [tools/](tools/).
+  [tools/](./docs/manual/tools/).
 
 ## Get help
 
 - Admins, Deans, Program Chairs and Instructors: see
-  [Send a message to the iCARE++ team](common-tasks.md#send-a-message-to-the-icare-team).
-- Students: see [Help and Support](student.md#help-and-support) in the Student guide.
+  [Send a message to the iCARE++ team](./docs/manual/common-tasks.md#send-a-message-to-the-icare-team).
+- Students: see [Help and Support](./docs/manual/student.md#help-and-support) in the Student guide.
 
 Admins answer these messages. The reply comes by email.
