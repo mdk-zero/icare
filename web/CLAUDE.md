@@ -1,11 +1,13 @@
 @AGENTS.md
 
-## Before every commit: run `./check.sh`
+## Before committing web code: run `./check.sh web`
 
-Run `./check.sh` from the repo root before every commit, and commit only when it ends with
-"All blocking checks passed". It runs what CI runs (typegen, typecheck, lint, build for web;
-typecheck and lint for mobile; the ML compile) plus a secret scan, a migration-number check and
-`npm audit`. It takes a few minutes, so start it in the background.
+When a commit changes code, config or package files in `web/`, run `./check.sh web` from the
+repo root (add `mobile` or `ml` if the commit touches them too). Commit only when it ends with
+"All blocking checks passed". It runs typegen, typecheck, lint and build, plus a secret scan, a
+migration-number check and `npm audit`. It takes a few minutes, so start it in the background.
+Markdown files and SQL migrations alone need only `./check.sh security`. The root `CLAUDE.md`
+has the full table.
 
 - **Blocking failures** (typecheck, build, secrets, migration numbers) must be fixed before
   committing.

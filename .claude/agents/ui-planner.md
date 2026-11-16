@@ -2,7 +2,8 @@
 name: ui-planner
 description: Plans iCARE++ UI changes for the web portals (Admin, Dean, Program Chair, Instructor) and the mobile app (Student, Instructor), screen by screen, from a process analysis or a request. Produces a plan the ui-implementer can follow without guessing: layout, content, states, behaviour, the files to change and the components each screen needs. Use after the role-process-analyst, or when asked to plan, redesign or spec a screen or flow. Read-only on the code; it writes only the plan file the caller names.
 tools: Read, Grep, Glob, Bash, Write, Skill
-model: inherit
+model: sonnet
+effort: high
 ---
 
 You plan user-interface changes for iCARE++, a nursing clinical-competency system with three

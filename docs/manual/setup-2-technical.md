@@ -648,7 +648,7 @@ To publish a new version of it:
    ```
 
    It builds the app for browsers under `/student` and replaces `web/public/student`.
-3. From the repository root, run `./check.sh`, then commit `web/public/student` by path and
+3. From the repository root, run `./check.sh web`, then commit `web/public/student` by path and
    push.
 
 **Result:** The portal's next deployment serves the new files at `/student`. Unlike an update,
@@ -742,10 +742,17 @@ To build the web portal while `next dev` is running, build into another folder:
 ### Check before every commit
 
 Run `./check.sh` from the repository root before every commit, and commit only when it ends with
-"All blocking checks passed". It takes a few minutes, so start it in the background.
+"All blocking checks passed". Run only the part the commit needs:
 
-It runs what CI runs, plus a secret scan of the files you changed, a check for duplicate
-migration numbers, the ML compile and `npm audit`.
+| The commit touches | Run | Takes |
+|---|---|---|
+| Code, config or package files in `web/`, `mobile/` or `ml/` | `./check.sh` with those apps, such as `./check.sh web` | a few minutes, so start it in the background |
+| `check.sh` or `.github/workflows/` | `./check.sh` | a few minutes |
+| Only docs, Markdown, `.claude/`, diagrams or SQL migrations | `./check.sh security` | seconds |
+
+The app checks run what CI runs, plus the ML compile and `npm audit`. Every run, `security`
+included, does a secret scan of the files you changed and checks for duplicate migration
+numbers.
 
 - **Blocking:** tracked secrets, the secret scan, migration numbers, the `web/` type generation,
   type check and build, the `mobile/` type check, and the ML compile and Docker check. Fix these
@@ -753,8 +760,7 @@ migration numbers, the ML compile and `npm audit`.
 - **Warnings:** lint and `npm audit`. Read them. Fix lint errors in code you touched. The mobile
   audit warning is expected for now: what is left sits inside Expo's own tooling.
 
-`./check.sh web` (or `mobile`, `ml`) checks only the apps you name; the security checks always
-run. `./check.sh --quick` skips the build and the audit.
+`./check.sh --quick` skips the build and the audit.
 
 When `./check.sh` fails for a reason that isn't the code, such as a tool change, fix
 `check.sh` in the same change. Regenerate `web/package-lock.json` with `npx -y npm@11 install`.

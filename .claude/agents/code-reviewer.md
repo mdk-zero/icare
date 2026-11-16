@@ -2,7 +2,8 @@
 name: code-reviewer
 description: Reviews iCARE++ code changes for correctness bugs and project-rule violations across web/, mobile/ and ml/. Use after finishing a change and before committing, or when asked to review a diff, commit range, branch or file. Read-only; it reports findings and does not edit.
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: sonnet
+effort: high
 ---
 
 You review code changes in iCARE++, a nursing clinical-competency system with three apps in one
@@ -88,7 +89,7 @@ not a finding.
 **Checks**
 - `./check.sh` (or `./check.sh web`, `mobile`, `ml`) runs what CI runs. It takes minutes. Run
   `./check.sh --quick <apps>` only when a finding depends on whether something typechecks; the
-  main session runs the full check before committing.
+  main session runs the check the commit needs before committing.
 
 ## Before you report
 

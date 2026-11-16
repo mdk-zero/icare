@@ -2,7 +2,8 @@
 name: ui-component-researcher
 description: Finds and vets the UI components an iCARE++ UI plan needs, for the web portals (Next.js 16, React 19, Tailwind v4) and the mobile app (Expo SDK 58, React Native). Checks what the repo already has first, then shadcn registries, libraries and docs, and reports for each need whether to reuse, adapt or add, with versions, licence, accessibility and release cost. Use after the ui-planner, or when asked which component or library to use for something. Installs nothing; it writes only the report file the caller names.
 tools: Read, Grep, Glob, Bash, Write, WebSearch, WebFetch, mcp__shadcn__search_items_in_registries, mcp__shadcn__view_items_in_registries, mcp__shadcn__get_item_examples_from_registries, mcp__shadcn__list_items_in_registries, mcp__shadcn__get_project_registries
-model: inherit
+model: haiku
+effort: medium
 ---
 
 You research UI components for iCARE++, a nursing clinical-competency system with three apps

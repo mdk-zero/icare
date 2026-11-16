@@ -17,6 +17,8 @@
 # Usage:
 #   ./check.sh                # everything
 #   ./check.sh web mobile     # only the stacks you name (security always runs)
+#   ./check.sh security       # only security + repo, for changes outside the
+#                             # app code (docs, Markdown, .claude/, migrations)
 #   ./check.sh --quick        # skip the slow parts (next build, npm audit)
 #   NO_COLOR=1 ./check.sh     # drop the ANSI colours
 #
@@ -43,21 +45,28 @@ fi
 
 services=()
 quick=0
+security_only=0
 for arg in "$@"; do
   case "$arg" in
     --quick)       quick=1 ;;
+    security)      security_only=1 ;;
     web|ml|mobile) services+=("$arg") ;;
     *)
-      printf '%sUnknown argument "%s". Usage: ./check.sh [--quick] [web] [ml] [mobile]%s\n' \
+      printf '%sUnknown argument "%s". Usage: ./check.sh [--quick] [security | web ml mobile]%s\n' \
         "$RED" "$arg" "$RESET" >&2
       exit 2 ;;
   esac
 done
-[ ${#services[@]} -eq 0 ] && services=(web ml mobile)
+if [ "$security_only" -eq 1 ] && [ ${#services[@]} -gt 0 ]; then
+  printf '%s"security" runs no app checks; drop it or the app names.%s\n' "$RED" "$RESET" >&2
+  exit 2
+fi
+[ ${#services[@]} -eq 0 ] && [ "$security_only" -eq 0 ] && services=(web ml mobile)
 
 enabled() {
   local s
-  for s in "${services[@]}"; do [ "$s" = "$1" ] && return 0; done
+  # The +-guard keeps bash 3.2 (macOS) from tripping set -u on an empty array.
+  for s in ${services[@]+"${services[@]}"}; do [ "$s" = "$1" ] && return 0; done
   return 1
 }
 

@@ -3,13 +3,21 @@
 Three apps in one repo: `web/` (Next.js portal and API), `mobile/` (Expo app) and `ml/`
 (Python model service). `web/CLAUDE.md` has the web-specific notes.
 
-## Before every commit: run `./check.sh`
+## Before committing: run `./check.sh` for what the commit touches
 
-Run `./check.sh` from the repo root before every commit, and commit only when it ends with
-"All blocking checks passed". It runs what CI runs for all three apps, plus a secret scan, a
-migration-number check and `npm audit`. It takes a few minutes, so start it in the background.
-`./check.sh web` (or `mobile`, `ml`) limits it to the apps you name; the security checks always
-run.
+Run only the part of `./check.sh` (from the repo root) that the commit's paths need, and commit
+only when it ends with "All blocking checks passed":
+
+| The commit touches | Run | Takes |
+|---|---|---|
+| Code, config or package files in `web/`, `mobile/` or `ml/` | `./check.sh <those apps>`, e.g. `./check.sh web` | minutes, so start it in the background |
+| `check.sh` or `.github/workflows/` | `./check.sh` (everything) | minutes |
+| Only docs, Markdown (CLAUDE.md files too), `.claude/`, diagrams or SQL migrations | `./check.sh security` | seconds |
+
+The app runs do what CI does, plus `npm audit`. Every run, `security` included, scans the
+changed files for secrets, checks that no secret-shaped file is tracked, and checks that no two
+migrations share a number. The repo is public, so never skip the `security` run. Don't run the
+app checks again when nothing in them changed since the last green run.
 
 - **Blocking failures** (typecheck, build, secrets, migration numbers) must be fixed before
   committing.

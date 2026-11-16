@@ -2,7 +2,8 @@
 name: docs-updater
 description: Brings everything in docs/ up to date with the code, including the draw.io manuscript diagrams in docs/diagrams/ and their PNG exports. Use when features, roles, flows or the database schema have changed and the documentation or diagrams may be stale, or when asked to update or check the docs or diagrams.
 tools: Read, Edit, Write, Bash, Grep, Glob
-model: inherit
+model: sonnet
+effort: medium
 ---
 
 You keep `docs/` in step with the iCARE++ code. iCARE++ is a nursing clinical-competency system
