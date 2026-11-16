@@ -87,7 +87,8 @@ async function settle(page, ms = 700) {
   await page.waitForTimeout(ms);
 }
 
-const text = (page, value) => page.getByText(value, { exact: true }).first();
+// Screens stay mounted under the one in front, so only a visible match counts.
+const text = (page, value) => page.getByText(value, { exact: true }).filter({ visible: true }).first();
 
 async function passWelcome(page) {
   await page.getByRole('checkbox').waitFor();
@@ -139,6 +140,29 @@ async function clipAround(page, locators) {
   const right = Math.min(vp.width, Math.max(...boxes.map((b) => b.x + b.width)) + 16);
   const bottom = Math.min(vp.height, Math.max(...boxes.map((b) => b.y + b.height)) + 16);
   return { x, y, width: right - x, height: bottom - y };
+}
+
+/** Below the floating app header. */
+const BELOW_HEADER = 112;
+/** Room kept clear of the floating tab bar. */
+const ABOVE_TABS = 120;
+
+/**
+ * Clips from the top of `first` to the bottom of `last`. A region taller than
+ * the screen gets a taller viewport (same width), as the capture rules allow.
+ */
+async function region(page, first, last) {
+  await scrollTo(first, BELOW_HEADER);
+  const a = await first.boundingBox();
+  const b = await last.boundingBox();
+  const needed = b.y + b.height - a.y + 32;
+  const vp = page.viewportSize();
+  if (BELOW_HEADER + needed > vp.height - ABOVE_TABS) {
+    await page.setViewportSize({ width: vp.width, height: Math.ceil(BELOW_HEADER + needed + ABOVE_TABS) });
+    await page.waitForTimeout(600);
+    await scrollTo(first, BELOW_HEADER);
+  }
+  return clipAround(page, [first, last]);
 }
 
 async function shot(s, id, file, clip) {
@@ -220,13 +244,15 @@ const GROUPS = {
     await page.getByRole('tab', { name: 'Clinic' }).click();
     await text(page, 'Room Layout').waitFor();
     await text(page, 'Asthma: Pulse Oximetry, Respirations and Nasal Cannula Oxygen').waitFor();
-    await scrollTo(text(page, 'Room Layout'), 108);
+    // The plan's rooms just under the app header, and Pending Tasks above the tab bar.
+    await scrollTo(text(page, 'Room Layout'), 40);
     await shot(s, 'STU-02', 'student/02-clinic.png');
 
     await text(page, 'Asthma: Pulse Oximetry, Respirations and Nasal Cannula Oxygen').click();
     await text(page, 'Clinical Tasks').waitFor();
     await text(page, 'Request instructor assistance').waitFor();
-    await scrollTo(text(page, 'Clinical Tasks'), 330);
+    // The tasks and the help button; the timer sits above, out of frame.
+    await scrollTo(text(page, 'Clinical Tasks'), 80);
     await shot(s, 'STU-04', 'student/04-case-in-progress.png');
     await page.goBack();
     await text(page, 'Room Layout').waitFor();
@@ -239,7 +265,9 @@ const GROUPS = {
     await page.goBack();
 
     await page.getByRole('tab', { name: 'Demos' }).click();
-    await text(page, 'Vital Signs Return Demonstration').click();
+    await text(page, 'Return Demos').waitFor();
+    // Home keeps its own copy of the title mounted below; this is the Demos card.
+    await page.getByText('Vital Signs Return Demonstration', { exact: true }).filter({ visible: true }).last().click();
     await text(page, 'Skills to demonstrate').waitFor();
     await text(page, 'PhilPEN Form').waitFor();
     await shot(s, 'STU-05', 'student/05-return-demo.png');
@@ -299,19 +327,16 @@ const GROUPS = {
 
     await text(page, 'Recommendations & study tips').click();
     await text(page, 'Needs improvement').waitFor();
-    const skill = page.locator('div', { has: page.getByText('Assessing Brachial Artery Blood Pressure') })
-      .filter({ has: page.getByText('Study tip', { exact: true }) })
-      .last();
-    await skill.getByText('Study tip', { exact: true }).click();
+    await page.getByRole('button', { name: 'Skill 1-7, Assessing Brachial Artery Blood Pressure' }).click();
+    // Its button's name also carries the icon's glyph, so find it by its words.
+    await text(page, 'Study tip').click();
     await text(page, 'Estimate the systolic pressure first').waitFor();
-    const panel = page.locator('div', { has: text(page, 'Recommendations & study tips') })
-      .filter({ has: page.getByText('Estimate the systolic pressure first') })
-      .last();
-    const top = text(page, 'Recommendations & study tips');
-    const tipEnd = page.getByText('Estimate the systolic pressure first').locator('xpath=../..');
-    await scrollTo(top, 110);
-    await shot(s, 'STU-13', 'student/13-study-tips.png', await clipAround(page, [top, tipEnd]));
-    void panel;
+    const clip = await region(
+      page,
+      page.getByRole('button', { name: /Recommendations & study tips/ }),
+      page.getByRole('button', { name: 'Skill 1-4, Assessing a Peripheral Pulse by Palpation' }),
+    );
+    await shot(s, 'STU-13', 'student/13-study-tips.png', clip);
     await s.context.close();
   },
 
@@ -327,12 +352,22 @@ const GROUPS = {
     await page.goBack();
     await text(page, 'NEXT UP').waitFor();
 
-    await page.getByRole('button', { name: 'Profile' }).click();
+    await page.getByRole('button', { name: 'Profile', exact: true }).click();
     await text(page, 'My Goals').waitFor();
     await text(page, 'Count every irregular pulse for a full minute').waitFor();
-    const header = text(page, STUDENT.email);
-    const lastGoal = text(page, 'Support the arm at heart level before taking a blood pressure');
-    await shot(s, 'STU-15', 'student/15-profile.png', await clipAround(page, [header.locator('xpath=../..'), lastGoal.locator('xpath=..')]));
+    // The innermost boxes holding the header card's lines and both goals.
+    const card = page.locator('div').filter({ has: text(page, STUDENT.email) }).filter({ has: text(page, 'Student') }).last();
+    const goalsCard = page.locator('div')
+      .filter({ has: text(page, 'Count every irregular pulse for a full minute') })
+      .filter({ has: text(page, 'Support the arm at heart level before taking a blood pressure') })
+      .last();
+    const cardBox = await card.boundingBox();
+    const goalsBox = await goalsCard.boundingBox();
+    // Profile opens scrolled to the top, with the card just under the app header: start the crop below the header.
+    const top = Math.max(cardBox.y - 6, 82);
+    // The full width: the cards sit 16 px in from each edge.
+    const profileClip = { x: 0, y: top, width: 390, height: goalsBox.y + goalsBox.height + 16 - top };
+    await shot(s, 'STU-15', 'student/15-profile.png', profileClip);
 
     await page.getByRole('button', { name: /^Notifications/ }).click();
     await text(page, 'Mark all read').waitFor();
@@ -355,11 +390,17 @@ try {
   for (const [name, run] of Object.entries(GROUPS)) {
     if (ONLY.length && !ONLY.includes(name)) continue;
     console.log(`— ${name}`);
-    try {
-      await run(browser);
-    } catch (err) {
-      results.push({ id: name, ok: false, problems: [err.message.split('\n')[0]] });
-      console.error(`✖ ${name}: ${err.message.split('\n').slice(0, 4).join('\n    ')}`);
+    // A step can now and then miss its moment in a headless browser: a group that fails gets one more go.
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const before = results.length;
+      try {
+        await run(browser);
+        break;
+      } catch (err) {
+        console.error(`✖ ${name} (attempt ${attempt}): ${err.message.split('\n').slice(0, 4).join('\n    ')}`);
+        if (attempt === 2) results.push({ id: name, ok: false, problems: [err.message.split('\n')[0]] });
+        else results.splice(before);
+      }
     }
   }
 } finally {

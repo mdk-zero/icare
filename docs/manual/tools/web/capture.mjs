@@ -27,6 +27,10 @@ const opt = (name, fallback) => {
   return i >= 0 ? args[i + 1] : fallback;
 };
 const BASE = opt("--base", "http://localhost:3100").replace(/\/$/, "");
+// The address the browser shows. Pages that print their own address (the
+// student web app, the app link) then read as the live site, while every
+// request is answered by the local server at BASE.
+const SITE = opt("--site", "https://www.i-care.dev").replace(/\/$/, "");
 const ONLY = (opt("--only", "") || "").split(",").map((s) => s.trim()).filter(Boolean);
 const HEADED = args.includes("--headed");
 
@@ -84,11 +88,26 @@ async function openPage(row) {
     reducedMotion: "reduce",
   });
   await context.clock.setFixedTime(CLOCK);
+  // Everything for SITE is fetched from BASE; nothing goes to the real site.
+  await context.route(`${SITE}/**`, async (route) => {
+    const url = BASE + route.request().url().slice(SITE.length);
+    // The error reporter's tunnel would pass these sessions on to the
+    // project's real Sentry; answer it here instead.
+    if (new URL(url).pathname.startsWith("/monitoring")) return route.fulfill({ status: 200, body: "" });
+    try {
+      const response = await route.fetch({ url, maxRedirects: 0 });
+      const headers = response.headers();
+      if (headers.location) headers.location = headers.location.split(BASE).join(SITE);
+      await route.fulfill({ response, headers });
+    } catch {
+      await route.abort().catch(() => {});
+    }
+  });
   // Demo rows must never reach the API. Public rows (the sign-in and contact
-  // pages) may ask the server for nothing more than its build id.
+  // pages) may ask the local server for nothing more than its build id.
   await context.route("**/api/**", (route) => {
     const req = route.request();
-    if (!row.role) return route.continue();
+    if (!row.role) return route.fallback();
     leaks.push(`${row.id}: ${req.method()} ${new URL(req.url()).pathname}`);
     return route.abort();
   });
@@ -121,7 +140,7 @@ const DEMO_LABEL = { faculty: "Instructor", dean: "Dean", pc: "Program Chair" };
 
 /** Starts the role's demo the way a visitor does. */
 async function startDemo(page, role) {
-  await page.goto(`${BASE}/login`);
+  await page.goto(`${SITE}/login`);
   if (role === "admin") {
     // The picker offers no Admin demo: set what startDemo() sets.
     await page.evaluate((viewer) => {
@@ -131,7 +150,7 @@ async function startDemo(page, role) {
       localStorage.setItem("icare_token", "logged_in");
       document.cookie = "icare_demo=super_admin; path=/; SameSite=Lax";
     }, ADMIN_VIEWER);
-    await page.goto(`${BASE}/admin`);
+    await page.goto(`${SITE}/admin`);
   } else {
     await page.getByRole("button", { name: /try a demo/i }).click();
     await page.getByRole("dialog").getByRole("button", { name: new RegExp(`^${DEMO_LABEL[role]}`) }).click();
@@ -142,7 +161,7 @@ async function startDemo(page, role) {
 
 /** Navigates within the demo with a full load, then waits for the page to settle. */
 async function go(page, route) {
-  await page.goto(`${BASE}${route}`);
+  await page.goto(`${SITE}${route}`);
   await settle(page);
 }
 
@@ -221,15 +240,22 @@ async function save(row, buffer) {
   console.log(`  wrote ${row.file} (${kb} KB)`);
 }
 
+/** Takes focus off any field, so no focus ring shows. */
+async function blur(page) {
+  await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
+}
+
 const shot = {
   /** The whole viewport. */
   async viewport(page, row) {
     await dismissToasts(page);
+    await blur(page);
     await save(row, await page.screenshot());
   },
   /** One or more elements, PAD around their union. */
   async of(page, row, locators, pad = PAD) {
     await dismissToasts(page);
+    await blur(page);
     const list = Array.isArray(locators) ? locators : [locators];
     await fitHeight(page, list[0]);
     await save(row, await page.screenshot({ clip: await clipOf(page, list, pad) }));
@@ -237,6 +263,7 @@ const shot = {
   /** A fixed rectangle. */
   async clip(page, row, clip) {
     await dismissToasts(page);
+    await blur(page);
     await save(row, await page.screenshot({ clip }));
   },
 };
@@ -476,6 +503,292 @@ row("COM-13", "common/13-report-preview.png", "faculty", async (page, r) => {
   await shot.of(page, r, d);
 });
 
+// --- admin (Admin demo) --------------------------------------------------------
+
+/** Picks the option whose text matches, in a native select. */
+async function choose(select, pattern) {
+  const value = await select.evaluate((el, src) => {
+    const re = new RegExp(src);
+    const opt = [...el.options].find((o) => re.test(o.textContent.trim()));
+    return opt ? opt.value : null;
+  }, pattern.source);
+  if (value === null) throw new Error(`no option matching ${pattern}`);
+  await select.selectOption(value);
+}
+
+row("ADM-01", "admin/01-dashboard.png", "admin", async (page, r) => {
+  await shot.viewport(page, r);
+});
+
+row("ADM-02", "admin/02-status-banner.png", "admin", async (page, r) => {
+  await page.getByRole("button", { name: "Check System Health Status" }).click();
+  await page.getByRole("button", { name: "Check System Health Status" }).waitFor({ timeout: 15_000 });
+  await settle(page);
+  await shot.of(page, r, page.locator('section[aria-labelledby="system-status"]'));
+});
+
+row("ADM-03", "admin/03-users.png", "admin", async (page, r) => {
+  await go(page, "/admin/users");
+  await page.getByRole("radio", { name: /^All accounts/ }).click();
+  await settle(page);
+  await shot.viewport(page, r);
+});
+
+row("ADM-04", "admin/04-new-account.png", "admin", async (page, r) => {
+  await go(page, "/admin/users");
+  await page.getByRole("button", { name: "New account" }).first().click();
+  const d = page.getByRole("dialog", { name: "New account" });
+  await d.waitFor();
+  await d.locator("#acct-name").fill("Lorna Dizon");
+  await d.locator("#acct-email").fill("lorna.dizon@demo.icare.ph");
+  await choose(d.locator("#acct-role"), /^Instructor$/);
+  await choose(d.locator("#acct-sex"), /^Female \(Ms\.\)$/);
+  await choose(d.locator("#acct-owner"), /^Ramon Castillo/);
+  await page.waitForTimeout(300);
+  // Don't save: the demo would show its demo-only temporary password.
+  await shot.of(page, r, d);
+});
+
+row("ADM-05", "admin/05-account-request.png", "admin", async (page, r) => {
+  await bellPopover(page, r);
+});
+
+row("ADM-06", "admin/06-account-from-request.png", "admin", async (page, r) => {
+  await page.getByRole("button", { name: /^Notifications/ }).first().click();
+  const pop = page.getByRole("dialog", { name: "Notifications" });
+  await pop.getByRole("button", { name: "Accept" }).first().click();
+  await page.waitForURL(/\/admin\/users/);
+  const d = page.getByRole("dialog", { name: "New account" });
+  await d.waitFor();
+  await settle(page);
+  await shot.of(page, r, d);
+});
+
+row("ADM-07", "admin/07-edit-account.png", "admin", async (page, r) => {
+  await go(page, "/admin/users");
+  await page.locator("tr", { hasText: "Jose Reyes" }).getByRole("button", { name: "Edit account" }).click();
+  const d = page.getByRole("dialog", { name: "Edit account" });
+  await d.waitFor();
+  await settle(page);
+  await shot.of(page, r, d);
+});
+
+async function composeAnnouncement(page) {
+  await go(page, "/admin/announcements");
+  await page.getByRole("radio", { name: "By Role" }).click();
+  await page.locator("label", { hasText: /^Instructors/ }).locator("input").check();
+  await page.getByPlaceholder("e.g. System maintenance on Saturday").fill("System maintenance on Saturday");
+  await page
+    .getByPlaceholder(/What should/)
+    .fill(
+      "iCARE++ will be offline this Saturday from 8:00 to 10:00 AM while we update the system.\nSave any grading you are doing before 8:00 AM.",
+    );
+  await page.waitForTimeout(400);
+}
+
+row("ADM-08", "admin/08-announcement.png", "admin", async (page, r) => {
+  await composeAnnouncement(page);
+  const card = await cardAround(page, page.locator("#title, input[placeholder^='e.g.']"), page.getByRole("button", { name: "Send Announcement" }));
+  await shot.of(page, r, card);
+});
+
+row("ADM-09", "admin/09-announcement-confirm.png", "admin", async (page, r) => {
+  await composeAnnouncement(page);
+  await page.getByRole("button", { name: "Send Announcement" }).click();
+  // ConfirmModal has no dialog role: take its card.
+  const d = page.locator("div.fixed.inset-0 > div.bg-surface", { hasText: "Send this announcement?" });
+  await d.waitFor();
+  await page.waitForTimeout(500);
+  // Never select Send Now.
+  await shot.of(page, r, d);
+});
+
+row("ADM-10", "admin/10-support-requests.png", "admin", async (page, r) => {
+  await go(page, "/admin/support");
+  await page.getByRole("radio", { name: /^Needs Reply/ }).click().catch(() => page.getByText("Needs Reply").first().click());
+  await page.locator('section[aria-label="Requests"] button, section[aria-label="Requests"] li').first().click();
+  await settle(page);
+  const box = page.getByPlaceholder(/^Hi /);
+  await box.fill("Hi Maria, thank you for the screenshot. We have found the cause and will fix the Group B results today.");
+  await box.scrollIntoViewIfNeeded();
+  await page.locator("body").click({ position: { x: 1435, y: 895 } });
+  await page.waitForTimeout(400);
+  await shot.viewport(page, r);
+});
+
+row("ADM-11", "admin/11-activity-log.png", "admin", async (page, r) => {
+  await go(page, "/admin/audit");
+  await shot.viewport(page, r);
+});
+
+row("ADM-12", "admin/12-system-performance.png", "admin", async (page, r) => {
+  await go(page, "/admin/performance");
+  await page.getByRole("radio", { name: "24 hours" }).click();
+  await settle(page);
+  await shot.viewport(page, r);
+});
+
+row("ADM-13", "admin/13-system-tests.png", "admin", async (page, r) => {
+  await go(page, "/admin/tests");
+  const health = page.locator("section#health");
+  await health.getByRole("button", { name: "Check System Health Status" }).click();
+  await health.getByRole("button", { name: "Check System Health Status" }).waitFor({ timeout: 15_000 });
+  await settle(page);
+  await scroller(page).evaluate((el) => el.scrollTo(0, 0));
+  await shot.of(page, r, [page.locator('nav[aria-label="Test suites"]'), health]);
+});
+
+row("ADM-14", "admin/14-student-web-app.png", "admin", async (page, r) => {
+  await go(page, "/admin/student-web");
+  await shot.viewport(page, r);
+});
+
+// --- dean (Dean demo) ----------------------------------------------------------
+
+/** The Dean's Students page with a section's roster open. */
+async function openRoster(page, section) {
+  await go(page, "/dean/student-management");
+  await page.getByRole("button", { name: `View ${section} roster` }).click();
+  await settle(page);
+}
+
+row("DEAN-01", "dean/01-overview.png", "dean", async (page, r) => {
+  await shot.viewport(page, r);
+});
+
+row("DEAN-02", "dean/02-students.png", "dean", async (page, r) => {
+  await go(page, "/dean/student-management");
+  await shot.viewport(page, r);
+});
+
+row("DEAN-03", "dean/03-section-roster.png", "dean", async (page, r) => {
+  await openRoster(page, "BSN 3101");
+  await shot.viewport(page, r);
+});
+
+row("DEAN-04", "dean/04-bulk-enroll.png", "dean", async (page, r) => {
+  await openRoster(page, "BSN 3101");
+  await page.getByRole("button", { name: /Bulk enroll/ }).click();
+  const d = page.getByRole("dialog").filter({ hasText: "Add a student by hand" });
+  await d.waitFor();
+  const people = [
+    ["Rina", "Soriano", "rina.soriano@student.demo.icare.ph", "female"],
+    ["Paulo", "Medina", "paulo.medina@student.demo.icare.ph", "male"],
+  ];
+  for (const [i, [first, last, email, sex]] of people.entries()) {
+    const n = i + 1;
+    if ((await d.getByLabel(`Student ${n} first name`).count()) === 0) {
+      await d.getByRole("button", { name: /Add a student by hand/ }).click();
+    }
+    await d.getByLabel(`Student ${n} first name`).fill(first);
+    await d.getByLabel(`Student ${n} last name`).fill(last);
+    await d.getByLabel(`Student ${n} email`).fill(email);
+    await d.getByLabel(`Student ${n} sex`).selectOption(sex);
+    await d.getByLabel(`Student ${n} group`).fill("Group A");
+  }
+  await page.waitForTimeout(400);
+  // Never select Enroll.
+  await shot.of(page, r, d);
+});
+
+row("DEAN-05", "dean/05-edit-groups.png", "dean", async (page, r) => {
+  await openRoster(page, "BSN 3101");
+  await page.getByRole("radio", { name: /Edit groups/ }).click();
+  await settle(page);
+  await shot.viewport(page, r);
+});
+
+row("DEAN-06", "dean/06-instructors.png", "dean", async (page, r) => {
+  await go(page, "/dean/instructors");
+  await shot.viewport(page, r);
+});
+
+row("DEAN-07", "dean/07-assign-groups.png", "dean", async (page, r) => {
+  await go(page, "/dean/instructors");
+  await page.getByRole("button", { name: "Actions for Maria Santos" }).click();
+  await page.getByRole("menuitem", { name: "Assign Groups" }).click();
+  const d = page.locator('[role="dialog"][aria-labelledby="assign-groups-title"]');
+  await d.waitFor();
+  await settle(page);
+  await shot.of(page, r, d);
+});
+
+row("DEAN-08", "dean/08-program-chairs.png", "dean", async (page, r) => {
+  await go(page, "/dean/program-chairs");
+  await shot.viewport(page, r);
+});
+
+row("DEAN-09", "dean/09-curriculum.png", "dean", async (page, r) => {
+  await go(page, "/dean/curriculum");
+  await shot.viewport(page, r);
+});
+
+row("DEAN-10", "dean/10-courses.png", "dean", async (page, r) => {
+  await go(page, "/dean/courses");
+  await shot.viewport(page, r);
+});
+
+row("DEAN-11", "dean/11-add-course.png", "dean", async (page, r) => {
+  await go(page, "/dean/courses/new");
+  // Semester and year stay on the current term; then the course and instructor.
+  // The plan's NCM 103 isn't in the demo curriculum's first-semester list.
+  await choose(page.locator("select", { has: page.locator("option", { hasText: "Choose a course" }) }), /^NCM 105L/);
+  await choose(page.locator("select", { has: page.locator("option", { hasText: "Choose an instructor" }) }), /^Liza Fernandez/);
+  await page.waitForTimeout(400);
+  await shot.clip(page, r, await mainArea(page));
+});
+
+row("DEAN-12", "dean/12-room-layout.png", "dean", async (page, r) => {
+  await go(page, "/dean/wards");
+  await page.getByRole("button", { name: "Room Layout" }).first().click();
+  await settle(page);
+  await shot.viewport(page, r);
+});
+
+row("DEAN-13", "dean/13-edit-layout.png", "dean", async (page, r) => {
+  await go(page, "/dean/wards");
+  await page.getByRole("button", { name: "Edit Layout" }).click();
+  await settle(page);
+  await page.getByRole("button", { name: /Add Room/ }).first().scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
+  await shot.viewport(page, r);
+});
+
+row("DEAN-14", "dean/14-admit-patient.png", "dean", async (page, r) => {
+  await go(page, "/dean/wards");
+  // Tall enough for the whole form; the dialog's height follows the window.
+  await page.setViewportSize({ width: DESKTOP.width, height: 1500 });
+  await page.getByRole("button", { name: /Admit Patient/ }).click();
+  const d = page.locator("div.bg-surface.max-w-2xl", { has: page.getByRole("heading", { name: "Add Patient" }) });
+  await d.waitFor();
+  await settle(page);
+  await shot.of(page, r, d);
+});
+
+row("DEAN-15", "dean/15-analytics.png", "dean", async (page, r) => {
+  await go(page, "/dean/analytics");
+  await shot.viewport(page, r);
+});
+
+row("DEAN-16", "dean/16-reports.png", "dean", async (page, r) => {
+  await go(page, "/dean/reports");
+  await shot.viewport(page, r);
+});
+
+row("DEAN-17", "dean/17-grade-change.png", "dean", async (page, r) => {
+  await bellPopover(page, r);
+});
+
+// --- program-chair (Program Chair demo) ----------------------------------------
+
+row("PC-01", "program-chair/01-sidebar.png", "pc", async (page, r) => {
+  await shot.of(page, r, page.locator("aside").first(), 0);
+});
+
+row("PC-02", "program-chair/02-overview-header.png", "pc", async (page, r) => {
+  await shot.of(page, r, scroller(page).locator("header").first());
+});
+
 // @@ROWS@@
 
 // ---------------------------------------------------------------------------
@@ -500,6 +813,7 @@ for (const r of wanted) {
     await page.screenshot({ path: where }).catch(() => {});
     console.log(`  page at failure: ${where}`);
   } finally {
+    await context.unrouteAll({ behavior: "ignoreErrors" });
     await context.close();
   }
 }
