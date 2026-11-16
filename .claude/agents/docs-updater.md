@@ -43,10 +43,11 @@ Write plainly: short sentences, the names the UI uses, no marketing tone. Match 
 the document you are editing.
 
 **How students get the app.** Students use the native mobile app: the Android APK now, and the
-Apple App Store for iPhones. The student web portal at `/student` is only a backup. It goes
-live only if the panel agrees to deploy it on the web instead of the App Store. No document
-should present it as the way iPhone students get the app, and no diagram should draw it as a
-student channel unless the user says the panel approved it.
+Apple App Store for iPhones. The student web portal at `/student` is the same app built for
+browsers. The panel has approved students using it (user, 2026-11-16), so the system
+architecture draws it as a student channel: the "Student Web App" edge from the Web Portal to
+the Student Nurse, and the "Student App (Mobile & Web)" box. Keep both. No document should
+present it as the way iPhone students get the app unless the user says so.
 
 ## Diagram rules
 
@@ -104,11 +105,14 @@ goes in your report as stale, for the user to decide.
 | `system-architecture.drawio` | `img/system-architecture-icare.png` |
 
 `img/system-architecture.png` is the user's own export of the system architecture. Leave it
-alone and say in your report if it no longer matches the `.drawio`.
+alone and say in your report if it no longer matches the `.drawio`. (On 2026-11-16 both PNGs
+were written from the same export.)
 
 Export only the diagrams you changed. Render with the draw.io viewer
 (`https://viewer.diagrams.net/js/viewer-static.min.js`) in headless Chromium at device scale
-1 and border 0, then screenshot the rendered diagram's element. Playwright is in
+1 and border 0, then screenshot the rendered diagram's element. Helvetica isn't installed, so
+load Arimo from Google Fonts and force it on `svg text, svg foreignObject *`; without it the
+labels come out in a monospace font at the same image size. Playwright is in
 `web/node_modules/playwright` and its browsers are in `~/.cache/ms-playwright`. Put the export
 script in the session's scratchpad, not in the repo.
 
