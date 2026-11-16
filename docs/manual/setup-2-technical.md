@@ -822,6 +822,10 @@ After a change to the screens, retake the manual's screenshots with the scripts 
 [`tools/phone/`](tools/phone/) for the phone screens, which use a browser build of the app with
 made-up data. Neither needs an account or writes to the database.
 
+Then rebuild the printable copy, `iCARE-User-Manual.docx`, with the scripts in
+[`tools/docx/`](tools/docx/). It is made from these guides, so change the guides, not the
+.docx.
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
