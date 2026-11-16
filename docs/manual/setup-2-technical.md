@@ -228,6 +228,9 @@ To create the first Admin:
 4. If you haven't set up Google sign-in, give the account a temporary password instead. It must
    be changed at the first sign-in:
 
+   Replace `<temporary password>`, angle brackets included, with a long random password, for
+   example the output of `openssl rand -base64 18`:
+
    ```sql
    update public.users
    set password_hash = crypt('<temporary password>', gen_salt('bf', 10)),
@@ -660,7 +663,8 @@ The change takes effect within about 15 seconds and needs no migration. While it
 
 - Students sign in at `https://www.i-care.dev/student` with their usual account. Staff are
   refused there.
-- An iPhone that opens `/download` is sent there.
+- While it is on, `/download` redirects iPhones to `/student` (`web/app/download/route.ts`). This
+  is a stopgap, not an iPhone version.
 - Browsers get no push notifications, so each notification is also emailed to students who used
   the web app in the last 7 days, unless they turned off email notifications.
 
@@ -827,7 +831,7 @@ made-up data. Neither needs an account or writes to the database.
 | ML runs fail with 401. | `ML_SERVICE_SECRET` differs between Vercel, Render and GitHub. | Make all three the same. |
 | Two sets of nightly notifications arrive. | The service's own scheduler and the nightly workflow both ran. | Set `ML_SCHEDULE_ENABLED` to `false`, or disable the workflow. |
 | The app stops loading after an update. | The update was published with a bare `eas update`, so it has no API address. | Republish with `npm run publish-update`. |
-| `publish-update` stops with "mobile/ has uncommitted changes". | Uncommitted files would ship in the update. | Commit or stash them. |
+| `publish-update` stops with "mobile/ has uncommitted changes". | Uncommitted files would ship in the update. | Commit them first. |
 | `publish-update` stops with "node_modules doesn't match package-lock.json". | Dependencies changed without an install. | Run `npm ci` in `mobile/`. |
 | Some phones never get an update. | Their APK has an older runtime. | They install the new APK from `www.i-care.dev/download`. |
 | `/download` says "The app isn't available yet". | `MOBILE_APP_URL` is unset or doesn't start with `https://`. | Set it and redeploy. |

@@ -62,7 +62,7 @@ from that address is already waiting, the page shows "Request already submitted"
 you can select **Send follow-up** to add to your request.
 
 **Who is notified:** Every Admin gets the notification "Account request from" followed by your
-name.
+name. The iCARE++ team's inboxes also get the request by email.
 
 **What happens next:** An Admin accepts the request and creates your account
 ([Create an account](admin.md#create-an-account)), and your welcome email arrives. If the request
@@ -270,7 +270,7 @@ Settings", with **Not now** and **Open Settings**. Tap **Open Settings** to allo
 phone's settings.
 
 Students can change these later in **Profile**, under **Settings**. Instructors can change them
-in the phone's own settings for the iCARE++ app.
+in the **Me** tab, under **Settings**.
 
 ### Sign in
 

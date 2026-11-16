@@ -548,7 +548,7 @@ team." appears. A copy of your message goes to your email, with the subject "We 
 message:" followed by your subject. Select **Write Another Message** to send another.
 
 **Who is notified:** Every Admin gets the notification "Support request from" followed by your
-name.
+name. The iCARE++ team's inboxes also get your message by email.
 
 **What happens next:** An Admin replies by email ([When the team replies](#when-the-team-replies)).
 

@@ -789,6 +789,223 @@ row("PC-02", "program-chair/02-overview-header.png", "pc", async (page, r) => {
   await shot.of(page, r, scroller(page).locator("header").first());
 });
 
+// --- instructor (Instructor demo) ----------------------------------------------
+
+/** Scrolls the Shell's own container, so a page's lower part comes into the frame. */
+async function scrollTo(page, y) {
+  await scroller(page).evaluate((el, top) => el.scrollTo(0, top), y);
+  await page.waitForTimeout(400);
+}
+
+/** The Instructor's Students page with a section's roster open. */
+async function openInstructorRoster(page, course, section) {
+  await go(page, "/instructor/teams");
+  await page.getByRole("button", { name: `View sections: ${course}` }).first().click();
+  await page.getByRole("button", { name: `View roster: ${section}` }).click();
+  await settle(page);
+}
+
+/** The card of a Patient Case on the Patient Cases page, found by part of its title. */
+function patientCaseCard(page, title) {
+  return page
+    .getByText(title, { exact: false })
+    .first()
+    .locator("xpath=ancestor::*[.//button[contains(.,'Actions')]][1]");
+}
+
+/** Opens a Patient Case's Review Submissions page. */
+async function openReview(page, title) {
+  await go(page, "/instructor/scenarios");
+  await patientCaseCard(page, title).getByRole("button", { name: /Review/ }).click();
+  await page.waitForURL(/\/instructor\/scenarios\/review/);
+  await settle(page);
+}
+
+row("INS-01", "instructor/01-overview-cards.png", "faculty", async (page, r) => {
+  // Short enough to end under the two cards, so the next section's label
+  // isn't cut in half; the sidebar, with its Demo chip, stays in frame.
+  await page.setViewportSize({ width: DESKTOP.width, height: 782 });
+  await page.waitForTimeout(500);
+  await shot.viewport(page, r);
+});
+
+row("INS-02", "instructor/02-students.png", "faculty", async (page, r) => {
+  await go(page, "/instructor/teams");
+  await shot.viewport(page, r);
+});
+
+row("INS-03", "instructor/03-edit-groups.png", "faculty", async (page, r) => {
+  await openInstructorRoster(page, "NCM 101", "BSN 3101");
+  await page.getByRole("radio", { name: /Edit groups/ }).click();
+  await settle(page);
+  // Scrolled to the end, so the group cards and "Not in a group" are both in frame.
+  await scrollTo(page, 10_000);
+  await shot.viewport(page, r);
+});
+
+row("INS-04", "instructor/04-student-profile.png", "faculty", async (page, r) => {
+  await openInstructorRoster(page, "NCM 101", "BSN 3101");
+  await page.getByRole("button", { name: "View Mark Anthony Cruz's profile" }).click();
+  await page.waitForURL(/\/instructor\/students\//);
+  await settle(page);
+  await scrollTo(page, 0);
+  await shot.viewport(page, r);
+});
+
+row("INS-05", "instructor/05-course-criteria.png", "faculty", async (page, r) => {
+  await go(page, "/instructor/courses");
+  await page.getByRole("link", { name: "NCM 101" }).first().click();
+  await page.waitForURL(/\/instructor\/courses\/[^/?]+$/);
+  await settle(page);
+  await shot.viewport(page, r);
+});
+
+// The Progress grid for the current NCM 101. Since the automatic grading split
+// (070) the grid takes no scores ("Scores can't be entered here"), so the shot
+// is the grid itself, not a score dialog.
+row("INS-06", "instructor/06-progress.png", "faculty", async (page, r) => {
+  await go(page, "/instructor/courses");
+  await page.getByRole("link", { name: "NCM 101" }).first().click();
+  await page.waitForURL(/\/instructor\/courses\/[^/?]+$/);
+  await settle(page);
+  await page.getByRole("tab", { name: /^Progress/ }).click();
+  await settle(page);
+  await shot.viewport(page, r);
+});
+
+row("INS-07", "instructor/07-patient-cases.png", "faculty", async (page, r) => {
+  await go(page, "/instructor/scenarios");
+  await shot.viewport(page, r);
+});
+
+row("INS-08", "instructor/08-create-patient-case.png", "faculty", async (page, r) => {
+  await go(page, "/instructor/scenarios/new");
+  await page.getByRole("radio", { name: /^NCM 101/ }).click();
+  await page.getByPlaceholder(/Search name/).fill("Rosa");
+  await page.getByText("Rosa Delgado").first().click();
+  // The room defaults to where the patient already is (Room 201).
+  await page.getByRole("radio", { name: /Room 201/ }).waitFor();
+  await page.waitForTimeout(500);
+  await shot.viewport(page, r);
+});
+
+row("INS-09", "instructor/09-assign-patient-case.png", "faculty", async (page, r) => {
+  await go(page, "/instructor/scenarios");
+  await patientCaseCard(page, "Fever Workup").getByRole("button", { name: /Actions/ }).click();
+  await page.getByRole("menuitem", { name: /Assign/ }).click();
+  const d = page.locator('[role="dialog"][aria-labelledby="assign-students-title"]');
+  await d.waitFor();
+  await d.locator("input[type=date]").fill("2026-11-23");
+  // Group A of BSN 3101 already has this case in the demo, so tick Group B.
+  const group = d.getByLabel("Select all of BSN 3101 Group B");
+  await group.check();
+  await group.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(400);
+  await shot.of(page, r, d);
+});
+
+row("INS-10", "instructor/10-grading.png", "faculty", async (page, r) => {
+  await openReview(page, "Fever Workup");
+  await page.getByRole("button", { name: /BSN 3102 · Group A/ }).first().click();
+  await page.getByRole("button", { name: /^Camille Robles/ }).click();
+  await settle(page);
+  const excellent = page.getByRole("radio", { name: /: Excellent, 3 points/ });
+  const satisfactory = page.getByRole("radio", { name: /: Satisfactory, 2 points/ });
+  await excellent.nth(0).click();
+  await excellent.nth(1).click();
+  await satisfactory.nth(2).click();
+  await excellent.nth(3).click();
+  await page.waitForTimeout(500);
+  // The student's header, with the projected grade, and the first rows. Never save.
+  await scrollTo(page, 300);
+  await shot.viewport(page, r);
+});
+
+row("INS-11", "instructor/11-request-edit.png", "faculty", async (page, r) => {
+  await openReview(page, "Fever Workup");
+  await page.getByRole("button", { name: /^Joshua Mendoza/ }).click();
+  await settle(page);
+  await page.getByRole("button", { name: "Request edit" }).click();
+  // The dialog has no dialog role: take its card.
+  const d = page.locator("div.fixed.inset-0 > div.bg-surface", { hasText: "Ask to change this grade" });
+  await d.waitFor();
+  await d.getByPlaceholder("Why does the grade need to change?").fill(
+    "I rated the pulse steps against the wrong checklist and need to correct them.",
+  );
+  await page.waitForTimeout(400);
+  // Never select Send request.
+  await shot.of(page, r, d);
+});
+
+row("INS-12", "instructor/12-return-demo-new.png", "faculty", async (page, r) => {
+  // Tall enough for the form down to the skill list.
+  await page.setViewportSize({ width: DESKTOP.width, height: 1250 });
+  await go(page, "/instructor/return-demos/new");
+  await page.getByRole("radio", { name: /^NCM 101/ }).click();
+  await page.getByPlaceholder(/Vital Signs Return/).fill("Blood Pressure Return Demonstration");
+  await page.getByRole("button", { name: /^Chapter 1 · Vital Signs/ }).click();
+  await page.locator("label", { hasText: /^\s*1-7/ }).first().click();
+  await page.waitForTimeout(500);
+  await shot.viewport(page, r);
+});
+
+row("INS-13", "instructor/13-quiz-editor.png", "faculty", async (page, r) => {
+  await go(page, "/instructor/assessments");
+  await page.getByRole("button", { name: /New Quiz/ }).click();
+  await page.waitForURL(/\/instructor\/assessments\/new/);
+  await settle(page);
+  await page.getByRole("radio", { name: /^NCM 101/ }).click();
+  await page.getByPlaceholder("e.g. Vital Signs Fundamentals").fill("Blood Pressure Check");
+  await page.getByRole("radio", { name: /With AI/ }).click();
+  await page.locator("#ai-skill").selectOption("1-7");
+  await page.getByRole("button", { name: /Create & Generate Quiz/ }).click();
+  await page.waitForURL(/\/instructor\/assessments\/(?!new)[^/]+$/, { timeout: 60_000 });
+  await page.getByText(/^Questions \(\d+\)/).waitFor({ timeout: 30_000 });
+  await settle(page);
+  await page.waitForTimeout(1500); // the "questions drafted" toasts
+  await dismissToasts(page);
+  await shot.viewport(page, r);
+});
+
+row("INS-14", "instructor/14-grade-group.png", "faculty", async (page, r) => {
+  await go(page, "/instructor/cases");
+  const card = page
+    .getByText("Case Presentation 1: A patient from your first ward week", { exact: false })
+    .first()
+    .locator("xpath=ancestor::*[.//button[contains(.,'Review')]][1]");
+  await card.getByRole("button", { name: /Review/ }).click();
+  await page.waitForURL(/\/instructor\/cases\/[^/]+$/);
+  await settle(page);
+  await page.getByRole("button", { name: /Group B.*BSN 3101/ }).click();
+  await settle(page);
+  // The demo's slide viewer reads "can't be previewed", so crop to the rubric.
+  const criteria = page.getByRole("radiogroup");
+  for (const [i, level] of [0, 1, 0].entries()) await criteria.nth(i).getByRole("radio").nth(level).click();
+  await page.waitForTimeout(500);
+  const title = page.getByRole("heading", { name: "Rubric" });
+  const rubric = title.locator("xpath=ancestor::section[1]");
+  // Its title, and the three rated criteria.
+  const header = title.locator("xpath=../..");
+  const third = criteria.nth(2).locator("xpath=..");
+  await page.setViewportSize({ width: DESKTOP.width, height: 1300 });
+  await page.waitForTimeout(400);
+  const top = (await rubric.boundingBox()).y;
+  await scrollTo(page, (await scroller(page).evaluate((el) => el.scrollTop)) + top - PAD);
+  await shot.of(page, r, [header, third]);
+});
+
+row("INS-15", "instructor/15-library.png", "faculty", async (page, r) => {
+  await go(page, "/instructor/library");
+  await page.getByRole("button", { name: /Assessing Brachial Artery Blood Pressure/ }).click();
+  await settle(page);
+  await shot.viewport(page, r);
+});
+
+row("INS-16", "instructor/16-analytics.png", "faculty", async (page, r) => {
+  await go(page, "/instructor/analytics");
+  await shot.viewport(page, r);
+});
+
 // @@ROWS@@
 
 // ---------------------------------------------------------------------------

@@ -361,7 +361,7 @@ To find a quiz:
 
 2. On the **On going** tab, find the quiz. Each row shows the title, the number of questions, the time limit (or "Untimed") and who set it. Tags show **Required**, the due date (for example "Due Nov 20") or "Not started", and the quiz's category.
 
-   <img src="img/student/07-quizzes.png" alt="The Quizzes tab listing quizzes with due dates, Required and attempts." width="300">
+   <img src="img/student/07-quizzes.png" alt="The Quizzes tab on On going, listing quizzes with their question counts, time limits, Required, a due date or Not started, and the category." width="300">
 
    *Figure 7. The On going tab of Quizzes, with each quiz's questions, time limit and due date.*
 
@@ -557,7 +557,7 @@ Performance shows your quiz average, your skill area scores, how well you know e
 The **Performance** screen shows:
 
 - **Overall Score** and **Quizzes Taken**: the average of all your graded quiz tries, and how many tries you have made.
-- **By Skill Area**: a bar for each skill area your instructor has scored. Until then it reads "No skill area scores yet — they appear as your instructor validates your work." You get the notification "Skill area score recorded" when a score is added.
+- **By Skill Area**: a bar for each skill area your quizzes have covered. The scores are worked out when you submit a quiz. Until then it reads "No skill area scores yet — they appear as your instructor validates your work."
 - **Skill Mastery (BKT)**: how likely it is that you know each skill. It is updated after every quiz answer and every finished Patient Case or Return Demonstration, and lists your weakest skills first, the same order a review quiz follows. 95% counts as mastered. Tap **Show 6 more** (the number varies) to see the rest.
 - **Quiz History**: each quiz with your latest score. Tap a quiz you have taken more than once to see each try.
 
@@ -589,7 +589,6 @@ Each notification shows a type badge, such as **Assignment**, **Validated**, **S
 | "Group slides uploaded" or "Group slides updated" | Your group leader uploads or replaces the slides | The Case Presentation |
 | "Case presentation graded" | Your instructor grades your group | The Case Presentation |
 | "New study note in the Library" (or video, handout, presentation or link) | An instructor publishes a study material | The material |
-| "Skill area score recorded" | Your instructor scores one of your skill areas | Nothing; see [Performance](#performance) |
 | "Support replied: …" and "Support request resolved: …" | The iCARE++ team answers your Help & Support message | Nothing; the full reply is in your email |
 | Announcements | The iCARE++ team sends a message to everyone | Nothing |
 
@@ -645,7 +644,7 @@ To change your name:
 
 **Result:** Your new name shows in the app and to your instructors.
 
-**Account details** shows your email, role and section, with "Email, role, and section are managed by your administrator." To change any of these, ask your instructor.
+**Account details** shows your email, role and section, with "Email, role, and section are managed by your administrator." To change any of these, send a message through [Help and Support](#help-and-support); an Admin changes them.
 
 ### Change your password
 

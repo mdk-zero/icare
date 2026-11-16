@@ -377,6 +377,9 @@ To edit an account:
 >   accounts are left with no Dean.
 > - Anyone who stops being a Student leaves their section and group.
 >
+> Changing between Dean and Program Chair is different: both keep the same access, so the person
+> isn't signed out, nothing is cleaned up, and the banner reads "Account saved".
+>
 > The page doesn't say if this clean-up fails. Afterwards, look at **Belongs to** for the old
 > links: a former Dean's instructors should read "No dean". If any old links remain, open the
 > account again and select **Save changes**, which repeats the clean-up.
@@ -962,7 +965,9 @@ While it is on:
   on the web, unless they turn that off in their settings.
 - The portal's sign-in page tells students who try to sign in there that they can use this
   address.
-- iPhones that open the app download link are offered this address instead.
+- While it is on, the app download link sends iPhones to this address, because there is no
+  iPhone version. That is a stopgap for a school that has chosen the web version, not an iPhone
+  app.
 
 While it is off, nobody can sign in there. Students already signed in on the web are signed out the
 next time they tap anything. Their work is kept, and the Android app isn't affected.

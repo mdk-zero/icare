@@ -14,7 +14,8 @@ In this guide:
 ## How the Program Chair role differs
 
 - You have every page of the Dean portal except **Program Chairs**.
-- You keep your own instructors, students, sections, groups, courses, semesters, curricula, rooms and patients. Your Dean doesn't see them, and you don't see your Dean's.
+- You keep your own instructors, students, sections, groups, courses, semesters, rooms and patients. Your Dean doesn't see them, and you don't see your Dean's.
+- The curriculum is the exception. If you belong to a Dean, you work on your Dean's curriculum, and choosing which one is in use changes it for both of you.
 - Your instructors send their grade change requests to you, not to your Dean.
 - Some labels say "Program Chair" where a Dean's say "Dean". See [What you see](#what-you-see).
 
@@ -28,7 +29,7 @@ Your Dean creates your account on their **Program Chairs** page, or an Admin cre
 
 Signing in, your first password, Google sign-in, **Remember me**, resetting a forgotten password, notifications, your settings and Help & Support work as for every web portal user. See [Sign in to the web portal for the first time](setup-1-getting-started.md#sign-in-to-the-web-portal-for-the-first-time) and [Common tasks in the web portal](common-tasks.md).
 
-When you start, your portal is empty: you see nothing your Dean has set up. Begin with [Set up a new term](dean.md#set-up-a-new-term).
+When you start, your portal is empty apart from your Dean's curriculum: you see nothing else your Dean has set up. Begin with [Set up a new term](dean.md#set-up-a-new-term).
 
 ## What you see
 
@@ -57,7 +58,6 @@ These labels differ from a Dean's:
 | Settings page title | "Dean Administration" | "Program Chair Administration" |
 | **Reports**: the summary report, and the **Role** list of the **Users** report | "Dean summary", "Dean" | "Program Chair summary", "Program Chair" |
 | Welcome email to the instructors you add | "Your dean has created…" | "Your program chair has created…" |
-| **Activity Log** role list | "Dean / Program Chair" | "Dean / Program Chair" |
 
 > [!NOTE]
 > The card at the top of your settings page reads "iCARE++ · Dean". It is still your own Program Chair account.
@@ -65,16 +65,16 @@ These labels differ from a Dean's:
 ## What you cannot do
 
 - **Manage Program Chairs.** You have no **Program Chairs** page. If you open its address, you go back to the **Overview**.
-- **Change your own role or Dean.** Your account's details beyond your profile are kept by your Dean or an Admin.
+- **Change your own role or Dean.** Only an Admin can change these.
 
 > [!NOTE]
-> To change your account's role or the Dean it belongs to, ask your Dean or an Admin. You can reach an Admin through [Help & Support](common-tasks.md#send-a-message-to-the-icare-team).
+> To change your account's role or the Dean it belongs to, ask an Admin through [Help & Support](common-tasks.md#send-a-message-to-the-icare-team).
 
 You can still change your own photo, name, email and password in your settings. See [Open your settings](common-tasks.md#open-your-settings).
 
 ## Whose records you see
 
-Each Dean and each Program Chair sees only their own instructors, students, sections, rooms, patients, courses, semesters, curricula, Patient Cases, Quizzes and Library materials.
+Each Dean and each Program Chair sees only their own instructors, students, sections, rooms, patients, courses, semesters, Patient Cases, Quizzes and Library materials. A Program Chair who belongs to a Dean shares that Dean's curriculum.
 
 - Your Dean sees only your counts: how many instructors and students you have, on their **Program Chairs** page.
 - Grade change requests from your instructors come to you. See [Approve or decline a grade change](dean.md#approve-or-decline-a-grade-change).

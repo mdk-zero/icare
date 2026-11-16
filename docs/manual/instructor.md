@@ -77,7 +77,8 @@ The iCARE++ app has a short Instructor view for following course requirements on
 
 ## Overview
 
-The **Overview** is the portal's home page. Its title greets you by your surname, and the line
+The **Overview** is the portal's home page. Its title greets you as Sir or Ma'am with your surname (or by your first name when no sex is
+recorded), and the line
 under it sums up your day, for example "2 students need a look, 3 submissions are waiting for
 review." When nothing is pending it reads "Everyone is on track and nothing is waiting on you."
 
@@ -386,8 +387,8 @@ To read a student's profile, open it from the roster ([Find a student](#find-a-s
   - **Reflections**: what the student wrote after Patient Cases and Quizzes, their goals and the
     feedback they read.
   - **Requirements**: one block for each of your courses that covers this student, with what
-    they have met. Where allowed, **Enter score** opens the same dialog as
-    [Track progress and enter a score](#track-progress-and-enter-a-score).
+    they have met. It fills in from graded work, like the course's
+    [Progress tab](#track-progress).
 
 > [!NOTE]
 > Some text on the profile points to controls you don't have. When a student isn't scored yet,
@@ -486,31 +487,25 @@ The grade works like this:
 > the "set up its requirements checklist" in the "New course assignment" notification means the
 > same: there is nothing to set up.
 
-### Track progress and enter a score
+### Track progress
 
-The **Progress** tab shows every student against every item of the course. Enter a score here for
-work a student did outside iCARE++, such as a quiz taken on paper.
+The **Progress** tab shows every student against every item of the course. It fills in on its own
+as you grade work in iCARE++.
 
-![The Progress grid with the Enter a score dialog open for one student.](img/instructor/06-enter-score.png)
+![The Progress grid for NCM 101, with students down the side and the course's items across the top.](img/instructor/06-progress.png)
 
-*Figure 6. The Progress grid, with the Enter a score dialog open.*
+*Figure 6. The Progress grid for a course.*
 
-To enter a score:
+To see a course's progress:
 
 1. Open the course and select **Progress**. The grid shows students down the side, under their
    section and group, and the items across the top.
 2. Optional: Use **Search students**, the **All groups** list, or **All**, **Incomplete** and
    **Complete** to narrow the grid.
-3. Select the student's cell under the item. The **Enter a score** dialog opens.
-4. In the **Score** box, enter a number from 0 to 100.
-5. Optional: In the **Note** box, enter what the score is for.
-6. Select **Save score**.
 
-**Result:** The message "Score saved" appears and the cell shows the score.
-
-You can enter a score only where the student has no grade yet. Graded work can't be changed here;
-the dialog says why, for example "The student already has a grade on this; change it by regrading
-their work". Select a column header to see a summary of that item.
+A cell shows the student's best score on that item. The note under the grid says "Scores can't be
+entered here.": to change a score, grade or regrade the work itself. Select a column header to see
+a summary of that item.
 
 ### Add or remove a student
 
@@ -988,10 +983,10 @@ the N AI draft questions". The quiz is a draft, hidden from students.
 The quiz editor holds the quiz's details, its scoring criteria and its questions. Questions the
 AI wrote are drafts for you to review.
 
-![The quiz editor with its status line, Scoring Criteria and questions.](img/instructor/13-quiz-editor.png)
+![A new quiz in the quiz editor, with its status line, a note on what to fix before publishing, Scoring Criteria and questions.](img/instructor/13-quiz-editor.png)
 
-*Figure 13. The quiz editor, with the status line at the top, the Scoring Criteria and the
-questions.*
+*Figure 13. The quiz editor, with the status line at the top, the list of what to fix, the
+Scoring Criteria and the questions.*
 
 To build the question bank:
 
@@ -1039,7 +1034,8 @@ To assign a Quiz:
 For a quiz that is already visible, the dialog also offers **Hide from students**.
 
 **Who is notified:** Each newly assigned student gets "New quiz assigned": "You have been assigned
-"<title>"." Students who can newly see the quiz get "New quiz available".
+"<title>"." Students who weren't assigned but can see the quiz get "New quiz available" only when you
+make a hidden quiz visible again.
 
 **What happens next:** The student takes the quiz in the app's **Quizzes** tab
 ([Take a quiz](student.md#take-a-quiz)). It is graded automatically. You get no notification when
@@ -1310,7 +1306,8 @@ Notifications arrive in the bell and as a message in the corner of the page. To 
 | "Case presentation handed in" | A group's leader uploaded the slides | [Grade a group](#grade-a-group) |
 | "Grade change approved" | Your Dean or Program Chair accepted your request | Change the grade ([Ask to change a saved grade](#ask-to-change-a-saved-grade)) |
 | "Grade change declined" | Your Dean or Program Chair declined your request | Nothing, or ask again with a fuller reason |
-| "Support request resolved: <subject>" | The iCARE++ team closed your Help & Support message | Read their reply in your email |
+| "Support replied: <subject>" | The iCARE++ team answered your Help & Support message | Read the full reply in your email |
+| "Support request resolved: <subject>" | The iCARE++ team closed your Help & Support message | Nothing, or send a new message if it still isn't fixed |
 | Announcements | An Admin sent an announcement | Read it |
 
 You also may see alerts about abnormal vital signs. You get no notification when a student takes a
@@ -1372,8 +1369,8 @@ To mark a requirement done:
 To take a mark away, tap **Unmark**. The alert "Remove your mark?" says the item goes back to
 counting graded work only. Tap **Remove**.
 
-On the web, the same need is met with a score instead
-([Track progress and enter a score](#track-progress-and-enter-a-score)).
+On the web there is no mark: the course's Progress tab fills in only from graded work
+([Track progress](#track-progress)).
 
 ### Me tab
 

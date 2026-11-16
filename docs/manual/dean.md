@@ -55,7 +55,7 @@ Do these steps in this order at the start of a term. Each step needs the one bef
 | 6 | [Make groups and give each an instructor](#make-groups-and-give-each-an-instructor), or [assign groups to an instructor](#assign-groups-to-an-instructor) | **Students** > a section > **Edit groups**, or **Instructors** > **Assign Groups** | An instructor sees only the students in the groups they supervise. |
 | 7 | [Add rooms](#add-rooms-and-arrange-the-floor-plan) and [admit patients](#admit-a-patient) | **Wards** | Patient Cases take place on the ward. Admitting a patient needs a course (step 3). |
 | 8 | [Email the app link](#email-the-app-link-to-students) | **Students** > **Email to students** | For students who haven't signed in yet. |
-| 9 | Deans only: [add your Program Chairs](#add-a-program-chair) | **Program Chairs** > **Add Program Chair** | Each Program Chair then does steps 1 to 8 for their own people. |
+| 9 | Deans only: [add your Program Chairs](#add-a-program-chair) | **Program Chairs** > **Add Program Chair** | Each Program Chair then does steps 2 to 8 for their own people. They share your curriculum from step 1. |
 | 10 | [Work through Needs Your Attention](#work-through-needs-your-attention) | **Overview** | It lists what is still missing. |
 
 The risk check that marks students Low performing runs every night on its own. [Running it by hand](#run-the-risk-check) only matters once students have done some work.
@@ -888,7 +888,7 @@ To make a report:
 **Result:** The report is added to **Recent**, which keeps your reports on any device. Select **Generate this PDF again** beside one to make it again with today's figures.
 
 > [!NOTE]
-> In the **Rooms** report, "Full" and "*n* of *c* occupied" count the students assigned to each room, not its patients.
+> In the **Rooms** report, "Full" and "*n* of *c* occupied" come from room assignments, so they can differ from the patients on the **Wards** page.
 
 ## Approve or decline a grade change
 
