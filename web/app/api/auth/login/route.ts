@@ -8,8 +8,10 @@ import { STUDENT_WEB_OFF_MESSAGE, STUDENT_WEB_SIGNIN, STUDENT_WEB_STAFF_MESSAGE 
 
 // Password guessing: a cap per address (one attacker) and per account (a
 // botnet aimed at one inbox). Both count every attempt, right or wrong.
+// The address cap is loose because a whole class on campus Wi-Fi signs in
+// from one public IP; the account cap is what stops guessing.
 const WINDOW_MS = 15 * 60 * 1000;
-const MAX_PER_IP = 20;
+const MAX_PER_IP = 300;
 const MAX_PER_EMAIL = 10;
 
 export async function POST(request: NextRequest) {

@@ -12,7 +12,7 @@ import { evidence, observation } from './qa-helpers';
  *   TC-AUTH-06  every portal page sends a signed-out visitor to sign in, and remembers where they were going
  *   TC-AUTH-07  the contact form refuses an incomplete request without sending it
  *
- * The login route allows 10 attempts per email and 20 per address in 15
+ * The login route allows 10 attempts per email and 300 per address in 15
  * minutes, right or wrong, so these tests try as few as they can.
  */
 
