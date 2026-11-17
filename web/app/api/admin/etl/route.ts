@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { forgetAnalytics } from '@/app/lib/analytics';
 import { logAudit } from '@/app/lib/audit';
 
 /**
@@ -23,6 +24,7 @@ export async function POST(request: NextRequest) {
       console.error('Warehouse ETL failed', error);
       return NextResponse.json({ error: 'ETL run failed' }, { status: 500 });
     }
+    forgetAnalytics();
 
     await logAudit(
       session,

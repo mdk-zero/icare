@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { bucketStart, callAnalytics, resolveSummaryArgs, withStudentAvatars, type SummaryArgs } from '@/app/lib/analytics';
+import {
+  bucketStart,
+  callAnalytics,
+  forgetAnalytics,
+  resolveSummaryArgs,
+  withStudentAvatars,
+  type SummaryArgs,
+} from '@/app/lib/analytics';
 import { courseArgs, courseFigures, loadCourseScope, type CourseScope } from '@/app/lib/analytics-course';
 import { isMissingTeamTables, loadTeams, manageableSectionIds } from '@/app/lib/teams';
 import { viewerDeanId } from '@/app/lib/dean-scope';
@@ -178,7 +185,10 @@ async function readGroupTrend(
 let refreshing: ReturnType<typeof runRefresh> | null = null;
 
 function runRefresh(supabase: ReturnType<typeof getSupabaseAdmin>) {
-  return Promise.resolve(supabase.rpc('run_dw_etl')).then(({ error }) => ({ error }));
+  return Promise.resolve(supabase.rpc('run_dw_etl')).then(({ error }) => {
+    if (!error) forgetAnalytics();
+    return { error };
+  });
 }
 
 function refreshWarehouse(supabase: ReturnType<typeof getSupabaseAdmin>) {
@@ -221,6 +231,13 @@ export async function GET(request: NextRequest) {
     }
     let summary = data as Summary;
 
+    // A stale-looking result may only be this instance's cached copy, from
+    // before another instance refreshed the warehouse: read it again first.
+    if (isStale(summary)) {
+      const current = await callAnalytics(supabase, 'dw_analytics_summary', { ...args }, { fresh: true });
+      if (!current.error && current.data) summary = current.data as Summary;
+    }
+
     // Empty or stale warehouse → refresh it and re-read. A failed ETL is
     // non-fatal: we still return whatever the warehouse currently holds.
     if (isStale(summary)) {
@@ -228,7 +245,7 @@ export async function GET(request: NextRequest) {
       if (etlError) {
         console.error('Warehouse auto-ETL failed', etlError);
       } else {
-        const refreshed = await callAnalytics(supabase, 'dw_analytics_summary', { ...args });
+        const refreshed = await callAnalytics(supabase, 'dw_analytics_summary', { ...args }, { fresh: true });
         if (!refreshed.error && refreshed.data) summary = refreshed.data as Summary;
       }
     }

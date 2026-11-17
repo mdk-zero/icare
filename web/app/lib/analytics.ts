@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { SessionPayload } from './auth/session';
 import { getFacultySectionIds, getFacultyStudentIds } from './roster';
 import { getAdminScope } from './admin-scope';
+import { TtlCache } from './ttl-cache';
 
 /**
  * Shared filter handling for the warehouse-backed analytics endpoints
@@ -24,17 +25,58 @@ export interface SummaryArgs {
   p_student_ids?: string[];
 }
 
+type AnalyticsResult = { data: unknown; error: { message: string; code?: string } | null };
+
+/**
+ * How long a server instance reuses a warehouse result. The warehouse is only
+ * rebuilt every few minutes (the summary route's STALE_MS), so this adds
+ * little to how old the figures can be, while a class opening the dashboard at
+ * once, or one person flipping between pages, costs one query instead of one
+ * each. The summary function is the heaviest query the dashboards run.
+ */
+const ANALYTICS_TTL_MS = 60_000;
+const analyticsResults = new TtlCache<AnalyticsResult>(ANALYTICS_TTL_MS, 200);
+
+/** Same function and scope, same key, in whatever order the ids were read. */
+function analyticsKey(fn: string, args: Record<string, unknown>): string {
+  const sorted = Object.keys(args)
+    .sort()
+    .map((k) => [k, Array.isArray(args[k]) ? [...(args[k] as unknown[])].map(String).sort() : args[k]]);
+  return `${fn}:${JSON.stringify(sorted)}`;
+}
+
+/** Drops every cached warehouse result, after this instance rebuilds the warehouse. */
+export function forgetAnalytics(): void {
+  analyticsResults.clear();
+}
+
+/**
+ * Calls a warehouse function, through this instance's short cache (see
+ * ANALYTICS_TTL_MS) unless `fresh` asks for a new read. Results are shared
+ * between callers, so treat them as read-only. Errors are never cached.
+ */
+export async function callAnalytics(
+  supabase: SupabaseClient,
+  fn: 'dw_analytics_summary' | 'dw_student_leaderboard',
+  args: Record<string, unknown>,
+  { fresh = false }: { fresh?: boolean } = {},
+): Promise<AnalyticsResult> {
+  const key = analyticsKey(fn, args);
+  if (fresh) analyticsResults.delete(key);
+  return analyticsResults.fetch(key, () => callAnalyticsUncached(supabase, fn, args), (r) => !r.error);
+}
+
 /**
  * Calls a warehouse function, dropping p_student_ids and retrying when the
  * live database predates migration 052 (PostgREST can't find a function with
  * that parameter). The retry is still section-scoped, but counts every
  * student in those sections, so it is logged.
  */
-export async function callAnalytics(
+async function callAnalyticsUncached(
   supabase: SupabaseClient,
   fn: 'dw_analytics_summary' | 'dw_student_leaderboard',
   args: Record<string, unknown>,
-): Promise<{ data: unknown; error: { message: string; code?: string } | null }> {
+): Promise<AnalyticsResult> {
   const first = await supabase.rpc(fn, args);
   if (!first.error || args.p_student_ids === undefined || first.error.code !== 'PGRST202') return first;
   console.warn(`${fn}: migration 052 not applied, falling back to a section-only scope`);

@@ -1,7 +1,7 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies, headers } from 'next/headers';
 import { getSupabaseAdmin } from '../supabase/server';
-import { isMissingColumn, liveSession } from './live-user';
+import { forgetLiveUser, isMissingColumn, liveSession } from './live-user';
 import { SESSION_COOKIE, getSecret, signSession, verifySession } from './jwt';
 import type { SessionClient, SessionPayload, SessionPlatform } from './jwt';
 import { studentWebEnabled } from '../student-web-server';
@@ -61,6 +61,7 @@ export async function openSession(
     .from('users')
     .update({ [column]: sessionId })
     .eq('id', user.uid);
+  forgetLiveUser(user.uid);
   if (error && !isMissingColumn(error)) throw error;
   if (error) console.warn(`users.${column} is missing (apply migration 079); earlier sessions stay signed in`);
   return startSession({ uid: user.uid, role: user.role, email: user.email, sessionId, platform, remember, client });
@@ -109,6 +110,8 @@ export async function updateUser(
   const supabase = getSupabaseAdmin();
   const run = async (f: Record<string, unknown>) => {
     const { data, error } = await supabase.from('users').update(f).eq('id', userId).select(columns).maybeSingle();
+    // The session check's cached row may hold the old role, email or cutoff.
+    forgetLiveUser(userId);
     return { data: data as Record<string, unknown> | null, error };
   };
   if (!revoke) return run(fields);

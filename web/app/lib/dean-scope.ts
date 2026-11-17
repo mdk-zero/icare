@@ -1,4 +1,5 @@
 import type { getSupabaseAdmin } from './supabase/server';
+import { liveUserRow, type LiveUser } from './auth/live-user';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -57,12 +58,15 @@ export async function viewerDeanId(
   if (session.role === 'super_admin') return null;
   if (!(await deanOwnershipLive(supabase))) return null;
   if (session.role === 'admin') return session.uid;
-  const { data, error } = await supabase.from('users').select('admin_id').eq('id', session.uid).maybeSingle();
-  if (error) {
-    console.error('Failed to read the Dean of an account', error);
+  // The row the session check has just read, so this costs no second lookup.
+  let live: LiveUser | null;
+  try {
+    live = await liveUserRow(session.uid);
+  } catch (err) {
+    console.error('Failed to read the Dean of an account', err);
     throw new Error('Unable to read your Dean');
   }
-  return (data?.admin_id as string | null) ?? NO_DEAN;
+  return live?.adminId ?? NO_DEAN;
 }
 
 /** The PostgREST filter for "owned by this Dean, or a preset nobody owns". */

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { forgetAnalytics } from '@/app/lib/analytics';
 import { requireSuperAdmin } from '@/app/lib/auth/super-admin';
 import { getProvider } from '@/app/lib/auth/email';
 import { saveTestRun } from '@/app/lib/system-tests';
@@ -63,6 +64,7 @@ async function checkWarehouse(supabase: ReturnType<typeof getSupabaseAdmin>): Pr
   // refresh only means nobody has looked lately. Running the ETL here shows
   // whether it still works, which is what this check is for.
   const etl = await timed(async () => supabase.rpc('run_dw_etl'));
+  if (!etl.value.error) forgetAnalytics();
   if (etl.value.error) {
     return { id: 'dw', label: 'Data warehouse', status: 'fail', detail: `The ETL failed: ${etl.value.error.message}`, duration_ms: ms + etl.ms };
   }

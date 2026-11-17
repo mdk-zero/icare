@@ -1,4 +1,5 @@
 import { getSupabaseAdmin, type UserRole } from '../supabase/server';
+import { TtlCache } from '../ttl-cache';
 import type { SessionPayload } from './jwt';
 
 /**
@@ -15,6 +16,15 @@ import type { SessionPayload } from './jwt';
  *
  * A database error throws. A 500 is recoverable, while a null makes clients
  * sign the user out.
+ *
+ * Every authenticated request asks this, so each server instance keeps the
+ * row it read for LIVE_USER_TTL_MS (see liveUserRow). Only a row that lets the
+ * session through is taken from there: a refusal is always checked against
+ * the database first, so a token from a sign-in this instance hasn't seen yet
+ * is never turned away. What the cache can delay is the other direction: a
+ * session signed out by a newer sign-in, a revocation, a role change or a
+ * deleted account takes effect on an instance holding the old row within
+ * that time, and at once on the instance that made the change.
  */
 export async function liveSession(claims: SessionPayload): Promise<SessionPayload | null> {
   return (await liveSessionStatus(claims)).session;
@@ -29,7 +39,19 @@ export type SessionEnd = 'gone' | 'revoked' | 'replaced';
 export async function liveSessionStatus(
   claims: SessionPayload,
 ): Promise<{ session: SessionPayload; ended?: undefined } | { session: null; ended: SessionEnd }> {
-  const live = await loadLiveUser(claims.uid);
+  const cached = liveUsers.get(claims.uid);
+  if (cached) {
+    const status = judgeSession(claims, cached);
+    if (status.session) return status;
+    liveUsers.delete(claims.uid);
+  }
+  return judgeSession(claims, await liveUserRow(claims.uid));
+}
+
+function judgeSession(
+  claims: SessionPayload,
+  live: LiveUser | null,
+): { session: SessionPayload; ended?: undefined } | { session: null; ended: SessionEnd } {
   if (!live) return { session: null, ended: 'gone' };
   if (live.validAfterMs !== null && issuedAtMs(claims) < live.validAfterMs) {
     return { session: null, ended: 'revoked' };
@@ -51,26 +73,49 @@ function issuedAtMs(claims: SessionPayload): number {
   return claims.iat !== undefined ? claims.iat * 1000 : 0;
 }
 
-interface LiveUser {
+export interface LiveUser {
   role: UserRole;
   email: string;
   validAfterMs: number | null;
   webSessionId: string | null;
   mobileSessionId: string | null;
+  /** The account's Dean (053); undefined on a database without the column. */
+  adminId: string | null | undefined;
+}
+
+/** How long an instance trusts a user row it read; see liveSessionStatus. */
+const LIVE_USER_TTL_MS = 30_000;
+const liveUsers = new TtlCache<LiveUser | null>(LIVE_USER_TTL_MS, 2000);
+
+/**
+ * The account's live row, from this instance's cache when it read it within
+ * LIVE_USER_TTL_MS. A missing account is never cached. Requests for the same
+ * account at the same moment share one read.
+ */
+export function liveUserRow(uid: string): Promise<LiveUser | null> {
+  return liveUsers.fetch(uid, () => loadLiveUser(uid), (live) => live !== null);
 }
 
 /**
- * Before 059 or 079 one of the optional columns is missing (42703), and the
- * row is read again with `*`, which returns whichever of them exist. That
- * costs a round trip, but it is not cached: an instance that went on
- * skipping a column after its migration landed would disagree with its
- * neighbours about a revoked session.
+ * Drops the cached row after a change to it (a sign-in, a role, password or
+ * Dean change, a deletion), so this instance sees the change at once.
+ */
+export function forgetLiveUser(uid: string): void {
+  liveUsers.delete(uid);
+}
+
+/**
+ * Before 053, 059 or 079 one of the optional columns is missing (42703), and
+ * the row is read again with `*`, which returns whichever of them exist. That
+ * costs a round trip, and which columns exist is not remembered: an instance
+ * that went on skipping a column after its migration landed would disagree
+ * with its neighbours about a revoked session.
  */
 async function loadLiveUser(uid: string): Promise<LiveUser | null> {
   const supabase = getSupabaseAdmin();
   const full = await supabase
     .from('users')
-    .select('role, email, sessions_valid_after, web_session_id, mobile_session_id')
+    .select('role, email, sessions_valid_after, web_session_id, mobile_session_id, admin_id')
     .eq('id', uid)
     .maybeSingle();
   if (!full.error) return full.data ? toLiveUser(full.data) : null;
@@ -90,6 +135,7 @@ function toLiveUser(row: Record<string, unknown>): LiveUser {
     validAfterMs: validAfter ? new Date(validAfter).getTime() : null,
     webSessionId: text(row.web_session_id),
     mobileSessionId: text(row.mobile_session_id),
+    adminId: 'admin_id' in row ? text(row.admin_id) : undefined,
   };
 }
 

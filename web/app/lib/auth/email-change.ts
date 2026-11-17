@@ -23,6 +23,7 @@ import { generateOtp } from './reset';
 import { sendEmailChangeOtp, sendEmailChangedNotice } from './email';
 import { readSuperAdminSession } from './super-admin';
 import { startSession, type SessionPayload } from './session';
+import { forgetLiveUser } from './live-user';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -199,6 +200,7 @@ export async function confirmEmailChange(
     .from('users')
     .update({ email: newEmail, google_sub: null })
     .eq('id', target.id);
+  forgetLiveUser(target.id);
   if (updateError) {
     // The unique index on users.email is the last word on a race.
     if ((updateError as { code?: string }).code === '23505') return fail(409, 'Another account already uses this email');
