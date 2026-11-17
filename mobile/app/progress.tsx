@@ -217,7 +217,6 @@ export default function ProgressScreen() {
         skills={mastery.data}
         loading={mastery.loading}
         error={mastery.error}
-        intro="Bayesian Knowledge Tracing: how likely it is that you know each skill, updated after every quiz answer and every finished Patient Case or Return Demonstration. Weakest first, the order a review quiz follows."
         empty="No estimates yet. They start with your first result on a skill."
         style={styles.section}
       />

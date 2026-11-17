@@ -4,6 +4,8 @@ import type { DemoAssignment } from "../fixtures/school";
 import { MAX_RATING_POINTS, NOT_APPLICABLE, type ChecklistRating, type TaskRating } from "@/app/lib/task-ratings";
 import { DEFAULT_BKT, oldestFirst, ratingAsAnswer, traceMastery, type SkillMastery } from "@/app/lib/bkt";
 import { sectionName, teamLabel } from "./scope";
+import { traceMasteryHistory, type SkillMasteryHistory } from "@/app/lib/mastery-history";
+import { listSkillSummaries } from "../fixtures/skills";
 
 /**
  * Read-side helpers shared by the demo's handlers: the joins and roll-ups
@@ -212,7 +214,8 @@ export function checklistAnswers(db: DemoDb, studentId?: string) {
  * answers are spread evenly down the paper and the paper dealt over the quiz's
  * skills in turn. Reads as a school with enough answers for its own fits.
  */
-export function skillMastery(db: DemoDb, studentId: string): SkillMastery[] {
+/** A student's answers on each skill, quiz answers and checklist ratings, oldest first. */
+function answerTimeline(db: DemoDb, studentId: string) {
   const timeline: { skill_id: string; title: string; at: string; correct: boolean }[] = [];
   const attempts = db.attempts
     .filter((a) => a.student_id === studentId && a.status === "submitted")
@@ -230,8 +233,27 @@ export function skillMastery(db: DemoDb, studentId: string): SkillMastery[] {
       timeline.push({ skill_id: id, title, at: attempt.submitted_at ?? "", correct });
     }
   }
+  return oldestFirst([...timeline, ...checklistAnswers(db, studentId)]);
+}
+
+/** The real loadMasteryHistory, from the demo's answers. */
+export async function masteryHistory(db: DemoDb, studentId: string): Promise<SkillMasteryHistory[]> {
+  const answers = answerTimeline(db, studentId);
+  const summaries = new Map((await listSkillSummaries()).map((s) => [s.id, s]));
+  const titles = new Map(answers.map((a) => [a.skill_id, a.title]));
+  return traceMasteryHistory(
+    answers,
+    () => DEFAULT_BKT,
+    (skill) => {
+      const s = summaries.get(skill);
+      return s ? { title: s.title, chapter: s.chapter, area: s.area } : { title: titles.get(skill) ?? `Skill ${skill}`, chapter: Number(skill.split("-")[0]) || 0, area: "" };
+    },
+  );
+}
+
+export function skillMastery(db: DemoDb, studentId: string): SkillMastery[] {
   const sequences = new Map<string, { title: string; answers: boolean[] }>();
-  for (const { skill_id, title, correct } of oldestFirst([...timeline, ...checklistAnswers(db, studentId)])) {
+  for (const { skill_id, title, correct } of answerTimeline(db, studentId)) {
     const row = sequences.get(skill_id) ?? { title, answers: [] };
     row.answers.push(correct);
     sequences.set(skill_id, row);
