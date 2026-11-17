@@ -54,9 +54,11 @@ export async function GET() {
       .order("created_at", { ascending: false })
       .limit(40);
 
+    // The alerts need the same predictions; read them once (five reads each).
+    const latestRisks = getLatestRiskByStudent(supabase, ids);
     const [risks, alerts, assignments, reviewed, audit] = await Promise.all([
-      getLatestRiskByStudent(supabase, ids),
-      buildFacultyAlerts(supabase, students),
+      latestRisks,
+      latestRisks.then((known) => buildFacultyAlerts(supabase, students, known)),
       ids.length > 0
         ? supabase
             .from("scenario_assignments")

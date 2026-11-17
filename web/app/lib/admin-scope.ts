@@ -1,5 +1,7 @@
 import type { getSupabaseAdmin } from './supabase/server';
-import { getFacultySectionIds, getFacultyStudentIds } from './roster';
+import { changesScope, getFacultySectionIds, getFacultyStudentIds, ROSTER_TABLES } from './roster';
+import { TtlCache } from './ttl-cache';
+import { onTableWrite } from './table-writes';
 import { deanOwnershipLive } from './dean-scope';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
@@ -25,7 +27,23 @@ export interface AdminScope {
   studentIds: string[];
 }
 
+/**
+ * Kept per server instance for 30 s, as lib/roster keeps an instructor's:
+ * every Dean request asks, and it takes two or three reads. This instance's
+ * own roster writes drop it at once.
+ */
+const adminScopes = new TtlCache<AdminScope | null>(30_000, 500);
+
+onTableWrite(ROSTER_TABLES, (table, body) => {
+  if (changesScope(table, body)) adminScopes.clear();
+});
+
 export async function getAdminScope(supabase: Supabase, adminId: string): Promise<AdminScope | null> {
+  const scope = await adminScopes.fetch(adminId, () => loadAdminScope(supabase, adminId));
+  return scope && { facultyIds: [...scope.facultyIds], sectionIds: [...scope.sectionIds], studentIds: [...scope.studentIds] };
+}
+
+async function loadAdminScope(supabase: Supabase, adminId: string): Promise<AdminScope | null> {
   const { data: faculty, error } = await supabase
     .from('users')
     .select('id')

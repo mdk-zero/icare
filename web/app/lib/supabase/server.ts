@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { watchedFetch } from '../table-writes';
 
 let cached: SupabaseClient | null = null;
 
@@ -16,6 +17,8 @@ export function getSupabaseAdmin(): SupabaseClient {
 
   cached = createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
+    // Lets per-instance caches hear this instance's writes (lib/table-writes).
+    global: { fetch: watchedFetch },
   });
   return cached;
 }

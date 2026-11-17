@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import {
   bucketStart,
   callAnalytics,
-  forgetAnalytics,
+  refreshWarehouse,
   resolveSummaryArgs,
   withStudentAvatars,
   type SummaryArgs,
@@ -17,10 +17,12 @@ import { WORK_KINDS, type WorkKind } from '@/app/lib/work-kinds';
 
 /**
  * Dashboard analytics read from the star-schema warehouse
- * (public.dw_analytics_summary → dw facts/dims). The warehouse is kept fresh
- * self-healingly: if it has never been loaded or is older than STALE_MS, this
- * route runs the ETL (run_dw_etl) and re-reads, so faculty never see a stale or
- * empty dashboard even without pg_cron. POST /api/admin/etl still forces a run.
+ * (public.dw_analytics_summary → dw facts/dims). pg_cron refreshes the
+ * warehouse every five minutes (migration 095). A warehouse older than
+ * STALE_MS is still served as it is, and refreshed after the response (see
+ * refreshInBackground); only one that has never been loaded is refreshed
+ * before answering. A refresh inside every request used to stall the whole
+ * system under load. POST /api/admin/etl still forces a run.
  *
  * Query params (all optional): section_ids (csv), from, to — see
  * resolveSummaryArgs, which also confines faculty to their own sections.
@@ -177,25 +179,25 @@ async function readGroupTrend(
 }
 
 /**
- * One warehouse refresh at a time per server instance. The page asks for the
- * current and the previous period at once, and both find the same stale
- * warehouse; without this each ran its own ETL, and the slower of the two
- * held up the page.
+ * A stale warehouse is refreshed after the response, at most once per
+ * STALE_MS per server instance: pg_cron normally gets there first, and this
+ * covers a database without it. refreshWarehouse keeps it to one refresh at
+ * a time (across instances since 095).
  */
-let refreshing: ReturnType<typeof runRefresh> | null = null;
+let lastBackgroundRefresh = 0;
 
-function runRefresh(supabase: ReturnType<typeof getSupabaseAdmin>) {
-  return Promise.resolve(supabase.rpc('run_dw_etl')).then(({ error }) => {
-    if (!error) forgetAnalytics();
-    return { error };
+function refreshInBackground(supabase: ReturnType<typeof getSupabaseAdmin>) {
+  if (Date.now() - lastBackgroundRefresh < STALE_MS) return;
+  lastBackgroundRefresh = Date.now();
+  after(async () => {
+    const { error } = await refreshWarehouse(supabase);
+    if (error) console.error('Warehouse background refresh failed', error);
   });
 }
 
-function refreshWarehouse(supabase: ReturnType<typeof getSupabaseAdmin>) {
-  refreshing ??= runRefresh(supabase).finally(() => {
-    refreshing = null;
-  });
-  return refreshing;
+/** Never loaded: no figures at all, so this one is worth waiting for. */
+function neverLoaded(summary: Summary): boolean {
+  return !summary?.etl?.last_run_at;
 }
 
 function isStale(summary: Summary): boolean {
@@ -231,23 +233,19 @@ export async function GET(request: NextRequest) {
     }
     let summary = data as Summary;
 
-    // A stale-looking result may only be this instance's cached copy, from
-    // before another instance refreshed the warehouse: read it again first.
-    if (isStale(summary)) {
-      const current = await callAnalytics(supabase, 'dw_analytics_summary', { ...args }, { fresh: true });
-      if (!current.error && current.data) summary = current.data as Summary;
-    }
-
-    // Empty or stale warehouse → refresh it and re-read. A failed ETL is
-    // non-fatal: we still return whatever the warehouse currently holds.
-    if (isStale(summary)) {
+    // A warehouse that has never been loaded is refreshed before answering;
+    // a stale one is served as it is and refreshed after the response. A
+    // failed refresh is non-fatal: the warehouse's current figures still go out.
+    if (neverLoaded(summary)) {
       const { error: etlError } = await refreshWarehouse(supabase);
       if (etlError) {
-        console.error('Warehouse auto-ETL failed', etlError);
+        console.error('Warehouse first load failed', etlError);
       } else {
         const refreshed = await callAnalytics(supabase, 'dw_analytics_summary', { ...args }, { fresh: true });
         if (!refreshed.error && refreshed.data) summary = refreshed.data as Summary;
       }
+    } else if (isStale(summary)) {
+      refreshInBackground(supabase);
     }
 
     // Laid over the warehouse's figures; its ranked students bring their own avatars.

@@ -1,4 +1,5 @@
 import type { getSupabaseAdmin } from './supabase/server';
+import { TtlCache } from './ttl-cache';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -47,10 +48,34 @@ export async function scenarioKindsReady(supabase: Supabase): Promise<boolean> {
 
 const CHUNK = 300;
 
+/**
+ * A scenario's kind is set when it is made and never changes, so each
+ * instance keeps the kinds it has read: many routes ask for them on every
+ * request. The before-072 answer (all Patient Cases) is never kept, so the
+ * migration is picked up at once. Kept per client: the app has one, and a
+ * check script's stand-in databases each get their own.
+ */
+const knownKindsBy = new WeakMap<object, TtlCache<ScenarioKind>>();
+
+function knownKindsOf(supabase: Supabase): TtlCache<ScenarioKind> {
+  let kept = knownKindsBy.get(supabase);
+  if (!kept) {
+    kept = new TtlCache<ScenarioKind>(10 * 60_000, 20_000);
+    knownKindsBy.set(supabase, kept);
+  }
+  return kept;
+}
+
 /** Scenario id -> kind. Every id is a Patient Case before 072; ids not found are left out. */
 export async function scenarioKinds(supabase: Supabase, ids: readonly string[]): Promise<Map<string, ScenarioKind>> {
   const kinds = new Map<string, ScenarioKind>();
-  const unique = [...new Set(ids)];
+  const knownKinds = knownKindsOf(supabase);
+  const unique: string[] = [];
+  for (const id of new Set(ids)) {
+    const known = knownKinds.get(id);
+    if (known) kinds.set(id, known);
+    else unique.push(id);
+  }
   for (let i = 0; i < unique.length; i += CHUNK) {
     const part = unique.slice(i, i + CHUNK);
     const { data, error } = await supabase.from('scenarios').select('id, kind').in('id', part);
@@ -60,7 +85,9 @@ export async function scenarioKinds(supabase: Supabase, ids: readonly string[]):
       return kinds;
     }
     for (const row of (data ?? []) as { id: string; kind: string | null }[]) {
-      kinds.set(row.id, row.kind === 'return_demo' ? 'return_demo' : 'patient_case');
+      const kind: ScenarioKind = row.kind === 'return_demo' ? 'return_demo' : 'patient_case';
+      kinds.set(row.id, kind);
+      knownKinds.set(row.id, kind);
     }
   }
   return kinds;

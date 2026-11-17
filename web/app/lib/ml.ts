@@ -15,7 +15,7 @@
 import { NextResponse, after } from 'next/server';
 import { NDJSON, readNdjson } from './ndjson';
 import { getSupabaseAdmin } from './supabase/server';
-import { forgetAnalytics } from './analytics';
+import { refreshWarehouse } from './analytics';
 
 export type MlAction = 'predict' | 'recommend';
 
@@ -123,9 +123,8 @@ export async function streamMlRun(
     // the next five minutes. Refreshing before the result is sent means the
     // count is current by the time anyone opens Analytics.
     if (action === 'predict') {
-      const { error } = await getSupabaseAdmin().rpc('run_dw_etl');
+      const { error } = await refreshWarehouse(getSupabaseAdmin());
       if (error) console.error('Warehouse refresh after predictions failed', error);
-      else forgetAnalytics();
     }
     await onResult(result);
   });

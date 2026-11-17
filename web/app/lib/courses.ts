@@ -240,31 +240,37 @@ export async function loadOfferingRosters(
   const people = new Map<string, StudentRow>();
   for (const u of [...(sectionStudentsRes.data ?? []), ...(addedStudentsRes.data ?? [])] as StudentRow[]) people.set(u.id, u);
   const memberIds = [...new Set(members.map((m) => m.student_id))].filter((id) => !people.has(id));
-  if (memberIds.length) {
-    const rows = must(
-      await supabase.from('users').select('id, name, picture_url, sex, section_id').eq('role', 'student').in('id', memberIds),
-    ) as StudentRow[];
-    for (const u of rows) people.set(u.id, u);
-  }
 
-  // Group of each student for the label: any group in their section, not only the instructor's.
-  const labelIds = [...people.keys()];
-  const allMemberships = labelIds.length
-    ? await supabase.from('team_members').select('team_id, student_id').in('student_id', labelIds)
-    : { data: [], error: null };
-  const membershipRows = (allMemberships.error ? [] : (allMemberships.data ?? [])) as { team_id: string; student_id: string }[];
+  // The group members' accounts, and the group of every possible student for
+  // the label (any group in their section, not only the instructor's), side
+  // by side: each read had waited on the one before (2026-11-17 load test).
+  const candidateIds = [...new Set([...people.keys(), ...memberIds])];
+  const [memberAccounts, allMemberships] = await Promise.all([
+    memberIds.length
+      ? supabase.from('users').select('id, name, picture_url, sex, section_id').eq('role', 'student').in('id', memberIds)
+      : Promise.resolve({ data: [], error: null }),
+    candidateIds.length
+      ? supabase.from('team_members').select('team_id, student_id').in('student_id', candidateIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  for (const u of (must(memberAccounts) ?? []) as StudentRow[]) people.set(u.id, u);
+  // Only for the students the rosters hold, as before.
+  const membershipRows = ((allMemberships.error ? [] : (allMemberships.data ?? [])) as { team_id: string; student_id: string }[]).filter(
+    (m) => people.has(m.student_id),
+  );
   const extraTeamIds = [...new Set(membershipRows.map((m) => m.team_id))].filter((id) => !teams.some((t) => t.id === id));
-  const extraTeams = extraTeamIds.length
-    ? ((must(await supabase.from('teams').select('id, name, section_id, faculty_id').in('id', extraTeamIds)) ?? []) as typeof teams)
-    : [];
-  const teamById = new Map([...teams, ...extraTeams].map((t) => [t.id, t]));
-
   const allSectionIds = [
     ...new Set([...sectionIds, ...[...people.values()].map((u) => u.section_id).filter((id): id is string => !!id)]),
   ];
-  const sectionRows = allSectionIds.length
-    ? ((must(await supabase.from('sections').select('id, name').in('id', allSectionIds)) ?? []) as { id: string; name: string }[])
-    : [];
+  const [extraTeams, sectionRows] = await Promise.all([
+    extraTeamIds.length
+      ? supabase.from('teams').select('id, name, section_id, faculty_id').in('id', extraTeamIds).then((r) => (must(r) ?? []) as typeof teams)
+      : Promise.resolve([] as typeof teams),
+    allSectionIds.length
+      ? supabase.from('sections').select('id, name').in('id', allSectionIds).then((r) => (must(r) ?? []) as { id: string; name: string }[])
+      : Promise.resolve([] as { id: string; name: string }[]),
+  ]);
+  const teamById = new Map([...teams, ...extraTeams].map((t) => [t.id, t]));
   const sectionName = new Map(sectionRows.map((s) => [s.id, s.name]));
 
   const entry = (u: StudentRow, team: { id: string; name: string } | null, source: RosterSource): RosterStudent => {

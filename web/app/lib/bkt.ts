@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ChecklistRating } from './task-ratings';
+import { TtlCache } from './ttl-cache';
 
 /**
  * Bayesian Knowledge Tracing: a student's probability of knowing a skill,
@@ -199,6 +200,14 @@ function isMissingTable(error: { code?: string } | null): boolean {
   return error?.code === '42P01' || error?.code === 'PGRST205';
 }
 
+/**
+ * Every skill's fitted parameters, read whole (one row per skill) and kept per
+ * server instance for BKT_TTL_MS: the ML service rewrites them only when it
+ * retrains, and mastery is worked out on many requests. Null when unreadable.
+ */
+const BKT_TTL_MS = 10 * 60_000;
+const allBkt = new TtlCache<Map<string, BktFit> | null>(BKT_TTL_MS, 1);
+
 /** The fitted parameters for the given skills; a skill not in the map uses DEFAULT_BKT. */
 export async function loadBktParameters(
   supabase: SupabaseClient,
@@ -206,14 +215,26 @@ export async function loadBktParameters(
 ): Promise<Map<string, BktFit>> {
   const params = new Map<string, BktFit>();
   if (skillIds.length === 0) return params;
+  const all = await allBkt.fetch('all', () => readAllBktParameters(supabase), (m) => m !== null);
+  if (!all) return params;
+  for (const id of new Set(skillIds)) {
+    const fit = all.get(id);
+    if (fit) params.set(id, { ...fit });
+  }
+  return params;
+}
+
+async function readAllBktParameters(supabase: SupabaseClient): Promise<Map<string, BktFit> | null> {
   const { data, error } = await supabase
     .from('bkt_parameters')
     .select('skill_id, p_init, p_learn, p_guess, p_slip, source')
-    .in('skill_id', [...new Set(skillIds)]);
+    .order('skill_id')
+    .limit(5000);
   if (error) {
     if (!isMissingTable(error)) console.error('Failed to read BKT parameters; using defaults', error);
-    return params;
+    return null;
   }
+  const params = new Map<string, BktFit>();
   for (const row of data ?? []) {
     params.set(row.skill_id as string, {
       p_init: Number(row.p_init),

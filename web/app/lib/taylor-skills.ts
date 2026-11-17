@@ -2,6 +2,22 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { TAYLORS_CHAPTERS } from '@/scripts/taylors-chapters';
 import bundled from '@/scripts/data/taylor-skills.json';
+import { TtlCache } from './ttl-cache';
+import { onTableWrite } from './table-writes';
+
+/**
+ * The book's skills hardly ever change (a seed script loads them), and the
+ * skill lists, Library and patient case screens read them on every request,
+ * so each server instance keeps what it read for CATALOG_TTL_MS. Only a
+ * successful read is kept; the bundled copy a failed read falls back to is not.
+ */
+const CATALOG_TTL_MS = 10 * 60_000;
+const skillList = new TtlCache<SkillSummary[]>(CATALOG_TTL_MS, 1);
+const skillDetails = new TtlCache<SkillDetail[]>(CATALOG_TTL_MS, 500);
+onTableWrite(['taylor_skills', 'taylor_skill_steps'], () => {
+  skillList.clear();
+  skillDetails.clear();
+});
 
 /**
  * The Taylor's skills catalog: the skills of all 18 chapters of Lynn & LeBon, "Skill
@@ -75,19 +91,26 @@ export function isSkillId(value: unknown): value is string {
 
 /** Every skill, in book order, without steps. */
 export async function listSkills(supabase: SupabaseClient): Promise<SkillSummary[]> {
+  const kept = skillList.get('all');
+  if (kept) return structuredClone(kept);
   const { data, error } = await supabase.from('taylor_skills').select('id, chapter, title');
   if (error || !data || data.length === 0) {
     return BUNDLED.map((s) => summarise(s.id, s.chapter, s.title));
   }
-  return data
+  const list = data
     .map((s) => summarise(s.id as string, s.chapter as number, s.title as string))
     .sort((a, b) => compareSkillIds(a.id, b.id));
+  skillList.set('all', list);
+  return structuredClone(list);
 }
 
 /** The named skills with their steps, in the order asked for; unknown ids are dropped. */
 export async function getSkills(supabase: SupabaseClient, ids: string[]): Promise<SkillDetail[]> {
   const wanted = [...new Set(ids.filter(isSkillId))];
   if (wanted.length === 0) return [];
+  const key = wanted.join(',');
+  const kept = skillDetails.get(key);
+  if (kept) return structuredClone(kept);
 
   const [{ data: skills, error }, { data: steps, error: stepsError }] = await Promise.all([
     supabase.from('taylor_skills').select('id, chapter, title, goal').in('id', wanted),
@@ -109,7 +132,7 @@ export async function getSkills(supabase: SupabaseClient, ids: string[]): Promis
     });
   }
 
-  return wanted.map((id) => {
+  const details = wanted.map((id) => {
     const s = skills.find((r) => r.id === id)!;
     return {
       ...summarise(s.id as string, s.chapter as number, s.title as string),
@@ -125,6 +148,8 @@ export async function getSkills(supabase: SupabaseClient, ids: string[]): Promis
         })),
     };
   });
+  skillDetails.set(key, details);
+  return structuredClone(details);
 }
 
 /** How a sub-task cites the book: "Skill 1-1, step 3" or "Skill 1-1, Assessing Oral Temperature, step 12". */

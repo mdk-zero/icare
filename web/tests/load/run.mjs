@@ -4,6 +4,7 @@
  * the figures the manuscript reports (see summarize.mjs).
  *
  *   JMETER_HOME=/path/to/apache-jmeter-5.6.3 npm run test:load:live -- performance
+ *   JMETER_HOME=/path/to/apache-jmeter-5.6.3 npm run test:load:live -- capacity
  *   JMETER_HOME=/path/to/apache-jmeter-5.6.3 npm run test:load:live -- reliability
  *
  * JMeter needs Java 17 or newer on the PATH or in JAVA_HOME. The passwords
@@ -20,13 +21,18 @@ import { accounts, baseUrl } from '../env.mjs';
 import { summarize } from './summarize.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const PLANS = { performance: 'icare-performance.jmx', reliability: 'icare-reliability.jmx' };
+const PLANS = {
+  performance: 'icare-performance.jmx',
+  throughput: 'icare-throughput.jmx',
+  capacity: 'icare-capacity.jmx',
+  reliability: 'icare-reliability.jmx',
+};
 /** The plans' role names, and the .env.test account each signs in as. */
 const ROLES = { student: 'student', instructor: 'faculty', dean: 'admin' };
 
 const planName = process.argv[2];
 if (!PLANS[planName]) {
-  console.error('Usage: node tests/load/run.mjs performance|reliability');
+  console.error('Usage: node tests/load/run.mjs performance|throughput|capacity|reliability');
   process.exit(2);
 }
 const home = process.env.JMETER_HOME;

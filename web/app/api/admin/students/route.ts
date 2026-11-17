@@ -4,6 +4,19 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getAdminScope } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 import { getStudentsWithWork } from '@/app/lib/faculty-dashboard';
+import { fetchAll, readMatching } from '@/app/lib/fetch-all';
+
+type StudentRow = {
+  id: string;
+  email: string;
+  name: string;
+  picture_url: string | null;
+  sex: 'male' | 'female' | null;
+  created_at: string;
+  last_login_at: string | null;
+  section_id: string | null;
+  sections: { name: string } | null;
+};
 
 /**
  * Cohort roster with per-student performance aggregates for the admin
@@ -22,32 +35,61 @@ export async function GET() {
     // Only this admin's students (migration 053).
     const scope = await getAdminScope(supabase, session.uid);
     if (scope && scope.studentIds.length === 0) return NextResponse.json({ students: [] });
-    let studentQuery = supabase
-      .from('users')
-      .select('id, email, name, picture_url, sex, created_at, last_login_at, section_id, sections!section_id(name)')
-      .eq('role', 'student')
-      .order('name');
-    if (scope) studentQuery = studentQuery.in('id', scope.studentIds);
-
-    const [studentsRes, attemptsRes, predictionsRes] = await Promise.all([
-      studentQuery,
+    const students = () =>
       supabase
-        .from('assessment_attempts')
-        .select('student_id, score')
-        .eq('status', 'submitted'),
-      supabase
-        .from('performance_predictions')
-        .select('student_id, risk, predicted_at')
-        .order('predicted_at', { ascending: false }),
+        .from('users')
+        .select('id, email, name, picture_url, sex, created_at, last_login_at, section_id, sections!section_id(name)')
+        .eq('role', 'student');
+    // A Dean's own students' attempts and predictions, not the whole tables:
+    // short id lists, paged past PostgREST's 1000-row cap. Before 053 there
+    // is no scope, and every student counts.
+    const ids = scope?.studentIds ?? null;
+    const optional = <T,>(what: string, rows: Promise<T[]>) =>
+      rows.catch((err) => {
+        console.error(`Failed to read ${what} for the student list`, err);
+        return [] as T[];
+      });
+    const [studentRows, attempts, predictions] = await Promise.all([
+      (ids
+        ? readMatching<StudentRow>(ids, (part, from, to) => students().in('id', part).order('id').range(from, to))
+        : fetchAll<StudentRow>((from, to) => students().order('id').range(from, to))
+      ).then((rows) => rows.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))),
+      optional(
+        'attempts',
+        ids
+          ? readMatching<{ student_id: string; score: number | null }>(ids, (part, from, to) =>
+              supabase.from('assessment_attempts').select('student_id, score').eq('status', 'submitted').in('student_id', part).order('id').range(from, to),
+            )
+          : fetchAll<{ student_id: string; score: number | null }>((from, to) =>
+              supabase.from('assessment_attempts').select('student_id, score').eq('status', 'submitted').order('id').range(from, to),
+            ),
+      ),
+      // Newest first within each student, which is all the dedupe below needs.
+      optional(
+        'predictions',
+        ids
+          ? readMatching<{ student_id: string; risk: string }>(ids, (part, from, to) =>
+              supabase
+                .from('performance_predictions')
+                .select('student_id, risk, predicted_at')
+                .in('student_id', part)
+                .order('predicted_at', { ascending: false })
+                .order('id')
+                .range(from, to),
+            )
+          : fetchAll<{ student_id: string; risk: string }>((from, to) =>
+              supabase
+                .from('performance_predictions')
+                .select('student_id, risk, predicted_at')
+                .order('predicted_at', { ascending: false })
+                .order('id')
+                .range(from, to),
+            ),
+      ),
     ]);
 
-    if (studentsRes.error) {
-      console.error('Failed to list students', studentsRes.error);
-      return NextResponse.json({ error: 'Unable to list students' }, { status: 500 });
-    }
-
     const totals = new Map<string, { count: number; sum: number }>();
-    for (const a of attemptsRes.data ?? []) {
+    for (const a of attempts) {
       const t = totals.get(a.student_id) ?? { count: 0, sum: 0 };
       t.count += 1;
       t.sum += a.score ?? 0;
@@ -56,14 +98,14 @@ export async function GET() {
 
     // Predictions are ordered newest-first; keep only the latest per student.
     const latestRisk = new Map<string, string>();
-    for (const p of predictionsRes.data ?? []) {
+    for (const p of predictions) {
       if (!latestRisk.has(p.student_id)) latestRisk.set(p.student_id, p.risk);
     }
 
     // No assigned or done work means not scored yet, whatever the ML predicted.
-    const withWork = await getStudentsWithWork(supabase, (studentsRes.data ?? []).map((s) => s.id));
+    const withWork = await getStudentsWithWork(supabase, studentRows.map((s) => s.id));
 
-    const students = (studentsRes.data ?? []).map((s) => {
+    const list = studentRows.map((s) => {
       const t = totals.get(s.id);
       const scored = withWork.has(s.id) && latestRisk.has(s.id);
       return {
@@ -79,11 +121,11 @@ export async function GET() {
         scored,
         at_risk: scored && latestRisk.get(s.id) === 'at_risk',
         section_id: s.section_id ?? null,
-        section: (s as unknown as { sections: { name: string } | null }).sections?.name ?? null,
+        section: s.sections?.name ?? null,
       };
     });
 
-    return NextResponse.json({ students });
+    return NextResponse.json({ students: list });
   } catch (err) {
     console.error('List students failed', err);
     return NextResponse.json({ error: 'Unable to list students' }, { status: 500 });
