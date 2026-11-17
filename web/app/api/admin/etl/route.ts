@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { forgetAnalytics } from '@/app/lib/analytics';
+import { refreshWarehouse } from '@/app/lib/analytics';
 import { logAudit } from '@/app/lib/audit';
 
 /**
@@ -18,13 +18,14 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const { data: rowsLoaded, error } = await supabase.rpc('run_dw_etl');
+    // A refresh already running (pg_cron's, another instance's) is not run twice.
+    const { loaded: rowsLoaded, skipped, error } = await refreshWarehouse(supabase);
 
     if (error) {
       console.error('Warehouse ETL failed', error);
       return NextResponse.json({ error: 'ETL run failed' }, { status: 500 });
     }
-    forgetAnalytics();
+    if (skipped) return NextResponse.json({ rows_loaded: null, skipped: true });
 
     await logAudit(
       session,

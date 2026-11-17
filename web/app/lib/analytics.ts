@@ -50,6 +50,40 @@ export function forgetAnalytics(): void {
   analyticsResults.clear();
 }
 
+export interface WarehouseRefresh {
+  error: { message: string; code?: string } | null;
+  /** Another refresh was already running, so this one did nothing. */
+  skipped: boolean;
+  /** What run_dw_etl reports it loaded; null when skipped or failed. */
+  loaded: unknown;
+}
+
+/**
+ * Refreshes the warehouse. run_dw_etl_once (migration 095) refreshes only
+ * when no refresh is already running anywhere, and pg_cron calls it every
+ * five minutes. Before 095 this falls back to run_dw_etl, which then only
+ * this instance keeps to one at a time. A refresh that ran drops this
+ * instance's cached results; a skipped one leaves them, since the refresh
+ * that was running will be read within ANALYTICS_TTL_MS.
+ */
+export function refreshWarehouse(supabase: SupabaseClient): Promise<WarehouseRefresh> {
+  refreshing ??= runRefresh(supabase).finally(() => {
+    refreshing = null;
+  });
+  return refreshing;
+}
+
+let refreshing: Promise<WarehouseRefresh> | null = null;
+
+async function runRefresh(supabase: SupabaseClient): Promise<WarehouseRefresh> {
+  let result = await supabase.rpc('run_dw_etl_once');
+  if (result.error?.code === 'PGRST202') result = await supabase.rpc('run_dw_etl');
+  if (result.error) return { error: result.error, skipped: false, loaded: null };
+  const skipped = (result.data as { skipped?: boolean } | null)?.skipped === true;
+  if (!skipped) forgetAnalytics();
+  return { error: null, skipped, loaded: skipped ? null : result.data };
+}
+
 /**
  * Calls a warehouse function, through this instance's short cache (see
  * ANALYTICS_TTL_MS) unless `fresh` asks for a new read. Results are shared

@@ -105,22 +105,35 @@ export function forgetLiveUser(uid: string): void {
 }
 
 /**
- * Before 053, 059 or 079 one of the optional columns is missing (42703), and
- * the row is read again with `*`, which returns whichever of them exist. That
- * costs a round trip, and which columns exist is not remembered: an instance
- * that went on skipping a column after its migration landed would disagree
- * with its neighbours about a revoked session.
+ * Before 053, 059 or 079 one of the optional columns is missing, and the read
+ * fails with 42703 naming it. The instance then leaves that column out of its
+ * reads for MISSING_COLUMN_RECHECK_MS before trying it again: reading it every
+ * time cost a failed round trip, and an error in the database log, on every
+ * session check (2026-11-17, with 059 not applied). An instance therefore
+ * picks up a migration that lands within that time. An error that names no
+ * column it knows falls back to `*`, which returns whichever of them exist.
  */
+const OPTIONAL_COLUMNS = ['sessions_valid_after', 'web_session_id', 'mobile_session_id', 'admin_id'] as const;
+const MISSING_COLUMN_RECHECK_MS = 10 * 60_000;
+/** Optional columns this instance found missing, and when to look for each again. */
+const missingColumns = new Map<string, number>();
+
+function liveColumns(): string {
+  const now = Date.now();
+  const present = OPTIONAL_COLUMNS.filter((column) => (missingColumns.get(column) ?? 0) <= now);
+  return ['role', 'email', ...present].join(', ');
+}
+
 async function loadLiveUser(uid: string): Promise<LiveUser | null> {
   const supabase = getSupabaseAdmin();
-  const full = await supabase
-    .from('users')
-    .select('role, email, sessions_valid_after, web_session_id, mobile_session_id, admin_id')
-    .eq('id', uid)
-    .maybeSingle();
-  if (!full.error) return full.data ? toLiveUser(full.data) : null;
-  if (full.error.code !== '42703') throw full.error;
-
+  for (let attempt = 0; attempt <= OPTIONAL_COLUMNS.length; attempt++) {
+    const { data, error } = await supabase.from('users').select(liveColumns()).eq('id', uid).maybeSingle();
+    if (!error) return data ? toLiveUser(data as unknown as Record<string, unknown>) : null;
+    if (error.code !== '42703') throw error;
+    const missing = OPTIONAL_COLUMNS.find((column) => error.message?.includes(column));
+    if (!missing) break;
+    missingColumns.set(missing, Date.now() + MISSING_COLUMN_RECHECK_MS);
+  }
   const { data, error } = await supabase.from('users').select('*').eq('id', uid).maybeSingle();
   if (error) throw error;
   return data ? toLiveUser(data) : null;

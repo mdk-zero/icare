@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { forgetAnalytics } from '@/app/lib/analytics';
+import { refreshWarehouse } from '@/app/lib/analytics';
 import { requireSuperAdmin } from '@/app/lib/auth/super-admin';
 import { getProvider } from '@/app/lib/auth/email';
 import { saveTestRun } from '@/app/lib/system-tests';
@@ -60,11 +60,11 @@ async function checkWarehouse(supabase: ReturnType<typeof getSupabaseAdmin>): Pr
       duration_ms: ms,
     };
   }
-  // Analytics refreshes the warehouse whenever someone opens it, so an old
-  // refresh only means nobody has looked lately. Running the ETL here shows
-  // whether it still works, which is what this check is for.
-  const etl = await timed(async () => supabase.rpc('run_dw_etl'));
-  if (!etl.value.error) forgetAnalytics();
+  // pg_cron refreshes the warehouse every five minutes (095), and Analytics
+  // does when it finds it stale, so an old refresh means neither has run
+  // lately. Running the ETL here shows whether it still works, which is what
+  // this check is for; one already running is left to finish.
+  const etl = await timed(async () => refreshWarehouse(supabase));
   if (etl.value.error) {
     return { id: 'dw', label: 'Data warehouse', status: 'fail', detail: `The ETL failed: ${etl.value.error.message}`, duration_ms: ms + etl.ms };
   }
@@ -72,9 +72,11 @@ async function checkWarehouse(supabase: ReturnType<typeof getSupabaseAdmin>): Pr
     id: 'dw',
     label: 'Data warehouse',
     status: 'pass',
-    detail: hours === null
-      ? 'Refreshed by the ETL just now, for the first time'
-      : `Refreshed by the ETL just now (the last refresh was ${Math.round(hours)} h ago)`,
+    detail: etl.value.skipped
+      ? 'A refresh was already running, so this check left it to finish'
+      : hours === null
+        ? 'Refreshed by the ETL just now, for the first time'
+        : `Refreshed by the ETL just now (the last refresh was ${Math.round(hours)} h ago)`,
     duration_ms: ms + etl.ms,
   };
 }

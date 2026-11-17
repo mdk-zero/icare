@@ -1,7 +1,8 @@
 /**
  * Behavioural checks for the per-instance caches that spare the database a
  * read on every request: the TTL cache itself, the session check's cached
- * user row (lib/auth/live-user) and the warehouse results (lib/analytics).
+ * user row (lib/auth/live-user) with its memory of missing columns, and the
+ * warehouse results and refresh (lib/analytics).
  * The app's own Supabase client runs against a small fake PostgREST that
  * counts what reaches it. There is no test runner in this repo.
  *
@@ -34,8 +35,16 @@ const db = {
     admin_id: 'dean-1' as string | null,
   } as Record<string, unknown> | null,
   userReads: 0,
+  /** The select list of each users read, last first. */
+  userSelects: [] as string[],
+  /** Optional users columns the fake database lacks (a migration not applied). */
+  missingUserColumns: new Set<string>(),
   summaryCalls: 0,
   summaryFails: 0,
+  /** What run_dw_etl_once does: refresh, report a refresh already running, or not exist (before 095). */
+  etlOnce: 'refresh' as 'refresh' | 'skip' | 'missing',
+  etlOnceCalls: 0,
+  etlCalls: 0,
 };
 
 async function startFakePostgrest(): Promise<string> {
@@ -47,7 +56,24 @@ async function startFakePostgrest(): Promise<string> {
     };
     if (url.pathname === '/rest/v1/users') {
       db.userReads++;
+      const select = url.searchParams.get('select') ?? '*';
+      db.userSelects.unshift(select);
+      const missing = select.split(',').map((c) => c.trim()).find((c) => db.missingUserColumns.has(c));
+      if (missing) return send(400, { code: '42703', message: `column users.${missing} does not exist` });
       return send(200, db.user ? [db.user] : []);
+    }
+    if (url.pathname === '/rest/v1/rpc/run_dw_etl_once') {
+      db.etlOnceCalls++;
+      if (db.etlOnce === 'missing') {
+        return send(404, { code: 'PGRST202', message: 'Could not find the function public.run_dw_etl_once without parameters' });
+      }
+      // Slow enough for concurrent callers to overlap.
+      setTimeout(() => send(200, db.etlOnce === 'skip' ? { skipped: true } : { fact_attempts: 3 }), 40);
+      return;
+    }
+    if (url.pathname === '/rest/v1/rpc/run_dw_etl') {
+      db.etlCalls++;
+      return send(200, { fact_attempts: 3 });
     }
     // deanOwnershipLive's probe: the column exists.
     if (url.pathname === '/rest/v1/sections') return send(200, []);
@@ -83,7 +109,7 @@ async function main() {
   const { TtlCache } = await import('../app/lib/ttl-cache');
   const { forgetLiveUser, liveSessionStatus } = await import('../app/lib/auth/live-user');
   const { viewerDeanId } = await import('../app/lib/dean-scope');
-  const { callAnalytics, forgetAnalytics } = await import('../app/lib/analytics');
+  const { callAnalytics, forgetAnalytics, refreshWarehouse } = await import('../app/lib/analytics');
   const { getSupabaseAdmin } = await import('../app/lib/supabase/server');
   const supabase = getSupabaseAdmin();
 
@@ -206,6 +232,51 @@ async function main() {
     const retried = await callAnalytics(supabase, 'dw_analytics_summary', args(['a']));
     check('an error is passed on', failed.error !== null);
     check('and not kept: the next request asks again', retried.error === null && db.summaryCalls === 6, `calls ${db.summaryCalls}`);
+  }
+
+  console.log('\nwarehouse refresh');
+  {
+    const args = { p_section_ids: null, p_from: null, p_to: null, p_bucket: 'week' };
+    const cachedSummary = async () => {
+      const before = db.summaryCalls;
+      await callAnalytics(supabase, 'dw_analytics_summary', args);
+      return db.summaryCalls - before; // 0: served from the cache
+    };
+
+    forgetAnalytics();
+    db.etlOnce = 'refresh';
+    db.etlOnceCalls = 0;
+    await cachedSummary();
+    const many = await Promise.all([1, 2, 3].map(() => refreshWarehouse(supabase)));
+    eq('three refreshes at once make one call', db.etlOnceCalls, 1);
+    check('and report a refresh that ran', many.every((r) => !r.error && !r.skipped && r.loaded !== null));
+    eq('which drops the cached results', await cachedSummary(), 1);
+
+    db.etlOnce = 'skip';
+    const skipped = await refreshWarehouse(supabase);
+    check('a refresh already running elsewhere is skipped', skipped.skipped && skipped.loaded === null);
+    eq('and leaves the cached results', await cachedSummary(), 0);
+
+    db.etlOnce = 'missing';
+    db.etlCalls = 0;
+    const fallback = await refreshWarehouse(supabase);
+    check('before 095 it falls back to run_dw_etl', !fallback.error && !fallback.skipped && db.etlCalls === 1, `etl calls ${db.etlCalls}`);
+  }
+
+  // Last: the memory below would leave sessions_valid_after out of later checks.
+  console.log('\nmissing columns');
+  {
+    db.missingUserColumns.add('sessions_valid_after');
+    forgetLiveUser('u1');
+    db.userReads = 0;
+    const first = await liveSessionStatus(token('s1'));
+    check('a session still passes when a column is missing', first.session !== null);
+    eq('the first read learns which column, in two reads', db.userReads, 2);
+    check('the second leaves it out', !db.userSelects[0].includes('sessions_valid_after') && db.userSelects[0].includes('web_session_id'), db.userSelects[0]);
+    forgetLiveUser('u1');
+    await liveSessionStatus(token('s1'));
+    eq('later reads take one round trip', db.userReads, 3);
+    eq("an instructor's Dean still comes through", await viewerDeanId(supabase as never, { uid: 'u1', role: 'faculty' }), 'dean-1');
   }
 
   console.log(failures ? `\n${failures} check(s) failed` : '\nAll checks passed');
