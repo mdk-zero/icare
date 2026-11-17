@@ -20,8 +20,19 @@ export const BENCHMARK_TARGETS = [
   { id: "dw", label: "Data warehouse query", url: "/api/super-admin/probe?target=dw" },
 ] as const;
 
-// 50 covers the 47-student test class all working at once.
-export const CONCURRENCY_LEVELS = [1, 5, 10, 25, 50];
+// 50 covers the 47-student test class all working at once; 100 and 200 are the
+// capacity target. Those two start unticked, since each sends that many
+// requests to production at the same moment.
+export const CONCURRENCY_LEVELS = [1, 5, 10, 25, 50, 100, 200];
+export const DEFAULT_LEVELS = [1, 5, 10, 25, 50];
+
+/**
+ * Requests one browser keeps open to the site at once: the HTTP/2
+ * SETTINGS_MAX_CONCURRENT_STREAMS that www.i-care.dev (Vercel) sent on
+ * 2026-11-17. Above it the browser queues the rest itself, so a level's
+ * times include that wait.
+ */
+export const BROWSER_STREAM_LIMIT = 160;
 
 /** Requests sent at one level: `perLevel`, or one per user if there are more users. */
 export const requestsAt = (concurrency: number, perLevel: number) => Math.max(perLevel, concurrency);

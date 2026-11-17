@@ -27,7 +27,9 @@ import { formatMs } from "../metrics";
 import { RUN_KINDS, STALE_RUN_MS, ago, runVerdict, type RunKind, type RunVerdict } from "../run-status";
 import {
   BENCHMARK_TARGETS,
+  BROWSER_STREAM_LIMIT,
   CONCURRENCY_LEVELS,
+  DEFAULT_LEVELS,
   requestsAt,
   runBenchmark,
   type BenchmarkResult,
@@ -471,7 +473,7 @@ function HealthSection({ runs, onRun, loading }: { runs: HealthRun[]; onRun: (ru
 
 function BenchmarkSection({ runs, onRun, loading }: { runs: BenchRun[]; onRun: (run: TestRun) => void; loading: boolean }) {
   const [targets, setTargets] = useState<string[]>(BENCHMARK_TARGETS.map((t) => t.id));
-  const [levels, setLevels] = useState<number[]>(CONCURRENCY_LEVELS);
+  const [levels, setLevels] = useState<number[]>(DEFAULT_LEVELS);
   const [perLevel, setPerLevel] = useState(20);
   const [progress, setProgress] = useState<{ done: number; total: number; label: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -572,6 +574,12 @@ function BenchmarkSection({ runs, onRun, loading }: { runs: BenchRun[]; onRun: (
         it has users, so each user sends at least one. Each counts toward Supabase usage; the data warehouse target is
         the heaviest.
       </p>
+      {levels.some((c) => c > BROWSER_STREAM_LIMIT) && (
+        <p className="text-xs text-amber-700 -mt-2 mb-4">
+          The site lets one browser keep {BROWSER_STREAM_LIMIT} requests open at once. At {Math.max(...levels)} users
+          the rest wait in this browser first, so that level&apos;s times include the wait.
+        </p>
+      )}
 
       {progress && (
         <div className="mb-4" role="status">
