@@ -273,7 +273,7 @@ export const PRIVACY: LegalDoc = {
         { p: 'We do not sell your data or use it for advertising. These service providers run parts of iCARE++ for us:' },
         {
           list: [
-            'Supabase: database and file storage (Sydney, Australia).',
+            'Supabase: database and file storage (Singapore).',
             'Vercel: hosting for the website and its server.',
             'Render: the service that makes performance predictions and fits the skill estimates.',
             'Anthropic: the AI features you allow, and tools for instructors.',

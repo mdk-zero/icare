@@ -29,7 +29,7 @@ In this guide:
 | Part | Runs on | What it does | Set up in |
 |---|---|---|---|
 | Database and files | Supabase | Postgres holds the app's tables and the `dw` data warehouse behind the analytics. Storage holds uploaded files. | [Supabase](#supabase) |
-| Web portal and API | Vercel, region `syd1` (set in `web/vercel.json`) | The `web/` Next.js app: the Admin, Dean and Instructor portals, and the `/api` routes that both the portals and the mobile app call. | [Web portal on Vercel](#web-portal-on-vercel) |
+| Web portal and API | Vercel, region `sin1` (set in `web/vercel.json`) | The `web/` Next.js app: the Admin, Dean and Instructor portals, and the `/api` routes that both the portals and the mobile app call. | [Web portal on Vercel](#web-portal-on-vercel) |
 | ML service | Render, as a Docker service in region `singapore` (set in `render.yaml`) | The `ml/` FastAPI service: the nightly Low performing prediction, skill mastery estimates and model retraining. | [ML service on Render](#ml-service-on-render) |
 | Mobile app | Expo EAS | Android builds (an APK) and over-the-air updates. | [Mobile app with Expo EAS](#mobile-app-with-expo-eas) |
 | Checks and scheduled jobs | GitHub Actions | CI on every push, the nightly ML run, and the test suites. | [GitHub Actions](#github-actions) |
@@ -250,7 +250,7 @@ Admin creates every other account; see [Create an account](admin.md#create-an-ac
 
 1. In Vercel, select **Add New** > **Project** and import the repository.
 2. Set **Root Directory** to `web`. Vercel reads `web/vercel.json`: the Next.js framework,
-   `npm install`, `npm run build`, and the `syd1` region.
+   `npm install`, `npm run build`, and the `sin1` region.
 3. Add the environment variables in [Environment variables](#environment-variables) before the
    first deployment.
 4. Add your domain under the project's domain settings. This manual uses
