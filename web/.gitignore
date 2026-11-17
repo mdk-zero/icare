@@ -70,3 +70,5 @@ firebase-service-account.json
 # Playwright's saved sign-ins, and test screenshots (they show real names)
 /tests/.auth/
 /qa/evidence/
+# JMeter results (tests/load/run.mjs)
+/tests/load/results/

@@ -111,6 +111,30 @@ Every request turns cookies off on purpose. A sign-in sets the session cookie, a
 reads the cookie before the bearer token, so with cookies on, the last role signed in would
 answer for all of them.
 
+## Load tests (JMeter)
+
+`tests/load/` holds the [Apache JMeter](https://jmeter.apache.org) plans behind the
+manuscript's performance tables, rebuilt on 2026-11-17 from its Chapter III and IV description.
+They send only read-only requests, as the student, Instructor and Dean test accounts:
+
+- `icare-performance.jmx`: response time with one user (three sign-ins per account, 30 rounds
+  of the activity list, at-risk predictions, recommendations and analytics summary, and 10
+  competency reports, each of which writes one audit row); then scalability at 1, 10, 30, 50 and
+  100 users for 70 s each, pausing 0.5 to 1.5 s between requests; then throughput, 30 users per
+  role for 50 s with no pauses.
+- `icare-reliability.jmx`: 30 users for 300 s, pausing 0.5 to 1.5 s. Run it after a cool-down.
+
+```bash
+JMETER_HOME=/path/to/apache-jmeter-5.6.3 npm run test:load:live -- performance
+JMETER_HOME=/path/to/apache-jmeter-5.6.3 npm run test:load:live -- reliability
+node tests/load/summarize.mjs tests/load/results/<run>/results.jtl   # the tables again
+```
+
+JMeter needs Java 17 or newer. Each run signs in up to nine times, inside the login limit, and
+signs the test accounts out of anywhere else. Load from 50 users up slows the live site for
+everyone, so run it when few people are using it. Results go to `tests/load/results/`
+(gitignored).
+
 ## CI
 
 `.github/workflows/tests.yml` runs both suites against a deployment on demand (Actions →

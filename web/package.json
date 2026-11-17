@@ -30,7 +30,9 @@
     "test:e2e:report": "node tests/with-report.mjs npx playwright test",
     "test:e2e:live": "node tests/live.mjs npx playwright test",
     "test:api": "node tests/api/run.mjs",
-    "test:api:report": "node tests/with-report.mjs node tests/api/run.mjs"
+    "test:api:report": "node tests/with-report.mjs node tests/api/run.mjs",
+    "test:load": "node tests/load/run.mjs",
+    "test:load:live": "node tests/live.mjs node tests/load/run.mjs"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^7.2.0",

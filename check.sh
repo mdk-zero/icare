@@ -171,9 +171,11 @@ secret_scan() {
       name=${rule%%|*}; rest=${rule#*|}
       flag=${rest%%|*}; pattern=${rest#*|}
       # -I skips binaries; the second grep drops obvious dummy values, among
-      # them the demo's fake passwords ("Demo-Pass-2026", "Demo-Reset-…").
+      # them the demo's fake passwords ("Demo-Pass-2026", "Demo-Reset-…"), and
+      # values filled in at run time: "${__P(student_password)}" in the JMeter
+      # plans, "{{password}}" in Postman.
       hits=$(grep -nHIE ${flag:+"$flag"} "$pattern" "$ROOT/$f" 2>/dev/null |
-        grep -viE 'example|dummy|placeholder|change-?me|not[-_]?real|redacted|"demo-' |
+        grep -viE 'example|dummy|placeholder|change-?me|not[-_]?real|redacted|"demo-|[:=][[:space:]]*["'\''](\$\{|\{\{)' |
         cut -d: -f1,2 || true)
       if [ -n "$hits" ]; then
         found=1
