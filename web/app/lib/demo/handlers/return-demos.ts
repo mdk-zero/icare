@@ -6,7 +6,8 @@ import type { DemoScenario } from "../fixtures/school";
 import { audit } from "./shared";
 import { addSkillTasks, caseGroupsOf, myStudentIds, newAssignment } from "./faculty";
 import { parseDeadline } from "@/app/lib/deadline-input";
-import { formByKey } from "@/app/lib/return-demo-forms";
+import { customFormKey, formByKey, type FormPageImage, type ReturnDemoForm } from "@/app/lib/return-demo-forms";
+import { sanitizeCustomForm } from "@/app/lib/form-import";
 import { mergeAssignees, parseReturnDemoInput, RETURN_DEMO_CATEGORY, returnDemoVisibleTo, skillDiff } from "@/app/lib/return-demos";
 import { checklistTasks, type ChecklistRow } from "@/app/lib/checklist-import";
 
@@ -150,6 +151,65 @@ route("POST", "/api/faculty/return-demos", async (ctx) => {
 });
 
 // Files are read on the server (pdf.js), which the demo doesn't have.
+/** Uploaded forms (095) kept in the demo store; a store saved before them has none. */
+function customForms(ctx: Ctx): (ReturnDemoForm & { created_by: string | null; created_at: string })[] {
+  const db = ctx.db as typeof ctx.db & { customForms?: (ReturnDemoForm & { created_by: string | null; created_at: string })[] };
+  if (!db.customForms) db.customForms = [];
+  return db.customForms;
+}
+
+/** A form by key, built-in or uploaded. */
+const anyFormByKey = (ctx: Ctx, key: string) => formByKey(key) ?? customForms(ctx).find((f) => f.key === key);
+
+route("GET", "/api/faculty/return-demo-forms", (ctx) => {
+  if (!staffOnly(ctx)) return forbidden();
+  return {
+    enabled: true,
+    forms: customForms(ctx).filter((f) => ctx.role === "admin" || f.created_by === ctx.viewer.id),
+  };
+});
+
+// Forms are read on the server (pdf.js and the AI), which the demo doesn't have.
+route("POST", "/api/faculty/return-demo-forms/read", (ctx) => {
+  if (!staffOnly(ctx)) return forbidden();
+  return json({ error: "The demo can't read files. Upload forms on the live portal." }, 422);
+});
+
+route("POST", "/api/faculty/return-demo-forms", (ctx) => {
+  if (!staffOnly(ctx)) return forbidden();
+  const pages = Array.isArray(ctx.body?.pages) ? (ctx.body.pages as FormPageImage[]) : [];
+  const form = pages.length ? sanitizeCustomForm(ctx.body, pages) : null;
+  if (!form) return json({ error: "Give the form a title and at least one field to fill in." }, 400);
+  const saved = {
+    key: customFormKey(newId()),
+    title: form.title,
+    description: form.description,
+    source: "Uploaded by an instructor",
+    page: pages[0],
+    pages,
+    sections: form.sections,
+    custom: true,
+    created_by: ctx.viewer.id,
+    created_at: new Date().toISOString(),
+  };
+  customForms(ctx).unshift(saved);
+  return json({ form: saved }, 201);
+});
+
+route("DELETE", "/api/faculty/return-demo-forms/:id", (ctx) => {
+  if (!staffOnly(ctx)) return forbidden();
+  const key = customFormKey(ctx.params.id);
+  const form = customForms(ctx).find((f) => f.key === key);
+  if (!form) return notFound("Form not found");
+  if (ctx.role !== "admin" && form.created_by !== ctx.viewer.id) return json({ error: "Only the instructor who uploaded it can remove it" }, 403);
+  if (ctx.db.scenarios.some((sc) => sc.form_keys?.includes(key))) {
+    return json({ error: "A Return Demonstration uses this form, so it can't be removed." }, 409);
+  }
+  const db = ctx.db as typeof ctx.db & { customForms?: typeof form[] };
+  db.customForms = customForms(ctx).filter((f) => f.key !== key);
+  return { success: true };
+});
+
 route("POST", "/api/faculty/return-demos/read-checklist", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   return json({ error: "The demo can't read files. Type the checklist's steps in instead." }, 422);
@@ -316,7 +376,7 @@ route("GET", "/api/faculty/scenarios/assignments/:id/forms", (ctx) => {
   if (!assignment) return notFound("Assignment not found");
   const scenario = ctx.db.scenarios.find((s) => s.id === assignment.scenario_id);
   const forms = (scenario?.form_keys ?? [])
-    .map((key) => formByKey(key))
+    .map((key) => anyFormByKey(ctx, key))
     .filter((f): f is NonNullable<typeof f> => !!f)
     .map((form) => {
       const saved = assignment.forms?.[form.key];

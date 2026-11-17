@@ -1,15 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faClipboardList, faEye, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faClipboardList, faEye, faFileArrowUp, faTrashCan, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { formFields, RETURN_DEMO_FORMS, type ReturnDemoForm } from "../../lib/return-demo-forms";
+import { deleteCustomForm, fetchCustomForms, readFormPdf, type CustomForm, type ReadFormDraft } from "../../lib/api";
+import { EcgLoader } from "../../components/EcgLoader";
+import { toast } from "../../components/Toast";
 import { FormPage } from "./form-page";
+import FormEditor from "./form-editor";
 
 /**
  * The optional forms of a Return Demonstration (094): printed forms such as
  * the DOH PhilPEN form, which students fill in on the app before they
  * demonstrate the skills. Each can be opened to see the form before adding it.
+ * An instructor can also upload their own form as a PDF (095): its fields are
+ * read from it, checked in the form editor, and it joins the list.
  */
 export default function FormsPicker({
   value,
@@ -22,7 +28,53 @@ export default function FormsPicker({
   disabled?: boolean;
 }) {
   const [preview, setPreview] = useState<ReturnDemoForm | null>(null);
+  const [custom, setCustom] = useState<CustomForm[]>([]);
+  const [uploadsOn, setUploadsOn] = useState(true);
+  const [reading, setReading] = useState(false);
+  const [draft, setDraft] = useState<ReadFormDraft | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const toggle = (key: string) => onChange(value.includes(key) ? value.filter((k) => k !== key) : [...value, key]);
+
+  useEffect(() => {
+    let live = true;
+    void fetchCustomForms().then((result) => {
+      if (!live) return;
+      setCustom(result.forms);
+      setUploadsOn(result.enabled);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  // Built-in first, then this instructor's uploads, newest first; a picked
+  // upload of someone else's (an admin editing) still shows by its key.
+  const all: ReturnDemoForm[] = [...RETURN_DEMO_FORMS, ...custom];
+
+  const upload = async (file: File) => {
+    setReading(true);
+    setError(null);
+    const result = await readFormPdf(file);
+    setReading(false);
+    if (result.error || !result.draft) {
+      setError(result.error ?? "That form couldn't be read");
+      return;
+    }
+    setDraft(result.draft);
+  };
+
+  const remove = async (form: CustomForm) => {
+    if (!window.confirm(`Remove “${form.title}” from your forms?`)) return;
+    const result = await deleteCustomForm(form.key);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    setCustom((prev) => prev.filter((f) => f.key !== form.key));
+    if (value.includes(form.key)) onChange(value.filter((k) => k !== form.key));
+    toast("Form removed");
+  };
 
   return (
     <div className="rounded-xl border border-hairline bg-surface p-4 shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]">
@@ -39,7 +91,7 @@ export default function FormsPicker({
           {value.length === 0 ? "No forms added" : `${value.length} form${value.length === 1 ? "" : "s"} added`}
         </span>
         {value.map((key) => {
-          const form = RETURN_DEMO_FORMS.find((f) => f.key === key);
+          const form = all.find((f) => f.key === key);
           return form ? (
             <span key={key} className="rounded-full bg-brand-600/10 px-2 py-0.5 text-[11px] font-semibold text-brand-700">
               {form.title}
@@ -49,8 +101,9 @@ export default function FormsPicker({
       </div>
 
       <ul className="mt-2 overflow-hidden rounded-lg border border-hairline">
-        {RETURN_DEMO_FORMS.map((form) => {
+        {all.map((form) => {
           const on = value.includes(form.key);
+          const upload = custom.find((f) => f.key === form.key);
           return (
             <li key={form.key} className="flex items-center gap-2 border-t border-hairline px-3 py-2 first:border-t-0 hover:bg-subtle">
               <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
@@ -77,10 +130,61 @@ export default function FormsPicker({
                 <FontAwesomeIcon icon={faEye} className="h-3 w-3" />
                 View form
               </button>
+              {upload && (
+                <button
+                  type="button"
+                  onClick={() => void remove(upload)}
+                  disabled={disabled}
+                  aria-label={`Remove ${form.title}`}
+                  title="Remove this form"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600"
+                >
+                  <FontAwesomeIcon icon={faTrashCan} className="h-3 w-3" />
+                </button>
+              )}
             </li>
           );
         })}
       </ul>
+
+      {uploadsOn && (
+        <div className="mt-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".pdf,application/pdf"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) void upload(file);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={disabled || reading}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-brand-600/50 px-3 py-2.5 text-sm font-semibold text-brand-700 hover:bg-brand-600/5 disabled:opacity-60"
+          >
+            {reading ? <EcgLoader /> : <FontAwesomeIcon icon={faFileArrowUp} className="h-3.5 w-3.5" />}
+            {reading ? "Reading the form… this takes up to a minute" : "Upload a form (PDF)"}
+          </button>
+          {error && <p className="mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-sm text-red-700">{error}</p>}
+        </div>
+      )}
+
+      {draft && (
+        <FormEditor
+          draft={draft}
+          onClose={() => setDraft(null)}
+          onSaved={(form) => {
+            setDraft(null);
+            setCustom((prev) => [form, ...prev]);
+            if (!value.includes(form.key)) onChange([...value, form.key]);
+            toast("Form saved and added");
+          }}
+        />
+      )}
 
       {preview && (
         <div

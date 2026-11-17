@@ -7,6 +7,7 @@ import { addSkillTasks } from '@/app/lib/skill-tasks';
 import { addChecklistTasks } from '@/app/lib/checklist-import-server';
 import { ensureCategories } from '@/app/lib/scenario-categories';
 import { parseReturnDemoInput, RETURN_DEMO_CATEGORY } from '@/app/lib/return-demos';
+import { knownFormKeys } from '@/app/lib/return-demo-forms-server';
 import { FORMS_NEED_MIGRATION, isMissingForms, listReturnDemos, needsMigration, returnDemosReady } from '@/app/lib/return-demos-server';
 
 // Difficulty is retired, but scenarios.difficulty is NOT NULL with no default.
@@ -66,7 +67,8 @@ export async function POST(request: NextRequest) {
     const resolved = await ensureCategories(supabase, [RETURN_DEMO_CATEGORY], 'faculty', session.uid);
     if ('error' in resolved) return NextResponse.json({ error: resolved.error }, { status: resolved.status });
 
-    const forms = input.forms ?? [];
+    // Only forms that exist: an uploaded one is checked against the database.
+    const forms = await knownFormKeys(supabase, input.forms ?? []);
     const { data: demo, error } = await supabase
       .from('scenarios')
       .insert({
