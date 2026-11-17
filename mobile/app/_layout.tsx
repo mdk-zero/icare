@@ -11,6 +11,7 @@ import { useUpdatePrompt } from '@/hooks/useUpdatePrompt';
 import { useWebUpdatePrompt } from '@/hooks/useWebUpdatePrompt';
 import { BootLoader } from '@/components/ui/BootLoader';
 import { ConnectionToast } from '@/components/ui/ConnectionToast';
+import { WebPullToRefresh } from '@/components/WebPullToRefresh';
 import { StudentWebOff } from '@/components/web/StudentWebOff';
 import { WebAlertHost } from '@/components/web/WebAlertHost';
 import { startConnectivityMonitor } from '@/lib/client';
@@ -176,6 +177,8 @@ function ThemedApp() {
         <View style={[{ flex: 1 }, WEB_COLUMN, WEB_COLUMN && { backgroundColor: Palette.background }]}>
           <AuthNavigator />
           <ConnectionToast />
+          {/* Pull down to reload, for the student web app in a phone browser. */}
+          <WebPullToRefresh />
         </View>
         <WebAlertHost />
       </View>

@@ -446,10 +446,19 @@ export default function DashboardScreen() {
                   </Text>
                   <View style={styles.taskMeta}>
                     <FontAwesome6 name="clock" size={10} color={Palette.textMuted} />
-                    <Text style={styles.taskDue}>{formatDeadline(task)}</Text>
-                    {isReturnDemo(task) && <Text style={styles.taskKind}>Return Demo</Text>}
-                    {task.required && <Text style={styles.taskRequired}>Required</Text>}
+                    <Text style={styles.taskDue} numberOfLines={1}>
+                      {formatDeadline(task)}
+                    </Text>
                   </View>
+                  {/* On their own line, so a long date never pushes them past the edge. */}
+                  {(isReturnDemo(task) || task.required) && (
+                    <View style={styles.taskTags}>
+                      {isReturnDemo(task) && (
+                        <Text style={[styles.taskTag, styles.taskKind]}>Return Demo</Text>
+                      )}
+                      {task.required && <Text style={[styles.taskTag, styles.taskRequired]}>Required</Text>}
+                    </View>
+                  )}
                 </View>
                 <FontAwesome6 name="chevron-right" size={13} color={Palette.textFaint} />
               </Pressable>
@@ -738,25 +747,34 @@ function createStyles(
       marginTop: 3,
     },
     taskDue: {
+      flexShrink: 1,
       fontSize: 12,
       color: Palette.textMuted,
       marginLeft: 5,
     },
-    taskKind: {
-      fontSize: 11,
+    taskTags: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6,
+      marginTop: 6,
+    },
+    taskTag: {
+      fontSize: 10,
       fontWeight: "700",
-      color: Accent.blue.fg,
-      marginLeft: Spacing.md,
       textTransform: "uppercase",
       letterSpacing: 0.3,
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+      borderRadius: 999,
+      overflow: "hidden",
+    },
+    taskKind: {
+      color: Accent.blue.fg,
+      backgroundColor: Accent.blue.bg,
     },
     taskRequired: {
-      fontSize: 11,
-      fontWeight: "700",
       color: Accent.red.fg,
-      marginLeft: Spacing.md,
-      textTransform: "uppercase",
-      letterSpacing: 0.3,
+      backgroundColor: Accent.red.bg,
     },
     emptyTasksWrap: {
       alignItems: "center",

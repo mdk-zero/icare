@@ -28,6 +28,7 @@ import { groupByCourse, numberWithinCourse } from "../../lib/course-groups";
 import CourseGroupHeading from "../../components/CourseGroupHeading";
 import { loadingToast, toast } from "../../components/Toast";
 import ConfirmModal from "../../components/ConfirmModal";
+import ActionsMenu from "../../components/ActionsMenu";
 import { usePageData } from "../../lib/use-page-data";
 import { describeTimeLimit } from "@/app/lib/time-limit";
 import { deadlineFromInput } from "../../lib/deadline-input";
@@ -526,21 +527,17 @@ export default function FacultyAssessmentsClient() {
                   {group.items.map((a) => (
                 <div
                   key={a.id}
-                  className="bg-surface rounded-xl border border-hairline shadow-tile overflow-hidden flex flex-col"
+                  className="flex flex-col overflow-hidden rounded-xl border border-hairline bg-surface shadow-tile transition-all duration-200 hover:shadow-tile-hover"
                 >
-                  <div className="p-4 flex-1">
+                  <div className="flex-1 border-b border-hairline p-3">
                     {quizNumber.has(a.id) && (
                       <p className="mb-0.5 text-[11px] font-semibold uppercase tracking-wider text-brand-700">
                         Quiz #{quizNumber.get(a.id)}
                       </p>
                     )}
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <h3 className="font-semibold text-gray-800 truncate">{a.title}</h3>
-                    </div>
-                    {a.description && (
-                      <p className="text-sm text-gray-500 mb-3 line-clamp-2">{a.description}</p>
-                    )}
-                    <div className="flex items-center gap-2 text-sm text-gray-400 flex-wrap">
+                    <h3 className="line-clamp-2 font-semibold text-gray-900">{a.title}</h3>
+                    {a.description && <p className="mt-1 line-clamp-2 text-sm text-gray-500">{a.description}</p>}
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-gray-400">
                       <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
                         {a.category}
                       </span>
@@ -561,7 +558,7 @@ export default function FacultyAssessmentsClient() {
                       </span>
                     </div>
                   </div>
-                  <div className="px-4 py-3 bg-subtle border-t border-hairline space-y-2">
+                  <div className="bg-subtle p-5">
                     {/* Where it stands with students. Assigning is what shows a quiz to them. */}
                     {(() => {
                       const groups = a.assigned_groups ?? [];
@@ -580,7 +577,7 @@ export default function FacultyAssessmentsClient() {
                           : `Visible to ${audience} · not assigned`;
                       const created = new Date(a.created_at);
                       return (
-                        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
                           <p className={`flex min-w-0 items-center gap-2 text-xs font-medium ${a.is_published ? "text-green-700" : "text-gray-500"}`}>
                             <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${a.is_published ? "bg-green-600" : "bg-gray-300"}`} />
                             <span className="truncate" title={label}>{label}</span>
@@ -604,81 +601,61 @@ export default function FacultyAssessmentsClient() {
                         </div>
                       );
                     })()}
-                    {/* One row: the two assign actions, then icon buttons. */}
-                    <div className="flex flex-nowrap items-center justify-end gap-1.5 overflow-x-auto">
-                      <button
-                        onClick={() => openAssignModal(a)}
-                        title={a.is_published ? "Assign to more sections, or hide it" : "Assign it to sections: that shows it to them"}
-                        className="flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700"
-                      >
-                        <FontAwesomeIcon icon={faUserPlus} className="w-3.5 h-3.5" />
-                        Assign
-                      </button>
+                    {/* The main thing to open, and who has it, as on a Return Demonstration card:
+                        its results once students have it, its questions before. */}
+                    <div className="mb-2 flex items-center gap-2">
+                      {a.student_count > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => router.push(`/instructor/assessments/${a.id}/results`)}
+                          className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
+                        >
+                          <FontAwesomeIcon icon={faChartSimple} className="h-3.5 w-3.5" />
+                          Results
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => router.push(`/instructor/assessments/${a.id}`)}
+                          className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg border border-brand-600/40 bg-surface px-3 py-2 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-600/5"
+                        >
+                          <FontAwesomeIcon icon={faListCheck} className="h-3.5 w-3.5" />
+                          Questions
+                        </button>
+                      )}
                       {(a.assigned_groups ?? []).length > 0 && (
                         <button
+                          type="button"
                           onClick={() => setWhoHas(a)}
                           title="Who has it: the groups and sections, and their deadlines"
                           aria-label={`Who has it: ${(a.assigned_groups ?? []).length} groups`}
-                          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-brand-600/40 bg-surface px-2.5 py-2 text-xs font-semibold tabular-nums text-brand-700 hover:bg-brand-600/5"
+                          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-brand-600/40 bg-surface px-3 py-2 text-sm font-semibold tabular-nums text-brand-700 hover:bg-brand-600/5"
                         >
-                          <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />
+                          <FontAwesomeIcon icon={faUsers} className="h-3.5 w-3.5" />
                           {(a.assigned_groups ?? []).length}
                         </button>
                       )}
-                      {canChange(a) && a.student_count > 0 ? (
-                        // Assigned: what students were given stays what they are graded on.
-                        <span className="group relative">
-                          <button
-                            type="button"
-                            aria-disabled
-                            aria-label="Edit (not available)"
-                            className="p-2 rounded-lg border border-gray-200 text-gray-300 cursor-not-allowed"
-                          >
-                            <FontAwesomeIcon icon={faPen} className="w-3.5 h-3.5" />
-                          </button>
-                          <span
-                            role="tooltip"
-                            className="pointer-events-none absolute bottom-full right-0 z-20 mb-2 w-60 rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium leading-snug text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
-                          >
-                            You can&apos;t edit this quiz because it&apos;s already assigned to {a.student_count} student
-                            {a.student_count === 1 ? "" : "s"}. Make a new quiz to change it.
-                          </span>
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => router.push(`/instructor/assessments/${a.id}`)}
-                          title={canChange(a) ? "Edit details" : "View"}
-                          className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
-                        >
-                          <FontAwesomeIcon icon={faPen} className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      {canChange(a) && (
-                        <button
-                          onClick={() => setConfirmDelete(a)}
-                          title="Delete"
-                          className="p-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
-                        >
-                          <FontAwesomeIcon icon={faTrash} className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => router.push(`/instructor/assessments/${a.id}/results`)}
-                        title="Results"
-                        aria-label="Results"
-                        className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
-                      >
-                        <FontAwesomeIcon icon={faChartSimple} className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => router.push(`/instructor/assessments/${a.id}`)}
-                        title="Questions"
-                        aria-label="Questions"
-                        className="p-2 rounded-lg bg-brand-600/10 dark:bg-brand-600/25 text-brand-700 dark:text-white hover:bg-brand-600/20 dark:hover:bg-brand-600/35"
-                      >
-                        <FontAwesomeIcon icon={faListCheck} className="w-3.5 h-3.5" />
-                      </button>
                     </div>
+                    {/* Everything else, in one menu as on the other cards. */}
+                    <ActionsMenu
+                      actions={[
+                        { label: "Assign", icon: faUserPlus, onClick: () => openAssignModal(a) },
+                        a.student_count > 0
+                          ? { label: "Questions", icon: faListCheck, onClick: () => router.push(`/instructor/assessments/${a.id}`) }
+                          : { label: "Results", icon: faChartSimple, onClick: () => router.push(`/instructor/assessments/${a.id}/results`) },
+                        {
+                          label: canChange(a) ? "Edit details" : "View",
+                          icon: faPen,
+                          onClick: () => router.push(`/instructor/assessments/${a.id}`),
+                          // Assigned: what students were given stays what they are graded on.
+                          disabled: canChange(a) && a.student_count > 0,
+                          disabledReason: `You can't edit this quiz because it's already assigned to ${a.student_count} student${a.student_count === 1 ? "" : "s"}. Make a new quiz to change it.`,
+                        },
+                        ...(canChange(a)
+                          ? [{ label: "Delete", icon: faTrash, danger: true, onClick: () => setConfirmDelete(a) }]
+                          : []),
+                      ]}
+                    />
                   </div>
                 </div>
               ))}
