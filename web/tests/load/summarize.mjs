@@ -1,8 +1,8 @@
 /**
  * Reads a JMeter results file (CSV .jtl) from one of the plans here and prints
  * the figures of the manuscript's performance tables: response time per
- * interaction (1 user), scalability per user level, throughput per role, and
- * reliability under sustained load.
+ * interaction (1 user), scalability per user level, throughput per role,
+ * reliability under sustained load, and capacity under realistic use.
  *
  *   node tests/load/summarize.mjs tests/load/results/<run>/results.jtl
  *
@@ -122,6 +122,31 @@ export function summarize(jtlPath) {
     });
     rows.push(['Overall', total, f1(seconds), f2(total / seconds), '', '']);
     table('Throughput, 30 users per role, no pauses', ['Scenario', 'Requests', 'Duration (s)', 'RPS', 'Failed', 'Avg (ms)'], rows);
+  }
+
+  const capacity = [...new Set(inGroup('5 ').map((s) => s.group))];
+  if (capacity.length) {
+    const pct = (xs, p) => {
+      const sorted = [...xs].sort((a, b) => a - b);
+      return sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))] : 0;
+    };
+    const rows = capacity.map((group) => {
+      const xs = samples.filter((s) => s.group === group);
+      const times = xs.map((s) => s.elapsed);
+      const failed = xs.filter((s) => !s.ok);
+      return [
+        Number(group.match(/(\d+) users?$/)?.[1] ?? 0),
+        xs.length,
+        f1(avg(times)),
+        median(times),
+        pct(times, 95),
+        f2(xs.length / span(xs)),
+        f2((100 * failed.length) / xs.length),
+      ];
+    });
+    table('Capacity, realistic use (5-15 s between requests)', ['Users', 'Requests', 'Avg (ms)', 'p50 (ms)', 'p95 (ms)', 'RPS', 'Errors (%)'], rows);
+    const failed = inGroup('5 ').filter((s) => !s.ok);
+    if (failed.length) console.log(`  failures by status: ${JSON.stringify(Object.groupBy(failed, (s) => s.code), (k, v) => (Array.isArray(v) ? v.length : v))}`);
   }
 
   const sustained = inGroup('4 ');

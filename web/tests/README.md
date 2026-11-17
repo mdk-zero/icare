@@ -124,11 +124,15 @@ They send only read-only requests, as the student, Instructor and Dean test acco
   role for 50 s with no pauses. 50 users is the most the program plans for (decided
   2026-11-17), so there is no 100-user step.
 - `icare-throughput.jmx`: the throughput scenarios alone, after signing in.
+- `icare-capacity.jmx`: realistic class use, the 200-user check: 50, 100, 150 and 200 users
+  for 180 s each (30 s ramp-up), each pausing 5 to 15 s between requests as people do. The
+  scalability steps above keep 50 users as their most, with their much shorter pauses.
 - `icare-reliability.jmx`: 30 users for 300 s, pausing 0.5 to 1.5 s. Run it after a cool-down.
 
 ```bash
 JMETER_HOME=/path/to/apache-jmeter-5.6.3 npm run test:load:live -- performance
 JMETER_HOME=/path/to/apache-jmeter-5.6.3 npm run test:load:live -- throughput
+JMETER_HOME=/path/to/apache-jmeter-5.6.3 npm run test:load:live -- capacity
 JMETER_HOME=/path/to/apache-jmeter-5.6.3 npm run test:load:live -- reliability
 node tests/load/summarize.mjs tests/load/results/<run>/results.jtl   # the tables again
 ```
