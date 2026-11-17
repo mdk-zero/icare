@@ -59,9 +59,9 @@ export interface WarehouseRefresh {
 }
 
 /**
- * Refreshes the warehouse. run_dw_etl_once (migration 095) refreshes only
+ * Refreshes the warehouse. run_dw_etl_once (migration 096) refreshes only
  * when no refresh is already running anywhere, and pg_cron calls it every
- * five minutes. Before 095 this falls back to run_dw_etl, which then only
+ * five minutes. Before 096 this falls back to run_dw_etl, which then only
  * this instance keeps to one at a time. A refresh that ran drops this
  * instance's cached results; a skipped one leaves them, since the refresh
  * that was running will be read within ANALYTICS_TTL_MS.

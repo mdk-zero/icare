@@ -1,5 +1,5 @@
 -- =================================================================
--- 095: One warehouse refresh at a time, on a schedule.
+-- 096: One warehouse refresh at a time, on a schedule.
 --
 -- Analytics refreshed the warehouse (run_dw_etl) from inside a dashboard
 -- request whenever it was over five minutes old. The app only kept one
@@ -53,7 +53,7 @@ begin
     end if;
     perform cron.schedule('icare-dw-etl', '*/5 * * * *', 'select public.run_dw_etl_once()');
   else
-    raise notice 'pg_cron is not enabled; enable it and run 095 again to schedule the warehouse refresh';
+    raise notice 'pg_cron is not enabled; enable it and run 096 again to schedule the warehouse refresh';
   end if;
 exception when others then
   raise notice 'pg_cron scheduling skipped: %', sqlerrm;

@@ -18,7 +18,7 @@ import { WORK_KINDS, type WorkKind } from '@/app/lib/work-kinds';
 /**
  * Dashboard analytics read from the star-schema warehouse
  * (public.dw_analytics_summary → dw facts/dims). pg_cron refreshes the
- * warehouse every five minutes (migration 095). A warehouse older than
+ * warehouse every five minutes (migration 096). A warehouse older than
  * STALE_MS is still served as it is, and refreshed after the response (see
  * refreshInBackground); only one that has never been loaded is refreshed
  * before answering. A refresh inside every request used to stall the whole
@@ -182,7 +182,7 @@ async function readGroupTrend(
  * A stale warehouse is refreshed after the response, at most once per
  * STALE_MS per server instance: pg_cron normally gets there first, and this
  * covers a database without it. refreshWarehouse keeps it to one refresh at
- * a time (across instances since 095).
+ * a time (across instances since 096).
  */
 let lastBackgroundRefresh = 0;
 

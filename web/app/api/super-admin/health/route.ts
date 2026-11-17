@@ -60,7 +60,7 @@ async function checkWarehouse(supabase: ReturnType<typeof getSupabaseAdmin>): Pr
       duration_ms: ms,
     };
   }
-  // pg_cron refreshes the warehouse every five minutes (095), and Analytics
+  // pg_cron refreshes the warehouse every five minutes (096), and Analytics
   // does when it finds it stale, so an old refresh means neither has run
   // lately. Running the ETL here shows whether it still works, which is what
   // this check is for; one already running is left to finish.

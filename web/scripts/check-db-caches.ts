@@ -43,7 +43,7 @@ const db = {
   missingUserColumns: new Set<string>(),
   summaryCalls: 0,
   summaryFails: 0,
-  /** What run_dw_etl_once does: refresh, report a refresh already running, or not exist (before 095). */
+  /** What run_dw_etl_once does: refresh, report a refresh already running, or not exist (before 096). */
   etlOnce: 'refresh' as 'refresh' | 'skip' | 'missing',
   etlOnceCalls: 0,
   etlCalls: 0,
@@ -284,7 +284,7 @@ async function main() {
     db.etlOnce = 'missing';
     db.etlCalls = 0;
     const fallback = await refreshWarehouse(supabase);
-    check('before 095 it falls back to run_dw_etl', !fallback.error && !fallback.skipped && db.etlCalls === 1, `etl calls ${db.etlCalls}`);
+    check('before 096 it falls back to run_dw_etl', !fallback.error && !fallback.skipped && db.etlCalls === 1, `etl calls ${db.etlCalls}`);
   }
 
   console.log('\ninstructor scope');
