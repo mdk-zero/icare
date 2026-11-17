@@ -3,7 +3,7 @@ import { summarizeAnomalyReasons } from './vitals/rules';
 import type { SessionPayload } from './auth/session';
 import { getFacultySectionIds } from './roster';
 import { getScopedStudentIds } from './admin-scope';
-import { fetchAll } from './fetch-all';
+import { fetchAll, readMatching } from './fetch-all';
 import { kindOf, scenarioKinds, SCENARIO_KIND_NOUN } from './scenario-kind';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
@@ -69,16 +69,28 @@ const STARTED = ['in_progress', 'completed'];
 export async function getStudentsWithWork(supabase: Supabase, studentIds: string[]): Promise<Set<string>> {
   const found = new Set<string>();
   if (studentIds.length === 0) return found;
+  // Split into short id lists and paged, so a large roster neither overflows
+  // the URL nor loses students past PostgREST's 1000-row cap.
+  type Row = { student_id: string };
+  const failed = (table: string) => (err: unknown) => {
+    console.error('Failed to check student work', table, err);
+    return [] as Row[];
+  };
   const results = await Promise.all([
-    supabase.from('scenario_assignments').select('student_id').in('student_id', studentIds).in('status', STARTED).limit(20000),
-    supabase.from('assessment_assignments').select('student_id').in('student_id', studentIds).in('status', STARTED).limit(20000),
-    supabase.from('assessment_attempts').select('student_id').in('student_id', studentIds).limit(20000),
-    supabase.from('case_submissions').select('student_id').in('student_id', studentIds).in('status', ['submitted', 'graded']).limit(20000),
+    readMatching<Row>(studentIds, (part, from, to) =>
+      supabase.from('scenario_assignments').select('student_id').in('student_id', part).in('status', STARTED).order('id').range(from, to),
+    ).catch(failed('scenario_assignments')),
+    readMatching<Row>(studentIds, (part, from, to) =>
+      supabase.from('assessment_assignments').select('student_id').in('student_id', part).in('status', STARTED).order('id').range(from, to),
+    ).catch(failed('assessment_assignments')),
+    readMatching<Row>(studentIds, (part, from, to) =>
+      supabase.from('assessment_attempts').select('student_id').in('student_id', part).order('id').range(from, to),
+    ).catch(failed('assessment_attempts')),
+    readMatching<Row>(studentIds, (part, from, to) =>
+      supabase.from('case_submissions').select('student_id').in('student_id', part).in('status', ['submitted', 'graded']).order('id').range(from, to),
+    ).catch(failed('case_submissions')),
   ]);
-  for (const res of results) {
-    if (res.error) console.error('Failed to check student work', res.error);
-    for (const row of res.data ?? []) found.add(row.student_id as string);
-  }
+  for (const rows of results) for (const row of rows) found.add(row.student_id);
   return found;
 }
 
@@ -190,6 +202,8 @@ const ASSISTANCE_STATUS: Record<string, FacultyAlertRow['status']> = {
 export async function buildFacultyAlerts(
   supabase: Supabase,
   students: ScopedStudent[],
+  /** The students' latest predictions, when the caller has already read them. */
+  knownRisks?: Awaited<ReturnType<typeof getLatestRiskByStudent>>,
 ): Promise<FacultyAlertRow[]> {
   if (students.length === 0) return [];
 
@@ -212,7 +226,7 @@ export async function buildFacultyAlerts(
       .eq('is_anomaly', true)
       .order('recorded_at', { ascending: false })
       .limit(100),
-    getLatestRiskByStudent(supabase, ids),
+    knownRisks ?? getLatestRiskByStudent(supabase, ids),
   ]);
 
   for (const row of assistance.data ?? []) {

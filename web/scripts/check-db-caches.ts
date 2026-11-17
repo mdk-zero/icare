@@ -1,8 +1,10 @@
 /**
  * Behavioural checks for the per-instance caches that spare the database a
  * read on every request: the TTL cache itself, the session check's cached
- * user row (lib/auth/live-user) with its memory of missing columns, and the
- * warehouse results and refresh (lib/analytics).
+ * user row (lib/auth/live-user) with its memory of missing columns, the
+ * warehouse results and refresh (lib/analytics), the instructor and Dean
+ * scopes with the write hook that drops them (lib/roster, lib/table-writes),
+ * and the scenario-kind and BKT catalogs.
  * The app's own Supabase client runs against a small fake PostgREST that
  * counts what reaches it. There is no test runner in this repo.
  *
@@ -45,6 +47,9 @@ const db = {
   etlOnce: 'refresh' as 'refresh' | 'skip' | 'missing',
   etlOnceCalls: 0,
   etlCalls: 0,
+  /** Reads per table, for the tables only these checks use. */
+  reads: {} as Record<string, number>,
+  writes: 0,
 };
 
 async function startFakePostgrest(): Promise<string> {
@@ -74,6 +79,22 @@ async function startFakePostgrest(): Promise<string> {
     if (url.pathname === '/rest/v1/rpc/run_dw_etl') {
       db.etlCalls++;
       return send(200, { fact_attempts: 3 });
+    }
+    const table = url.pathname.replace('/rest/v1/', '');
+    if (req.method !== 'GET' && !table.startsWith('rpc/')) {
+      db.writes++;
+      return send(201, []);
+    }
+    db.reads[table] = (db.reads[table] ?? 0) + 1;
+    if (table === 'teams') return send(200, [{ id: 't1', section_id: 'sec1' }]);
+    if (table === 'team_members') return send(200, [{ student_id: 'st1', users: { role: 'student' } }]);
+    if (table === 'course_offerings') return send(200, []);
+    if (table === 'scenarios') {
+      const ids = (url.searchParams.get('id') ?? '').replace(/^in\.\(|\)$/g, '').split(',').filter(Boolean);
+      return send(200, ids.map((id) => ({ id, kind: id.startsWith('rd') ? 'return_demo' : 'patient_case' })));
+    }
+    if (table === 'bkt_parameters') {
+      return send(200, [{ skill_id: '1-1', p_init: 0.3, p_learn: 0.2, p_guess: 0.2, p_slip: 0.1, source: 'fitted' }]);
     }
     // deanOwnershipLive's probe: the column exists.
     if (url.pathname === '/rest/v1/sections') return send(200, []);
@@ -111,6 +132,9 @@ async function main() {
   const { viewerDeanId } = await import('../app/lib/dean-scope');
   const { callAnalytics, forgetAnalytics, refreshWarehouse } = await import('../app/lib/analytics');
   const { getSupabaseAdmin } = await import('../app/lib/supabase/server');
+  const { getFacultySectionIds, getFacultyStudentIds } = await import('../app/lib/roster');
+  const { scenarioKinds } = await import('../app/lib/scenario-kind');
+  const { loadBktParameters } = await import('../app/lib/bkt');
   const supabase = getSupabaseAdmin();
 
   console.log('ttl cache');
@@ -261,6 +285,45 @@ async function main() {
     db.etlCalls = 0;
     const fallback = await refreshWarehouse(supabase);
     check('before 095 it falls back to run_dw_etl', !fallback.error && !fallback.skipped && db.etlCalls === 1, `etl calls ${db.etlCalls}`);
+  }
+
+  console.log('\ninstructor scope');
+  {
+    db.reads = {};
+    const [a, b] = await Promise.all([getFacultyStudentIds(supabase, 'f1'), getFacultyStudentIds(supabase, 'f1')]);
+    eq('two requests at once read the groups once', { a, b, teams: db.reads.teams }, { a: ['st1'], b: ['st1'], teams: 1 });
+    a.push('changed by a caller');
+    eq('a caller changing its copy leaves the kept one', await getFacultyStudentIds(supabase, 'f1'), ['st1']);
+    eq('and later requests read nothing', db.reads.teams, 1);
+    await getFacultySectionIds(supabase, 'f1');
+    await getFacultySectionIds(supabase, 'f1');
+    eq('the sections are kept too', db.reads.teams, 2);
+
+    await supabase.from('users').update({ last_login_at: new Date().toISOString() }).eq('id', 'f1');
+    await getFacultyStudentIds(supabase, 'f1');
+    eq('a sign-in stamping last_login_at keeps them', db.reads.teams, 2);
+    await supabase.from('team_members').insert({ team_id: 't1', student_id: 'st2' });
+    await getFacultyStudentIds(supabase, 'f1');
+    eq('a group change on this instance drops them at once', db.reads.teams, 3);
+    await supabase.from('users').update({ section_id: 'sec2' }).eq('id', 'st1');
+    await getFacultySectionIds(supabase, 'f1');
+    eq('and so does moving a student to another section', db.reads.teams, 4);
+  }
+
+  console.log('\ncatalogs');
+  {
+    db.reads = {};
+    const first = await scenarioKinds(supabase, ['pc1', 'rd1']);
+    const again = await scenarioKinds(supabase, ['rd1', 'pc1']);
+    eq('scenario kinds are read once', { reads: db.reads.scenarios, rd1: again.get('rd1') }, { reads: 1, rd1: 'return_demo' });
+    check('with the same answer', first.get('pc1') === 'patient_case' && again.get('pc1') === 'patient_case');
+    await scenarioKinds(supabase, ['pc1', 'pc2']);
+    eq('a new scenario is read on its own', db.reads.scenarios, 2);
+
+    const p1 = await loadBktParameters(supabase, ['1-1', '2-1']);
+    const p2 = await loadBktParameters(supabase, ['1-1']);
+    eq('BKT parameters are read once for every skill', db.reads.bkt_parameters, 1);
+    check('and filtered to the skills asked for', p1.size === 1 && p1.get('1-1')?.p_init === 0.3 && p2.size === 1);
   }
 
   // Last: the memory below would leave sessions_valid_after out of later checks.

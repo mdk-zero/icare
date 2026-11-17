@@ -15,12 +15,17 @@ export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
 
-    const { data: assignments, error } = await supabase
-      .from('scenario_assignments')
-      // '*' so a database without started_at (before 063) still answers.
-      .select('*')
-      .eq('student_id', session.uid)
-      .order('assigned_at', { ascending: false });
+    // The student's team doesn't depend on the assignments, so it is read
+    // alongside them; nothing before migration 048.
+    const [{ data: assignments, error }, { data: membership }] = await Promise.all([
+      supabase
+        .from('scenario_assignments')
+        // '*' so a database without started_at (before 063) still answers.
+        .select('*')
+        .eq('student_id', session.uid)
+        .order('assigned_at', { ascending: false }),
+      supabase.from('team_members').select('teams(name)').eq('student_id', session.uid).maybeSingle(),
+    ]);
 
     if (error) {
       console.error('Failed to fetch student assignments', error);
@@ -32,10 +37,11 @@ export async function GET() {
     }
 
     const scenarioIds = [...new Set(assignments.map((a) => a.scenario_id))];
-    const { data: scenarios, error: scenariosError } = await supabase
-      .from('scenarios')
-      .select('id, title, category, patient_id')
-      .in('id', scenarioIds);
+    // Patient Case or Return Demonstration (072), so the app opens the right screen.
+    const [{ data: scenarios, error: scenariosError }, kinds] = await Promise.all([
+      supabase.from('scenarios').select('id, title, category, patient_id').in('id', scenarioIds),
+      scenarioKinds(supabase, scenarioIds),
+    ]);
 
     if (scenariosError) {
       console.error('Failed to fetch patient cases', scenariosError);
@@ -43,14 +49,6 @@ export async function GET() {
     }
 
     const scenariosById = new Map(scenarios?.map((s) => [s.id, s]));
-    // Patient Case or Return Demonstration (072), so the app opens the right screen.
-    const kinds = await scenarioKinds(supabase, scenarioIds);
-    // The student's team, if any; nothing before migration 048.
-    const { data: membership } = await supabase
-      .from('team_members')
-      .select('teams(name)')
-      .eq('student_id', session.uid)
-      .maybeSingle();
     const teamName = (membership?.teams as unknown as { name: string } | null)?.name ?? null;
 
     const formatted = assignments.map((a) => {

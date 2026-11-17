@@ -1,6 +1,50 @@
 import type { getSupabaseAdmin } from './supabase/server';
+import { TtlCache } from './ttl-cache';
+import { onTableWrite } from './table-writes';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
+
+/**
+ * A faculty member's sections and students, kept per server instance for
+ * SCOPE_TTL_MS: nearly every instructor request asks for them, and the
+ * students alone take up to six reads, four of them one after another. A
+ * group move or a student added elsewhere shows here within that time, as
+ * the session check's 30 s does (lib/auth/live-user); this instance's own
+ * roster writes drop them at once (lib/table-writes). admin-scope keeps the
+ * Dean's the same way.
+ */
+const SCOPE_TTL_MS = 30_000;
+const sectionScope = new TtlCache<string[]>(SCOPE_TTL_MS, 1000);
+const studentScope = new TtlCache<string[]>(SCOPE_TTL_MS, 1000);
+
+/** The tables that decide whose students are whose. */
+export const ROSTER_TABLES = [
+  'teams',
+  'team_members',
+  'faculty_sections',
+  'faculty_students',
+  'course_offerings',
+  'course_offering_sections',
+  'course_offering_students',
+  'sections',
+  'users',
+] as const;
+
+/**
+ * Whether a write moves anyone between scopes. A users write does only when
+ * it adds or removes an account or sets its role, Dean or section; a sign-in
+ * stamping last_login_at does not.
+ */
+export function changesScope(table: string, body: string | null): boolean {
+  if (table !== 'users' || body === null) return true;
+  return /"(role|admin_id|section_id)"\s*:/.test(body);
+}
+
+onTableWrite(ROSTER_TABLES, (table, body) => {
+  if (!changesScope(table, body)) return;
+  sectionScope.clear();
+  studentScope.clear();
+});
 
 /**
  * Who a faculty member teaches is decided by groups. An admin splits each
@@ -41,8 +85,12 @@ async function supervisedGroups(
   return (data ?? []) as { id: string; section_id: string }[];
 }
 
-/** The sections of the groups the faculty member supervises. */
-export async function getFacultySectionIds(
+/** The sections of the groups the faculty member supervises (kept for SCOPE_TTL_MS). */
+export async function getFacultySectionIds(supabase: Supabase, facultyId: string): Promise<string[]> {
+  return [...(await sectionScope.fetch(facultyId, () => loadFacultySectionIds(supabase, facultyId)))];
+}
+
+async function loadFacultySectionIds(
   supabase: Supabase,
   facultyId: string,
 ): Promise<string[]> {
@@ -90,9 +138,13 @@ async function courseRosterStudentIds(
 /**
  * The faculty member's students: the members of the groups they supervise,
  * and the rest of their course rosters (a section where they supervise no
- * group, students added by hand).
+ * group, students added by hand). Kept for SCOPE_TTL_MS.
  */
-export async function getFacultyStudentIds(
+export async function getFacultyStudentIds(supabase: Supabase, facultyId: string): Promise<string[]> {
+  return [...(await studentScope.fetch(facultyId, () => loadFacultyStudentIds(supabase, facultyId)))];
+}
+
+async function loadFacultyStudentIds(
   supabase: Supabase,
   facultyId: string,
 ): Promise<string[]> {
