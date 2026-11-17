@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet, Pressable } from 'react-native';
+import { ScrollView, View, Text, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -201,22 +201,14 @@ export default function QuizInfoScreen() {
             </View>
           </View>
 
-          <Pressable
-            style={({ pressed }) => [styles.studyButton, pressed && styles.pressed]}
-            onPress={() => router.push(`/flashcards/${quiz.id}`)}
-            accessibilityRole="button"
-          >
-            <View style={[styles.studyIcon, { backgroundColor: Accent.violet.bg }]}>
-              <Ionicons name="copy-outline" size={18} color={Accent.violet.fg} />
-            </View>
-            <View style={styles.studyText}>
-              <Text style={styles.studyTitle}>Study flashcards</Text>
-              <Text style={styles.studyBody}>Review this quiz&apos;s questions and answers</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={Palette.textFaint} />
-          </Pressable>
-
           {strictRules}
+          {/* Studying and retaking side by side: the two things to do after a quiz. */}
+          <PrimaryButton
+            title="Study flashcards"
+            onPress={() => router.push(`/flashcards/${quiz.id}`)}
+            variant="outline"
+            size="lg"
+          />
           <PrimaryButton
             title={blocked ? 'Nothing to review' : canPractice ? 'Take review quiz' : 'Take it again'}
             onPress={() => router.push(`/quiz/${quiz.id}`)}
@@ -268,7 +260,6 @@ function createStyles(
     container: { flex: 1, backgroundColor: Palette.background },
     content: { padding: Spacing.lg, paddingBottom: 40, gap: Spacing.md },
     center: { flex: 1, justifyContent: 'center', backgroundColor: Palette.background },
-    pressed: { opacity: 0.85 },
     hero: { borderRadius: Radius.lg, padding: Spacing.lg, overflow: 'hidden' },
     heroTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
     heroIcon: {
@@ -319,20 +310,6 @@ function createStyles(
     scoreText: { flex: 1 },
     scoreTitle: { ...Type.title, fontSize: 18 },
     scoreBody: { fontSize: 12, color: Palette.textSecondary, lineHeight: 17, marginTop: 4 },
-    studyButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Spacing.md,
-      padding: Spacing.md,
-      borderRadius: Radius.md,
-      borderWidth: 1,
-      borderColor: Palette.border,
-      backgroundColor: Palette.background,
-    },
-    studyIcon: { width: 38, height: 38, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
-    studyText: { flex: 1 },
-    studyTitle: { fontSize: 14, fontWeight: '700', color: Palette.ink },
-    studyBody: { fontSize: 12, color: Palette.textMuted, marginTop: 1 },
     note: { fontSize: 12, color: Accent.red.fg, textAlign: 'center' },
     practiceNote: { fontSize: 12, color: Palette.textSecondary, textAlign: 'center', lineHeight: 17 },
     readyRow: { flexDirection: 'row', gap: Spacing.sm, alignItems: 'flex-start' },

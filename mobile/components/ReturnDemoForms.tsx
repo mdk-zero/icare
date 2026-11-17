@@ -283,7 +283,14 @@ function PreviewWindow({
   const styles = useMemo(() => createStyles(Palette, Accent), [Palette, Accent]);
   const insets = useSafeAreaInsets();
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="fullScreen">
+    <Modal
+      visible={visible}
+      animationType="slide"
+      onRequestClose={onClose}
+      presentationStyle="fullScreen"
+      statusBarTranslucent
+      navigationBarTranslucent
+    >
       <View style={[styles.window, { paddingTop: insets.top }]}>
         <WindowHeader title={form.title} subtitle={form.source} onClose={onClose} styles={styles} />
         <ScrollView contentContainerStyle={styles.previewBody}>
@@ -299,7 +306,7 @@ function PreviewWindow({
         </ScrollView>
         {onStart ? (
           <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
-            <PrimaryButton title={startLabel} onPress={onStart} style={{ flex: 1 }} />
+            <PrimaryButton title={startLabel} onPress={onStart} />
           </View>
         ) : null}
       </View>
@@ -365,6 +372,8 @@ function FillWindow({
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState<'save' | 'submit' | 'close' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Every required answer is in and Submit was pressed: asking once more before handing it in. */
+  const [confirming, setConfirming] = useState(false);
 
   const { answered, asked } = answeredCount(form, draft);
   const set = (key: string, value: string) => {
@@ -373,11 +382,16 @@ function FillWindow({
     setError(null);
   };
 
-  const save = async (mode: 'save' | 'submit' | 'close') => {
+  const save = async (mode: 'save' | 'submit' | 'close', confirmed = false) => {
     const rows = sanitizeRows(form, draft);
     if (mode === 'submit') {
       const missing = missingInRows(form, rows);
       if (missing) return setError(missing);
+      if (!confirmed) {
+        setError(null);
+        return setConfirming(true);
+      }
+      setConfirming(false);
     }
     if (mode === 'close' && !dirty) return onClose();
     setBusy(mode);
@@ -396,7 +410,14 @@ function FillWindow({
   };
 
   return (
-    <Modal visible animationType="slide" onRequestClose={() => void save('close')} presentationStyle="fullScreen">
+    <Modal
+      visible
+      animationType="slide"
+      onRequestClose={() => (confirming ? setConfirming(false) : void save('close'))}
+      presentationStyle="fullScreen"
+      statusBarTranslucent
+      navigationBarTranslucent
+    >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={[styles.window, { paddingTop: insets.top }]}
@@ -453,6 +474,26 @@ function FillWindow({
             />
           </View>
         </View>
+
+        {confirming ? (
+          <View style={styles.confirmBackdrop}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setConfirming(false)} accessibilityLabel="Keep editing" />
+            <View style={styles.confirmCard} accessibilityViewIsModal accessibilityRole="alert">
+              <View style={styles.confirmIcon}>
+                <Ionicons name="paper-plane-outline" size={22} color={Palette.primary} />
+              </View>
+              <Text style={styles.confirmTitle}>Submit the {form.title}?</Text>
+              <Text style={styles.confirmBody}>
+                {answered} of {asked} answered. Your instructor will see your answers on the form. You can still edit them
+                until your Return Demonstration is graded.
+              </Text>
+              <View style={styles.actions}>
+                <PrimaryButton title="Keep editing" onPress={() => setConfirming(false)} variant="outline" style={{ flex: 1 }} />
+                <PrimaryButton title="Submit" onPress={() => void save('submit', true)} style={{ flex: 1 }} />
+              </View>
+            </View>
+          </View>
+        ) : null}
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -742,5 +783,33 @@ function createStyles(Palette: ReturnType<typeof useTheme>['Palette'], Accent: R
     },
     checkOn: { borderColor: Palette.primary, backgroundColor: Accent.teal.bg },
     checkText: { fontSize: 14, color: Palette.ink, flex: 1 },
+
+    confirmBackdrop: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: Spacing.lg,
+    },
+    confirmCard: {
+      width: '100%',
+      maxWidth: 420,
+      gap: Spacing.md,
+      padding: Spacing.lg,
+      borderRadius: Radius.lg,
+      backgroundColor: Palette.surface,
+      borderWidth: 1,
+      borderColor: Palette.border,
+    },
+    confirmIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: Accent.teal.bg,
+    },
+    confirmTitle: { fontSize: 18, fontWeight: '700', color: Palette.ink },
+    confirmBody: { fontSize: 14, lineHeight: 20, color: Palette.textSecondary },
   });
 }

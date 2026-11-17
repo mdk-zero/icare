@@ -154,12 +154,22 @@ const DROPDOWN_ORDER: DropdownKey[] = ["pending", "completed", "hospital"];
 const DROPDOWN_HEADING_H = 56;
 
 /** A section heading that opens and closes its list; the same one shows pinned below the app header. */
+type AccentName = keyof ReturnType<typeof useTheme>["Accent"];
+
+/**
+ * A list's heading, as a card: its icon, title and count, and a line saying
+ * what is in it, so a closed list still tells the student something (what is
+ * next, the latest grade, how many write-ups are left).
+ */
 function DropdownHeading({
   title,
   count,
   open,
   onToggle,
   tone = "default",
+  icon,
+  accent,
+  summary,
 }: {
   title: string;
   count: number;
@@ -167,12 +177,17 @@ function DropdownHeading({
   onToggle: () => void;
   /** "alert" when the count is work still to do. */
   tone?: "default" | "alert";
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  accent: AccentName;
+  /** One line about what is inside, such as "Next: Patient Case Demo 1". */
+  summary?: string;
 }) {
   const { Palette, Accent, Shadow, Type } = useTheme();
   const styles = React.useMemo(
     () => createStyles(Palette, Accent, Shadow, Type),
     [Palette, Accent, Shadow, Type],
   );
+  const tint = Accent[accent];
   const countColors =
     tone === "alert" && count > 0
       ? { backgroundColor: Accent.red.bg, color: Accent.red.fg }
@@ -180,21 +195,38 @@ function DropdownHeading({
   return (
     <Pressable
       onPress={onToggle}
-      style={({ pressed }) => [styles.dropdownHeading, pressed && { opacity: 0.7 }]}
+      style={({ pressed }) => [
+        styles.dropdownHeading,
+        open && { borderColor: tint.border },
+        pressed && styles.pressedCard,
+      ]}
       accessibilityRole="button"
       accessibilityState={{ expanded: open }}
-      accessibilityLabel={`${title}, ${count}`}
+      accessibilityLabel={`${title}, ${count}${summary ? `. ${summary}` : ""}`}
       accessibilityHint={open ? "Collapses the list" : "Expands the list"}
     >
-      <Text style={styles.dropdownTitle} numberOfLines={1}>
-        {title}
-      </Text>
-      <View style={[styles.dropdownCount, { backgroundColor: countColors.backgroundColor }]}>
-        <Text style={[styles.dropdownCountText, { color: countColors.color }]}>{count}</Text>
+      <View style={[styles.dropdownIcon, { backgroundColor: tint.bg }]}>
+        <Ionicons name={icon} size={19} color={tint.fg} />
       </View>
-      <View style={{ flex: 1 }} />
+      <View style={styles.dropdownText}>
+        <View style={styles.dropdownTitleRow}>
+          <Text style={styles.dropdownTitle} numberOfLines={1}>
+            {title}
+          </Text>
+          <View style={[styles.dropdownCount, { backgroundColor: countColors.backgroundColor }]}>
+            <Text style={[styles.dropdownCountText, { color: countColors.color }]}>{count}</Text>
+          </View>
+        </View>
+        {summary ? (
+          <Text style={styles.dropdownSummary} numberOfLines={1}>
+            {summary}
+          </Text>
+        ) : null}
+      </View>
       {/* Down while the list is showing, right while it's hidden. */}
-      <Ionicons name={open ? "chevron-down" : "chevron-forward"} size={18} color={Palette.textSecondary} />
+      <View style={[styles.dropdownChevron, open && { backgroundColor: tint.bg }]}>
+        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={16} color={open ? tint.fg : Palette.textSecondary} />
+      </View>
     </Pressable>
   );
 }
@@ -322,10 +354,39 @@ export default function ClinicScreen() {
   const pendingCases = caseList.filter((c) => c.status === "not_started" || c.status === "draft");
   const pendingCount = openAssignments.length + pendingCases.length;
 
-  const headings: Record<DropdownKey, { title: string; count: number; tone?: "alert" }> = {
-    pending: { title: "Pending Tasks", count: pendingCount, tone: "alert" },
-    completed: { title: "Graded Patient Cases", count: completedAssignments.length },
-    hospital: { title: "Hospital Cases", count: caseList.length },
+  // What each closed list says about itself.
+  const nextUp = openAssignments[0]?.scenario_title ?? pendingCases[0]?.presentation.title ?? null;
+  const latestGraded = completedAssignments[0] ?? null;
+  const headings: Record<
+    DropdownKey,
+    { title: string; count: number; tone?: "alert"; icon: React.ComponentProps<typeof Ionicons>["name"]; accent: AccentName; summary?: string }
+  > = {
+    pending: {
+      title: "Pending Tasks",
+      count: pendingCount,
+      tone: "alert",
+      icon: pendingCount > 0 ? "time-outline" : "checkmark-done-outline",
+      accent: pendingCount > 0 ? "amber" : "green",
+      summary: pending ? undefined : nextUp ? `Next: ${nextUp}` : "You're all caught up",
+    },
+    completed: {
+      title: "Graded Patient Cases",
+      count: completedAssignments.length,
+      icon: "ribbon-outline",
+      accent: "green",
+      summary: latestGraded ? `Latest: ${latestGraded.scenario_title}, ${gradedLabel(latestGraded.score)}` : undefined,
+    },
+    hospital: {
+      title: "Hospital Cases",
+      count: caseList.length,
+      icon: "document-text-outline",
+      accent: "teal",
+      summary: cases.loading && caseList.length === 0
+        ? undefined
+        : pendingCases.length > 0
+          ? `${pendingCases.length} to hand in`
+          : "All handed in",
+    },
   };
 
   const caseCard = (item: CaseListItem) => (
@@ -635,13 +696,41 @@ function createStyles(
     dropdownHeading: {
       flexDirection: "row",
       alignItems: "center",
-      gap: Spacing.sm,
-      minHeight: 48,
-      paddingVertical: Spacing.sm,
+      gap: Spacing.md,
+      minHeight: 64,
+      paddingVertical: 12,
+      paddingHorizontal: Spacing.md,
+      borderRadius: Radius.lg,
+      borderWidth: 1,
+      borderColor: Palette.border,
+      backgroundColor: Palette.surface,
+      ...Shadow.card,
     },
+    dropdownIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: Radius.md,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    dropdownText: { flex: 1, minWidth: 0 },
+    dropdownTitleRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
     dropdownTitle: {
-      ...Type.sectionTitle,
+      ...Type.itemTitle,
+      fontSize: 16,
       flexShrink: 1,
+    },
+    dropdownSummary: {
+      ...Type.caption,
+      marginTop: 2,
+    },
+    dropdownChevron: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: Palette.surfaceMuted,
     },
     dropdownCount: {
       minWidth: 24,
@@ -667,7 +756,7 @@ function createStyles(
       left: 0,
       right: 0,
       paddingHorizontal: Spacing.lg,
-      paddingTop: Spacing.sm,
+      paddingVertical: Spacing.sm,
       backgroundColor: Palette.background,
       borderBottomWidth: 1,
       borderBottomColor: Palette.border,

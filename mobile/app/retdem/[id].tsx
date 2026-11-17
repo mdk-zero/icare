@@ -200,6 +200,8 @@ export default function ReturnDemoScreen() {
         animationType="slide"
         presentationStyle="fullScreen"
         onRequestClose={() => setSkillsOpen(false)}
+        statusBarTranslucent
+        navigationBarTranslucent
       >
         <View style={[styles.container, { paddingTop: insets.top }]}>
           <View style={styles.windowHeader}>
