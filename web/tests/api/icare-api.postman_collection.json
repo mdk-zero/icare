@@ -1517,7 +1517,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"returns 400\", () => pm.response.to.have.status(400));",
-                  "pm.test(\"only student or faculty\", () => pm.expect(pm.response.json().error).to.match(/student or faculty/i));"
+                  "pm.test(\"only student or instructor\", () => pm.expect(pm.response.json().error).to.match(/student or instructor/i));"
                 ]
               }
             }
