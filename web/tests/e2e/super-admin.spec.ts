@@ -51,7 +51,8 @@ test.describe('Admin portal', () => {
     await page.getByPlaceholder('Search by name or email').fill(email);
     await expect(page.getByRole('row')).toHaveCount(2); // header + this account
     await page.getByPlaceholder('Search by name or email').fill('zz-no-such-account-zz');
-    await expect(page.getByText('No accounts match')).toBeVisible();
+    // The phone list says it too; this is the desktop table's.
+    await expect(page.getByRole('cell', { name: 'No accounts match' })).toBeVisible();
   });
 
   test('new-account form opens and cancels without saving', async ({ page }) => {
@@ -80,7 +81,7 @@ test.describe('Admin portal', () => {
       'API tests (Postman)',
       'Load benchmark',
       'Data warehouse query benchmark',
-      'Risk-prediction model evaluation',
+      'ML models',
     ]) {
       await expect(page.getByRole('heading', { name: heading })).toBeVisible();
     }

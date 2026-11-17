@@ -33,10 +33,12 @@ test('TC-UI-03: the menu button opens the navigation, and choosing a page closes
 test('TC-UI-04: an instructor finds a student’s report and previews it on a phone', async ({ page }, testInfo) => {
   await startDemo(page, 'Instructor');
   await page.goto('/instructor/reports');
-  const previews = page.getByRole('button', { name: /^Preview / });
+  // Students' reports sit inside their section's folder.
+  await page.getByRole('button', { name: /^Open (?!navigation$)/ }).first().click();
+  const previews = page.getByRole('button', { name: /^Preview (?!Whole section)/ });
   const student = (await previews.first().getAttribute('aria-label'))!.replace(/^Preview /, '');
 
-  await page.getByRole('searchbox').or(page.getByRole('textbox', { name: /^Search/ })).first().fill(student);
+  await page.getByRole('searchbox', { name: 'Search this folder' }).fill(student);
   await expect(previews).toHaveCount(1);
   expect(await sidewaysOverflow(page)).toBeLessThanOrEqual(0);
   await evidence(page, testInfo, 'TC-UI-04-found');

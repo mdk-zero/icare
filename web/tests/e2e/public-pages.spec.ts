@@ -6,7 +6,7 @@ import { evidence, observation, watchProblems } from './qa-helpers';
  *   TC-PUB-01  the public pages load and show their heading, with no script errors
  *   TC-PUB-02  the landing page's links lead to the right places
  *   TC-PUB-03  an unknown address shows the "not found" page
- *   TC-PUB-04  the app download link hands Android phones the app and tells iPhones there is none
+ *   TC-PUB-04  the app download link hands Android phones the app and iPhones the student web app
  *   TC-PUB-05  the sign-in page links to recovery, the contact form and the legal pages
  */
 
@@ -67,7 +67,7 @@ test('TC-PUB-03: an unknown address shows the not-found page', async ({ page }, 
   await evidence(page, testInfo, 'TC-PUB-03-not-found');
 });
 
-test('TC-PUB-04: the app download link serves Android phones and turns iPhones away', async ({ request }, testInfo) => {
+test('TC-PUB-04: the app download link serves Android phones and sends iPhones to the web app', async ({ request }, testInfo) => {
   const android = await request.get('/download', {
     maxRedirects: 0,
     headers: { 'user-agent': 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 Mobile Safari/537.36' },
@@ -79,18 +79,29 @@ test('TC-PUB-04: the app download link serves Android phones and turns iPhones a
   expect(target).toMatch(/^https:\/\//);
   expect(android.headers()['cache-control']).toBe('no-store');
 
+  // There is no iOS build: iPhones get the student web app while an Admin has
+  // it switched on, and otherwise a page saying the app is Android-only.
   const iphone = await request.get('/download', {
     maxRedirects: 0,
     headers: { 'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148' },
   });
-  expect(iphone.status()).toBe(200);
-  expect(await iphone.text()).toContain('iCARE++ is for Android phones');
+  let iphoneSaw: string;
+  if (iphone.status() === 302) {
+    const location = new URL(iphone.headers()['location'], iphone.url());
+    expect(location.pathname).toBe('/student');
+    expect(iphone.headers()['cache-control']).toBe('no-store');
+    iphoneSaw = `Location: ${location.pathname} (the student web app)`;
+  } else {
+    expect(iphone.status()).toBe(200);
+    expect(await iphone.text()).toContain('iCARE++ is for Android phones');
+    iphoneSaw = '"iCARE++ is for Android phones"';
+  }
 
   await observation(
     testInfo,
     'TC-PUB-04-download-link',
     `GET /download as an Android phone -> HTTP ${android.status()}, Location: ${target}\n` +
-      `GET /download as an iPhone       -> HTTP ${iphone.status()}, "iCARE++ is for Android phones"\n`,
+      `GET /download as an iPhone       -> HTTP ${iphone.status()}, ${iphoneSaw}\n`,
   );
 });
 
