@@ -22,6 +22,7 @@ import { summarize } from './summarize.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PLANS = {
+  suite: 'icare-suite.jmx',
   performance: 'icare-performance.jmx',
   throughput: 'icare-throughput.jmx',
   capacity: 'icare-capacity.jmx',

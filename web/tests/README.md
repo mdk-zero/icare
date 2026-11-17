@@ -128,12 +128,21 @@ They send only read-only requests, as the student, Instructor and Dean test acco
   for 180 s each (30 s ramp-up), each pausing 5 to 15 s between requests as people do. The
   scalability steps above keep 50 users as their most, with their much shorter pauses.
 - `icare-reliability.jmx`: 30 users for 300 s, pausing 0.5 to 1.5 s. Run it after a cool-down.
+- `icare-suite.jmx`: the whole evaluation as one run, in this order: the 1-user response
+  times above; scalability at 1, 5, 10, 25, 50, 100 and 200 users for 180 s each (30 s ramp-up),
+  pausing 5 to 15 s between requests; a 120 s cool-down; the reliability scenario; another
+  cool-down; then the throughput scenarios. About 35 minutes.
+
+The analytics queries are timed inside the database with
+`supabase/benchmarks/analytics_queries.sql` (EXPLAIN ANALYZE, three runs each): once with the
+system idle, and once during a load step.
 
 ```bash
 JMETER_HOME=/path/to/apache-jmeter-5.6.3 npm run test:load:live -- performance
 JMETER_HOME=/path/to/apache-jmeter-5.6.3 npm run test:load:live -- throughput
 JMETER_HOME=/path/to/apache-jmeter-5.6.3 npm run test:load:live -- capacity
 JMETER_HOME=/path/to/apache-jmeter-5.6.3 npm run test:load:live -- reliability
+JMETER_HOME=/path/to/apache-jmeter-5.6.3 npm run test:load:live -- suite
 node tests/load/summarize.mjs tests/load/results/<run>/results.jtl   # the tables again
 ```
 

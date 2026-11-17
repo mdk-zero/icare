@@ -51,6 +51,11 @@ const median = (xs) => {
 };
 const f1 = (x) => x.toFixed(1);
 const f2 = (x) => x.toFixed(2);
+/** The p-th percentile, nearest rank. */
+const pct = (xs, p) => {
+  const sorted = [...xs].sort((a, b) => a - b);
+  return sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))] : 0;
+};
 
 /** "2 Scalability 30 users 2-17" → "2 Scalability 30 users". */
 const groupOf = (threadName) => threadName.replace(/ \d+-\d+$/, '');
@@ -100,12 +105,22 @@ export function summarize(jtlPath) {
     const rows = levels.map((group) => {
       const xs = samples.filter((s) => s.group === group);
       const users = Number(group.match(/(\d+) users?$/)?.[1] ?? 0);
-      const mean = avg(xs.map((s) => s.elapsed));
+      const times = xs.map((s) => s.elapsed);
+      const mean = avg(times);
       baseline ??= mean;
       const errors = (100 * xs.filter((s) => !s.ok).length) / xs.length;
-      return [users, xs.length, f1(mean), f2(xs.length / span(xs)), f2(errors), users === 1 ? 'Baseline' : f2((100 * (mean - baseline)) / baseline)];
+      return [
+        users,
+        xs.length,
+        f1(mean),
+        median(times),
+        pct(times, 95),
+        f2(xs.length / span(xs)),
+        f2(errors),
+        users === 1 ? 'Baseline' : f2((100 * (mean - baseline)) / baseline),
+      ];
     });
-    table('Scalability', ['Users', 'Requests', 'Avg (ms)', 'RPS', 'Errors (%)', 'Degradation (%)'], rows);
+    table('Scalability', ['Users', 'Requests', 'Avg (ms)', 'p50 (ms)', 'p95 (ms)', 'RPS', 'Errors (%)', 'Degradation (%)'], rows);
   }
 
   const roles = [...new Set(inGroup('3 ').map((s) => s.group))];
@@ -126,10 +141,6 @@ export function summarize(jtlPath) {
 
   const capacity = [...new Set(inGroup('5 ').map((s) => s.group))];
   if (capacity.length) {
-    const pct = (xs, p) => {
-      const sorted = [...xs].sort((a, b) => a - b);
-      return sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))] : 0;
-    };
     const rows = capacity.map((group) => {
       const xs = samples.filter((s) => s.group === group);
       const times = xs.map((s) => s.elapsed);
