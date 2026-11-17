@@ -575,7 +575,7 @@ export default function StudentManagementClient() {
     const atRisk = Number(predictions.result?.at_risk ?? 0);
     const bkt = recommendations.result?.bkt as { written?: boolean; skills?: number } | undefined;
     const refit = bkt?.written
-      ? `Refit skill mastery (BKT) on ${bkt.skills} skill${bkt.skills === 1 ? "" : "s"}. `
+      ? `Updated skill mastery on ${bkt.skills} skill${bkt.skills === 1 ? "" : "s"}. `
       : "";
     toast(
       `Scored ${scored} student${scored === 1 ? "" : "s"} (${atRisk} low performing). ` +
@@ -809,7 +809,7 @@ export default function StudentManagementClient() {
           disabled: runningMl,
           label: mlRun
             ? mlRunLabel(mlRun, true)
-            : "Run ML Jobs — score every student for risk and refit skill mastery (BKT)",
+            : "Run ML Jobs — score every student for risk and update skill mastery",
           below: mlRun && <MlRunProgress run={mlRun} wholeCohort />,
         }}
       />
