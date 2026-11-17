@@ -60,7 +60,9 @@ const nextConfig: NextConfig = {
   // lesson PDF fails to parse, so pdf-parse loads from node_modules instead —
   // and the worker, which file tracing can't see through a runtime import, is
   // shipped explicitly to the routes that read lessons.
-  serverExternalPackages: ["pdf-parse"],
+  // Reading an uploaded form's layout (app/lib/form-import-server.ts) uses
+  // pdf.js directly, so it is kept out of the bundle the same way.
+  serverExternalPackages: ["pdf-parse", "pdfjs-dist"],
   outputFileTracingIncludes: {
     // The PDF letterhead reads the logo from disk (app/lib/reports/kit.tsx).
     "/api/faculty/reports/*": ["./public/logo-no-bg.png"],
@@ -69,6 +71,9 @@ const nextConfig: NextConfig = {
       "./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
     ],
     "/api/faculty/assessments/*/questions/generate-from-lesson": [
+      "./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
+    ],
+    "/api/faculty/return-demo-forms/read": [
       "./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
     ],
   },

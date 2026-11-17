@@ -2401,6 +2401,83 @@ export interface ReturnDemoInput {
   checklist?: ChecklistRow[];
 }
 
+/** An uploaded form, as listed for the instructor to add (095). */
+export type CustomForm = ReturnDemoForm & { created_by: string | null; created_at: string };
+
+/** What was read from an uploaded PDF form, for the instructor to check before saving it. */
+export interface ReadFormDraft {
+  title: string;
+  description: string;
+  pages: { image: string; width: number; height: number }[];
+  sections: ReturnDemoForm['sections'];
+  /** A scan: the fields were read by eye and have no place on the page yet. */
+  scanned: boolean;
+}
+
+/** The uploaded forms this instructor can add; `enabled` is false before migration 095. */
+export async function fetchCustomForms(): Promise<{ forms: CustomForm[]; enabled: boolean }> {
+  try {
+    const res = await apiFetch('/api/faculty/return-demo-forms', { credentials: 'include' });
+    if (!res.ok) return { forms: [], enabled: false };
+    const json = (await res.json()) as { forms?: CustomForm[]; enabled?: boolean };
+    return { forms: json.forms ?? [], enabled: json.enabled !== false };
+  } catch (err) {
+    console.error('fetchCustomForms() failed', err);
+    return { forms: [], enabled: false };
+  }
+}
+
+/** Reads an uploaded PDF form into pages and fields; nothing is saved yet. */
+export async function readFormPdf(file: File): Promise<{ draft?: ReadFormDraft; error?: string }> {
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await apiFetch('/api/faculty/return-demo-forms/read', { method: 'POST', credentials: 'include', body: form });
+    if (!res.ok) return { error: await errorOf(res, "That form couldn't be read") };
+    const json = (await res.json()) as { form?: ReadFormDraft };
+    return json.form ? { draft: json.form } : { error: "That form couldn't be read" };
+  } catch (err) {
+    console.error('readFormPdf() failed', err);
+    return { error: "That form couldn't be read. Check your connection and try again." };
+  }
+}
+
+/** Keeps a checked form. */
+export async function saveCustomForm(input: {
+  title: string;
+  description: string;
+  pages: ReadFormDraft['pages'];
+  sections: ReturnDemoForm['sections'];
+}): Promise<{ form?: CustomForm; error?: string }> {
+  try {
+    const res = await apiFetch('/api/faculty/return-demo-forms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) return { error: await errorOf(res, 'Unable to save the form') };
+    const json = (await res.json()) as { form?: CustomForm };
+    return json.form ? { form: json.form } : { error: 'Unable to save the form' };
+  } catch (err) {
+    console.error('saveCustomForm() failed', err);
+    return { error: 'Unable to save the form' };
+  }
+}
+
+/** Removes an uploaded form no Return Demonstration uses. */
+export async function deleteCustomForm(key: string): Promise<{ error?: string }> {
+  try {
+    const id = key.replace(/^custom:/, '');
+    const res = await apiFetch(`/api/faculty/return-demo-forms/${id}`, { method: 'DELETE', credentials: 'include' });
+    if (!res.ok) return { error: await errorOf(res, 'Unable to remove the form') };
+    return {};
+  } catch (err) {
+    console.error('deleteCustomForm() failed', err);
+    return { error: 'Unable to remove the form' };
+  }
+}
+
 /** A form on a student's Return Demonstration, with the rows they entered (094). */
 export type SubmittedForm = ReturnDemoForm & {
   rows: FormRow[];

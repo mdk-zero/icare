@@ -7,6 +7,7 @@ import { addSkillTasks } from '@/app/lib/skill-tasks';
 import { addChecklistTasks } from '@/app/lib/checklist-import-server';
 import { getFacultyStudentIdSet } from '@/app/lib/scenario-visibility';
 import { parseReturnDemoInput, skillDiff } from '@/app/lib/return-demos';
+import { knownFormKeys } from '@/app/lib/return-demo-forms-server';
 import {
   canEdit,
   FORMS_NEED_MIGRATION,
@@ -150,7 +151,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // A form taken off hides it from the student and the grading sheet; what
     // students already entered on it is kept.
     if (input.forms !== undefined && (input.forms.length > 0 || (await loadFormKeys(supabase, id)).length > 0)) {
-      update.form_keys = input.forms;
+      update.form_keys = await knownFormKeys(supabase, input.forms);
     }
     if (input.offering_id !== undefined) {
       const course = await activityCourse(supabase, 'scenarios', session, input.offering_id);

@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import {
   formatFieldValue,
   formFields,
+  formPages,
   isAsked,
   type FormField,
   type FormRow,
@@ -26,88 +27,156 @@ function written(field: FormField, value: string | number | null | undefined): s
   return formatFieldValue(field, value);
 }
 
+/** A built-in page's file name, or an uploaded page's full URL. */
+const pageSrc = (image: string) => (/^https?:\/\//.test(image) ? image : `/forms/${image}`);
+
+/** A spot the editor marks on a page: where a field's answer, or an option's tick, goes. */
+export interface PageMarker {
+  id: string;
+  page: number;
+  x: number;
+  y: number;
+  w?: number;
+  label: string;
+  active?: boolean;
+}
+
 /**
- * A form's printed page with the student's answers written on it: each
+ * A form's printed pages with the student's answers written on them: each
  * written answer in its blank, each ticked box ticked and the chosen colour
  * band circled. Without answers it is the blank form. It scales with its
- * width; the answers are sized to the page, not the screen.
+ * width; the answers are sized to the page, not the screen. For the form
+ * editor, `markers` shows where each answer goes and `onPick` reports a
+ * click on a page, in points.
  */
-export function FormPage({ form, answers, className = "" }: { form: ReturnDemoForm; answers?: FormRow; className?: string }) {
-  const { width: W, height: H } = form.page;
-  const pct = (place: PagePlace, w?: number, h?: number): CSSProperties => ({
-    left: `${(place.x / W) * 100}%`,
-    top: `${(place.y / H) * 100}%`,
-    ...(w !== undefined ? { width: `${(w / W) * 100}%` } : {}),
-    ...(h !== undefined ? { height: `${(h / H) * 100}%` } : {}),
-  });
-  const size = (pt: number) => `${(pt / W) * 100}cqw`;
-  const marks: React.ReactNode[] = [];
+export function FormPage({
+  form,
+  answers,
+  className = "",
+  markers,
+  onPick,
+}: {
+  form: ReturnDemoForm;
+  answers?: FormRow;
+  className?: string;
+  markers?: PageMarker[];
+  onPick?: (page: number, x: number, y: number) => void;
+}) {
+  const pages = formPages(form);
+  const marks: { page: number; node: React.ReactNode }[] = [];
+  const pageOf = (place: PagePlace) => place.page ?? 0;
+
+  const pct = (page: number, place: PagePlace, w?: number, h?: number): CSSProperties => {
+    const { width: W, height: H } = pages[page] ?? pages[0];
+    return {
+      left: `${(place.x / W) * 100}%`,
+      top: `${(place.y / H) * 100}%`,
+      ...(w !== undefined ? { width: `${(w / W) * 100}%` } : {}),
+      ...(h !== undefined ? { height: `${(h / H) * 100}%` } : {}),
+    };
+  };
+  const size = (page: number, pt: number) => `${(pt / (pages[page] ?? pages[0]).width) * 100}cqw`;
 
   if (answers) {
     for (const field of formFields(form)) {
       const value = answers[field.key];
       if (value === null || value === undefined || value === "" || !isAsked(field, answers)) continue;
       if (field.at) {
-        marks.push(
-          <span
-            key={field.key}
-            title={`${field.label}: ${formatFieldValue(field, value)}`}
-            className="absolute overflow-hidden text-ellipsis whitespace-nowrap font-semibold leading-none"
-            style={{ ...pct(field.at, field.at.w), color: INK, fontSize: size(TEXT_PT) }}
-          >
-            {written(field, value)}
-          </span>,
-        );
+        const page = pageOf(field.at);
+        marks.push({
+          page,
+          node: (
+            <span
+              key={field.key}
+              title={`${field.label}: ${formatFieldValue(field, value)}`}
+              className="absolute overflow-hidden text-ellipsis whitespace-nowrap font-semibold leading-none"
+              style={{ ...pct(page, field.at, field.at.w ?? 120), color: INK, fontSize: size(page, TEXT_PT) }}
+            >
+              {written(field, value)}
+            </span>
+          ),
+        });
         continue;
       }
       const picked = field.type === "multi" ? String(value).split(",") : [String(value)];
       for (const option of field.options ?? []) {
         if (!option.at || !picked.includes(option.value)) continue;
         const key = `${field.key}:${option.value}`;
-        if (option.at.w && option.at.h) {
-          // A colour band: circled, as the form asks.
-          marks.push(
-            <span
-              key={key}
-              title={`${field.label}: ${option.label}`}
-              className="absolute rounded-[50%]"
-              style={{
-                ...pct({ x: option.at.x - 2, y: option.at.y - 1.5 }, option.at.w + 4, option.at.h + 3),
-                border: `${size(1.3)} solid ${INK}`,
-              }}
-            />,
-          );
-        } else {
-          marks.push(
-            <span
-              key={key}
-              title={`${field.label}: ${option.label}`}
-              className="absolute flex items-center justify-center font-bold leading-none"
-              style={{ ...pct(option.at, BOX.w, BOX.h), color: INK, fontSize: size(TICK_PT) }}
-            >
-              ✓
-            </span>,
-          );
-        }
+        const page = pageOf(option.at);
+        marks.push({
+          page,
+          node:
+            option.at.w && option.at.h ? (
+              // A colour band: circled, as the form asks.
+              <span
+                key={key}
+                title={`${field.label}: ${option.label}`}
+                className="absolute rounded-[50%]"
+                style={{
+                  ...pct(page, { x: option.at.x - 2, y: option.at.y - 1.5 }, option.at.w + 4, option.at.h + 3),
+                  border: `${size(page, 1.3)} solid ${INK}`,
+                }}
+              />
+            ) : (
+              <span
+                key={key}
+                title={`${field.label}: ${option.label}`}
+                className="absolute flex items-center justify-center font-bold leading-none"
+                style={{ ...pct(page, option.at, BOX.w, BOX.h), color: INK, fontSize: size(page, TICK_PT) }}
+              >
+                ✓
+              </span>
+            ),
+        });
       }
     }
   }
 
   return (
-    <div
-      className={`relative w-full overflow-hidden rounded-lg border border-hairline bg-white shadow-tile ${className}`}
-      style={{ aspectRatio: `${W} / ${H}`, containerType: "inline-size" }}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element -- a fixed page image, drawn over at exact points */}
-      <img
-        src={`/forms/${form.page.image}`}
-        alt={answers ? `${form.title}, filled in` : `${form.title}, blank`}
-        className="absolute inset-0 h-full w-full select-none"
-        draggable={false}
-      />
-      <div aria-hidden className="absolute inset-0">
-        {marks}
-      </div>
+    <div className={`w-full space-y-3 ${className}`}>
+      {pages.map((p, n) => (
+        <div
+          key={n}
+          className={`relative w-full overflow-hidden rounded-lg border border-hairline bg-white shadow-tile ${onPick ? "cursor-crosshair" : ""}`}
+          style={{ aspectRatio: `${p.width} / ${p.height}`, containerType: "inline-size" }}
+          onClick={
+            onPick
+              ? (e) => {
+                  const box = e.currentTarget.getBoundingClientRect();
+                  onPick(n, ((e.clientX - box.left) / box.width) * p.width, ((e.clientY - box.top) / box.height) * p.height);
+                }
+              : undefined
+          }
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- a page picture, drawn over at exact points */}
+          <img
+            src={pageSrc(p.image)}
+            alt={`${form.title}${pages.length > 1 ? `, page ${n + 1}` : ""}${answers ? ", filled in" : ""}`}
+            className="absolute inset-0 h-full w-full select-none"
+            draggable={false}
+          />
+          <div aria-hidden className="absolute inset-0">
+            {marks.filter((m) => m.page === n).map((m) => m.node)}
+            {(markers ?? [])
+              .filter((m) => m.page === n)
+              .map((m) => (
+                <span
+                  key={m.id}
+                  title={m.label}
+                  className={`absolute -translate-y-1/2 rounded border-2 ${
+                    m.active ? "border-brand-600 bg-brand-600/25 ring-2 ring-brand-600/30" : "border-amber-500 bg-amber-300/25"
+                  }`}
+                  style={{ ...pct(n, { x: m.x, y: m.y + 4 }, m.w ?? 10), height: size(n, 11) }}
+                />
+              ))}
+          </div>
+          {pages.length > 1 && (
+            <span className="absolute bottom-2 right-2 rounded-full bg-gray-900/70 px-2 py-0.5 text-[11px] font-semibold text-white">
+              Page {n + 1} of {pages.length}
+            </span>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

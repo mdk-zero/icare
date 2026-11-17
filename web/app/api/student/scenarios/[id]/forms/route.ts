@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { formByKey, missingInRows, sanitizeRows } from '@/app/lib/return-demo-forms';
+import { missingInRows, sanitizeRows } from '@/app/lib/return-demo-forms';
 import { LEGACY_SHEET, loadAssignmentForms } from '@/app/lib/return-demo-forms-server';
 import { FORMS_NEED_MIGRATION, isMissingForms } from '@/app/lib/return-demos-server';
 
@@ -47,9 +47,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
   const formKey = typeof body.form_key === 'string' ? body.form_key : '';
-  const form = formByKey(formKey);
-  if (!form) return NextResponse.json({ error: 'Unknown form' }, { status: 400 });
-  const rows = sanitizeRows(form, body.rows);
   const submit = body.submit === true;
 
   try {
@@ -61,9 +58,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (loaded.assignment.status === 'completed') {
       return NextResponse.json({ error: 'Your instructor has graded this, so the forms can no longer change' }, { status: 409 });
     }
-    if (!loaded.forms.some((f) => f.key === form.key)) {
-      return NextResponse.json({ error: 'This form is not part of your Return Demonstration' }, { status: 400 });
-    }
+    // Built-in or uploaded, the form is whichever the Return Demonstration includes by that key.
+    const form = loaded.forms.find((f) => f.key === formKey);
+    if (!form) return NextResponse.json({ error: 'This form is not part of your Return Demonstration' }, { status: 400 });
+    const rows = sanitizeRows(form, body.rows);
     if (submit) {
       const missing = missingInRows(form, rows);
       if (missing) return NextResponse.json({ error: missing }, { status: 400 });
