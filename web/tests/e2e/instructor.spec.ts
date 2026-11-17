@@ -64,7 +64,8 @@ test.describe('Instructor, demo', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Reports' })).toBeVisible();
     // Sections are folders, with the most low performers first by default.
     await expect(page.getByRole('group', { name: 'Sort' }).getByRole('button', { name: 'Most low performers' })).toHaveAttribute('aria-pressed', 'true');
-    const folders = page.getByRole('button', { name: /^Open (?!navigation$)/ });
+    // Not the "Open Next.js Dev Tools" button that `next dev` adds to every page.
+    const folders = page.getByRole('button', { name: /^Open (?!navigation$|Next\.js Dev Tools$)/ });
     await expect(folders.first()).toBeVisible();
     const sections = await Promise.all(
       (await folders.all()).map(async (folder) => {

@@ -34,7 +34,8 @@ test('TC-UI-04: an instructor finds a student’s report and previews it on a ph
   await startDemo(page, 'Instructor');
   await page.goto('/instructor/reports');
   // Students' reports sit inside their section's folder.
-  await page.getByRole('button', { name: /^Open (?!navigation$)/ }).first().click();
+  // Not the "Open Next.js Dev Tools" button that `next dev` adds to every page.
+  await page.getByRole('button', { name: /^Open (?!navigation$|Next\.js Dev Tools$)/ }).first().click();
   const previews = page.getByRole('button', { name: /^Preview (?!Whole section)/ });
   const student = (await previews.first().getAttribute('aria-label'))!.replace(/^Preview /, '');
 
