@@ -5,9 +5,13 @@
  * app, each tied to its place on the page, so the instructor sees the answers
  * written on the form itself.
  *
- * The database stores only form keys and the answers (one row of field key to
- * value in `entries`), so a form is added or changed here. Its page image is
- * web/public/forms/<image> and mobile/assets/forms/<image>.
+ * The built-in forms (PhilPEN) are defined here, their page image in
+ * web/public/forms/<image> and mobile/assets/forms/<image>. An instructor can
+ * also upload their own form as a PDF (migration 095): its fields are read
+ * from the file, checked by the instructor, and stored with page images held
+ * online, under a `custom:<id>` key. Either way the database keeps only the
+ * key on the Return Demonstration and the answers (one row of field key to
+ * value in `entries`).
  * mobile/lib/return-demo-forms.ts is a copy for the app: keep the two the same.
  *
  * Pure, so the API routes, the instructor pages and the demo share it.
@@ -15,8 +19,10 @@
 
 export type FormFieldType = 'text' | 'longtext' | 'number' | 'date' | 'bp' | 'choice' | 'multi';
 
-/** A spot on the page, in PDF points from its top left. */
+/** A spot on a page, in PDF points from its top left. */
 export interface PagePlace {
+  /** Which page, from 0; the first when absent. */
+  page?: number;
   x: number;
   y: number;
   /** Width of a blank, or of a box drawn round an option (with `h`). */
@@ -66,10 +72,33 @@ export interface ReturnDemoForm {
   description: string;
   /** Who issues it, such as "Department of Health". */
   source: string;
-  /** The printed page the answers are written on. */
-  page: { image: string; width: number; height: number };
+  /** The (first) printed page the answers are written on. */
+  page: FormPageImage;
+  /** Every page, the first being `page`; absent on a one-page built-in form. */
+  pages?: FormPageImage[];
   sections: FormSection[];
+  /** An instructor's upload rather than a built-in form. */
+  custom?: boolean;
 }
+
+/**
+ * A page's picture and size in PDF points. `image` is a built-in file name
+ * (philpen-form.png) or, for an uploaded form, the full URL of its picture.
+ */
+export interface FormPageImage {
+  image: string;
+  width: number;
+  height: number;
+}
+
+/** Every page of a form, in order. */
+export const formPages = (form: Pick<ReturnDemoForm, 'page' | 'pages'>): FormPageImage[] =>
+  form.pages && form.pages.length > 0 ? form.pages : [form.page];
+
+/** An uploaded form's key: `custom:` and its row's id. */
+export const CUSTOM_FORM_KEY = /^custom:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+export const isCustomFormKey = (key: string) => CUSTOM_FORM_KEY.test(key);
+export const customFormKey = (id: string) => `custom:${id}`;
 
 const YES_NO = (yes: PagePlace, no: PagePlace): FormOption[] => [
   { value: 'yes', label: 'Yes', at: yes },
@@ -269,11 +298,16 @@ export function formByKey(key: string): ReturnDemoForm | undefined {
 /** Every field of a form, in order. */
 export const formFields = (form: ReturnDemoForm): FormField[] => form.sections.flatMap((s) => s.fields);
 
-/** Known form keys from a request body, first mention kept, in order. */
+/**
+ * Form keys from a request body, first mention kept, in order: built-in ones,
+ * and uploaded ones by shape (the server checks those exist).
+ */
 export function parseFormKeys(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   const out: string[] = [];
-  for (const v of value) if (typeof v === 'string' && BY_KEY.has(v) && !out.includes(v)) out.push(v);
+  for (const v of value) {
+    if (typeof v === 'string' && (BY_KEY.has(v) || isCustomFormKey(v)) && !out.includes(v)) out.push(v);
+  }
   return out;
 }
 
