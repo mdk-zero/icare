@@ -365,14 +365,14 @@ export default function TeamsClient() {
         <StatTile
           icon={faCircleCheck}
           value={allStudents.filter((s) => details.get(s.id)?.risk_level === "safe").length}
-          label="Safe"
+          label="Thriving"
           iconBg="bg-emerald-50"
           iconColor="text-emerald-600"
         />
         <StatTile
           icon={faTriangleExclamation}
           value={allStudents.filter((s) => isAtRisk(s.id)).length}
-          label="Low Performing"
+          label="At Risk"
           iconBg="bg-rose-50"
           iconColor="text-rose-600"
         />
@@ -402,8 +402,8 @@ export default function TeamsClient() {
         {section && (
           <FilterSelect value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
             <option value="all">All Students</option>
-            <option value="at-risk">Low Performing</option>
-            <option value="safe">Safe</option>
+            <option value="at-risk">At risk</option>
+            <option value="safe">Thriving</option>
           </FilterSelect>
         )}
       </div>
@@ -710,7 +710,7 @@ export default function TeamsClient() {
                                           : "bg-emerald-50 text-emerald-600"
                                     }`}
                                   >
-                                    {!risk ? "Not scored yet" : risk === "at_risk" ? "Low Performing" : "Safe"}
+                                    {!risk ? "Not scored yet" : risk === "at_risk" ? "At risk" : "Thriving"}
                                   </span>
                                 </td>
                                 <td className="px-4 py-4 text-sm text-gray-500 sm:px-6">{formatLastActive(info?.last_activity)}</td>

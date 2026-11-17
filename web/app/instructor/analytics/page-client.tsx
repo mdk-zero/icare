@@ -945,11 +945,9 @@ export default function FacultyAnalyticsClient() {
                 <FontAwesomeIcon icon={faBrain} className="h-5 w-5 text-brand-600" />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900">Skill Mastery (BKT)</h3>
+                <h3 className="font-semibold text-gray-900">Skill Mastery</h3>
                 <p className="text-xs text-gray-400">
-                  {course
-                    ? "Bayesian Knowledge Tracing for this course's roster, from each student's whole record of quizzes, Patient Cases and Return Demonstrations. Weakest skills first."
-                    : "Bayesian Knowledge Tracing: the average chance your students know each skill, from their whole record of quizzes, Patient Cases and Return Demonstrations. Weakest first."}
+                  {course ? "This course's students, weakest skill first." : "Your students, weakest skill first."}
                 </p>
               </div>
             </div>

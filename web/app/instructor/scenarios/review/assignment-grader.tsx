@@ -263,6 +263,7 @@ export default function AssignmentGrader({
   onDirtyChange,
   header = "student",
   onCollapse,
+  readOnly = false,
 }: {
   assignment: ScenarioAssignment;
   /**
@@ -276,6 +277,11 @@ export default function AssignmentGrader({
   onAssignmentChange: (patch: Partial<ScenarioAssignment>) => void;
   /** Whether there are ratings or notes not saved yet, so the parent can ask before leaving. */
   onDirtyChange?: (dirty: boolean) => void;
+  /**
+   * Shown, never changed: a student's profile reads a finished case here and
+   * leaves grading and changes to Review Submissions.
+   */
+  readOnly?: boolean;
 }) {
   const selected = assignment;
   const selectedId = assignment.id;
@@ -309,7 +315,7 @@ export default function AssignmentGrader({
     setDraftTasks((previous) => update(previous ?? savedTasks));
 
   const finalized = selected.status === "completed";
-  const locked = finalized && !editing;
+  const locked = readOnly || (finalized && !editing);
 
   // A saved grade changes only with an admin's approval; this is where the
   // faculty member stands on this one.
@@ -805,7 +811,9 @@ export default function AssignmentGrader({
                   .
                 </p>
                 <p className="text-xs text-gray-400">
-                  {editState?.status === "not_required"
+                  {readOnly
+                    ? "To change a grade, open it from Review on the Patient Cases page."
+                    : editState?.status === "not_required"
                     ? "Edit to change a rating or note."
                     : editState?.status === "accepted"
                       ? `${editState.resolved_by_name ?? "Your Dean or Program Chair"} approved a change. Saving it uses the approval up.`
@@ -848,7 +856,7 @@ export default function AssignmentGrader({
                 className="h-10 w-24 animate-pulse rounded-xl bg-gray-200"
                 aria-hidden
               />
-            ) : locked ? (
+            ) : readOnly ? null : locked ? (
               <button
                 onClick={handleEdit}
                 disabled={editState?.status === "pending"}

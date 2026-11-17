@@ -107,8 +107,8 @@ send POST, PATCH or DELETE, and never call `rpc/`, because a function call can w
 - **Embeds.** `users` → `sections` embeds must name the foreign key (`sections!section_id(...)`),
   or PostgREST answers PGRST201.
 - **Row cap.** PostgREST returns at most 1000 rows; `fetchAll` pages past it.
-- **Latency.** Supabase is in Sydney and Vercel in syd1, about 350 ms from the Philippines, so
-  the number of round trips per request matters more than query cost.
+- **Latency.** Supabase is in Singapore (ap-southeast-1) and Vercel in sin1, the nearest pair to
+  the Philippines; the number of round trips per request still matters more than query cost.
 - **AI.** `callAI` tries Claude Haiku, then Gemini, then OpenRouter. A student's record reaches
   an AI only after that student consented (`web/app/lib/ai-consent.ts`), and only Claude may
   receive it. Each test call spends the app's real quota.

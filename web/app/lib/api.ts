@@ -9,6 +9,8 @@ import { holdTabPresence, releaseTabPresence } from './tab-presence';
 import type { ItemProgress, OfferingSummary, RequirementInput, RequirementRow, TermStatus } from './course-progress';
 import type { GradingSplit } from './course-grading';
 import type { ChecklistRow, ReadChecklist } from './checklist-import';
+import type { StudentCase } from './student-cases';
+import type { SkillMasteryHistory } from './mastery-history';
 import type { FormRow, ReturnDemoForm } from './return-demo-forms';
 import type { CatalogCourse, CurriculumAnalysis, CurriculumCourseInput, CurriculumCourseRow } from './curriculum';
 import type { ScenarioKind } from './scenario-kind';
@@ -3624,9 +3626,40 @@ export async function deleteStudentUser(
 }
 
 /** Every scenario assigned to one student, graded or not (the faculty view). */
-export async function fetchAssignmentsForStudent(studentId: string): Promise<ScenarioAssignment[]> {
+/** One student's mastery of each skill over time, for their profile; null when it can't be read. */
+export async function fetchStudentMasteryHistory(studentId: string): Promise<SkillMasteryHistory[] | null> {
   try {
-    const res = await apiFetch(`/api/faculty/scenarios/assignments?student_id=${encodeURIComponent(studentId)}`, {
+    const res = await apiFetch(`/api/faculty/students/${encodeURIComponent(studentId)}/skill-mastery/history`, {
+      credentials: 'include',
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { skills?: SkillMasteryHistory[] };
+    return json.skills ?? [];
+  } catch (err) {
+    console.error('fetchStudentMasteryHistory() failed', err);
+    return null;
+  }
+}
+
+/** One student's case presentations, for their profile; empty when they can't be read. */
+export async function fetchStudentCasesForFaculty(studentId: string): Promise<StudentCase[]> {
+  try {
+    const res = await apiFetch(`/api/faculty/students/${encodeURIComponent(studentId)}/cases`, { credentials: 'include' });
+    if (!res.ok) return [];
+    const json = (await res.json()) as { cases?: StudentCase[] };
+    return json.cases ?? [];
+  } catch (err) {
+    console.error('fetchStudentCasesForFaculty() failed', err);
+    return [];
+  }
+}
+
+export async function fetchAssignmentsForStudent(
+  studentId: string,
+  kind: 'patient_case' | 'return_demo' = 'patient_case',
+): Promise<ScenarioAssignment[]> {
+  try {
+    const res = await apiFetch(`/api/faculty/scenarios/assignments?student_id=${encodeURIComponent(studentId)}&kind=${kind}`, {
       credentials: 'include',
     });
     const json = (await res.json()) as { assignments?: ScenarioAssignment[]; error?: string };
