@@ -129,7 +129,8 @@ export function summarize(jtlPath) {
     const duration = span(sustained);
     const failed = sustained.filter((s) => !s.ok);
     const start = Math.min(...sustained.map((s) => s.start));
-    const windows = Math.ceil(duration / 10);
+    // The windows requests were sent in; a sliver after the last one started isn't one.
+    const windows = Math.floor((Math.max(...sustained.map((s) => s.start)) - start) / 10_000) + 1;
     const up = new Set(sustained.filter((s) => s.ok).map((s) => Math.floor((s.start - start) / 10_000)));
     const users = Number(sustained[0].group.match(/(\d+) users/)?.[1] ?? 0);
     table('Reliability', ['Measurement', 'Result'], [
