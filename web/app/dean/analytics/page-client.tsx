@@ -1142,12 +1142,8 @@ export default function AdminAnalyticsClient() {
           <Panel className="mb-6">
             <CardHeading
               icon={faBrain}
-              title="Skill Mastery (BKT)"
-              subtitle={
-                course
-                  ? "Bayesian Knowledge Tracing for this course's roster, from each student's whole record of quizzes, Patient Cases and Return Demonstrations. Weakest first."
-                  : "Bayesian Knowledge Tracing: the average chance your students know each skill, from quizzes, Patient Cases and Return Demonstrations. Weakest first."
-              }
+              title="Skill Mastery"
+              subtitle={course ? "This course's students, weakest skill first." : "Your students, weakest skill first."}
               tag={<ScopeTag label="Whole record" />}
             />
             <CohortMasteryBody data={mastery.data} loading={mastery.loading} />

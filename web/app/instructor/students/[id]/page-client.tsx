@@ -7,14 +7,14 @@ import {
   faChevronLeft,
   faBolt,
   faWandMagicSparkles,
-  faCircleCheck,
-  faClipboardCheck,
   faChartLine,
   faClipboardList,
   faClock,
   faShieldHalved,
   faTriangleExclamation,
   faStethoscope,
+  faHandHoldingMedical,
+  faFilePrescription,
   faListCheck,
   faBullseye,
   faBookMedical,
@@ -34,6 +34,8 @@ import {
   logAuditAction,
   getCurrentFacultyUser,
   fetchAssignmentsForStudent,
+  fetchStudentCasesForFaculty,
+  fetchStudentMasteryHistory,
   scenarioHistoryFrom,
   type ScenarioAssignment,
   fetchCompetencyScores,
@@ -56,18 +58,13 @@ import AiThinking from "../../../components/AiThinking";
 import ReflectionsTab from "./reflections-tab";
 import RequirementsTab, { requirementsTally, useStudentRequirements } from "./requirements-tab";
 import { fetchStudentReflections, type FacultyReflection } from "../../../lib/api";
-import SkillAreaTrend from "./skill-area-trend";
 import { SendAppLinkButton } from "../../../components/AppLink";
-import { MasteryBrief, StudentMasteryPanel, useStudentMastery } from "../../../components/SkillMastery";
+import { MasteryBrief, useStudentMastery } from "../../../components/SkillMastery";
 import QuizHistory, { groupAttempts, scoreColor } from "./quiz-history";
 import AssignmentGrader, { ScenarioSummaryCard } from "../../scenarios/review/assignment-grader";
-import {
-  AssignmentFilterTabs,
-  EmptyPanel,
-  initialFilter,
-  matchesFilter,
-  type Filter,
-} from "../../scenarios/review/assignment-list";
+import GradeTrend, { type GradePoint } from "./grade-trend";
+import CasePresentationsTab from "./case-presentations-tab";
+import MasteryByChapter from "./mastery-by-chapter";
 import { studentsViewHref } from '../../../lib/students-view';
 
 /** Shown in turn while the summary is written, following what it draws on. */
@@ -344,13 +341,15 @@ export default function StudentDetailClient() {
 
   // Keyed by student, so stepping back to the roster and into the same student
   // again reads the whole profile from memory.
-  const { data, loading, setData } = usePageData(
+  const { data, loading } = usePageData(
     studentId ? `faculty:student:${studentId}` : null,
     async () => {
-      const [detail, riskPrediction, assignments, scoreHistory] = await Promise.all([
+      const [detail, riskPrediction, assignments, returnDemos, cases, scoreHistory] = await Promise.all([
         fetchFacultyStudentDetail(studentId),
         fetchLatestPrediction(studentId),
         fetchAssignmentsForStudent(studentId),
+        fetchAssignmentsForStudent(studentId, "return_demo"),
+        fetchStudentCasesForFaculty(studentId),
         fetchCompetencyScores(studentId),
       ]);
 
@@ -359,6 +358,8 @@ export default function StudentDetailClient() {
         performanceHistory: detail?.performance_history ?? NO_PERFORMANCE_HISTORY,
         riskPrediction,
         assignments,
+        returnDemos,
+        cases,
         scoreHistory,
         // A faculty validation outranks a quiz result; assessment-derived scores
         // fill every competency nobody has reviewed by hand.
@@ -371,42 +372,37 @@ export default function StudentDetailClient() {
   const requirements = useStudentRequirements(studentId);
   const requirementCount = requirementsTally(requirements.data?.data);
   const mastery = useStudentMastery(studentId);
+  const masteryHistory = usePageData(studentId ? `faculty:mastery-history:${studentId}` : null, () =>
+    fetchStudentMasteryHistory(studentId),
+  );
   const performanceHistory = data?.performanceHistory ?? NO_PERFORMANCE_HISTORY;
   // Retakes of a quiz count once, as the Performance tab lists them.
   const quizCount = useMemo(() => groupAttempts(performanceHistory).length, [performanceHistory]);
   // Every scenario assigned to the student; the graded ones are their scenario history.
   const assignments = data?.assignments ?? NO_ASSIGNMENTS;
   const scenarioHistory = useMemo(() => scenarioHistoryFrom(assignments), [assignments]);
-  // Null until the faculty member picks a filter; until then it opens on what needs grading.
-  const [scenarioFilter, setScenarioFilter] = useState<Filter | null>(null);
-  const activeFilter = scenarioFilter ?? initialFilter(assignments);
-  const visibleAssignments = assignments.filter((a) => matchesFilter(a, activeFilter));
-  // The scenario opened to its checklist. Undefined until one is opened or
-  // closed: until then the first one still to grade opens by itself.
-  const [openedId, setOpenedId] = useState<string | null | undefined>(undefined);
-  const selectedAssignment =
-    visibleAssignments.find((a) => (openedId === undefined ? a.status !== "completed" : a.id === openedId)) ??
-    null;
-  // Whether the open sheet has ratings or notes not saved yet (the grader reports it).
-  const [gradingDirty, setGradingDirty] = useState(false);
-  const confirmDiscard = () => !gradingDirty || window.confirm("Discard your unsaved ratings and notes?");
-  // Opening one card closes the other, so unsaved ratings are asked about first.
-  const openAssignment = (id: string | null) => {
-    if (id === (selectedAssignment?.id ?? null) || !confirmDiscard()) return;
-    setOpenedId(id);
-  };
-  const changeScenarioFilter = (next: Filter) => {
-    if (next === activeFilter) return;
-    const stays = selectedAssignment !== null && matchesFilter(selectedAssignment, next);
-    if (!stays && !confirmDiscard()) return;
-    setScenarioFilter(next);
-  };
-  const updateAssignment = (id: string, patch: Partial<ScenarioAssignment>) =>
-    // Only reachable from a loaded profile, so there is always data to patch.
-    setData((previous) => ({
-      ...previous!,
-      assignments: previous!.assignments.map((a) => (a.id === id ? { ...a, ...patch } : a)),
-    }));
+  // Only finished patient cases: grading them is on the Patient Cases review page, not here.
+  const completedAssignments = useMemo(() => assignments.filter((a) => a.status === "completed"), [assignments]);
+  // Finished Return Demonstrations, likewise read-only here.
+  const completedReturnDemos = useMemo(
+    () => (data?.returnDemos ?? NO_ASSIGNMENTS).filter((a) => a.status === "completed"),
+    [data?.returnDemos],
+  );
+  const cases = data ? data.cases : null;
+  // The one opened to its (read-only) checklist; none until the instructor opens one.
+  const [openedId, setOpenedId] = useState<string | null>(null);
+  // Their graded quizzes and patient cases over time, for the trend in the prediction card.
+  const gradePoints = useMemo<GradePoint[]>(
+    () => [
+      ...performanceHistory.flatMap((h) =>
+        h.score != null && h.submitted_at ? [{ at: h.submitted_at, grade: h.score, label: h.quiz_title }] : [],
+      ),
+      ...[...completedAssignments, ...completedReturnDemos].flatMap((a) =>
+        a.score != null && a.completed_at ? [{ at: a.completed_at, grade: a.score, label: a.scenario_title }] : [],
+      ),
+    ],
+    [performanceHistory, completedAssignments, completedReturnDemos],
+  );
   const competencies = data?.competencies ?? NO_COMPETENCIES;
   const scoreHistory = data?.scoreHistory ?? NO_SCORE_HISTORY;
   const riskPrediction = data?.riskPrediction ?? null;
@@ -492,6 +488,9 @@ export default function StudentDetailClient() {
     summaryResult && !summaryResult.summary
       ? (summaryResult.error ?? "Unable to generate summary")
       : null;
+
+  // What the model weighed, minus inactivity: it isn't shown as a factor.
+  const shownFactors = (riskPrediction?.explanations ?? []).filter((exp) => exp.feature !== 'days_since_active');
 
   const featureLabel = (feature: string) =>
     feature.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -603,7 +602,7 @@ export default function StudentDetailClient() {
                 iconBg="bg-brand-600/10"
                 iconColor="text-brand-600"
                 value={student.average_score != null ? `${student.average_score}%` : "—"}
-                label="Avg Score"
+                label="Average grade"
               />
               <StatTile
                 fitValue
@@ -651,7 +650,7 @@ export default function StudentDetailClient() {
                       ? "text-red-600"
                       : "text-emerald-600"
                 }
-                value={riskPrediction ? (riskPrediction.risk === "at_risk" ? "Low Performing" : "Safe") : "Not scored yet"}
+                value={riskPrediction ? (riskPrediction.risk === "at_risk" ? "At risk" : "Thriving") : "Not scored yet"}
                 valueColor={
                   !riskPrediction
                     ? "text-gray-500"
@@ -659,7 +658,7 @@ export default function StudentDetailClient() {
                       ? "text-red-600"
                       : "text-emerald-600"
                 }
-                label="Risk Status"
+                label="Performance"
               />
             </div>
           </Card>
@@ -670,7 +669,7 @@ export default function StudentDetailClient() {
             <div className="p-2 bg-purple-100 rounded-lg">
               <FontAwesomeIcon icon={faBolt} className="w-5 h-5 text-purple-600" />
             </div>
-            <h3 className="font-semibold text-gray-900">Low Performance Prediction</h3>
+            <h3 className="font-semibold text-gray-900">Performance Prediction</h3>
           </div>
 
           {!riskPrediction ? (
@@ -679,6 +678,7 @@ export default function StudentDetailClient() {
                 Not scored yet. A student is scored once they have started or completed work; the ML
                 service then scores the cohort nightly (or run it from Admin &gt; Analytics).
               </p>
+              <GradeTrend points={gradePoints} />
               <MasteryBrief skills={mastery.data} onOpen={() => setActiveTab('competencies')} />
             </div>
           ) : (
@@ -686,7 +686,7 @@ export default function StudentDetailClient() {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-500">Classification</span>
                 <span className={`font-medium ${riskPrediction.risk === 'at_risk' ? 'text-red-600' : 'text-emerald-600'}`}>
-                  {riskPrediction.risk === 'at_risk' ? 'AT RISK' : 'SAFE'}
+                  {riskPrediction.risk === 'at_risk' ? 'At risk' : 'Thriving'}
                 </span>
               </div>
               {riskPrediction.probability != null && (
@@ -705,11 +705,11 @@ export default function StudentDetailClient() {
                   </div>
                 </div>
               )}
-              {riskPrediction.explanations.length > 0 && (
+              {shownFactors.length > 0 && (
                 <div className="border-t border-hairline pt-3">
                   <p className="text-sm text-gray-500 mb-2">Top Contributing Factors</p>
                   <div className="space-y-2">
-                    {riskPrediction.explanations.map((exp) => (
+                    {shownFactors.map((exp) => (
                       <div key={exp.feature} className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2">
                           <div className={`w-2 h-2 rounded-full ${exp.direction === 'increases_risk' ? 'bg-red-600' : 'bg-emerald-600'}`} />
@@ -730,29 +730,30 @@ export default function StudentDetailClient() {
                     : 'No graded quizzes yet, so this rating is based on missed deadlines rather than scores.'}
                 </p>
               )}
+              <GradeTrend points={gradePoints} />
               <MasteryBrief skills={mastery.data} onOpen={() => setActiveTab('competencies')} />
-              <p className="text-xs text-gray-400 border-t border-hairline pt-3">
-                {riskPrediction.ml_models
-                  ? `${riskPrediction.ml_models.kind.replace(/_/g, ' ')} v${riskPrediction.ml_models.version}${riskPrediction.ml_models.is_baseline ? ' (pre-trained baseline)' : ''}`
-                  : 'model unknown'}
-                {' · '}
-                {new Date(riskPrediction.predicted_at).toLocaleString()}
-              </p>
             </div>
           )}
         </Card>
       </div>
 
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {([
-            { key: 'performance', label: 'Performance', hint: 'Quiz results', count: quizCount, unit: quizCount === 1 ? 'quiz' : 'quizzes', icon: faChartLine },
-            { key: 'scenarios', label: 'Patient Cases', hint: 'Assigned patient cases', count: assignments.length, unit: 'assigned', icon: faStethoscope },
-            { key: 'competencies', label: 'Skill Areas', hint: 'Skill mastery', count: competencies.length, unit: 'areas', icon: faListCheck },
-            { key: 'reflections', label: 'Reflections', hint: 'Reflections & goals', count: reflections?.length ?? 0, unit: 'entries', icon: faBullseye },
+            { key: 'performance', label: 'Quizzes', count: quizCount, unit: quizCount === 1 ? 'quiz' : 'quizzes', icon: faChartLine },
+            { key: 'scenarios', label: 'Patient Cases', count: completedAssignments.length, unit: 'completed', icon: faStethoscope },
+            { key: 'returnDemos', label: 'Return Demonstrations', count: completedReturnDemos.length, unit: 'completed', icon: faHandHoldingMedical },
+            {
+              key: 'cases',
+              label: 'Case Presentations',
+              count: (cases ?? []).filter((c) => c.status === 'graded').length,
+              unit: 'graded',
+              icon: faFilePrescription,
+            },
+            { key: 'competencies', label: 'Skill Areas', count: competencies.length, unit: 'areas', icon: faListCheck },
+            { key: 'reflections', label: 'Reflections', count: reflections?.length ?? 0, unit: 'entries', icon: faBullseye },
             {
               key: 'requirements',
               label: 'Requirements',
-              hint: 'This semester, your courses',
               count: requirementCount.total > 0 ? `${requirementCount.done}/${requirementCount.total}` : 0,
               unit: 'met',
               icon: faBookMedical,
@@ -779,7 +780,6 @@ export default function StudentDetailClient() {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-base font-bold leading-tight">{tab.label}</span>
-                  <span className={`block text-xs ${active ? 'text-white/70' : 'text-gray-500'}`}>{tab.hint}</span>
                 </span>
                 <span className="shrink-0 text-right">
                   <span className="block text-2xl font-bold leading-none tabular-nums">{tab.count}</span>
@@ -795,49 +795,54 @@ export default function StudentDetailClient() {
           {activeTab === 'performance' && <QuizHistory records={performanceHistory} />}
 
           {activeTab === 'scenarios' && (
-            assignments.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">No patient cases assigned to this student yet</p>
+            completedAssignments.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">No completed patient cases yet</p>
             ) : (
-              // The same checklist as Review Submissions, for this student's scenarios only.
-              <div>
-                <AssignmentFilterTabs
-                  assignments={assignments}
-                  filter={activeFilter}
-                  onFilterChange={changeScenarioFilter}
-                />
-                {visibleAssignments.length === 0 ? (
-                  <EmptyPanel icon={faClipboardList} title="All clear" body="Nothing in this view right now." />
-                ) : (
-                  // Each scenario folds to a card that opens to its checklist, one
-                  // open at a time.
-                  <div className="space-y-3">
-                    {visibleAssignments.map((a) =>
-                      a.id === selectedAssignment?.id ? (
-                        <AssignmentGrader
-                          key={a.id}
-                          assignment={a}
-                          header="scenario"
-                          onCollapse={() => openAssignment(null)}
-                          onAssignmentChange={(patch) => {
-                            updateAssignment(a.id, patch);
-                            // Fully graded: follow it to Completed, still open, instead
-                            // of it vanishing from the Assigned view.
-                            if (patch.status === "completed" && activeFilter === "assigned") {
-                              setScenarioFilter("completed");
-                              setOpenedId(a.id);
-                            }
-                          }}
-                          onDirtyChange={setGradingDirty}
-                        />
-                      ) : (
-                        <ScenarioSummaryCard key={a.id} assignment={a} onExpand={() => openAssignment(a.id)} />
-                      ),
-                    )}
-                  </div>
+              // Finished cases only, read-only: grading is on the Patient Cases review page.
+              <div className="space-y-3">
+                {completedAssignments.map((a) =>
+                  a.id === openedId ? (
+                    <AssignmentGrader
+                      key={a.id}
+                      assignment={a}
+                      header="scenario"
+                      readOnly
+                      onCollapse={() => setOpenedId(null)}
+                      onAssignmentChange={() => {}}
+                    />
+                  ) : (
+                    <ScenarioSummaryCard key={a.id} assignment={a} onExpand={() => setOpenedId(a.id)} />
+                  ),
                 )}
               </div>
             )
           )}
+
+          {activeTab === 'returnDemos' && (
+            completedReturnDemos.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">No completed Return Demonstrations yet</p>
+            ) : (
+              // Finished ones only, read-only: grading is on the Return Demonstrations review page.
+              <div className="space-y-3">
+                {completedReturnDemos.map((a) =>
+                  a.id === openedId ? (
+                    <AssignmentGrader
+                      key={a.id}
+                      assignment={a}
+                      header="scenario"
+                      readOnly
+                      onCollapse={() => setOpenedId(null)}
+                      onAssignmentChange={() => {}}
+                    />
+                  ) : (
+                    <ScenarioSummaryCard key={a.id} assignment={a} onExpand={() => setOpenedId(a.id)} />
+                  ),
+                )}
+              </div>
+            )
+          )}
+
+          {activeTab === 'cases' && <CasePresentationsTab cases={cases} />}
 
           {activeTab === 'reflections' && <ReflectionsTab reflections={reflections} enabled={reflectionsEnabled} />}
 
@@ -885,19 +890,6 @@ export default function StudentDetailClient() {
                           >
                             {COMPETENCY_LEVEL_LABEL[c.level]}
                           </span>
-                          {/* Where the number came from — faculty judgement or
-                              the student's own quiz performance. */}
-                          <span className="inline-flex items-center gap-1 text-[11px] text-gray-500">
-                            <FontAwesomeIcon
-                              icon={
-                                c.source === "faculty_validation" ? faCircleCheck : faClipboardCheck
-                              }
-                              className="w-3 h-3"
-                            />
-                            {c.source === "faculty_validation"
-                              ? "Instructor validated"
-                              : `From assessments${c.attempts > 0 ? ` (${c.attempts})` : ""}`}
-                          </span>
                         </div>
                       </div>
                     ))}
@@ -905,42 +897,8 @@ export default function StudentDetailClient() {
                 </>
               )}
 
-              <StudentMasteryPanel skills={mastery.data} loading={mastery.loading} />
-
-              <SkillAreaTrend
-                records={scoreHistory.map((r) => ({
-                  name: r.competency_areas?.name ?? "Unknown skill area",
-                  score: r.score,
-                  created_at: r.created_at,
-                }))}
-              />
-
-              {scoreHistory.length > 0 && (
-                <div>
-                  <h3 className="font-semibold text-gray-900 mb-3">Validation history</h3>
-                  <div className="space-y-2">
-                    {scoreHistory.slice(0, 10).map((record) => (
-                      <div
-                        key={record.id}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded-xl"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-gray-800">
-                            {record.competency_areas?.name ?? "Unknown skill area"}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {new Date(record.created_at).toLocaleString()}
-                            {record.remarks ? ` · ${record.remarks}` : ""}
-                          </p>
-                        </div>
-                        <span className={`font-bold ${getScoreColor(record.score)}`}>
-                          {record.score}%
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Skill by skill over time, by chapter, as the student sees it on their Profile. */}
+              <MasteryByChapter skills={masteryHistory.data ?? null} loading={masteryHistory.loading} />
             </div>
           )}
         </div>

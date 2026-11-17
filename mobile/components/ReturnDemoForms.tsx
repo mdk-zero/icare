@@ -23,10 +23,12 @@ import {
   answeredCount,
   formatFieldValue,
   formFields,
+  formPages,
   isAsked,
   missingInRows,
   sanitizeRows,
   type FormField,
+  type FormPageImage,
   type FormRow,
   type ReturnDemoForm,
 } from '@/lib/return-demo-forms';
@@ -106,7 +108,7 @@ function FormCard({ assignmentId, form: initial, locked }: { assignmentId: strin
           accessibilityLabel={`Look over the ${form.title}`}
           style={styles.thumb}
         >
-          <Image source={PAGE_IMAGES[form.page.image]} style={styles.thumbImage} resizeMode="cover" />
+          <Image source={pageSource(form.page.image)} style={styles.thumbImage} resizeMode="cover" />
         </Pressable>
         <View style={{ flex: 1, gap: 4 }}>
           <View style={styles.titleRow}>
@@ -169,19 +171,49 @@ function FormCard({ assignmentId, form: initial, locked }: { assignmentId: strin
   );
 }
 
-/** The printed page, with the answers written on it when there are any. */
+/** A page's picture: a built-in form's bundled file, or an uploaded form's URL. */
+function pageSource(image: string): ImageSourcePropType | undefined {
+  return /^https?:\/\//.test(image) ? { uri: image } : PAGE_IMAGES[image];
+}
+
+/** The printed pages, with the answers written on them when there are any. */
 function PageView({ form, answers }: { form: ReturnDemoForm; answers?: FormRow }) {
+  const pages = formPages(form);
+  return (
+    <View style={{ gap: Spacing.md }}>
+      {pages.map((page, n) => (
+        <OnePage key={n} form={form} page={page} index={n} count={pages.length} answers={answers} />
+      ))}
+    </View>
+  );
+}
+
+function OnePage({
+  form,
+  page,
+  index,
+  count,
+  answers,
+}: {
+  form: ReturnDemoForm;
+  page: FormPageImage;
+  index: number;
+  count: number;
+  answers?: FormRow;
+}) {
   const [width, setWidth] = useState(0);
-  const { width: W, height: H } = form.page;
+  const { width: W, height: H } = page;
   const k = width / W;
   const ink = '#1d3fbf';
   const marks: React.ReactNode[] = [];
+  const here = (at: { page?: number }) => (at.page ?? 0) === index;
 
   if (answers && width > 0) {
     for (const field of formFields(form)) {
       const value = answers[field.key];
       if (value === null || value === undefined || value === '' || !isAsked(field, answers)) continue;
       if (field.at) {
+        if (!here(field.at)) continue;
         const text = field.type === 'number' || field.type === 'bp' ? String(value) : formatFieldValue(field, value);
         marks.push(
           <Text
@@ -205,7 +237,7 @@ function PageView({ form, answers }: { form: ReturnDemoForm; answers?: FormRow }
       }
       const picked = field.type === 'multi' ? String(value).split(',') : [String(value)];
       for (const option of field.options ?? []) {
-        if (!option.at || !picked.includes(option.value)) continue;
+        if (!option.at || !here(option.at) || !picked.includes(option.value)) continue;
         const key = `${field.key}:${option.value}`;
         marks.push(
           option.at.w && option.at.h ? (
@@ -251,10 +283,10 @@ function PageView({ form, answers }: { form: ReturnDemoForm; answers?: FormRow }
       onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
       style={{ width: '100%', aspectRatio: W / H, backgroundColor: '#fff', borderRadius: Radius.md, overflow: 'hidden' }}
       accessibilityRole="image"
-      accessibilityLabel={answers ? `${form.title} with your answers` : `${form.title}, blank`}
+      accessibilityLabel={`${form.title}${count > 1 ? `, page ${index + 1} of ${count}` : ''}${answers ? ', with your answers' : ', blank'}`}
     >
       <Image
-        source={PAGE_IMAGES[form.page.image]}
+        source={pageSource(page.image)}
         style={{ position: 'absolute', top: 0, left: 0, width: width || '100%', height: width ? width * (H / W) : '100%' }}
         resizeMode="contain"
       />

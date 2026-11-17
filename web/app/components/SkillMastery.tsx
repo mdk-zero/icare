@@ -6,11 +6,7 @@ import { faCircleCheck } from "@fortawesome/free-solid-svg-icons";
 import { fetchCohortMastery, fetchStudentSkillMastery } from "../lib/api";
 import {
   MASTERY_THRESHOLD,
-  MIN_FIT_ANSWERS,
-  MIN_FIT_STUDENTS,
-  countSources,
   masteryPercent,
-  type BktSource,
   type CohortMastery,
   type SkillMastery,
 } from "../lib/bkt";
@@ -113,22 +109,6 @@ function MasteryKey() {
   );
 }
 
-/** Says how far to trust the numbers: a cold-start skill is a rough estimate. */
-function SourceNote({ skills }: { skills: readonly { source: BktSource }[] }) {
-  const { fitted, chapter, default: cold } = countSources(skills);
-  const fit = `A skill gets its own fit at ${MIN_FIT_STUDENTS} students and ${MIN_FIT_ANSWERS} results.`;
-  const parts = [
-    fitted > 0 && `${fitted} ${fitted === 1 ? "skill" : "skills"} fitted on ${fitted === 1 ? "its" : "their"} own results`,
-    chapter > 0 && `${chapter} on a chapter's fit`,
-    cold > 0 && `${cold} on the starting parameters`,
-  ].filter(Boolean);
-  const text =
-    cold === skills.length
-      ? `Rough estimates for now: every skill here is on the starting parameters. ${fit}`
-      : `${parts.join(" · ")}.${cold > 0 || chapter > 0 ? ` ${fit}` : ""}`;
-  return <p className="mt-4 border-t border-hairline pt-3 text-xs text-gray-400">{text}</p>;
-}
-
 function Grid({ children }: { children: ReactNode }) {
   return <div className="grid grid-cols-1 gap-x-8 gap-y-4 lg:grid-cols-2">{children}</div>;
 }
@@ -152,11 +132,7 @@ export function StudentMasteryPanel({ skills, loading }: { skills: SkillMastery[
     <section>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
         <div className="min-w-0">
-          <h3 className="font-semibold text-gray-900">Skill Mastery (BKT)</h3>
-          <p className="text-xs text-gray-500">
-            Bayesian Knowledge Tracing: the chance this student knows each skill, updated after every quiz answer and
-            every finished Patient Case or Return Demonstration. Weakest first, the order a review quiz follows.
-          </p>
+          <h3 className="font-semibold text-gray-900">Skill Mastery</h3>
         </div>
         {skills && skills.length > 0 && <MasteryKey />}
       </div>
@@ -182,7 +158,6 @@ export function StudentMasteryPanel({ skills, loading }: { skills: SkillMastery[
               />
             ))}
           </Grid>
-          <SourceNote skills={skills} />
         </>
       )}
     </section>
@@ -197,7 +172,7 @@ export function MasteryBrief({ skills, onOpen }: { skills: SkillMastery[] | null
   return (
     <div className="border-t border-hairline pt-3">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm text-gray-500">Skill Mastery (BKT)</span>
+        <span className="text-sm text-gray-500">Skill Mastery</span>
         <span className="text-sm font-medium tabular-nums text-gray-900">
           {mastered} of {skills.length} mastered
         </span>
@@ -271,7 +246,6 @@ export function CohortMasteryBody({ data, loading }: { data: CohortMastery | nul
       </div>
       <ReteachNote skills={data.skills} />
       <SkillMasteryChart skills={data.skills} />
-      <SourceNote skills={data.skills} />
     </>
   );
 }

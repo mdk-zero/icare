@@ -53,7 +53,7 @@ export function SkillMasterySection({
   skills: SkillMastery[] | null;
   loading: boolean;
   error: string | null;
-  intro: string;
+  intro?: string;
   empty: string;
   style?: StyleProp<ViewStyle>;
 }) {
@@ -67,8 +67,8 @@ export function SkillMasterySection({
 
   return (
     <View style={style}>
-      <SectionHeader title="Skill Mastery (BKT)" count={hasRows ? all.length : undefined} />
-      <Text style={styles.intro}>{intro}</Text>
+      <SectionHeader title="Skill Mastery" count={hasRows ? all.length : undefined} />
+      {intro ? <Text style={styles.intro}>{intro}</Text> : null}
       <Card>
         {loading && !skills ? (
           [0, 1, 2].map((index) => (

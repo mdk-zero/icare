@@ -9,6 +9,8 @@ import { holdTabPresence, releaseTabPresence } from './tab-presence';
 import type { ItemProgress, OfferingSummary, RequirementInput, RequirementRow, TermStatus } from './course-progress';
 import type { GradingSplit } from './course-grading';
 import type { ChecklistRow, ReadChecklist } from './checklist-import';
+import type { StudentCase } from './student-cases';
+import type { SkillMasteryHistory } from './mastery-history';
 import type { FormRow, ReturnDemoForm } from './return-demo-forms';
 import type { CatalogCourse, CurriculumAnalysis, CurriculumCourseInput, CurriculumCourseRow } from './curriculum';
 import type { ScenarioKind } from './scenario-kind';
@@ -2401,6 +2403,83 @@ export interface ReturnDemoInput {
   checklist?: ChecklistRow[];
 }
 
+/** An uploaded form, as listed for the instructor to add (095). */
+export type CustomForm = ReturnDemoForm & { created_by: string | null; created_at: string };
+
+/** What was read from an uploaded PDF form, for the instructor to check before saving it. */
+export interface ReadFormDraft {
+  title: string;
+  description: string;
+  pages: { image: string; width: number; height: number }[];
+  sections: ReturnDemoForm['sections'];
+  /** A scan: the fields were read by eye and have no place on the page yet. */
+  scanned: boolean;
+}
+
+/** The uploaded forms this instructor can add; `enabled` is false before migration 095. */
+export async function fetchCustomForms(): Promise<{ forms: CustomForm[]; enabled: boolean }> {
+  try {
+    const res = await apiFetch('/api/faculty/return-demo-forms', { credentials: 'include' });
+    if (!res.ok) return { forms: [], enabled: false };
+    const json = (await res.json()) as { forms?: CustomForm[]; enabled?: boolean };
+    return { forms: json.forms ?? [], enabled: json.enabled !== false };
+  } catch (err) {
+    console.error('fetchCustomForms() failed', err);
+    return { forms: [], enabled: false };
+  }
+}
+
+/** Reads an uploaded PDF form into pages and fields; nothing is saved yet. */
+export async function readFormPdf(file: File): Promise<{ draft?: ReadFormDraft; error?: string }> {
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await apiFetch('/api/faculty/return-demo-forms/read', { method: 'POST', credentials: 'include', body: form });
+    if (!res.ok) return { error: await errorOf(res, "That form couldn't be read") };
+    const json = (await res.json()) as { form?: ReadFormDraft };
+    return json.form ? { draft: json.form } : { error: "That form couldn't be read" };
+  } catch (err) {
+    console.error('readFormPdf() failed', err);
+    return { error: "That form couldn't be read. Check your connection and try again." };
+  }
+}
+
+/** Keeps a checked form. */
+export async function saveCustomForm(input: {
+  title: string;
+  description: string;
+  pages: ReadFormDraft['pages'];
+  sections: ReturnDemoForm['sections'];
+}): Promise<{ form?: CustomForm; error?: string }> {
+  try {
+    const res = await apiFetch('/api/faculty/return-demo-forms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) return { error: await errorOf(res, 'Unable to save the form') };
+    const json = (await res.json()) as { form?: CustomForm };
+    return json.form ? { form: json.form } : { error: 'Unable to save the form' };
+  } catch (err) {
+    console.error('saveCustomForm() failed', err);
+    return { error: 'Unable to save the form' };
+  }
+}
+
+/** Removes an uploaded form no Return Demonstration uses. */
+export async function deleteCustomForm(key: string): Promise<{ error?: string }> {
+  try {
+    const id = key.replace(/^custom:/, '');
+    const res = await apiFetch(`/api/faculty/return-demo-forms/${id}`, { method: 'DELETE', credentials: 'include' });
+    if (!res.ok) return { error: await errorOf(res, 'Unable to remove the form') };
+    return {};
+  } catch (err) {
+    console.error('deleteCustomForm() failed', err);
+    return { error: 'Unable to remove the form' };
+  }
+}
+
 /** A form on a student's Return Demonstration, with the rows they entered (094). */
 export type SubmittedForm = ReturnDemoForm & {
   rows: FormRow[];
@@ -3547,9 +3626,40 @@ export async function deleteStudentUser(
 }
 
 /** Every scenario assigned to one student, graded or not (the faculty view). */
-export async function fetchAssignmentsForStudent(studentId: string): Promise<ScenarioAssignment[]> {
+/** One student's mastery of each skill over time, for their profile; null when it can't be read. */
+export async function fetchStudentMasteryHistory(studentId: string): Promise<SkillMasteryHistory[] | null> {
   try {
-    const res = await apiFetch(`/api/faculty/scenarios/assignments?student_id=${encodeURIComponent(studentId)}`, {
+    const res = await apiFetch(`/api/faculty/students/${encodeURIComponent(studentId)}/skill-mastery/history`, {
+      credentials: 'include',
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { skills?: SkillMasteryHistory[] };
+    return json.skills ?? [];
+  } catch (err) {
+    console.error('fetchStudentMasteryHistory() failed', err);
+    return null;
+  }
+}
+
+/** One student's case presentations, for their profile; empty when they can't be read. */
+export async function fetchStudentCasesForFaculty(studentId: string): Promise<StudentCase[]> {
+  try {
+    const res = await apiFetch(`/api/faculty/students/${encodeURIComponent(studentId)}/cases`, { credentials: 'include' });
+    if (!res.ok) return [];
+    const json = (await res.json()) as { cases?: StudentCase[] };
+    return json.cases ?? [];
+  } catch (err) {
+    console.error('fetchStudentCasesForFaculty() failed', err);
+    return [];
+  }
+}
+
+export async function fetchAssignmentsForStudent(
+  studentId: string,
+  kind: 'patient_case' | 'return_demo' = 'patient_case',
+): Promise<ScenarioAssignment[]> {
+  try {
+    const res = await apiFetch(`/api/faculty/scenarios/assignments?student_id=${encodeURIComponent(studentId)}&kind=${kind}`, {
       credentials: 'include',
     });
     const json = (await res.json()) as { assignments?: ScenarioAssignment[]; error?: string };

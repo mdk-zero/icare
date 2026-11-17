@@ -14,7 +14,7 @@ import {
 } from "@/app/lib/case-rubric";
 import { audit } from "./shared";
 import { parseDeadline } from "@/app/lib/deadline-input";
-import { DAY_MS, hasWork, lastActivity, mean, skillMastery } from "./derive";
+import { DAY_MS, hasWork, lastActivity, masteryHistory, mean, skillMastery } from "./derive";
 import { summariseCohort } from "@/app/lib/bkt";
 import { listSkillSummaries } from "../fixtures/skills";
 import { byName, canSeeStudent, manageableSections, sectionName, teamLabel, userById, visibleSections, visibleStudents } from "./scope";
@@ -97,6 +97,46 @@ function visiblePresentations(ctx: Ctx) {
   const sections = new Set(manageableSections(ctx.db, ctx.role, ctx.viewer.id).map((s) => s.id));
   return ctx.db.casePresentations.filter((p) => ctx.role === "admin" || p.section_ids.some((id) => sections.has(id)));
 }
+
+// The real loadMasteryHistory: one student's mastery of each skill over time.
+route("GET", "/api/faculty/students/:id/skill-mastery/history", async (ctx) => {
+  if (!staffOnly(ctx)) return forbidden();
+  if (!canSeeStudent(ctx.db, ctx.role, ctx.viewer.id, ctx.params.id)) return forbidden();
+  return { skills: await masteryHistory(ctx.db, ctx.params.id) };
+});
+
+// The real loadStudentCases: one student's case presentations, for their profile.
+route("GET", "/api/faculty/students/:id/cases", (ctx) => {
+  if (!staffOnly(ctx)) return forbidden();
+  const studentId = ctx.params.id;
+  if (!canSeeStudent(ctx.db, ctx.role, ctx.viewer.id, studentId)) return forbidden();
+  const groups = new Map(allCaseGroups(ctx).map((g) => [g.id, g]));
+  return {
+    cases: ctx.db.caseSubmissions
+      .filter((s) => s.student_id === studentId && s.group_id && groups.has(s.group_id))
+      .flatMap((s) => {
+        const g = groups.get(s.group_id!)!;
+        const p = ctx.db.casePresentations.find((x) => x.id === g.presentation_id);
+        if (!p) return [];
+        return [
+          {
+            id: s.id,
+            status: g.status,
+            group_name: g.team_name,
+            is_leader: g.leader_id === studentId,
+            file_name: g.file?.name ?? null,
+            submitted_at: g.submitted_at,
+            graded_at: g.graded_at,
+            score: g.status === "graded" && g.score !== null ? Number(g.score) : null,
+            updated_at: g.graded_at ?? g.submitted_at ?? p.created_at,
+            presentation: { id: p.id, title: p.title, instructions: p.instructions, deadline: p.deadline },
+            late: isLateSubmission(g.submitted_at, p.deadline),
+          },
+        ];
+      })
+      .sort((a, b) => Number(a.status === "graded") - Number(b.status === "graded")),
+  };
+});
 
 route("GET", "/api/faculty/cases", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
