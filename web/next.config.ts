@@ -73,6 +73,7 @@ const nextConfig: NextConfig = {
     ],
   },
   experimental: {
+    agentUpgrade: "security",
     // Hold route segments in the client router cache instead of re-requesting
     // the RSC payload on every navigation. Without this `dynamic` is 0s, so
     // moving between two pages re-renders both server-side every time.
