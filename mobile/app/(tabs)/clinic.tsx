@@ -8,8 +8,6 @@ import {
   Pressable,
   RefreshControl,
   LayoutAnimation,
-  type LayoutChangeEvent,
-  type ScrollViewInstance,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -28,7 +26,6 @@ import { useApiData } from "@/hooks/useApiData";
 import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 import { FloorPlan, FloorPlanSkeleton } from "@/components/FloorPlan";
 import { gradedLabel, performOn } from "@/lib/return-demos";
-import { useAppHeaderHeight } from "@/components/navigation/AppTabs";
 import {
   fetchWard,
   fetchMyCases,
@@ -42,9 +39,8 @@ import {
  * The Clinic tab: the ward's floor plan as the Dean laid it out first (rooms
  * not on the plan follow as cards, four to a page, as does the whole ward
  * before any room is placed). Below it, Pending Tasks: open patient cases and
- * unfinished write-ups, which scrolls with the page; then Graded Patient
- * Cases and Hospital Cases, each a dropdown whose heading stays pinned under
- * the app header while its list scrolls, so long lists don't bury the screen. Students find the room with
+ * unfinished write-ups; then Graded Patient Cases and Hospital Cases. Each is
+ * a dropdown that scrolls with the page. Students find the room with
  * their patient and walk into it to read the scenario brief and task
  * checklist. The ward arrives in one cached read (/api/student/ward), so the
  * rooms still show offline.
@@ -147,13 +143,6 @@ function AssignmentBanner({
 
 type DropdownKey = "pending" | "completed" | "hospital";
 
-/** Top to bottom, as they appear on the screen. */
-const DROPDOWN_ORDER: DropdownKey[] = ["pending", "completed", "hospital"];
-
-/** Room left for a dropdown's heading when deciding whether it should still be pinned. */
-const DROPDOWN_HEADING_H = 56;
-
-/** A section heading that opens and closes its list; the same one shows pinned below the app header. */
 type AccentName = keyof ReturnType<typeof useTheme>["Accent"];
 
 /**
@@ -239,7 +228,6 @@ export default function ClinicScreen() {
     () => createStyles(Palette, Accent, Shadow, Type),
     [Palette, Accent, Shadow, Type],
   );
-  const headerHeight = useAppHeaderHeight();
 
   const { data, loading, refreshing, error, fromCache, refresh, reload } = useApiData(fetchWard);
   const cases = useApiData(fetchMyCases);
@@ -283,46 +271,9 @@ export default function ClinicScreen() {
     hospital: false,
   });
 
-  // Where each dropdown sits in the scroll content, and which one's heading
-  // is pinned below the app header because its list is being scrolled.
-  const scrollRef = React.useRef<ScrollViewInstance>(null);
-  const layouts = React.useRef<Partial<Record<DropdownKey, { y: number; height: number }>>>({});
-  const scrollY = React.useRef(0);
-  const [pinned, setPinned] = React.useState<DropdownKey | null>(null);
-
-  const updatePinned = React.useCallback(
-    (y: number) => {
-      scrollY.current = y;
-      // The line just under the app header, in content coordinates.
-      const line = y + headerHeight;
-      let next: DropdownKey | null = null;
-      for (const key of DROPDOWN_ORDER) {
-        // Pending Tasks is short and first on the page, so it never pins.
-        if (key === "pending") continue;
-        const box = layouts.current[key];
-        if (box && line > box.y && line < box.y + box.height - DROPDOWN_HEADING_H) next = key;
-      }
-      setPinned((current) => (current === next ? current : next));
-    },
-    [headerHeight],
-  );
-
-  const onSectionLayout = (key: DropdownKey, e: LayoutChangeEvent) => {
-    const { y, height } = e.nativeEvent.layout;
-    layouts.current[key] = { y, height };
-    updatePinned(scrollY.current);
-  };
-
   const toggle = (key: DropdownKey) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    const closing = open[key];
     setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
-    // Closing a list from its pinned heading: bring its heading back into
-    // place instead of leaving the screen scrolled past where it was.
-    const box = layouts.current[key];
-    if (closing && pinned === key && box) {
-      scrollRef.current?.scrollTo({ y: Math.max(0, box.y - headerHeight), animated: false });
-    }
   };
 
   // The header and section titles need nothing fetched; the plan and the
@@ -398,12 +349,9 @@ export default function ClinicScreen() {
   return (
     <View style={styles.container}>
       <ScrollView
-        ref={scrollRef}
         style={styles.container}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 88 }]}
         showsVerticalScrollIndicator={false}
-        onScroll={(e) => updatePinned(e.nativeEvent.contentOffset.y)}
-        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -460,7 +408,7 @@ export default function ClinicScreen() {
         </View>
 
         {/* What the student still has to do, open from the start. */}
-        <View style={styles.section} onLayout={(e) => onSectionLayout("pending", e)}>
+        <View style={styles.section}>
           <DropdownHeading {...headings.pending} open={open.pending} onToggle={() => toggle("pending")} />
           {open.pending ? (
             <View style={styles.dropdownBody}>
@@ -509,7 +457,7 @@ export default function ClinicScreen() {
         </View>
 
         {completedAssignments.length > 0 ? (
-          <View style={styles.section} onLayout={(e) => onSectionLayout("completed", e)}>
+          <View style={styles.section}>
             <DropdownHeading
               {...headings.completed}
               open={open.completed}
@@ -534,7 +482,7 @@ export default function ClinicScreen() {
         ) : null}
 
         {caseList.length > 0 || cases.loading ? (
-          <View style={styles.section} onLayout={(e) => onSectionLayout("hospital", e)}>
+          <View style={styles.section}>
             <DropdownHeading {...headings.hospital} open={open.hospital} onToggle={() => toggle("hospital")} />
             {open.hospital ? (
               <View style={styles.dropdownBody}>
@@ -555,13 +503,6 @@ export default function ClinicScreen() {
         ) : null}
 
       </ScrollView>
-
-      {/* The heading of the list being scrolled, held just below the app header. */}
-      {pinned ? (
-        <View style={[styles.pinnedHeading, { top: headerHeight }]}>
-          <DropdownHeading {...headings[pinned]} open={open[pinned]} onToggle={() => toggle(pinned)} />
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -752,17 +693,6 @@ function createStyles(
     dropdownNote: {
       ...Type.caption,
       marginBottom: Spacing.md,
-    },
-    pinnedHeading: {
-      position: "absolute",
-      left: 0,
-      right: 0,
-      paddingHorizontal: Spacing.lg,
-      paddingVertical: Spacing.sm,
-      backgroundColor: Palette.background,
-      borderBottomWidth: 1,
-      borderBottomColor: Palette.border,
-      zIndex: 5,
     },
     offPlan: { marginTop: Spacing.lg },
     offPlanTitle: {
