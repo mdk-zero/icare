@@ -105,7 +105,19 @@ function runEas(easArgs) {
   const installed = spawnSync('eas', easArgs, options);
   if (installed.error?.code !== 'ENOENT') return installed;
   console.log('eas-cli is not installed globally, so it runs through npx.');
-  return spawnSync('npx', ['--yes', 'eas-cli@latest', ...easArgs], options);
+  return npx(['--yes', 'eas-cli@latest', ...easArgs], options);
+}
+
+// On Windows npx is only npx.cmd, which spawnSync can't start without a shell,
+// and a shell would split the update message at its spaces. So npm's own npx
+// script runs with this Node instead: next to npm-cli.js when the script was
+// started by `npm run`, else in the npm that ships with Node.
+function npx(args, options) {
+  if (process.platform !== 'win32') return spawnSync('npx', args, options);
+  const npmBin = process.env.npm_execpath
+    ? path.dirname(process.env.npm_execpath)
+    : path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin');
+  return spawnSync(process.execPath, [path.join(npmBin, 'npx-cli.js'), ...args], options);
 }
 
 console.log(`Publishing to channel "${channel}" with ${Object.keys(env).join(', ')}`);
