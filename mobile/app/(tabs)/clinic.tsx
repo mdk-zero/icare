@@ -42,9 +42,9 @@ import {
  * The Clinic tab: the ward's floor plan as the Dean laid it out first (rooms
  * not on the plan follow as cards, four to a page, as does the whole ward
  * before any room is placed). Below it, Pending Tasks: open patient cases and
- * unfinished write-ups; then Graded Patient Cases and Hospital Cases,
- * each a dropdown whose heading stays pinned under the app header while its
- * list scrolls, so long lists don't bury the screen. Students find the room with
+ * unfinished write-ups, which scrolls with the page; then Graded Patient
+ * Cases and Hospital Cases, each a dropdown whose heading stays pinned under
+ * the app header while its list scrolls, so long lists don't bury the screen. Students find the room with
  * their patient and walk into it to read the scenario brief and task
  * checklist. The ward arrives in one cached read (/api/student/ward), so the
  * rooms still show offline.
@@ -297,6 +297,8 @@ export default function ClinicScreen() {
       const line = y + headerHeight;
       let next: DropdownKey | null = null;
       for (const key of DROPDOWN_ORDER) {
+        // Pending Tasks is short and first on the page, so it never pins.
+        if (key === "pending") continue;
         const box = layouts.current[key];
         if (box && line > box.y && line < box.y + box.height - DROPDOWN_HEADING_H) next = key;
       }

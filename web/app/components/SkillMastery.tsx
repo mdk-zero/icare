@@ -165,7 +165,14 @@ export function StudentMasteryPanel({ skills, loading }: { skills: SkillMastery[
 }
 
 /** A student's mastery in a line or two, for the prediction card beside the risk model. */
-export function MasteryBrief({ skills, onOpen }: { skills: SkillMastery[] | null | undefined; onOpen: () => void }) {
+export function MasteryBrief({
+  skills,
+  onOpen,
+}: {
+  skills: SkillMastery[] | null | undefined;
+  /** Opens the full list; left out where the skills already show below it. */
+  onOpen?: () => void;
+}) {
   if (!skills || skills.length === 0) return null;
   const mastered = skills.filter((s) => s.mastery >= MASTERY_THRESHOLD).length;
   const weakest = skills[0];
@@ -177,7 +184,12 @@ export function MasteryBrief({ skills, onOpen }: { skills: SkillMastery[] | null
           {mastered} of {skills.length} mastered
         </span>
       </div>
-      {mastered < skills.length && (
+      {mastered < skills.length && !onOpen && (
+        <p className="mt-1 text-xs text-gray-500">
+          Weakest: Skill {weakest.skill_id} at {masteryPercent(weakest.mastery)}%
+        </p>
+      )}
+      {mastered < skills.length && onOpen && (
         <button
           type="button"
           onClick={onOpen}

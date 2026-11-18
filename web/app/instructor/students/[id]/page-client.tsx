@@ -15,9 +15,6 @@ import {
   faStethoscope,
   faHandHoldingMedical,
   faFilePrescription,
-  faListCheck,
-  faBullseye,
-  faBookMedical,
   faXmark,
   faArrowsRotate,
 } from "@fortawesome/free-solid-svg-icons";
@@ -51,13 +48,9 @@ import {
 } from "../../../components/skeletons";
 import Card from "../../../components/Card";
 import Avatar from "../../../components/Avatar";
-import StatTile from "../../../components/StatTile";
 import { usePageData } from "../../../lib/use-page-data";
 import LiveClock from "../../../components/LiveClock";
 import AiThinking from "../../../components/AiThinking";
-import ReflectionsTab from "./reflections-tab";
-import RequirementsTab, { requirementsTally, useStudentRequirements } from "./requirements-tab";
-import { fetchStudentReflections, type FacultyReflection } from "../../../lib/api";
 import { SendAppLinkButton } from "../../../components/AppLink";
 import { MasteryBrief, useStudentMastery } from "../../../components/SkillMastery";
 import QuizHistory, { groupAttempts, scoreColor } from "./quiz-history";
@@ -301,25 +294,81 @@ function StudentSummaryModal({
   );
 }
 
+/** A figure in the profile header, two to a row. */
+function Kpi({
+  icon,
+  tone,
+  label,
+  value,
+  valueClass = "text-gray-900",
+}: {
+  icon: typeof faChartLine;
+  tone: string;
+  label: string;
+  value: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-hairline bg-subtle p-4">
+      <span className="flex items-center justify-between gap-2">
+        <span className="text-sm text-gray-500">{label}</span>
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tone}`}>
+          <FontAwesomeIcon icon={icon} className="h-4 w-4" />
+        </span>
+      </span>
+      <span className={`block truncate font-display text-[1.75rem] font-bold leading-none tabular-nums ${valueClass}`}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * A finished Patient Case or Return Demonstration, read-only, over the page so
+ * the list beside the prediction keeps its place. Its close button, Esc or a
+ * click outside closes it.
+ */
+function GradedWorkModal({ assignment, onClose }: { assignment: ScenarioAssignment; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={assignment.scenario_title}
+        className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-hairline bg-surface shadow-overlay"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] [scrollbar-width:thin]">
+          <AssignmentGrader
+            assignment={assignment}
+            header="scenario"
+            readOnly
+            onClose={onClose}
+            onAssignmentChange={() => {}}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function StudentDetailClient() {
   const router = useRouter();
   const params = useParams();
   const studentId = params?.id as string;
   
   const [activeTab, setActiveTab] = useState("performance");
-  const [reflections, setReflections] = useState<FacultyReflection[] | null>(null);
-  const [reflectionsEnabled, setReflectionsEnabled] = useState(true);
-  useEffect(() => {
-    let live = true;
-    void fetchStudentReflections(studentId).then((r) => {
-      if (!live) return;
-      setReflections(r.reflections);
-      setReflectionsEnabled(r.enabled);
-    });
-    return () => {
-      live = false;
-    };
-  }, [studentId]);
   const loggedRef = useRef(false);
 
   useEffect(() => {
@@ -369,8 +418,6 @@ export default function StudentDetailClient() {
   );
 
   const student = data?.student ?? null;
-  const requirements = useStudentRequirements(studentId);
-  const requirementCount = requirementsTally(requirements.data?.data);
   const mastery = useStudentMastery(studentId);
   const masteryHistory = usePageData(studentId ? `faculty:mastery-history:${studentId}` : null, () =>
     fetchStudentMasteryHistory(studentId),
@@ -389,8 +436,12 @@ export default function StudentDetailClient() {
     [data?.returnDemos],
   );
   const cases = data ? data.cases : null;
-  // The one opened to its (read-only) checklist; none until the instructor opens one.
+  // The one opened to its (read-only) checklist in a popup; none until the instructor opens one.
   const [openedId, setOpenedId] = useState<string | null>(null);
+  const opened = useMemo(
+    () => [...completedAssignments, ...completedReturnDemos].find((a) => a.id === openedId) ?? null,
+    [completedAssignments, completedReturnDemos, openedId],
+  );
   // Their graded quizzes and patient cases over time, for the trend in the prediction card.
   const gradePoints = useMemo<GradePoint[]>(
     () => [
@@ -490,7 +541,9 @@ export default function StudentDetailClient() {
       : null;
 
   // What the model weighed, minus inactivity: it isn't shown as a factor.
-  const shownFactors = (riskPrediction?.explanations ?? []).filter((exp) => exp.feature !== 'days_since_active');
+  const shownFactors = (riskPrediction?.explanations ?? []).filter(
+    (exp) => exp.feature !== 'days_since_last_activity' && exp.feature !== 'days_since_active',
+  );
 
   const featureLabel = (feature: string) =>
     feature.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -498,6 +551,60 @@ export default function StudentDetailClient() {
   const getScoreColor = scoreColor;
 
   const needsImprovement = competencies.filter((c) => c.level === 'needs_improvement');
+
+  // The skill areas and mastery by chapter, always open under Skill Mastery in the prediction card.
+  const skillsBody = (
+          <div className="space-y-4 border-t border-hairline pt-3">
+              {competencies.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">
+                  No skill area scores yet. They appear once this student submits a quiz whose
+                  criteria are mapped to skill areas.
+                </p>
+              ) : (
+                <>
+                  {needsImprovement.length > 0 && (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                      <p className="text-sm font-semibold text-rose-800">
+                        Needs improvement ({needsImprovement.length})
+                      </p>
+                      <p className="mt-1 text-sm text-rose-700">
+                        {needsImprovement.map((c) => c.name).join(" · ")}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 gap-2">
+                    {competencies.map((c) => (
+                      <div key={c.competency_id} className="p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-start justify-between mb-2 gap-2">
+                          <span className="font-medium text-gray-900">{c.name}</span>
+                          <span className={`font-bold shrink-0 ${getScoreColor(c.score)}`}>
+                            {Math.round(c.score)}%
+                          </span>
+                        </div>
+                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${COMPETENCY_LEVEL_BAR[c.level]}`}
+                            style={{ width: `${Math.min(100, Math.max(0, c.score))}%` }}
+                          />
+                        </div>
+                        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${COMPETENCY_LEVEL_TONE[c.level]}`}
+                          >
+                            {COMPETENCY_LEVEL_LABEL[c.level]}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {/* Skill by skill over time, by chapter, as the student sees it on their Profile. */}
+              <MasteryByChapter skills={masteryHistory.data ?? null} loading={masteryHistory.loading} />
+            </div>
+  );
 
   // The back row is static, so it renders for real; everything below mirrors
   // the loaded layout so nothing shifts when the data lands.
@@ -518,17 +625,17 @@ export default function StudentDetailClient() {
     return (
       <div>
         {backRow}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-          <div className="lg:col-span-2">
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+          <div className="space-y-4 lg:col-span-2">
             <SkeletonProfileHeader />
+            <SkeletonTabTiles />
+            <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-clip">
+              <div className="p-6">
+                <SkeletonTabContent />
+              </div>
+            </div>
           </div>
           <SkeletonRiskPredictionCard />
-        </div>
-        <SkeletonTabTiles />
-        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-clip">
-          <div className="p-6">
-            <SkeletonTabContent />
-          </div>
         </div>
       </div>
     );
@@ -552,10 +659,10 @@ export default function StudentDetailClient() {
     <div>
       {backRow}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-        <div className="lg:col-span-2">
-          <Card padding="sm" className="flex h-full flex-col">
-            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="flex min-w-0 flex-col gap-4 lg:col-span-2">
+          <Card padding="sm">
+            <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex min-w-0 items-center gap-4">
                 <Avatar
                   name={student.name}
@@ -595,76 +702,131 @@ export default function StudentDetailClient() {
               </div>
             </div>
 
-            <div className="grid flex-1 grid-cols-1 sm:grid-cols-2 gap-3">
-              <StatTile
-                fitValue
+            <div className="grid grid-cols-2 gap-3">
+              <Kpi
                 icon={faChartLine}
-                iconBg="bg-brand-600/10"
-                iconColor="text-brand-600"
-                value={student.average_score != null ? `${student.average_score}%` : "—"}
+                tone="bg-brand-600/10 text-brand-600"
                 label="Average grade"
+                value={student.average_score != null ? `${student.average_score}%` : "—"}
               />
-              <StatTile
-                fitValue
+              <Kpi
                 icon={faClipboardList}
-                iconBg="bg-purple-50"
-                iconColor="text-purple-600"
-                value={String(student.quiz_count ?? 0)}
+                tone="bg-purple-50 text-purple-600"
                 label="Quizzes"
+                value={student.quiz_count ? String(student.quiz_count) : "—"}
               />
-              <StatTile
-                fitValue
+              <Kpi
                 icon={faClock}
-                iconBg="bg-amber-50"
-                iconColor="text-amber-600"
+                tone="bg-amber-50 text-amber-600"
+                label="Last active"
                 value={
                   student.last_activity
-                    ? new Date(student.last_activity).toLocaleDateString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                      })
+                    ? new Date(student.last_activity).toLocaleDateString(undefined, { month: "short", day: "numeric" })
                     : "Never"
                 }
-                label="Last Active"
               />
-              <StatTile
-                fitValue
-                icon={
+              <Kpi
+                icon={riskPrediction?.risk === "at_risk" ? faTriangleExclamation : faShieldHalved}
+                tone={
                   !riskPrediction
-                    ? faShieldHalved
+                    ? "bg-gray-100 text-gray-500"
                     : riskPrediction.risk === "at_risk"
-                      ? faTriangleExclamation
-                      : faShieldHalved
-                }
-                iconBg={
-                  !riskPrediction
-                    ? "bg-gray-100"
-                    : riskPrediction.risk === "at_risk"
-                      ? "bg-red-50"
-                      : "bg-emerald-50"
-                }
-                iconColor={
-                  !riskPrediction
-                    ? "text-gray-500"
-                    : riskPrediction.risk === "at_risk"
-                      ? "text-red-600"
-                      : "text-emerald-600"
-                }
-                value={riskPrediction ? (riskPrediction.risk === "at_risk" ? "At risk" : "Thriving") : "Not scored yet"}
-                valueColor={
-                  !riskPrediction
-                    ? "text-gray-500"
-                    : riskPrediction.risk === "at_risk"
-                      ? "text-red-600"
-                      : "text-emerald-600"
+                      ? "bg-red-50 text-red-600"
+                      : "bg-emerald-50 text-emerald-600"
                 }
                 label="Performance"
+                value={riskPrediction ? (riskPrediction.risk === "at_risk" ? "At risk" : "Thriving") : "Not scored yet"}
+                valueClass={
+                  !riskPrediction
+                    ? "text-gray-500"
+                    : riskPrediction.risk === "at_risk"
+                      ? "text-red-600"
+                      : "text-emerald-600"
+                }
               />
             </div>
           </Card>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {([
+            { key: 'performance', label: 'Quizzes', count: quizCount, unit: quizCount === 1 ? 'quiz' : 'quizzes', icon: faChartLine },
+            { key: 'scenarios', label: 'Patient Cases', count: completedAssignments.length, unit: 'completed', icon: faStethoscope },
+            { key: 'returnDemos', label: 'Return Demonstrations', count: completedReturnDemos.length, unit: 'completed', icon: faHandHoldingMedical },
+            {
+              key: 'cases',
+              label: 'Case Presentations',
+              count: (cases ?? []).filter((c) => c.status === 'graded').length,
+              unit: 'graded',
+              icon: faFilePrescription,
+            },
+          ] as const).map((tab) => {
+            const active = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                aria-pressed={active}
+                className={`group relative flex items-center gap-3 overflow-hidden rounded-xl border px-3.5 py-3 text-left transition-all duration-200 ${
+                  active
+                    ? 'border-[#1b6b7b] bg-gradient-to-br from-[#1b6b7b] to-[#124a52] text-white shadow-[0_8px_20px_-6px_rgba(27,107,123,0.5)]'
+                    : 'border-hairline bg-surface text-gray-900 hover:-translate-y-0.5 hover:border-brand-600/40 hover:shadow-tile-hover'
+                }`}
+              >
+                <span
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors ${
+                    active ? 'bg-white/20 text-white' : 'bg-brand-600/10 text-brand-600 group-hover:bg-brand-600/15'
+                  }`}
+                >
+                  <FontAwesomeIcon icon={tab.icon} className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-bold leading-tight">{tab.label}</span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className="block text-xl font-bold leading-none tabular-nums">{tab.count}</span>
+                  <span className={`block text-[11px] ${active ? 'text-white/70' : 'text-gray-400'}`}>{tab.unit}</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        <Card padding="sm" className="h-full">
+        <div className="overflow-y-auto rounded-xl border border-hairline bg-surface shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] lg:min-h-[24rem] lg:flex-1 lg:basis-0">
+        <div className="p-6">
+          {activeTab === 'performance' && <QuizHistory records={performanceHistory} />}
+
+          {activeTab === 'scenarios' && (
+            completedAssignments.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">No completed patient cases yet</p>
+            ) : (
+              // Finished cases only, read-only: grading is on the Patient Cases review page.
+              <div className="space-y-3">
+                {completedAssignments.map((a) => (
+                  <ScenarioSummaryCard key={a.id} assignment={a} opensInPopup onExpand={() => setOpenedId(a.id)} />
+                ))}
+              </div>
+            )
+          )}
+
+          {activeTab === 'returnDemos' && (
+            completedReturnDemos.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">No completed Return Demonstrations yet</p>
+            ) : (
+              // Finished ones only, read-only: grading is on the Return Demonstrations review page.
+              <div className="space-y-3">
+                {completedReturnDemos.map((a) => (
+                  <ScenarioSummaryCard key={a.id} assignment={a} opensInPopup onExpand={() => setOpenedId(a.id)} />
+                ))}
+              </div>
+            )
+          )}
+
+          {activeTab === 'cases' && <CasePresentationsTab cases={cases} />}
+
+        </div>
+      </div>
+        </div>
+
+        <Card padding="sm">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 bg-purple-100 rounded-lg">
               <FontAwesomeIcon icon={faBolt} className="w-5 h-5 text-purple-600" />
@@ -679,7 +841,8 @@ export default function StudentDetailClient() {
                 service then scores the cohort nightly (or run it from Admin &gt; Analytics).
               </p>
               <GradeTrend points={gradePoints} />
-              <MasteryBrief skills={mastery.data} onOpen={() => setActiveTab('competencies')} />
+              <MasteryBrief skills={mastery.data} />
+              {skillsBody}
             </div>
           ) : (
             <div className="space-y-3">
@@ -731,178 +894,14 @@ export default function StudentDetailClient() {
                 </p>
               )}
               <GradeTrend points={gradePoints} />
-              <MasteryBrief skills={mastery.data} onOpen={() => setActiveTab('competencies')} />
+              <MasteryBrief skills={mastery.data} />
+              {skillsBody}
             </div>
           )}
         </Card>
       </div>
 
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {([
-            { key: 'performance', label: 'Quizzes', count: quizCount, unit: quizCount === 1 ? 'quiz' : 'quizzes', icon: faChartLine },
-            { key: 'scenarios', label: 'Patient Cases', count: completedAssignments.length, unit: 'completed', icon: faStethoscope },
-            { key: 'returnDemos', label: 'Return Demonstrations', count: completedReturnDemos.length, unit: 'completed', icon: faHandHoldingMedical },
-            {
-              key: 'cases',
-              label: 'Case Presentations',
-              count: (cases ?? []).filter((c) => c.status === 'graded').length,
-              unit: 'graded',
-              icon: faFilePrescription,
-            },
-            { key: 'competencies', label: 'Skill Areas', count: competencies.length, unit: 'areas', icon: faListCheck },
-            { key: 'reflections', label: 'Reflections', count: reflections?.length ?? 0, unit: 'entries', icon: faBullseye },
-            {
-              key: 'requirements',
-              label: 'Requirements',
-              count: requirementCount.total > 0 ? `${requirementCount.done}/${requirementCount.total}` : 0,
-              unit: 'met',
-              icon: faBookMedical,
-            },
-          ] as const).map((tab) => {
-            const active = activeTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                aria-pressed={active}
-                className={`group relative flex items-center gap-4 overflow-hidden rounded-2xl border p-4 text-left transition-all duration-200 ${
-                  active
-                    ? 'border-[#1b6b7b] bg-gradient-to-br from-[#1b6b7b] to-[#124a52] text-white shadow-[0_8px_20px_-6px_rgba(27,107,123,0.5)]'
-                    : 'border-hairline bg-surface text-gray-900 hover:-translate-y-0.5 hover:border-brand-600/40 hover:shadow-tile-hover'
-                }`}
-              >
-                <span
-                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors ${
-                    active ? 'bg-white/20 text-white' : 'bg-brand-600/10 text-brand-600 group-hover:bg-brand-600/15'
-                  }`}
-                >
-                  <FontAwesomeIcon icon={tab.icon} className="h-5 w-5" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-base font-bold leading-tight">{tab.label}</span>
-                </span>
-                <span className="shrink-0 text-right">
-                  <span className="block text-2xl font-bold leading-none tabular-nums">{tab.count}</span>
-                  <span className={`block text-[11px] ${active ? 'text-white/70' : 'text-gray-400'}`}>{tab.unit}</span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04),0_1px_2px_-1px_rgba(0,0,0,0.06)] overflow-clip">
-        <div className="p-6">
-          {activeTab === 'performance' && <QuizHistory records={performanceHistory} />}
-
-          {activeTab === 'scenarios' && (
-            completedAssignments.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">No completed patient cases yet</p>
-            ) : (
-              // Finished cases only, read-only: grading is on the Patient Cases review page.
-              <div className="space-y-3">
-                {completedAssignments.map((a) =>
-                  a.id === openedId ? (
-                    <AssignmentGrader
-                      key={a.id}
-                      assignment={a}
-                      header="scenario"
-                      readOnly
-                      onCollapse={() => setOpenedId(null)}
-                      onAssignmentChange={() => {}}
-                    />
-                  ) : (
-                    <ScenarioSummaryCard key={a.id} assignment={a} onExpand={() => setOpenedId(a.id)} />
-                  ),
-                )}
-              </div>
-            )
-          )}
-
-          {activeTab === 'returnDemos' && (
-            completedReturnDemos.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">No completed Return Demonstrations yet</p>
-            ) : (
-              // Finished ones only, read-only: grading is on the Return Demonstrations review page.
-              <div className="space-y-3">
-                {completedReturnDemos.map((a) =>
-                  a.id === openedId ? (
-                    <AssignmentGrader
-                      key={a.id}
-                      assignment={a}
-                      header="scenario"
-                      readOnly
-                      onCollapse={() => setOpenedId(null)}
-                      onAssignmentChange={() => {}}
-                    />
-                  ) : (
-                    <ScenarioSummaryCard key={a.id} assignment={a} onExpand={() => setOpenedId(a.id)} />
-                  ),
-                )}
-              </div>
-            )
-          )}
-
-          {activeTab === 'cases' && <CasePresentationsTab cases={cases} />}
-
-          {activeTab === 'reflections' && <ReflectionsTab reflections={reflections} enabled={reflectionsEnabled} />}
-
-          {activeTab === 'requirements' && student && <RequirementsTab studentId={studentId} studentName={student.name} />}
-
-          {activeTab === 'competencies' && (
-            <div className="space-y-6">
-              {competencies.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">
-                  No skill area data yet. Scores appear automatically once this student submits an
-                  assessment whose criteria are mapped to skill areas — or record one by hand
-                  below.
-                </p>
-              ) : (
-                <>
-                  {needsImprovement.length > 0 && (
-                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
-                      <p className="text-sm font-semibold text-rose-800">
-                        Needs improvement ({needsImprovement.length})
-                      </p>
-                      <p className="mt-1 text-sm text-rose-700">
-                        {needsImprovement.map((c) => c.name).join(" · ")}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {competencies.map((c) => (
-                      <div key={c.competency_id} className="p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-start justify-between mb-2 gap-2">
-                          <span className="font-medium text-gray-900">{c.name}</span>
-                          <span className={`font-bold shrink-0 ${getScoreColor(c.score)}`}>
-                            {Math.round(c.score)}%
-                          </span>
-                        </div>
-                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all ${COMPETENCY_LEVEL_BAR[c.level]}`}
-                            style={{ width: `${Math.min(100, Math.max(0, c.score))}%` }}
-                          />
-                        </div>
-                        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                          <span
-                            className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${COMPETENCY_LEVEL_TONE[c.level]}`}
-                          >
-                            {COMPETENCY_LEVEL_LABEL[c.level]}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-
-              {/* Skill by skill over time, by chapter, as the student sees it on their Profile. */}
-              <MasteryByChapter skills={masteryHistory.data ?? null} loading={masteryHistory.loading} />
-            </div>
-          )}
-        </div>
-      </div>
+      {opened && <GradedWorkModal assignment={opened} onClose={() => setOpenedId(null)} />}
 
       {summaryOpen && (
         <StudentSummaryModal
