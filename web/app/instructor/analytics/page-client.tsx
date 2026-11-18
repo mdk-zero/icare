@@ -24,10 +24,6 @@ import {
   FacultyCourseSummary,
   Section,
 } from "../../lib/api";
-import {
-  SkeletonStatTile,
-  SkeletonChartArea,
-} from "../../components/skeletons";
 import PageHeader from "../../components/PageHeader";
 import StatTile from "../../components/StatTile";
 import Card, { CardLabel } from "../../components/Card";
@@ -35,7 +31,8 @@ import { usePageData } from "../../lib/use-page-data";
 import { EcgLoader } from "../../components/EcgLoader";
 import { AiSummaryButton, AnalyticsSummaryModal, useAnalyticsSummary } from "../../components/AnalyticsSummary";
 import { CohortMasteryBody, useCohortMastery } from "../../components/SkillMastery";
-import { Leaderboard, LeaderboardSkeleton } from "./Leaderboard";
+import { Leaderboard } from "./Leaderboard";
+import AnalyticsSkeleton from "./AnalyticsSkeleton";
 import GroupPerformance, { useGroupSummaries } from "./GroupPerformance";
 import CoursePerformance from "./CoursePerformance";
 import CourseFilter from "./CourseFilter";
@@ -729,32 +726,7 @@ export default function FacultyAnalyticsClient() {
           and even then the header and filters above stay live. The skeleton
           follows the panels' own grid, so nothing moves when they land. */}
       {firstLoad ? (
-        <div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <SkeletonStatTile key={i} />
-            ))}
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-            <Card padding="md">
-              <div className="mb-5 flex items-center gap-2.5 animate-pulse">
-                <div className="h-10 w-10 rounded-xl bg-gray-100" />
-                <div className="h-4 w-44 rounded bg-gray-100" />
-              </div>
-              <LeaderboardSkeleton rows={7} />
-            </Card>
-            <div className="lg:col-span-2">
-              <SkeletonChartArea height="h-64" />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 mb-4">
-            <SkeletonChartArea height="h-56" />
-            <SkeletonChartArea height="h-56" />
-            <div className="lg:col-span-2 xl:col-span-1">
-              <SkeletonChartArea height="h-56" />
-            </div>
-          </div>
-        </div>
+        <AnalyticsSkeleton />
       ) : (
         <div
           className={`transition-opacity duration-200 ${

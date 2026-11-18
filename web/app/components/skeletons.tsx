@@ -1,13 +1,16 @@
-/** Mirrors StatTile: label beside a round icon, a display-size value, caption. */
+/** Mirrors StatTile at its sizes and spacing: label beside a round icon, a
+ * display-size value, the caption line. Change it with StatTile. */
 export function SkeletonStatTile() {
   return (
-    <div className="flex flex-col rounded-2xl border border-hairline bg-surface p-4 shadow-tile animate-pulse">
+    <div className="flex flex-col rounded-2xl border border-hairline bg-surface p-4 shadow-tile animate-pulse sm:p-5">
       <div className="flex items-start justify-between gap-2">
         <div className="mt-0.5 h-3 w-24 rounded bg-gray-100" />
-        <div className="h-9 w-9 shrink-0 rounded-full bg-gray-100 sm:h-12 sm:w-12" />
+        <div className="h-9 w-9 shrink-0 rounded-full bg-gray-100 sm:h-11 sm:w-11" />
       </div>
-      <div className="mt-2 h-9 w-20 rounded bg-gray-100" />
-      <div className="mt-2.5 h-3 w-28 rounded bg-gray-100" />
+      <div className="mt-2 h-8 w-20 rounded bg-gray-100 sm:mt-3.5 sm:h-11" />
+      <div className="mt-2 flex min-h-4 items-center sm:mt-3">
+        <div className="h-3 w-36 rounded bg-gray-100" />
+      </div>
     </div>
   );
 }
@@ -252,20 +255,6 @@ export function SkeletonTabTiles({ count = 4 }: { count?: number }) {
           </div>
         </div>
       ))}
-    </div>
-  );
-}
-
-export function SkeletonChartArea({ height = "h-36" }: { height?: string }) {
-  return (
-    <div className="bg-surface rounded-xl border border-hairline shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] p-5 animate-pulse">
-      <div className="h-4 w-32 bg-gray-100 rounded mb-4" />
-      <div className={`${height} bg-gray-50 rounded-lg flex items-end gap-2 p-2`}>
-        {/* Fixed heights: random ones would change on every render. */}
-        {[55, 80, 40, 95, 65, 75, 45, 85].map((h, i) => (
-          <div key={i} className="flex-1 bg-gray-100 rounded-t" style={{ height: `${h}%` }} />
-        ))}
-      </div>
     </div>
   );
 }

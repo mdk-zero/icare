@@ -84,7 +84,8 @@ export function LeaderboardSkeleton({ rows = 8 }: { rows?: number }) {
         <div key={i} className="flex items-center gap-3 rounded-xl border border-hairline bg-surface p-3">
           <span className="h-7 w-7 shrink-0 rounded-full bg-gray-100" />
           <span className="h-8 w-8 shrink-0 rounded-full bg-gray-100" />
-          <span className="min-w-0 flex-1 space-y-1.5">
+          {/* The height of a name over its meta line, so the rows don't grow when they land. */}
+          <span className="flex h-9 min-w-0 flex-1 flex-col justify-center gap-1.5">
             <span className="block h-3.5 w-40 max-w-full rounded bg-gray-100" />
             <span className="block h-3 w-28 max-w-full rounded bg-gray-100" />
           </span>
