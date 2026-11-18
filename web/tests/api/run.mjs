@@ -4,9 +4,10 @@
  * /admin/tests as each request finishes. Exits non-zero when any request fails, for CI.
  *
  *   npm run test:api
+ *   API_RESULTS_JSON=results.json npm run test:api   # also keep each request's result
  */
 import newman from 'newman';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { accounts, baseUrl, reportEnabled } from '../env.mjs';
@@ -76,6 +77,8 @@ newman.run(
       row.error = failures.length ? failures.join('\n') : null;
     }
     const results = [...rows.values()];
+    // API_RESULTS_JSON=<file> also keeps the rows, for counting by folder.
+    if (process.env.API_RESULTS_JSON) writeFileSync(process.env.API_RESULTS_JSON, JSON.stringify(results, null, 1));
 
     await live?.finish(results, { duration_ms: Date.now() - started });
     process.exit(results.some((r) => r.status === 'failed') ? 1 : 0);

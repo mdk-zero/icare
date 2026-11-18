@@ -289,7 +289,7 @@ export default function LoginPage() {
                 },
                 {
                   title: "Realistic simulation",
-                  description: "EHR charts, live vitals, and patient encounters",
+                  description: "Simulated patient cases and return demonstrations, rated on skill checklists",
                   delay: "600ms",
                   icon: faHeart,
                 },
