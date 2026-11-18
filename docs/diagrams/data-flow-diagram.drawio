@@ -106,7 +106,7 @@
         <mxCell id="f1" edge="1" parent="1" source="D1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.25;exitY=0.0;exitDx=0;exitDy=0;entryX=0.25;entryY=1.0;entryDx=0;entryDy=0;" target="P1" value="ACCOUNT RECORD">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="f2" edge="1" parent="1" source="P1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.75;exitY=1.0;exitDx=0;exitDy=0;entryX=0.75;entryY=0.0;entryDx=0;entryDy=0;" target="D1" value="ACCOUNT DETAIL">
+        <mxCell id="f2" edge="1" parent="1" source="P1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.75;exitY=1.0;exitDx=0;exitDy=0;entryX=0.75;entryY=0.0;entryDx=0;entryDy=0;" target="D1" value="NEW ACCOUNT">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="f3" edge="1" parent="1" source="D1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.25;exitY=1.0;exitDx=0;exitDy=0;entryX=0.25;entryY=0.0;entryDx=0;entryDy=0;" target="P2" value="INSTRUCTOR LIST">
@@ -155,7 +155,7 @@
         <mxCell id="f14" edge="1" parent="1" source="D5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.75;exitY=0.0;exitDx=0;exitDy=0;entryX=0.75;entryY=1.0;entryDx=0;entryDy=0;" target="P5" value="STORED ANALYTICS">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="f15" edge="1" parent="1" source="DEAN" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=1.0;exitY=0.1527;exitDx=0;exitDy=0;entryX=0.0;entryY=0.3438;entryDx=0;entryDy=0;" target="P1" value="USER DETAIL">
+        <mxCell id="f15" edge="1" parent="1" source="DEAN" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=1.0;exitY=0.1527;exitDx=0;exitDy=0;entryX=0.0;entryY=0.3438;entryDx=0;entryDy=0;" target="P1" value="USER ACCOUNT">
           <mxGeometry relative="1" as="geometry">
             <mxPoint y="-8" as="offset" />
           </mxGeometry>
@@ -227,17 +227,17 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="f24" edge="1" parent="1" source="INST" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=1.0;exitY=0.2167;exitDx=0;exitDy=0;entryX=0.0;entryY=0.1875;entryDx=0;entryDy=0;" target="P3" value="PATIENT CASE DETAIL">
+        <mxCell id="f24" edge="1" parent="1" source="INST" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=1.0;exitY=0.2167;exitDx=0;exitDy=0;entryX=0.0;entryY=0.1875;entryDx=0;entryDy=0;" target="P3" value="PATIENT CASE SCENARIO">
           <mxGeometry relative="1" as="geometry">
             <mxPoint y="-8" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="f25" edge="1" parent="1" source="INST" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=1.0;exitY=0.3833;exitDx=0;exitDy=0;entryX=0.0;entryY=0.5;entryDx=0;entryDy=0;" target="P3" value="RETURN DEMONSTRATION DETAIL">
+        <mxCell id="f25" edge="1" parent="1" source="INST" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=1.0;exitY=0.3833;exitDx=0;exitDy=0;entryX=0.0;entryY=0.5;entryDx=0;entryDy=0;" target="P3" value="RETURN DEMONSTRATION CHECKLIST">
           <mxGeometry relative="1" as="geometry">
             <mxPoint y="-8" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="f26" edge="1" parent="1" source="INST" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=1.0;exitY=0.55;exitDx=0;exitDy=0;entryX=0.0;entryY=0.8125;entryDx=0;entryDy=0;" target="P3" value="QUIZ DETAIL">
+        <mxCell id="f26" edge="1" parent="1" source="INST" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=1.0;exitY=0.55;exitDx=0;exitDy=0;entryX=0.0;entryY=0.8125;entryDx=0;entryDy=0;" target="P3" value="QUIZ QUESTION">
           <mxGeometry relative="1" as="geometry">
             <mxPoint y="-8" as="offset" />
           </mxGeometry>
@@ -284,17 +284,22 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="f32" edge="1" parent="1" source="STUD" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.0;exitY=0.2167;exitDx=0;exitDy=0;entryX=1.0;entryY=0.1875;entryDx=0;entryDy=0;" target="P4" value="QUIZ ANSWER">
+        <mxCell id="f32" edge="1" parent="1" source="STUD" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.0;exitY=0.1833;exitDx=0;exitDy=0;entryX=1.0;entryY=0.125;entryDx=0;entryDy=0;" target="P4" value="QUIZ ANSWER">
           <mxGeometry relative="1" as="geometry">
             <mxPoint y="-8" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="f33" edge="1" parent="1" source="STUD" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.0;exitY=0.3833;exitDx=0;exitDy=0;entryX=1.0;entryY=0.5;entryDx=0;entryDy=0;" target="P4" value="CASE PRESENTATION">
+        <mxCell id="fCF" edge="1" parent="1" source="STUD" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.0;exitY=0.3167;exitDx=0;exitDy=0;entryX=1.0;entryY=0.375;entryDx=0;entryDy=0;" target="P4" value="CLINICAL FORM ANSWER">
           <mxGeometry relative="1" as="geometry">
             <mxPoint y="-8" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="f34" edge="1" parent="1" source="P4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=1.0;exitY=0.8125;exitDx=0;exitDy=0;entryX=0.0;entryY=0.55;entryDx=0;entryDy=0;" target="STUD" value="PERFORMANCE FEEDBACK">
+        <mxCell id="f33" edge="1" parent="1" source="STUD" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.0;exitY=0.45;exitDx=0;exitDy=0;entryX=1.0;entryY=0.625;entryDx=0;entryDy=0;" target="P4" value="CASE PRESENTATION FILE">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-8" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="f34" edge="1" parent="1" source="P4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=1.0;exitY=0.875;exitDx=0;exitDy=0;entryX=0.0;entryY=0.5833;entryDx=0;entryDy=0;" target="STUD" value="PERFORMANCE FEEDBACK">
           <mxGeometry relative="1" as="geometry">
             <mxPoint y="-8" as="offset" />
           </mxGeometry>
@@ -326,7 +331,7 @@
         <mxCell id="f38" edge="1" parent="1" source="D6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.2;exitY=0.0;exitDx=0;exitDy=0;entryX=0.2;entryY=1.0;entryDx=0;entryDy=0;" target="P6" value="CURRICULUM RECORD">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="f39" edge="1" parent="1" source="P6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.8;exitY=1.0;exitDx=0;exitDy=0;entryX=0.8;entryY=0.0;entryDx=0;entryDy=0;" target="D6" value="CURRICULUM DETAIL">
+        <mxCell id="f39" edge="1" parent="1" source="P6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.8;exitY=1.0;exitDx=0;exitDy=0;entryX=0.8;entryY=0.0;entryDx=0;entryDy=0;" target="D6" value="NEW CURRICULUM">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="f40" edge="1" parent="1" source="D6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;html=1;jumpStyle=arc;jumpSize=9;strokeColor=#111827;strokeWidth=1.1;endArrow=classic;endFill=1;endSize=7;fontSize=8.5;fontColor=#111827;labelBackgroundColor=#ffffff;fontFamily=Helvetica;exitX=0.0;exitY=0.5;exitDx=0;exitDy=0;entryX=1.0;entryY=0.125;entryDx=0;entryDy=0;" target="P2" value="LAB COURSE LIST">
