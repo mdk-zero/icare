@@ -6,6 +6,7 @@ import {
   faCalendarCheck,
   faCalendarDay,
   faChevronDown,
+  faEye,
   faFloppyDisk,
   faHourglassHalf,
   faLock,
@@ -13,6 +14,7 @@ import {
   faRotateLeft,
   faStopwatch,
   faTriangleExclamation,
+  faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   ScenarioAssignment,
@@ -218,9 +220,12 @@ function collapseProps(onToggle: () => void, label: string) {
 export function ScenarioSummaryCard({
   assignment,
   onExpand,
+  opensInPopup = false,
 }: {
   assignment: ScenarioAssignment;
   onExpand: () => void;
+  /** The checklist opens over the page rather than in the card's place: show View, not a chevron. */
+  opensInPopup?: boolean;
 }) {
   const done = assignment.status === "completed";
   const score = done ? (assignment.score ?? 0) : null;
@@ -228,8 +233,9 @@ export function ScenarioSummaryCard({
     <div className="overflow-clip rounded-2xl border border-hairline bg-surface shadow-tile">
       <div
         {...collapseProps(onExpand, `Open ${assignment.scenario_title}`)}
-        aria-expanded={false}
-        className="flex cursor-pointer flex-col gap-5 p-5 transition-colors hover:bg-subtle/60 sm:flex-row sm:items-center sm:justify-between sm:p-6"
+        aria-expanded={opensInPopup ? undefined : false}
+        aria-haspopup={opensInPopup ? "dialog" : undefined}
+        className="group flex cursor-pointer flex-col gap-5 p-5 transition-colors hover:bg-subtle/60 sm:flex-row sm:items-center sm:justify-between sm:p-6"
       >
         <ScenarioInfo assignment={assignment} />
         <div className="flex shrink-0 items-center gap-4">
@@ -244,7 +250,17 @@ export function ScenarioSummaryCard({
               </p>
             </div>
           </div>
-          <Chevron open={false} />
+          {opensInPopup ? (
+            <span
+              aria-hidden
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-brand-600/30 bg-surface px-3 py-1.5 text-sm font-semibold text-brand-700 transition-colors group-hover:bg-brand-600/5"
+            >
+              <FontAwesomeIcon icon={faEye} className="h-3.5 w-3.5" />
+              View
+            </span>
+          ) : (
+            <Chevron open={false} />
+          )}
         </div>
       </div>
     </div>
@@ -263,6 +279,7 @@ export default function AssignmentGrader({
   onDirtyChange,
   header = "student",
   onCollapse,
+  onClose,
   readOnly = false,
 }: {
   assignment: ScenarioAssignment;
@@ -273,6 +290,8 @@ export default function AssignmentGrader({
   header?: "student" | "scenario";
   /** Makes the header fold the sheet back into its summary card. */
   onCollapse?: () => void;
+  /** Shown in a popup: a close button in the header, which sticks to the popup's top. */
+  onClose?: () => void;
   /** The assignment as the server now has it, after a save. */
   onAssignmentChange: (patch: Partial<ScenarioAssignment>) => void;
   /** Whether there are ratings or notes not saved yet, so the parent can ask before leaving. */
@@ -580,7 +599,7 @@ export default function AssignmentGrader({
             scrolls under them. Like the finalize bar, the negative inset
             cancels Shell's padding (`p-3 lg:p-5`) so it docks at the
             window's top edge; keep the two in step. */}
-        <div ref={stickyHeadRef} className="sticky -top-3 z-20 bg-surface lg:-top-5">
+        <div ref={stickyHeadRef} className={`sticky z-20 bg-surface ${onClose ? "top-0" : "-top-3 lg:-top-5"}`}>
           {/* Who, what, and the grade so far */}
           <div
             {...(onCollapse &&
@@ -671,6 +690,16 @@ export default function AssignmentGrader({
                 </div>
               )}
               {onCollapse && <Chevron open />}
+              {onClose && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Close"
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-hairline bg-surface text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                >
+                  <FontAwesomeIcon icon={faXmark} className="h-4 w-4" />
+                </button>
+              )}
             </div>
           </div>
 
@@ -790,7 +819,7 @@ export default function AssignmentGrader({
             the bar flush with the edge; keep it in step with Shell's.
             Square corners, since docked mid-panel it meets the edge —
             the panel's `overflow-clip` rounds them off at its end. */}
-        <div className="isolate z-10 -bottom-3 flex flex-col gap-3 border-t border-hairline bg-surface px-5 py-4 sm:sticky sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:-bottom-5">
+        <div className={`isolate z-10 flex flex-col gap-3 border-t border-hairline bg-surface px-5 py-4 sm:sticky sm:flex-row sm:items-center sm:justify-between sm:px-6 ${onClose ? "bottom-0" : "-bottom-3 lg:-bottom-5"}`}>
           <div className="min-w-0 text-sm">
             {tasksLoading ? (
               <div className="animate-pulse space-y-2 py-0.5" aria-hidden>
