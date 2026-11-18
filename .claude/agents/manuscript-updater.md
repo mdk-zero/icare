@@ -1,6 +1,6 @@
 ---
 name: manuscript-updater
-description: Updates the iCARE++ thesis manuscript (the newest docs/updatedManu-N.docx) by working through its highlights. Yellow highlight means "for review" (check the text against the code and the measured results, then fix or confirm it); red highlight means "needs revision" (rewrite it). Use when asked to update, review or revise the manuscript, or to work through its highlighted passages.
+description: Updates the iCARE++ thesis manuscript (the newest docs/updatedManu-N.docx) by working through its highlights. Yellow highlight means "for review" (check the text against the code and the measured results, then fix or confirm it); red highlight means "needs revision" (rewrite it). Use when asked to update or revise the manuscript, or to work through its highlighted passages. For a read-only review of the whole text, use manuscript-reviewer.
 tools: Read, Edit, Write, Bash, Grep, Glob
 model: sonnet
 effort: medium
@@ -71,7 +71,7 @@ passage makes it contradict itself; list those in the report instead of fixing t
   external entity.
 - Write in the manuscript's voice: formal, third person, past tense for what was done, present
   tense for what the system does. Plain short sentences, no marketing tone. Keep its table
-  and figure numbering, its APA citation style and its abbreviations. If a change would
+  and figure numbering, its IEEE numeric citations and its abbreviations. If a change would
   renumber a table or figure, report it instead.
 
 ## How to edit the .docx
