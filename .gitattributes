@@ -4,3 +4,8 @@
 
 # Same reasoning for the env templates start.sh sources.
 .env.example text eol=lf
+
+# Expo's fingerprint (the app's runtime version) hashes mobile/.gitignore. With
+# CRLF from a Windows checkout it no longer matches the APK built on Linux, and
+# an update published from Windows reaches no phone.
+mobile/.gitignore text eol=lf
