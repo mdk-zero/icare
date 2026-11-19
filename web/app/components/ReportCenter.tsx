@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
@@ -45,6 +45,9 @@ export interface Target {
   label: string;
   sub: string;
   badges?: { text: string; tone: Tone }[];
+  /** Headings a folder's items are listed under: the section, then the group. */
+  section?: string | null;
+  group?: string | null;
 }
 
 /** One way of slicing a folder's contents: "Per student", "Per group". */
@@ -705,7 +708,26 @@ export default function ReportCenter({
                   </p>
                 ) : (
                   <ul className="divide-y divide-hairline">
-                    {viewItems.slice(0, shown).map((t) => row(t, t.id, t.id, currentView?.type))}
+                    {viewItems.slice(0, shown).map((t, i, page) => {
+                      const prev = page[i - 1];
+                      const newSection = Boolean(t.section) && t.section !== prev?.section;
+                      const newGroup = Boolean(t.group) && (newSection || t.group !== prev?.group);
+                      return (
+                        <Fragment key={t.id}>
+                          {newSection && (
+                            <li className="bg-subtle px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-600 sm:px-5">
+                              {t.section}
+                            </li>
+                          )}
+                          {newGroup && (
+                            <li className="border-l-4 border-brand-600/40 bg-surface px-4 py-1.5 text-xs font-semibold text-brand-700 sm:px-5">
+                              {t.group}
+                            </li>
+                          )}
+                          {row(t, t.id, t.id, currentView?.type)}
+                        </Fragment>
+                      );
+                    })}
                   </ul>
                 )}
                 {viewItems.length > shown && (

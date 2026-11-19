@@ -13,6 +13,9 @@ export interface Performer {
   teamId: string | null;
   /** "BSN 1101 · Group A", or the section alone for a student in no group. */
   groupLabel: string;
+  /** The section and the group on their own, for sorting a folder under section and group headings. */
+  sectionName: string | null;
+  groupName: string | null;
   status: string;
   score: number | null;
   deadline: string | null;
@@ -68,6 +71,8 @@ export async function loadChecklistRoster(
         name: a.users?.name ?? 'Unknown student',
         teamId: g?.teamId ?? null,
         groupLabel: g?.groupLabel ?? 'No group',
+        sectionName: g?.sectionName ?? null,
+        groupName: g?.groupName ?? null,
         status: a.status,
         score: a.status === 'completed' && a.score !== null ? Number(a.score) : null,
         deadline: a.deadline,

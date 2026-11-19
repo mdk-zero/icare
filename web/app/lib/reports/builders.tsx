@@ -4,7 +4,6 @@ import { getFacultyStudentIds } from '@/app/lib/roster';
 import { CourseCriteria, ReportShell, StatGrid, TEAL, Table, scoreColor, styles, type ReportMeta, type ReportDocument } from './kit';
 import {
   CASE_STATUS_LABEL,
-  NEEDS_PRACTICE_BELOW,
   PASSING_SCORE,
   avg,
   date,
@@ -32,6 +31,7 @@ import { competencyRemark } from '../return-demo-remarks';
 import { loadActivityGrid } from './activity-data';
 import { ActivityTable, type GridMember } from './activity-sheet';
 import { loadGroupings } from './groupings';
+import { getLatestRiskByStudent } from '../faculty-dashboard';
 import { loadQuizCriteria, loadQuizQuestions, loadQuizRoster, loadQuizTries } from './quiz-data';
 import { answerRows, criterionForGroup, criterionForStudent, matrix } from './quiz-model';
 import { CriterionTable, QuizAnswers, QuizMatrix } from './quiz-sheet';
@@ -264,9 +264,10 @@ export async function buildStudentReport(
       <Text style={styles.sectionTitle}>Summary</Text>
       <StatGrid
         items={[
-          gradeTile('Patient case average', avg(scoresOf(scenarioRows))),
-          gradeTile('Case presentation average', avg(scoresOf(caseRows))),
-          { label: 'Quiz average', value: pct(avg(scoresOf(quizRows))) },
+          { label: 'Quiz AVG', value: pct(avg(scoresOf(quizRows))) },
+          { label: 'Return demo AVG', value: pct(avg(scoresOf(returnDemoRows))) },
+          { label: 'Patient case AVG', value: pct(avg(scoresOf(scenarioRows))) },
+          { label: 'Case presentation AVG', value: pct(avg(scoresOf(caseRows))) },
         ]}
       />
 
@@ -352,9 +353,10 @@ export async function buildSectionReport(
   const students = (sectionStudents ?? []).filter((s) => !scope || scope.includes(s.id));
   const ids = students.map((s) => s.id);
 
-  const [groups, work, scores] = await Promise.all([
+  const [groups, work, risks, scores] = await Promise.all([
     groupNames(supabase, ids),
     studentWork(supabase, ids),
+    getLatestRiskByStudent(supabase, ids),
     // Every rating, paged past the 1,000-row cap.
     readMatching<{ score: number; competency_areas: { name: string } | null }>(ids, (part, from, to) =>
       supabase
@@ -370,28 +372,38 @@ export async function buildSectionReport(
   const scenarioAverages = roster.flatMap((r) => (r.work.scenarioAverage === null ? [] : [r.work.scenarioAverage]));
   const quizAverages = roster.flatMap((r) => (r.work.quizAverage === null ? [] : [r.work.quizAverage]));
   const demoAverages = roster.flatMap((r) => (r.work.returnDemoAverage === null ? [] : [r.work.returnDemoAverage]));
-  const needsPractice = scenarioAverages.filter((s) => s < NEEDS_PRACTICE_BELOW).length;
+  // Low performing: already failing, the mean of the averages a student has is below the passing mark.
+  // At risk: not failing yet, but the latest ML prediction says they may.
+  const failing = new Set(
+    roster
+      .filter((r) => {
+        const own = [r.work.quizAverage, r.work.returnDemoAverage, r.work.scenarioAverage, r.work.caseAverage].filter(
+          (v): v is number => v !== null,
+        );
+        const mean = avg(own);
+        return mean !== null && mean < PASSING_SCORE;
+      })
+      .map((r) => r.id),
+  );
+  const atRisk = roster.filter((r) => !failing.has(r.id) && risks.get(r.id)?.risk === 'at_risk').length;
 
   const byGroup = new Map<string, typeof roster>();
   for (const r of roster) {
     const key = r.group ?? 'No group';
     byGroup.set(key, [...(byGroup.get(key) ?? []), r]);
   }
-  // Each group on its own, with only the work given to its members, names A to Z.
-  const [grid, groupings] = await Promise.all([
-    loadActivityGrid(supabase, ids),
-    loadGroupings(supabase, students.map((s) => ({ id: s.id, section_id: sectionId }))),
-  ]);
-  const blocks = new Map<string, GridMember[]>();
-  for (const st of students) {
-    const name = groupings.get(st.id)?.groupName ?? 'Students not in a group';
-    blocks.set(name, [...(blocks.get(name) ?? []), { name: st.name, entries: grid.get(st.id) ?? [] }]);
+  // Each group on its own: every member's average per kind of work, names A to Z.
+  const groupings = await loadGroupings(supabase, students.map((s) => ({ id: s.id, section_id: sectionId })));
+  const NO_GROUP = 'Students not in a group';
+  const blocks = new Map<string, typeof roster>();
+  for (const r of roster) {
+    const name = groupings.get(r.id)?.groupName ?? NO_GROUP;
+    blocks.set(name, [...(blocks.get(name) ?? []), r]);
   }
   const groupBlocks = [...blocks.entries()]
-    .sort(([a], [b]) =>
-      a === 'Students not in a group' ? 1 : b === 'Students not in a group' ? -1 : a.localeCompare(b, undefined, { numeric: true }),
-    )
+    .sort(([a], [b]) => (a === NO_GROUP ? 1 : b === NO_GROUP ? -1 : a.localeCompare(b, undefined, { numeric: true })))
     .map(([name, members]) => ({ name, members: [...members].sort((x, y) => x.name.localeCompare(y.name)) }));
+  const caseAverages = roster.flatMap((r) => (r.work.caseAverage === null ? [] : [r.work.caseAverage]));
 
   const byArea = new Map<string, number[]>();
   for (const s of scores) {
@@ -419,10 +431,12 @@ export async function buildSectionReport(
       <StatGrid
         items={[
           { label: 'Students', value: roster.length },
-          gradeTile('Patient case average', avg(scenarioAverages)),
-          gradeTile('Return demo average', avg(demoAverages)),
-          { label: 'Quiz average', value: pct(avg(quizAverages)) },
-          { label: 'Needs Practice', value: needsPractice },
+          { label: 'Quiz AVG', value: pct(avg(quizAverages)) },
+          { label: 'Return demo AVG', value: pct(avg(demoAverages)) },
+          { label: 'Patient case AVG', value: pct(avg(scenarioAverages)) },
+          { label: 'Case presentation AVG', value: pct(avg(caseAverages)) },
+          { label: 'Low performing', value: failing.size },
+          { label: 'At risk', value: atRisk },
         ]}
       />
 
@@ -431,16 +445,23 @@ export async function buildSectionReport(
         <Text style={styles.empty}>No students in this section yet.</Text>
       ) : (
         groupBlocks.map((g) => (
-          <ActivityTable
-            key={g.name}
-            members={g.members}
-            heading={
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4, marginBottom: 3 }}>
-                <Text style={{ fontFamily: 'Helvetica-Bold', color: TEAL }}>{g.name}</Text>
-                <Text style={{ fontSize: 8, color: '#6b7280' }}>{plural(g.members.length, 'member')}</Text>
-              </View>
-            }
-          />
+          <View key={g.name} wrap={false}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4, marginBottom: 3 }}>
+              <Text style={{ fontFamily: 'Helvetica-Bold', color: TEAL }}>{g.name}</Text>
+              <Text style={{ fontSize: 8, color: '#6b7280' }}>{plural(g.members.length, 'member')}</Text>
+            </View>
+            <Table
+              head={['Member', 'Quizzes', 'Return Demonstrations', 'Patient Cases', 'Case Presentations']}
+              widths={[2.2, 1.2, 1.9, 1.6, 1.9]}
+              rows={g.members.map((m) => [
+                m.name,
+                pct(m.work.quizAverage),
+                pct(m.work.returnDemoAverage),
+                pct(m.work.scenarioAverage),
+                pct(m.work.caseAverage),
+              ])}
+            />
+          </View>
         ))
       )}
 
@@ -451,10 +472,11 @@ export async function buildSectionReport(
         emptyText="No skill area ratings recorded for this section yet."
       />
       <Text style={note}>
-        Patient cases counts graded out of assigned. A quiz average is over the quizzes the student has taken, each
-        graded as the average of its graded tries. Needs Practice counts students whose patient case average is
-        below {NEEDS_PRACTICE_BELOW}%.
-      </Text>
+        Each average is over the work the student was given and has been graded on; a dash means nothing graded yet.
+        A quiz is graded as the average of its graded tries.
+        Low performing counts students already failing: the mean of their averages is below {PASSING_SCORE}%. At risk
+        counts students not failing yet whom the latest ML prediction flags as likely to fall behind.
+        </Text>
     </ReportShell>
   );
 

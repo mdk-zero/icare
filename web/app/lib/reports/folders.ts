@@ -22,6 +22,9 @@ export interface FolderItem {
   sub: string;
   /** A short flag such as "Not performed"; null for none. */
   flag: string | null;
+  /** The headings it sits under, section first and then group; null for none. */
+  section?: string | null;
+  group?: string | null;
 }
 
 export interface FolderView {
@@ -41,6 +44,19 @@ export interface FolderData {
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 
+const NO_SECTION = 'No section';
+const NO_GROUP = 'Students not in a group';
+
+/** Section A to Z, then group A to Z with students in no group last, then the name. */
+function bySectionGroup(a: FolderItem, b: FolderItem): number {
+  const group = (x: FolderItem) => (x.group === NO_GROUP ? '\uffff' : (x.group ?? ''));
+  return (
+    (a.section ?? '').localeCompare(b.section ?? '', undefined, { numeric: true }) ||
+    group(a).localeCompare(group(b), undefined, { numeric: true }) ||
+    a.label.localeCompare(b.label)
+  );
+}
+
 /** Folder contents for a Return Demonstration or a Patient Case. */
 async function checklistFolder(
   supabase: Supabase,
@@ -55,7 +71,9 @@ async function checklistFolder(
     label: p.name,
     sub: `${p.groupLabel} · ${p.status === 'completed' && p.score !== null ? `Performed · ${p.score}%` : 'Not yet performed'}`,
     flag: p.status === 'completed' ? null : 'Not performed',
-  }));
+    section: p.sectionName ?? NO_SECTION,
+    group: p.groupName ?? NO_GROUP,
+  })).sort(bySectionGroup);
   const byTeam = new Map<string, typeof roster.performers>();
   for (const p of roster.performers) if (p.teamId) byTeam.set(p.teamId, [...(byTeam.get(p.teamId) ?? []), p]);
   const groups = [...byTeam.entries()]
@@ -66,9 +84,11 @@ async function checklistFolder(
         label: members[0].groupLabel,
         sub: `${plural(members.length, 'member')} · ${members.length - pending} performed · ${members.map((m) => m.name).join(', ')}`,
         flag: pending > 0 ? `${pending} not performed` : null,
+        section: members[0].sectionName ?? NO_SECTION,
+        group: null,
       };
     })
-    .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+    .sort(bySectionGroup);
   return {
     title: roster.title,
     whole:
@@ -90,7 +110,9 @@ async function quizFolder(supabase: Supabase, id: string, scope: readonly string
     label: p.name,
     sub: `${p.groupLabel} · ${p.grade === null ? 'Not taken' : `Grade ${p.grade}%`}`,
     flag: p.grade === null ? 'Not taken' : null,
-  }));
+    section: p.sectionName ?? NO_SECTION,
+    group: p.groupName ?? NO_GROUP,
+  })).sort(bySectionGroup);
   const byTeam = new Map<string, typeof roster.performers>();
   for (const p of roster.performers) if (p.teamId) byTeam.set(p.teamId, [...(byTeam.get(p.teamId) ?? []), p]);
   const groups = [...byTeam.entries()]
@@ -101,9 +123,11 @@ async function quizFolder(supabase: Supabase, id: string, scope: readonly string
         label: members[0].groupLabel,
         sub: `${plural(members.length, 'member')} · ${members.length - waiting} submitted · ${members.map((m) => m.name).join(', ')}`,
         flag: waiting > 0 ? `${waiting} not taken` : null,
+        section: members[0].sectionName ?? NO_SECTION,
+        group: null,
       };
     })
-    .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+    .sort(bySectionGroup);
   return {
     title: roster.title,
     whole: { type: 'assessment', id, label: 'Whole class', sub: `Everyone given this quiz, ${plural(students.length, 'student')}` },

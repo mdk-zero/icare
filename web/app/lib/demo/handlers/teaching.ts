@@ -945,19 +945,25 @@ route("GET", "/api/faculty/reports/folder/:type/:id", (ctx) => {
   const mine = visibleStudents(db, ctx.role, ctx.viewer.id);
   const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
   const label = (teamId: string | null | undefined, section: string | null) => teamLabel(db, teamId) ?? section ?? "No group";
-  type Member = { id: string; name: string; team_id: string | null; flag: string | null; detail: string };
+  type Member = { id: string; name: string; team_id: string | null; section_id?: string | null; flag: string | null; detail: string };
+  const sectionOf = (m: Member) => sectionName(db, m.section_id) ?? "No section";
+  const groupOf = (m: Member) => db.teams.find((t) => t.id === m.team_id)?.name ?? "Students not in a group";
+  const byHeading = (a: { section: string; group: string | null; label: string }, b: { section: string; group: string | null; label: string }) => {
+    const g = (x: { group: string | null }) => (x.group === "Students not in a group" ? "\uffff" : (x.group ?? ""));
+    return a.section.localeCompare(b.section, undefined, { numeric: true }) || g(a).localeCompare(g(b), undefined, { numeric: true }) || a.label.localeCompare(b.label);
+  };
   const group = (members: Member[], parent: string, itemType: string, status: (m: Member[]) => { text: string; flag: string | null }) => {
     const teams = [...new Set(members.flatMap((m) => (m.team_id ? [m.team_id] : [])))];
     return teams
       .map((teamId) => {
         const list = members.filter((m) => m.team_id === teamId);
         const st = status(list);
-        return { id: `${parent}:group:${teamId}`, label: teamLabel(db, teamId) ?? "Group", sub: `${plural(list.length, "member")} · ${st.text} · ${list.map((m) => m.name).join(", ")}`, flag: st.flag };
+        return { id: `${parent}:group:${teamId}`, label: teamLabel(db, teamId) ?? "Group", sub: `${plural(list.length, "member")} · ${st.text} · ${list.map((m) => m.name).join(", ")}`, flag: st.flag, section: sectionOf(list[0]), group: null as string | null };
       })
-      .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+      .sort(byHeading);
   };
   const views = (parent: string, itemType: string, members: Member[], status: (m: Member[]) => { text: string; flag: string | null }) => [
-    { id: "student", label: "Per student", type: itemType, items: members.map((m) => ({ id: `${parent}:student:${m.id}`, label: m.name, sub: `${label(m.team_id, null)} · ${m.detail}`, flag: m.flag })) },
+    { id: "student", label: "Per student", type: itemType, items: members.map((m) => ({ id: `${parent}:student:${m.id}`, label: m.name, sub: `${label(m.team_id, null)} · ${m.detail}`, flag: m.flag, section: sectionOf(m), group: groupOf(m) as string | null })).sort(byHeading) },
     { id: "group", label: "Per group", type: itemType, items: group(members, parent, itemType, status) },
   ];
 
@@ -990,7 +996,7 @@ route("GET", "/api/faculty/reports/folder/:type/:id", (ctx) => {
       .flatMap((a) => {
         const s = mine.find((x) => x.id === a.student_id);
         const graded = a.status === "completed";
-        return s ? [{ id: s.id, name: s.name, team_id: s.team_id ?? null, flag: graded ? null : "Not performed", detail: graded && a.score != null ? `Performed · ${a.score}%` : "Not yet performed", graded } as Member & { graded: boolean }] : [];
+        return s ? [{ id: s.id, name: s.name, team_id: s.team_id ?? null, section_id: s.section_id ?? null, flag: graded ? null : "Not performed", detail: graded && a.score != null ? `Performed · ${a.score}%` : "Not yet performed", graded } as Member & { graded: boolean }] : [];
       })
       .sort((a, b) => a.name.localeCompare(b.name));
     return {
@@ -1011,7 +1017,7 @@ route("GET", "/api/faculty/reports/folder/:type/:id", (ctx) => {
       .map((s) => {
         const scores = db.attempts.filter((a) => a.assessment_id === id && a.student_id === s.id && a.status === "submitted" && a.score != null).map((a) => a.score!);
         const grade = scores.length ? Math.round(mean(scores)!) : null;
-        return { id: s.id, name: s.name, team_id: s.team_id ?? null, flag: grade === null ? "Not taken" : null, detail: grade === null ? "Not taken" : `Grade ${grade}%` };
+        return { id: s.id, name: s.name, team_id: s.team_id ?? null, section_id: s.section_id ?? null, flag: grade === null ? "Not taken" : null, detail: grade === null ? "Not taken" : `Grade ${grade}%` };
       })
       .sort((a, b) => a.name.localeCompare(b.name));
     return {

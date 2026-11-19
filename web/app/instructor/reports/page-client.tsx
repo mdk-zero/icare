@@ -72,7 +72,7 @@ function folderLoader(type: FolderType): (id: string) => Promise<FolderContents 
           id: string;
           label: string;
           type: string;
-          items: { id: string; label: string; sub: string; flag: string | null }[];
+          items: { id: string; label: string; sub: string; flag: string | null; section?: string | null; group?: string | null }[];
         }[];
       };
       return {
@@ -83,6 +83,8 @@ function folderLoader(type: FolderType): (id: string) => Promise<FolderContents 
             id: it.id,
             label: it.label,
             sub: it.sub,
+            section: it.section ?? null,
+            group: it.group ?? null,
             badges: it.flag ? [{ text: it.flag, tone: "slate" as const }] : [],
           })),
         })),

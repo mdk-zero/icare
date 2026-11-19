@@ -85,9 +85,10 @@ function studentReport(ctx: Ctx, id: string): Built {
         { label: "Risk check", value: s.risk_level === "at_risk" ? `Low performing (${Math.round((s.risk_probability ?? 0) * 100)}%)` : "On track" },
       ]}>
         <StatGrid items={[
-          { label: "Patient case average", value: pct(caseAverage(db, id)) },
-          { label: "Quiz average", value: pct(quizAverage(db, id)) },
-          { label: "Cases performed", value: cases.filter((a) => a.status === "completed").length },
+          { label: "Quiz AVG", value: pct(quizAverage(db, id)) },
+          { label: "Return demo AVG", value: pct(kindAverage(demoGrid(db, id), "return_demo")) },
+          { label: "Patient case AVG", value: pct(caseAverage(db, id)) },
+          { label: "Case presentation AVG", value: pct(kindAverage(demoGrid(db, id), "case")) },
         ]} />
         <H>Courses and assessment criteria</H>
         <CourseCriteria courses={demoStudentStandings(db, id)} />
@@ -139,6 +140,11 @@ function demoGrid(db: DemoDb, studentId: string): GridEntry[] {
 
 const NO_GROUP = "Students not in a group";
 
+/** A member's average over the graded work of one kind; null when nothing is graded. */
+function kindAverage(entries: GridEntry[], kind: GridEntry["kind"]): number | null {
+  return mean(entries.filter((e) => e.kind === kind && e.score !== null).map((e) => e.score as number));
+}
+
 function sectionReport(ctx: Ctx, id: string): Built {
   const { db } = ctx;
   const name = sectionName(db, id);
@@ -152,19 +158,46 @@ function sectionReport(ctx: Ctx, id: string): Built {
   const groups = [...blocks.entries()]
     .sort(([a], [b]) => (a === NO_GROUP ? 1 : b === NO_GROUP ? -1 : a.localeCompare(b, undefined, { numeric: true })))
     .map(([group, members]) => ({ group, members: [...members].sort((x, y) => x.name.localeCompare(y.name)) }));
+  const lowPerforming = new Set(
+    students
+      .filter((s) => {
+        const e = demoGrid(db, s.id);
+        const m = mean(
+          (["quiz", "return_demo", "patient_case", "case"] as const).map((k) => kindAverage(e, k)).filter((x): x is number => x !== null),
+        );
+        return m !== null && m < 75;
+      })
+      .map((s) => s.id),
+  );
   return {
     subject: name,
     doc: (
       <Shell ctx={ctx} title={`Section report — ${name}`} heading="Section Performance Report" orientation="landscape" rows={[{ label: "Section", value: name }]}>
         <StatGrid items={[
           { label: "Students", value: students.length },
-          { label: "Case average", value: pct(mean(students.map((s) => caseAverage(db, s.id)).filter((x): x is number => x !== null))) },
-          { label: "Quiz average", value: pct(mean(students.map((s) => quizAverage(db, s.id)).filter((x): x is number => x !== null))) },
-          { label: "Low performing", value: students.filter((s) => s.risk_level === "at_risk").length },
+          { label: "Quiz AVG", value: pct(mean(students.map((s) => quizAverage(db, s.id)).filter((x): x is number => x !== null))) },
+          { label: "Return demo AVG", value: pct(mean(students.map((s) => kindAverage(demoGrid(db, s.id), "return_demo")).filter((x): x is number => x !== null))) },
+          { label: "Patient case AVG", value: pct(mean(students.map((s) => kindAverage(demoGrid(db, s.id), "patient_case")).filter((x): x is number => x !== null))) },
+          { label: "Case presentation AVG", value: pct(mean(students.map((s) => kindAverage(demoGrid(db, s.id), "case")).filter((x): x is number => x !== null))) },
+          { label: "Low performing", value: lowPerforming.size },
+          { label: "At risk", value: students.filter((s) => !lowPerforming.has(s.id) && s.risk_level === "at_risk").length },
         ]} />
         <H>Groups</H>
         {groups.map((g) => (
-          <ActivityTable key={g.group} members={g.members} heading={<Text style={{ fontWeight: 700, marginTop: 4, marginBottom: 3 }}>{g.group}</Text>} />
+          <View key={g.group} wrap={false}>
+            <Text style={{ fontWeight: 700, marginTop: 4, marginBottom: 3 }}>{g.group}</Text>
+            <Table
+              head={["Member", "Quizzes", "Return Demonstrations", "Patient Cases", "Case Presentations"]}
+              widths={[2.2, 1.2, 1.9, 1.6, 1.9]}
+              rows={g.members.map((m) => [
+                m.name,
+                pct(kindAverage(m.entries, "quiz")),
+                pct(kindAverage(m.entries, "return_demo")),
+                pct(kindAverage(m.entries, "patient_case")),
+                pct(kindAverage(m.entries, "case")),
+              ])}
+            />
+          </View>
         ))}
       </Shell>
     ),

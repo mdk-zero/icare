@@ -10,6 +10,8 @@ export interface QuizPerformer {
   name: string;
   teamId: string | null;
   groupLabel: string;
+  sectionName: string | null;
+  groupName: string | null;
   tries: number;
   /** The average of the graded tries; null until one is scored. */
   grade: number | null;
@@ -70,6 +72,8 @@ export async function loadQuizRoster(
         name: p.name,
         teamId: g?.teamId ?? null,
         groupLabel: g?.groupLabel ?? 'No group',
+        sectionName: g?.sectionName ?? null,
+        groupName: g?.groupName ?? null,
         tries: p.scores.length,
         grade: grade === null ? null : Math.round(grade),
       };
