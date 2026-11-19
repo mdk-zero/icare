@@ -12,6 +12,7 @@ import {
   faSearch,
   faDownload,
   faChartSimple,
+  faFeatherPointed,
 } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../../../components/PageHeader";
 import StatTile from "../../../../components/StatTile";
@@ -20,6 +21,7 @@ import { SkeletonTable } from "../../../../components/skeletons";
 import { usePageData } from "../../../../lib/use-page-data";
 import { fetchReport, saveBlob } from "../../../../lib/reports/client";
 import { loadingToast } from "../../../../components/Toast";
+import EssayGradingModal from "./essay-grading";
 
 type Status = "submitted" | "in_progress" | "not_started";
 
@@ -45,6 +47,8 @@ interface StudentResult {
   latest_time_taken_seconds: number | null;
   /** The latest submission came in after the time limit (still graded). */
   latest_late: boolean;
+  /** Tries with an essay still to grade (097); absent before it. */
+  to_grade?: number;
 }
 
 /** Stable empty fallback, so the filter memos are not invalidated every render. */
@@ -56,6 +60,8 @@ interface Summary {
   in_progress: number;
   not_started: number;
   average_score: number | null;
+  /** Tries with an essay still to grade, over every student shown. */
+  to_grade?: number;
 }
 
 /** One group's averages over its members' individual grades. */
@@ -132,7 +138,8 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
   const [groupFilter, setGroupFilter] = useState("all");
   const [scoreFilter, setScoreFilter] = useState<ScoreBand>("all");
 
-  const { data, loading, error: loadError } = usePageData(`faculty:assessment-results:${assessmentId}`, async () => {
+  const [grading, setGrading] = useState<{ id: string; name: string } | null>(null);
+  const { data, loading, error: loadError, refresh } = usePageData(`faculty:assessment-results:${assessmentId}`, async () => {
     const res = await apiFetch(`/api/faculty/assessments/${assessmentId}/results`, {
       credentials: "include",
     });
@@ -142,6 +149,7 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
       summary?: Summary;
       audience?: Audience;
       groups?: GroupResult[];
+      has_essays?: boolean;
       error?: string;
     };
     if (!res.ok) throw new Error(json.error ?? "Unable to load results.");
@@ -151,12 +159,14 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
       summary: json.summary ?? null,
       audience: json.audience ?? "visibility",
       groups: json.groups ?? NO_GROUPS,
+      hasEssays: json.has_essays ?? false,
     };
   });
 
   const assessment = data?.assessment ?? null;
   const results = data?.results ?? NO_RESULTS;
   const summary = data?.summary ?? null;
+  const hasEssays = data?.hasEssays ?? false;
   const groups = data?.groups ?? NO_GROUPS;
   const audience = data?.audience ?? "visibility";
   const error = loadError instanceof Error ? loadError.message : loadError ? String(loadError) : null;
@@ -302,6 +312,30 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
               iconColor="text-brand-600"
             />
           </div>
+
+          {summary?.to_grade ? (
+            <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <FontAwesomeIcon icon={faFeatherPointed} className="h-4 w-4 text-amber-600" />
+              <span className="min-w-0 flex-1">
+                <strong className="font-semibold">
+                  {summary.to_grade} {summary.to_grade === 1 ? "try has" : "tries have"} an essay to grade.
+                </strong>{" "}
+                Until you grade it, the essay counts as 0 in the student&apos;s grade.
+              </span>
+              {(() => {
+                const next = results.find((r) => r.to_grade);
+                return next ? (
+                  <button
+                    type="button"
+                    onClick={() => setGrading({ id: next.student_id, name: next.name })}
+                    className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-700"
+                  >
+                    Grade next
+                  </button>
+                ) : null;
+              })()}
+            </div>
+          ) : null}
 
           {groups.length > 0 && (
             <div className="mb-4 overflow-hidden rounded-xl border border-hairline bg-surface shadow-tile">
@@ -483,6 +517,25 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
                               {formatScore(r.grade)}
                             </span>
                           )}
+                          {r.to_grade ? (
+                            <button
+                              type="button"
+                              onClick={() => setGrading({ id: r.student_id, name: r.name })}
+                              className="mt-1 flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-200 transition-colors hover:bg-amber-100"
+                              title="The grade counts the essay as 0 until you grade it"
+                            >
+                              <FontAwesomeIcon icon={faFeatherPointed} className="h-3 w-3" />
+                              Grade essay{r.to_grade === 1 ? "" : "s"}
+                            </button>
+                          ) : r.submitted_count > 0 && hasEssays ? (
+                            <button
+                              type="button"
+                              onClick={() => setGrading({ id: r.student_id, name: r.name })}
+                              className="mt-1 block text-xs font-medium text-brand-600 hover:text-brand-700"
+                            >
+                              Essays
+                            </button>
+                          ) : null}
                         </td>
                         <td className="px-4 py-4 text-sm text-gray-600 sm:px-6">
                           {r.attempt_count === 0 ? "—" : r.attempt_count}
@@ -525,6 +578,15 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
             </div>
           )}
         </>
+      )}
+
+      {grading && (
+        <EssayGradingModal
+          assessmentId={assessmentId}
+          student={grading}
+          onClose={() => setGrading(null)}
+          onGraded={() => void refresh()}
+        />
       )}
     </div>
   );

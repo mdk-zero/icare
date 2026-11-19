@@ -5,6 +5,10 @@ import { citedSkillId, isMissingSkillColumn, isSkillId } from '@/app/lib/taylor-
 import { logAudit } from '@/app/lib/audit';
 import { guardAssessmentEdit } from '@/app/lib/assessment-access';
 import { minOptions, SHORT_ANSWER } from '@/app/lib/short-answer';
+import { ESSAY_DEFAULT_POINTS, isEssay } from '@/app/lib/essay';
+import { ESSAYS_NEED_MIGRATION, isEssayTypeRefused } from '@/app/lib/essay-grading';
+
+const QUESTION_TYPES = ['multiple_choice', 'true_false', 'short_answer', 'essay'];
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -52,9 +56,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (typeof content !== 'string' || content.trim().length === 0) {
     return NextResponse.json({ error: 'Question content is required' }, { status: 400 });
   }
-  const sanitizedOptions = Array.isArray(options)
-    ? options.filter((o): o is string => typeof o === 'string' && o.trim().length > 0)
-    : [];
+  if (question_type !== undefined && (typeof question_type !== 'string' || !QUESTION_TYPES.includes(question_type))) {
+    return NextResponse.json({ error: 'Invalid question type' }, { status: 400 });
+  }
+  const essay = isEssay(question_type);
+  // An essay has no choices: the student writes, the instructor grades.
+  const sanitizedOptions = essay
+    ? []
+    : Array.isArray(options)
+      ? options.filter((o): o is string => typeof o === 'string' && o.trim().length > 0)
+      : [];
   if (sanitizedOptions.length < minOptions(question_type)) {
     return NextResponse.json(
       {
@@ -66,11 +77,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       { status: 400 },
     );
   }
-  const correctIndex = Number(correct_index);
+  const correctIndex = essay ? 0 : Number(correct_index);
   if (
-    !Number.isInteger(correctIndex) ||
-    correctIndex < 0 ||
-    correctIndex >= sanitizedOptions.length
+    !essay &&
+    (!Number.isInteger(correctIndex) || correctIndex < 0 || correctIndex >= sanitizedOptions.length)
   ) {
     return NextResponse.json({ error: 'Invalid correct answer index' }, { status: 400 });
   }
@@ -122,7 +132,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       options: sanitizedOptions,
       correct_index: correctIndex,
       question_type: typeof question_type === 'string' ? question_type : 'multiple_choice',
-      points: typeof points === 'number' ? points : 1,
+      // What an essay is worth out of; 1 for anything else, as before.
+      points:
+        typeof points === 'number' && Number.isInteger(points) && points >= 1
+          ? points
+          : essay
+            ? ESSAY_DEFAULT_POINTS
+            : 1,
       explanation: typeof explanation === 'string' ? explanation.trim() : '',
       criteria_id: criteriaId,
     };
@@ -138,6 +154,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
     const { data: question, error } = inserted;
 
+    if (essay && isEssayTypeRefused(error)) {
+      return NextResponse.json({ error: ESSAYS_NEED_MIGRATION }, { status: 409 });
+    }
     if (error || !question) {
       console.error('Failed to create question', error);
       return NextResponse.json({ error: 'Unable to create question' }, { status: 500 });

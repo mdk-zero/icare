@@ -5,6 +5,8 @@ import { citedSkillId, isMissingSkillColumn, isSkillId } from '@/app/lib/taylor-
 import { logAudit } from '@/app/lib/audit';
 import { guardAssessmentEdit } from '@/app/lib/assessment-access';
 import { minOptions, SHORT_ANSWER } from '@/app/lib/short-answer';
+import { isEssay } from '@/app/lib/essay';
+import { ESSAYS_NEED_MIGRATION, isEssayTypeRefused } from '@/app/lib/essay-grading';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -61,9 +63,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     updates.content = content.trim();
   }
   if (options !== undefined) {
-    sanitizedOptions = Array.isArray(options)
-      ? options.filter((o): o is string => typeof o === 'string' && o.trim().length > 0)
-      : [];
+    // An essay has no choices.
+    sanitizedOptions = isEssay(question_type)
+      ? []
+      : Array.isArray(options)
+        ? options.filter((o): o is string => typeof o === 'string' && o.trim().length > 0)
+        : [];
     // The type sent with it, if any; a PATCH of options alone is checked against two.
     if (sanitizedOptions.length < minOptions(question_type)) {
       return NextResponse.json(
@@ -86,7 +91,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     updates.correct_index = ci;
   }
   if (question_type !== undefined) {
-    const validTypes = ['multiple_choice', 'true_false', 'short_answer'];
+    const validTypes = ['multiple_choice', 'true_false', 'short_answer', 'essay'];
     if (typeof question_type !== 'string' || !validTypes.includes(question_type)) {
       return NextResponse.json({ error: 'Invalid question type' }, { status: 400 });
     }
@@ -117,7 +122,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const { data: current } = await supabase
       .from('questions')
-      .select('assessment_id, options, correct_index')
+      .select('assessment_id, options, correct_index, question_type')
       .eq('id', id)
       .single();
     if (!current) {
@@ -148,14 +153,20 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     if (Object.keys(updates).length > 0 || skill_id !== undefined) {
-      // Keep correct_index within the (possibly updated) options bounds.
+      // Keep correct_index within the (possibly updated) options bounds. An
+      // essay has neither: no choices, and the instructor grades it.
       const existing = current;
+      const essay = isEssay(updates.question_type ?? existing.question_type);
+      if (essay) {
+        updates.options = [];
+        updates.correct_index = 0;
+      }
       const finalOptions =
         sanitizedOptions ?? ((existing.options as string[] | null) ?? []);
       const finalCorrect = Number(
         updates.correct_index !== undefined ? updates.correct_index : existing.correct_index,
       );
-      if (finalCorrect >= finalOptions.length) {
+      if (!essay && finalCorrect >= finalOptions.length) {
         return NextResponse.json(
           { error: 'Correct answer index is out of range for the options' },
           { status: 400 },
@@ -172,6 +183,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       let { error } = await supabase.from('questions').update(skillUpdates).eq('id', id);
       if (error && skillUpdates !== updates && isMissingSkillColumn(error)) {
         ({ error } = await supabase.from('questions').update(updates).eq('id', id));
+      }
+      if (isEssayTypeRefused(error)) {
+        return NextResponse.json({ error: ESSAYS_NEED_MIGRATION }, { status: 409 });
       }
       if (error) {
         console.error('Failed to update question', error);

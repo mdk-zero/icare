@@ -109,6 +109,12 @@ export default function QuizInfoScreen() {
     : null;
   const score = quiz.grade;
   const passed = score !== null && score >= PASSING_SCORE;
+  // An essay still to grade counts 0 in the grade until the instructor grades it.
+  const essayNote = quiz.awaiting_grading ? (
+    <Text style={styles.practiceNote}>
+      Your instructor is still grading your essay. Your grade will include it once it is graded.
+    </Text>
+  ) : null;
   const practiceNote = canPractice ? (
     <Text style={styles.practiceNote}>
       Your graded {quiz.max_attempts === 1 ? 'try is' : 'tries are'} used up. This review quiz has only the{' '}
@@ -181,7 +187,7 @@ export default function QuizInfoScreen() {
             ) : null}
             <View style={styles.scoreText}>
               <Text style={styles.scoreTitle}>
-                {score === null ? 'Not scored yet' : passed ? 'Passed' : 'Keep practicing'}
+                {score === null ? (quiz.awaiting_grading ? 'Being graded' : 'Not scored yet') : passed ? 'Passed' : 'Keep practicing'}
               </Text>
               <Text style={styles.scoreBody}>
                 {quiz.attempt_count} {quiz.attempt_count === 1 ? 'attempt' : 'attempts'}
@@ -221,6 +227,7 @@ export default function QuizInfoScreen() {
             </Text>
           ) : null}
           {practiceNote}
+          {essayNote}
         </View>
       ) : (
         <View style={styles.card}>
@@ -244,6 +251,7 @@ export default function QuizInfoScreen() {
             <Text style={styles.note}>Ask your instructor if you need another try.</Text>
           ) : null}
           {practiceNote}
+          {essayNote}
         </View>
       )}
     </ScrollView>

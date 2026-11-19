@@ -8,6 +8,7 @@ import { isLateSubmission } from '@/app/lib/assessment-timing';
 import { PRACTICE_STATUS } from '@/app/lib/quiz-practice';
 import { quizGrade } from '@/app/lib/quiz-attempts';
 import { quizInDeanScope } from '@/app/lib/assessment-access';
+import { isMissingAwaitingColumn } from '@/app/lib/essay-grading';
 
 type Status = 'submitted' | 'in_progress' | 'not_started';
 
@@ -72,14 +73,37 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       .order('name');
     if (scopedIds) studentQuery = studentQuery.in('id', scopedIds);
 
-    const [studentsRes, attemptsRes, assignmentsRes] = await Promise.all([
+    // awaiting_grading is 097's; before it, no attempt has an essay to grade.
+    const readAttempts = (columns: string) =>
+      supabase.from('assessment_attempts').select(columns).eq('assessment_id', id);
+    const [studentsRes, attemptsFirst, assignmentsRes, essaysRes] = await Promise.all([
       studentQuery,
-      supabase
-        .from('assessment_attempts')
-        .select('student_id, status, score, submitted_at, time_taken_seconds, started_at')
-        .eq('assessment_id', id),
+      readAttempts('student_id, status, score, submitted_at, time_taken_seconds, started_at, awaiting_grading'),
       supabase.from('assessment_assignments').select('student_id').eq('assessment_id', id),
+      supabase
+        .from('questions')
+        .select('id', { count: 'exact', head: true })
+        .eq('assessment_id', id)
+        .eq('question_type', 'essay'),
     ]);
+    const attemptsRes = (
+      isMissingAwaitingColumn(attemptsFirst.error)
+        ? await readAttempts('student_id, status, score, submitted_at, time_taken_seconds, started_at')
+        : attemptsFirst
+    ) as unknown as {
+      data:
+        | {
+            student_id: string;
+            status: string;
+            score: number | null;
+            submitted_at: string | null;
+            time_taken_seconds: number | null;
+            started_at: string;
+            awaiting_grading?: boolean;
+          }[]
+        | null;
+      error: { message: string } | null;
+    };
 
     if (studentsRes.error) {
       console.error('Failed to list students for results', studentsRes.error);
@@ -168,7 +192,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       );
       const latest = submitted[0] ?? null;
 
-      const scores = submitted.map((a) => a.score).filter((s): s is number => s !== null);
+      // A try with an essay still to grade (097) counts once it is graded.
+      const scores = submitted
+        .filter((a) => !a.awaiting_grading)
+        .map((a) => a.score)
+        .filter((s): s is number => s !== null);
 
       let status: Status = 'not_started';
       if (submitted.length > 0) status = 'submitted';
@@ -192,6 +220,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         latest_submitted_at: latest?.submitted_at ?? null,
         latest_time_taken_seconds: latest?.time_taken_seconds ?? null,
         latest_late: isLateSubmission(latest?.time_taken_seconds, assessment.time_limit_seconds as number | null),
+        // Graded tries with an essay (097) still to grade; their score counts it 0 until then.
+        to_grade: submitted.filter((a) => a.awaiting_grading).length,
       };
     });
 
@@ -222,11 +252,14 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       // Lets the page say whether an empty table means "assigned to nobody you
       // handle" or "nobody can see this yet".
       audience: hasAssignments ? 'assigned' : 'visibility',
+      // Whether the quiz asks essays (097), which the instructor grades here.
+      has_essays: (essaysRes.count ?? 0) > 0,
       summary: {
         total: results.length,
         submitted: results.filter((r) => r.status === 'submitted').length,
         in_progress: results.filter((r) => r.status === 'in_progress').length,
         not_started: results.filter((r) => r.status === 'not_started').length,
+        to_grade: results.reduce((sum, r) => sum + r.to_grade, 0),
         // Averaged over grades, matching what the table ranks on.
         average_score:
           graded.length > 0
