@@ -2416,6 +2416,72 @@ export interface ReadFormDraft {
   scanned: boolean;
 }
 
+/** One essay (097) on a student's attempt, as the instructor grades it. */
+export interface EssayToGrade {
+  question_id: string;
+  question: string;
+  /** The question's explanation: the instructor's grading notes. */
+  guidance: string | null;
+  position: number;
+  answer_text: string;
+  max_points: number;
+  /** Null until graded. */
+  points_awarded: number | null;
+  feedback: string | null;
+  graded_at: string | null;
+}
+
+export interface EssayAttempt {
+  attempt_id: string;
+  student_id: string;
+  student_name: string;
+  student_email: string;
+  picture_url: string | null;
+  sex: "male" | "female" | null;
+  submitted_at: string | null;
+  score: number | null;
+  awaiting_grading: boolean;
+  essays: EssayToGrade[];
+}
+
+/** The essays written on a quiz, by attempt; `studentId` narrows it to one student. */
+export async function fetchQuizEssays(
+  assessmentId: string,
+  studentId?: string,
+): Promise<{ attempts: EssayAttempt[]; error?: string }> {
+  try {
+    const query = studentId ? `?student_id=${encodeURIComponent(studentId)}` : "";
+    const res = await apiFetch(`/api/faculty/assessments/${assessmentId}/essays${query}`, { credentials: "include" });
+    const json = (await res.json().catch(() => ({}))) as { attempts?: EssayAttempt[]; error?: string };
+    if (!res.ok) return { attempts: [], error: json.error ?? "Unable to load the essays" };
+    return { attempts: json.attempts ?? [], error: json.error };
+  } catch (err) {
+    console.error("fetchQuizEssays() failed", err);
+    return { attempts: [], error: "Unable to load the essays" };
+  }
+}
+
+/** Grades essays on one attempt; the attempt's new score, and whether any essay is still ungraded. */
+export async function gradeEssays(
+  attemptId: string,
+  grades: { question_id: string; points: number; feedback: string | null }[],
+): Promise<{ score?: number; awaiting_grading?: boolean; error?: string }> {
+  try {
+    const res = await apiFetch(`/api/faculty/attempts/${attemptId}/essays`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ grades }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { score?: number; awaiting_grading?: boolean; error?: string };
+    if (!res.ok) return { error: json.error ?? "Unable to save the grades" };
+    return json;
+  } catch (err) {
+    console.error("gradeEssays() failed", err);
+    return { error: "Unable to save the grades" };
+  }
+}
+
 /** The uploaded forms this instructor can add; `enabled` is false before migration 095. */
 export async function fetchCustomForms(): Promise<{ forms: CustomForm[]; enabled: boolean }> {
   try {
