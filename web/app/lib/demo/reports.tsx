@@ -1,14 +1,17 @@
 "use client";
 
-import { pdf, Text, View } from "@react-pdf/renderer";
-import { CourseCriteria, GRID_AHEAD, Note, ReportShell, Section, StatGrid, Table, registerReportFonts, scoreTile, type ReportDocument, type ReportMeta } from "../reports/kit-ui";
-import { dateLabel, generatedStamp } from "../reports/view";
+import { pdf, View } from "@react-pdf/renderer";
+import { GRID_AHEAD, Note, ReportShell, Section, StatGrid, Table, registerReportFonts, scoreTile, type ReportDocument, type ReportMeta } from "../reports/kit-ui";
+import { addScore, dateLabel, emptyTotals, generatedStamp, type KindTotals } from "../reports/view";
+import { StudentReportBody, type StudentWorkItem } from "../reports/student-sheet";
+import { GroupReportBody, RosterReportBody, SectionReportBody, type SectionStudent } from "../reports/cohort-sheet";
+import { isLateSubmission as isLateAttempt } from "../assessment-timing";
 import { CASE_CRITERIA, caseLevelLabel } from "../case-rubric";
 import { ChecklistSheet } from "../reports/checklist-sheet";
 import { buildSheetSkills } from "../reports/checklist-grades";
 import { parseTarget } from "../reports/targets";
 import { competencyRemark } from "../return-demo-remarks";
-import { ActivityTable, activityAhead, type GridEntry, type GridMember } from "../reports/activity-sheet";
+import type { GridEntry, GridMember } from "../reports/activity-sheet";
 import { CriterionTable, QuizAnswers, QuizMatrix } from "../reports/quiz-sheet";
 import { answerRows, criterionForGroup, criterionForStudent, matrix, type QuizCriterion, type QuizQuestion, type QuizTry } from "../reports/quiz-model";
 import type { DemoAttempt } from "./fixtures/school";
@@ -16,8 +19,8 @@ import type { DemoDb } from "./store";
 import { scoreDescriptor } from "../task-ratings";
 import type { DemoCaseGroup } from "./fixtures/teaching";
 import type { DemoContext } from "./router";
-import { caseAverage, mean, quizAverage, submittedAttempts } from "./handlers/derive";
-import { sectionName, teamLabel, userById, visibleSections, visibleStudents } from "./handlers/scope";
+import { caseAverage, mean, prediction, quizAverage, submittedAttempts } from "./handlers/derive";
+import { sectionName, teamLabel, userById, visibleStudents } from "./handlers/scope";
 import { DEMO_INSTITUTION } from "./fixtures/school";
 import { demoStudentStandings } from "./handlers/courses";
 import { roleLabel } from "../role-labels";
@@ -58,49 +61,107 @@ function Shell({ ctx, title, subject, runningLabel, rows, orientation, audience,
 
 // --- Instructor reports -----------------------------------------------------------
 
+/**
+ * A student's graded work pooled by kind, as the real reports' studentWork
+ * does it: completed Patient Cases and Return Demonstrations, graded case
+ * presentations and every submitted quiz try, each added once through the
+ * shared addScore.
+ */
+function demoTotals(db: DemoDb, studentId: string): KindTotals {
+  const totals = emptyTotals();
+  const demos = new Set(db.scenarios.filter((x) => x.kind === "return_demo").map((x) => x.id));
+  for (const a of db.assignments) {
+    if (a.student_id === studentId && a.status === "completed" && a.score != null) addScore(totals, demos.has(a.scenario_id) ? "return_demo" : "patient_case", a.score);
+  }
+  for (const c of db.caseSubmissions) {
+    if (c.student_id === studentId && c.status === "graded" && c.score != null) addScore(totals, "case_presentation", c.score);
+  }
+  for (const a of submittedAttempts(db, studentId)) {
+    if (a.score != null) addScore(totals, "quiz", a.score);
+  }
+  return totals;
+}
+
+const isLate = (at: string | null, deadline: string | null) => !!at && !!deadline && Date.parse(at) > Date.parse(deadline);
+const CASE_STATUS: Record<string, string> = { not_started: "Not started", draft: "Draft", submitted: "Awaiting grade", graded: "Presented" };
+
+/** Everything given to a student as rows for the shared Student report, each filed under the course it was made for. */
+function demoWork(db: DemoDb, studentId: string): StudentWorkItem[] {
+  const items: StudentWorkItem[] = [];
+  for (const a of db.assignments.filter((x) => x.student_id === studentId)) {
+    const sc = db.scenarios.find((x) => x.id === a.scenario_id);
+    const kind = sc?.kind === "return_demo" ? "return_demo" : "patient_case";
+    const label = a.status === "completed" ? "Performed" : a.submitted_at ? "Awaiting grade" : a.status === "in_progress" ? "In progress" : a.status === "overdue" ? "Overdue" : "Not started";
+    items.push({
+      kind,
+      offering: sc?.offering_id ?? null,
+      title: sc?.title ?? (kind === "return_demo" ? "Return Demonstration" : "Unknown Patient Case"),
+      status: label,
+      at: kind === "return_demo" ? (a.status === "completed" ? a.completed_at : null) : a.submitted_at,
+      late: kind === "patient_case" && isLate(a.submitted_at, a.deadline),
+      score: a.status === "completed" ? a.score : null,
+      tries: 0,
+      overdue: label === "Overdue",
+      awaiting: label === "Awaiting grade",
+      stage: label === "Awaiting grade" ? 0 : label === "In progress" ? 1 : 2,
+    });
+  }
+  for (const c of db.caseSubmissions.filter((x) => x.student_id === studentId)) {
+    const p = db.casePresentations.find((x) => x.id === c.presentation_id);
+    items.push({
+      kind: "case_presentation",
+      offering: p?.offering_id ?? null,
+      title: p?.title ?? "Case Presentation",
+      status: CASE_STATUS[c.status] ?? c.status,
+      at: c.submitted_at,
+      late: isLate(c.submitted_at, p?.deadline ?? null),
+      score: c.status === "graded" ? c.score : null,
+      tries: 0,
+      overdue: false,
+      awaiting: c.status === "submitted",
+      stage: c.status === "submitted" ? 0 : c.status === "draft" ? 1 : 2,
+    });
+  }
+  const tries = submittedAttempts(db, studentId);
+  const quizIds = new Set([...db.quizAssignments.filter((x) => x.student_id === studentId).map((x) => x.assessment_id), ...tries.map((x) => x.assessment_id)]);
+  for (const quizId of quizIds) {
+    const quiz = db.quizzes.find((q) => q.id === quizId);
+    const own = tries.filter((t) => t.assessment_id === quizId);
+    const scores = own.filter((t) => t.score != null).map((t) => t.score!);
+    const latest = own[0];
+    items.push({
+      kind: "quiz",
+      offering: quiz?.offering_id ?? null,
+      title: quiz?.title ?? "Unknown quiz",
+      status: own.length ? "Completed" : "Not started",
+      at: latest?.submitted_at ?? null,
+      late: latest ? isLateAttempt(latest.time_taken_seconds, quiz?.time_limit_seconds ?? null) : false,
+      score: scores.length ? Math.round(mean(scores)!) : null,
+      tries: scores.length,
+      overdue: false,
+      awaiting: false,
+      stage: own.length ? 0 : 2,
+    });
+  }
+  return items;
+}
+
 function studentReport(ctx: Ctx, id: string): Built {
   const { db } = ctx;
   const s = userById(db, id);
   if (!s || !visibleStudents(db, ctx.role, ctx.viewer.id).some((x) => x.id === id)) return { error: "Not found", status: 404 };
-  // Return Demonstrations (072) get their own table; the case table and average leave them out.
-  const demos = new Set(db.scenarios.filter((x) => x.kind === "return_demo").map((x) => x.id));
-  const work = db.assignments.filter((a) => a.student_id === id).sort((a, b) => b.assigned_at.localeCompare(a.assigned_at));
-  const cases = work.filter((a) => !demos.has(a.scenario_id));
-  const returnDemos = work.filter((a) => demos.has(a.scenario_id));
-  const attempts = submittedAttempts(db, id);
+  // Reads each activity's course (070) before the work is filed under it.
+  const courses = demoStudentStandings(db, id);
+  const label = teamLabel(db, s.team_id);
+  const [section, ...group] = (label ?? sectionName(db, s.section_id) ?? "—").split(" · ");
   return {
     subject: s.name,
     doc: (
       <Shell ctx={ctx} title="Student Progress Report" subject={s.name} rows={[
-        { label: "Section / group", value: teamLabel(db, s.team_id) ?? sectionName(db, s.section_id) ?? "—" },
-        { label: "Risk check", value: s.risk_level === "at_risk" ? `Low performing (${Math.round((s.risk_probability ?? 0) * 100)}%)` : "On track" },
+        { label: "Section", value: section },
+        { label: "Group", value: group.join(" · ") || "No group" },
       ]}>
-        <StatGrid items={[
-          scoreTile("Patient case average", caseAverage(db, id)),
-          scoreTile("Quiz average", quizAverage(db, id)),
-          { label: "Cases performed", value: cases.filter((a) => a.status === "completed").length },
-        ]} />
-        <Section title="Courses and assessment criteria" />
-        <CourseCriteria courses={demoStudentStandings(db, id)} />
-        <Section title="Patient cases" />
-        <Table head={["Case", "Score", "Performed"]} widths={[4, 1, 1.4]} rows={cases.map((a) => [
-          db.scenarios.find((x) => x.id === a.scenario_id)?.title ?? "—",
-          pct(a.score),
-          submitted(a),
-        ])} />
-        <Section title="Return Demonstrations" />
-        <Table head={["Return Demonstration", "Score", "Performed", "Remarks"]} widths={[4, 1, 1.4, 1.6]} rows={returnDemos.map((a) => [
-          db.scenarios.find((x) => x.id === a.scenario_id)?.title ?? "—",
-          pct(a.score),
-          a.status === "completed" ? date(a.completed_at) : "—",
-          competencyRemark(a.status === "completed" ? a.score : null),
-        ])} />
-        <Section title="Quizzes" />
-        <Table head={["Quiz", "Score", "Submitted"]} widths={[4, 1, 1.4]} rows={attempts.map((a) => [
-          db.quizzes.find((q) => q.id === a.assessment_id)?.title ?? "—",
-          pct(a.score),
-          date(a.submitted_at),
-        ])} />
+        <StudentReportBody totals={demoTotals(db, id)} items={demoWork(db, id)} courses={courses} />
       </Shell>
     ),
   };
@@ -135,6 +196,7 @@ function sectionReport(ctx: Ctx, id: string): Built {
   const name = sectionName(db, id);
   if (!name) return { error: "Not found", status: 404 };
   const students = visibleStudents(db, ctx.role, ctx.viewer.id).filter((s) => s.section_id === id);
+  const inSection = db.users.filter((u) => u.role === "student" && u.section_id === id).length;
   const blocks = new Map<string, GridMember[]>();
   for (const s of students) {
     const group = db.teams.find((t) => t.id === s.team_id)?.name ?? NO_GROUP;
@@ -142,21 +204,23 @@ function sectionReport(ctx: Ctx, id: string): Built {
   }
   const groups = [...blocks.entries()]
     .sort(([a], [b]) => (a === NO_GROUP ? 1 : b === NO_GROUP ? -1 : a.localeCompare(b, undefined, { numeric: true })))
-    .map(([group, members]) => ({ group, members: [...members].sort((x, y) => x.name.localeCompare(y.name)) }));
+    .map(([group, members]) => ({ name: group, members: [...members].sort((x, y) => x.name.localeCompare(y.name)) }));
+  const roster: SectionStudent[] = students.map((s) => {
+    const risk = prediction(db, s)?.risk;
+    return {
+      name: s.name,
+      group: db.teams.find((t) => t.id === s.team_id)?.name ?? null,
+      totals: demoTotals(db, s.id),
+      prediction: risk === undefined ? "none" : risk === "at_risk" ? "at_risk" : "on_track",
+    };
+  });
   return {
     subject: name,
     doc: (
-      <Shell ctx={ctx} title="Section Performance Report" subject={name} orientation="landscape" rows={[]}>
-        <StatGrid items={[
-          { label: "Students", value: students.length },
-          scoreTile("Case average", mean(students.map((s) => caseAverage(db, s.id)).filter((x): x is number => x !== null))),
-          scoreTile("Quiz average", mean(students.map((s) => quizAverage(db, s.id)).filter((x): x is number => x !== null))),
-          { label: "Low performing", value: students.filter((s) => s.risk_level === "at_risk").length },
-        ]} />
-        <Section title="Groups" ahead={activityAhead(groups[0]?.members ?? [])} />
-        {groups.map((g) => (
-          <ActivityTable key={g.group} members={g.members} heading={<Text style={{ fontWeight: 700, marginTop: 4, marginBottom: 3 }}>{g.group}</Text>} />
-        ))}
+      <Shell ctx={ctx} title="Section Performance Report" subject={name} orientation="landscape" rows={
+        students.length < inSection ? [{ label: "Students shown", value: `${students.length} of ${inSection} (your students only)` }] : []
+      }>
+        <SectionReportBody students={roster} groups={groups} />
       </Shell>
     ),
   };
@@ -278,18 +342,11 @@ function sectionGroupReport(ctx: Ctx, teamId: string): Built {
   const label = teamLabel(db, teamId);
   const members = groupMembers(ctx, teamId);
   if (!label || members.length === 0) return { error: "Not found", status: 404 };
-  const grid: GridMember[] = members.map((s) => ({ name: s.name, entries: demoGrid(db, s.id) }));
   return {
     subject: label,
     doc: (
       <Shell ctx={ctx} title="Group Performance Report" subject={label} orientation="landscape" audience="instructor-copy" rows={[]}>
-        <StatGrid items={[
-          { label: "Members", value: members.length },
-          scoreTile("Case average", mean(members.map((s) => caseAverage(db, s.id)).filter((x): x is number => x !== null))),
-          scoreTile("Quiz average", mean(members.map((s) => quizAverage(db, s.id)).filter((x): x is number => x !== null))),
-        ]} />
-        <Section title="Work given to this group" ahead={activityAhead(grid)} />
-        <ActivityTable members={grid} />
+        <GroupReportBody members={members.map((s) => ({ name: s.name, entries: demoGrid(db, s.id), totals: demoTotals(db, s.id) }))} />
       </Shell>
     ),
   };
@@ -431,14 +488,13 @@ function rosterReport(ctx: Ctx): Built {
   return {
     subject: "Roster summary",
     doc: (
-      <Shell ctx={ctx} title="Roster Summary Report" subject={ctx.role === "admin" ? "Your students" : "Your groups"} rows={[{ label: "Sections", value: visibleSections(db, ctx.role, ctx.viewer.id).map((s) => s.name).join(", ") }]}>
-        <StatGrid items={[
-          { label: "Students", value: students.length },
-          { label: "With graded work", value: students.filter((s) => caseAverage(db, s.id) !== null).length },
-          { label: "Low performing", value: students.filter((s) => s.risk_level === "at_risk").length },
-        ]} />
-        <Section title="Every student" />
-        <Table head={["Student", "Section / group", "Cases", "Quizzes"]} widths={[3, 2.4, 1, 1]} rows={students.map((s) => [s.name, teamLabel(db, s.team_id) ?? "—", pct(caseAverage(db, s.id)), pct(quizAverage(db, s.id))])} />
+      <Shell ctx={ctx} title="Roster Summary Report" subject={ctx.role === "admin" ? "Your students" : "Your groups"} rows={[]}>
+        <RosterReportBody students={students.map((s) => ({
+          name: s.name,
+          section: sectionName(db, s.section_id) ?? "Unassigned",
+          group: db.teams.find((t) => t.id === s.team_id)?.name ?? null,
+          totals: demoTotals(db, s.id),
+        }))} />
       </Shell>
     ),
   };

@@ -511,7 +511,8 @@ export function Section({
 }) {
   return (
     <>
-      <View style={styles.sectionHead} minPresenceAhead={ahead}>
+      {/* wrap={false}: react-pdf skips minPresenceAhead for a heading that straddles the page end, and splits it. */}
+      <View style={styles.sectionHead} minPresenceAhead={ahead} wrap={false}>
         <Text style={styles.sectionTitle}>{title}</Text>
         {caption && <Text style={styles.sectionCaption}>{caption}</Text>}
       </View>
@@ -673,12 +674,30 @@ export interface Col {
   flex?: number;
 }
 
+/** A date, with the word "Late" after it in amber when it was handed in past the deadline. */
+export interface DateCell {
+  date: string;
+  late?: boolean;
+}
+
+/** A short word that carries a tone: "Low performing" in red, "On track" muted. */
+export interface TagCell {
+  tag: string;
+  tone: 'low' | 'practice' | 'pass' | 'muted';
+}
+
+interface ScoreCellValue {
+  score: number | null;
+  word?: boolean;
+  text?: string;
+}
+
 /**
  * One table cell. A score cell shows a band-coloured percent (or `text`, for a
  * grade that keeps a decimal, such as a course grade) and, with `word`, the
  * verbal rating after it. A null score is a dash.
  */
-export type Cell = string | number | { score: number | null; word?: boolean; text?: string } | null;
+export type Cell = string | number | ScoreCellValue | DateCell | TagCell | null;
 
 /** A row, with a tone when it needs a look: red and barred, amber, or a total. */
 export interface TableRow {
@@ -686,15 +705,18 @@ export interface TableRow {
   tone?: 'attention' | 'notice' | 'total';
 }
 
-const scoreCell = (c: Cell): c is { score: number | null; word?: boolean; text?: string } =>
-  typeof c === 'object' && c !== null;
+const scoreCell = (c: Cell): c is ScoreCellValue => typeof c === 'object' && c !== null && 'score' in c;
+const dateCell = (c: Cell): c is DateCell => typeof c === 'object' && c !== null && 'date' in c;
+const tagCell = (c: Cell): c is TagCell => typeof c === 'object' && c !== null && 'tag' in c;
+
+const TAG_COLOR: Record<TagCell['tone'], string> = { low: TONE.low, practice: TONE.practice, pass: TONE.pass, muted: MUTED };
 
 const NUMERIC = /^[—\d.,%/\s()+-]+$/;
 
 /** Right when every filled cell is a number, a score or looks like one; left otherwise. */
 function inferAlign(cells: Cell[]): Align {
   const filled = cells.filter((c) => c !== null && !(typeof c === 'string' && (c.trim() === '' || c === '—')));
-  const numeric = filled.every((c) => (typeof c === 'string' ? NUMERIC.test(c) : true));
+  const numeric = filled.every((c) => (typeof c === 'string' ? NUMERIC.test(c) : !dateCell(c) && !tagCell(c)));
   const words = cells.some((c) => scoreCell(c) && c.word);
   // A score with its rating after it lines up on the score's right edge, so the group sits at the left.
   return words ? 'left' : numeric ? 'right' : 'left';
@@ -706,6 +728,21 @@ function CellView({ cell, align, bold }: { cell: Cell; align: Align; bold: boole
     // Where a score would end, so the dashes keep to the column the digits are in.
     const slot = scoreCell(cell) && cell.word ? [styles.scoreSlot, { fontWeight: 400 }] : [styles.tableText, { textAlign: align }];
     return <Text style={[...slot, { color: FAINT }]}>—</Text>;
+  }
+  if (dateCell(cell)) {
+    return (
+      <Text style={[styles.tableText, { textAlign: align }, weight]}>
+        {cell.date}
+        {cell.late && <Text style={{ fontWeight: 700, color: TONE.practice }}>{'  Late'}</Text>}
+      </Text>
+    );
+  }
+  if (tagCell(cell)) {
+    return (
+      <Text style={[styles.tableText, { textAlign: align, color: TAG_COLOR[cell.tone], fontWeight: cell.tone === 'muted' ? 400 : 700 }]}>
+        {cell.tag}
+      </Text>
+    );
   }
   if (scoreCell(cell)) {
     const score = cell.score as number;
@@ -799,75 +836,95 @@ export interface CourseCriteriaEntry {
 const gradeText = (n: number | null) => (n === null ? '—' : formatGrade(n));
 
 /**
- * The criteria each of a student's courses is assessed on, with the
- * student's average on each and their course grade so far. The real and the
- * demo Student report share it, so both read the same.
+ * One course in a student's report: its name and term, the student's course
+ * grade at the right, the criteria it is assessed on with the student's
+ * average on each, then whatever the report puts under it (that course's
+ * work). The heading and the criteria stay on one page; the work may break
+ * across pages. The real and the demo Student report share it.
  */
-export function CourseCriteria({ courses }: { courses: CourseCriteriaEntry[] }) {
-  if (courses.length === 0) {
-    return <Text style={styles.empty}>Not on the roster of any course yet.</Text>;
-  }
-  const auto = courses.some((c) => c.standing.auto && c.standing.criteria.length);
-  const weighted = courses.some((c) => !c.standing.auto && c.standing.criteria.length);
+export function CourseBlock({ entry, children }: { entry: CourseCriteriaEntry; children?: ReactNode }) {
+  const { course, term, instructor, standing } = entry;
+  const items = standing.criteria.reduce((n, c) => n + c.items, 0);
+  const scored = standing.criteria.reduce((n, c) => n + c.scored, 0);
+  const partial = standing.scored_weight < 100;
+  const detail = standing.invalid
+    ? "the criteria don't add up to 100%"
+    : standing.grade === null
+      ? 'nothing scored yet'
+      : standing.auto
+        ? `${scored} of ${items} items scored`
+        : `${standing.scored_weight}% of the grade scored`;
+  const gradeShown = standing.invalid || standing.grade === null ? null : standing.grade;
   return (
-    <View>
-      {courses.map(({ id, course, term, instructor, standing }) => {
-        const items = standing.criteria.reduce((n, c) => n + c.items, 0);
-        const scored = standing.criteria.reduce((n, c) => n + c.scored, 0);
-        const partial = standing.scored_weight < 100;
-        const detail = standing.invalid
-          ? "the criteria don't add up to 100%"
-          : standing.grade === null
-            ? 'nothing scored yet'
-            : standing.auto
-              ? `${scored} of ${items} items scored`
-              : `${standing.scored_weight}% of the grade scored`;
-        const gradeShown = standing.invalid || standing.grade === null ? null : standing.grade;
-        return (
-          <View key={id} wrap={false} style={{ marginTop: 8 }}>
+    <View style={{ marginTop: 10 }}>
+      <View wrap={false} minPresenceAhead={90}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 4 }}>
+          <View style={{ flex: 1, paddingRight: 10 }}>
             <Text style={courseHeading}>
               {course.code} – {course.title}
             </Text>
             <Text style={styles.courseSub}>
               {term.name} · Instructor: {instructor}
             </Text>
-            <Table
-              head={[{ label: 'Criterion' }, { label: 'Weight' }, { label: 'Scored' }, { label: 'Average' }]}
-              widths={[3, 1.3, 1.3, 1.9]}
-              rows={standing.criteria.map((c) => [
-                c.name,
-                `${c.weight}%`,
-                `${c.scored}/${c.items}`,
-                { score: c.score, text: c.score === null ? undefined : formatGrade(c.score) },
-              ])}
-              emptyText={standing.auto ? 'Nothing to grade in this course yet.' : 'No grading criteria set for this course yet.'}
-            />
-            {standing.criteria.length > 0 && (
-              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'flex-end', gap: 6, paddingTop: 5, paddingRight: 6 }}>
-                <Text style={{ fontSize: 8.5, color: MUTED }}>
-                  Course grade{partial && standing.grade !== null ? ' so far' : ''} ({detail})
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 700,
-                    color: gradeShown === null ? FAINT : bandColor(gradeShown),
-                  }}
-                >
-                  {standing.invalid ? '—' : gradeText(standing.grade)}
-                </Text>
-              </View>
-            )}
           </View>
-        );
-      })}
-      {(auto || weighted) && (
-        <Note>
-          {auto && "Weight is a criterion's share of the course's items: the course grade is the average of every scored item. "}
-          {weighted && "The course grade is each criterion's average times its weight, added up. "}
-          Work with no score yet is left out, so a grade reads as the grade so far.
-        </Note>
-      )}
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={{ fontSize: 7.5, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+              Course grade{partial && standing.grade !== null ? ' so far' : ''}
+            </Text>
+            <Text
+              style={{
+                fontSize: 15,
+                fontFamily: reportFonts.display,
+                fontWeight: 700,
+                color: gradeShown === null ? FAINT : bandColor(gradeShown),
+              }}
+            >
+              {standing.invalid ? '—' : gradeText(standing.grade)}
+            </Text>
+            <Text style={{ fontSize: 8, color: MUTED }}>({detail})</Text>
+          </View>
+        </View>
+        <Table
+          head={[{ label: 'Criterion' }, { label: 'Weight' }, { label: 'Scored' }, { label: 'Average' }]}
+          widths={[3, 1.3, 1.3, 1.9]}
+          rows={standing.criteria.map((c) => [
+            c.name,
+            `${c.weight}%`,
+            `${c.scored}/${c.items}`,
+            { score: c.score, text: c.score === null ? undefined : formatGrade(c.score) },
+          ])}
+          emptyText={standing.auto ? 'Nothing to grade in this course yet.' : 'No grading criteria set for this course yet.'}
+        />
+      </View>
+      {children}
+    </View>
+  );
+}
+
+/** How a course grade is worked out, said once under the last course. */
+export function CourseCriteriaNote({ courses }: { courses: CourseCriteriaEntry[] }) {
+  const auto = courses.some((c) => c.standing.auto && c.standing.criteria.length);
+  const weighted = courses.some((c) => !c.standing.auto && c.standing.criteria.length);
+  if (!auto && !weighted) return null;
+  return (
+    <Note>
+      {auto && "Weight is a criterion's share of the course's items: the course grade is the average of every scored item. "}
+      {weighted && "The course grade is each criterion's average times its weight, added up. "}
+      Work with no score yet is left out, so a grade reads as the grade so far.
+    </Note>
+  );
+}
+
+/**
+ * A small heading over one table inside a block: a title and, in muted type,
+ * how its rows are ordered. It keeps room for the header row and the first
+ * rows after it on the same page.
+ */
+export function TableTitle({ title, caption }: { title: string; caption?: string }) {
+  return (
+    <View minPresenceAhead={64} wrap={false} style={{ marginTop: 8, marginBottom: 3, flexDirection: 'row', alignItems: 'baseline' }}>
+      <Text style={{ fontSize: 9.5, fontWeight: 700 }}>{title}</Text>
+      {caption && <Text style={{ fontSize: 8, color: MUTED, marginLeft: 6 }}>{caption}</Text>}
     </View>
   );
 }

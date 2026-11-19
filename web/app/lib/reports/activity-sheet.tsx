@@ -6,7 +6,7 @@
  */
 import type { ReactNode } from 'react';
 import { Text, View } from '@react-pdf/renderer';
-import { scoreColor } from './bands';
+import { TINT, TONE, scoreColor } from './bands';
 import { FAINT, GRID_AHEAD, HAIRLINE, MUTED, SUBTLE, reportFonts, styles } from './kit-ui';
 
 export type ActivityKind = 'patient_case' | 'return_demo' | 'quiz' | 'case';
@@ -38,6 +38,8 @@ export interface GridMember {
    * of the entries; null is a dash.
    */
   average?: number | null;
+  /** The row needs a look (below the pass mark): a red tint and a bar at the left edge. */
+  attention?: boolean;
 }
 
 export interface GridColumn {
@@ -74,7 +76,7 @@ const WHOLE_TABLE_MAX = 12;
  * by a figure given up front.
  */
 export function activityAhead(members: readonly GridMember[]): number {
-  return members.length > WHOLE_TABLE_MAX ? GRID_AHEAD : 100 + 26 * members.length;
+  return members.length > WHOLE_TABLE_MAX ? GRID_AHEAD : 80 + 22 * members.length;
 }
 
 /** Entries given to the member but not graded yet. */
@@ -167,7 +169,9 @@ export function ActivityTable({
             const open = openCount(m.entries);
             const body = { paddingVertical: 4, paddingHorizontal: 2, justifyContent: 'center' as const };
             const row = (
-              <View style={[styles.row, { paddingVertical: 0, alignItems: 'stretch' }]}>
+              <View style={[styles.row, { paddingVertical: 0, alignItems: 'stretch' }, m.attention ? { backgroundColor: TINT.low } : {}]}>
+                {/* Absolute, so the bar takes no width and the columns stay under their headings. */}
+                {m.attention && <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: TONE.low }} />}
                 <View style={[body, { flex: 2.2, paddingHorizontal: 4 }]}>
                   <Text style={{ fontSize: 8.5 }}>{m.name}</Text>
                 </View>

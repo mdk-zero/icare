@@ -9,7 +9,7 @@ import { scoreDescriptor } from '../task-ratings';
 import { ofKind, scenarioKinds } from '../scenario-kind';
 import { readMatching } from '../fetch-all';
 import { quizGrade } from '../quiz-attempts';
-import { dateLabel } from './view';
+import { addScore, dateLabel, emptyTotals, type KindTotals } from './view';
 export { PASSING_SCORE, NEEDS_PRACTICE_BELOW } from './bands';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
@@ -94,6 +94,11 @@ export interface StudentWork {
   quizzesTaken: number;
   /** Across those quizzes, each graded as the average of its graded tries (quizGrade), as the app grades them. */
   quizAverage: number | null;
+  /**
+   * Every graded piece of work, summed by kind for the "Overall average" (see view.ts).
+   * Each submitted quiz try counts on its own; practice runs do not.
+   */
+  totals: KindTotals;
 }
 
 /**
@@ -136,11 +141,11 @@ export async function studentWork(
 
   const lists = new Map<
     string,
-    { scenario: number[]; assigned: number; demo: number[]; demos: number; kase: number[]; quiz: Map<string, number[]> }
+    { scenario: number[]; assigned: number; demo: number[]; demos: number; kase: number[]; quiz: Map<string, number[]>; totals: KindTotals }
   >();
   const entry = (id: string) => {
     let e = lists.get(id);
-    if (!e) lists.set(id, (e = { scenario: [], assigned: 0, demo: [], demos: 0, kase: [], quiz: new Map() }));
+    if (!e) lists.set(id, (e = { scenario: [], assigned: 0, demo: [], demos: 0, kase: [], quiz: new Map(), totals: emptyTotals() }));
     return e;
   };
   // Patient Cases and Return Demonstrations (072) are counted apart.
@@ -148,20 +153,31 @@ export async function studentWork(
   for (const a of ofKind(scenarios, kinds, 'patient_case', (row) => row.scenario_id)) {
     const e = entry(a.student_id);
     e.assigned += 1;
-    if (a.status === 'completed' && a.score !== null) e.scenario.push(Number(a.score));
+    if (a.status === 'completed' && a.score !== null) {
+      e.scenario.push(Number(a.score));
+      addScore(e.totals, 'patient_case', Number(a.score));
+    }
   }
   for (const a of ofKind(scenarios, kinds, 'return_demo', (row) => row.scenario_id)) {
     const e = entry(a.student_id);
     e.demos += 1;
-    if (a.status === 'completed' && a.score !== null) e.demo.push(Number(a.score));
+    if (a.status === 'completed' && a.score !== null) {
+      e.demo.push(Number(a.score));
+      addScore(e.totals, 'return_demo', Number(a.score));
+    }
   }
   for (const c of cases) {
-    if (c.status === 'graded' && c.score !== null) entry(c.student_id).kase.push(Number(c.score));
+    if (c.status === 'graded' && c.score !== null) {
+      const e = entry(c.student_id);
+      e.kase.push(Number(c.score));
+      addScore(e.totals, 'case_presentation', Number(c.score));
+    }
   }
   for (const a of attempts) {
     if (a.score === null) continue;
-    const quiz = entry(a.student_id).quiz;
-    quiz.set(a.assessment_id, [...(quiz.get(a.assessment_id) ?? []), Number(a.score)]);
+    const e = entry(a.student_id);
+    e.quiz.set(a.assessment_id, [...(e.quiz.get(a.assessment_id) ?? []), Number(a.score)]);
+    addScore(e.totals, 'quiz', Number(a.score));
   }
 
   for (const id of ids) {
@@ -181,6 +197,7 @@ export async function studentWork(
       caseAverage: avg(e?.kase ?? []),
       quizzesTaken: quizGrades.length,
       quizAverage: avg(quizGrades),
+      totals: e?.totals ?? emptyTotals(),
     });
   }
   return work;
