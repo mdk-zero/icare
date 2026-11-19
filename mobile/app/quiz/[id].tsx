@@ -20,6 +20,8 @@ function formatClock(seconds: number) {
 }
 
 /** The College's passing mark for Skill Assessments, as a percentage. */
+/** The longest essay the server keeps, in characters. */
+const ESSAY_MAX_LENGTH = 5000;
 const PASSING_SCORE = 75;
 
 /**
@@ -53,12 +55,15 @@ function ScoreGauge({
   detail,
   Palette,
   color,
+  verdict,
 }: {
   score: number;
   passed: boolean;
   detail: string;
   Palette: Palette;
   color: string;
+  /** Said in place of Passed / Not passed, while an essay waits for its grade. */
+  verdict?: string;
 }) {
   const size = 220;
   const c = size / 2;
@@ -75,7 +80,7 @@ function ScoreGauge({
         )}
       </Svg>
       <View style={{ position: 'absolute', top: 58, alignItems: 'center' }}>
-        <Text style={{ fontSize: 15, fontWeight: '800', color }}>{passed ? 'Passed' : 'Not passed'}</Text>
+        <Text style={{ fontSize: 15, fontWeight: '800', color }}>{verdict ?? (passed ? 'Passed' : 'Not passed')}</Text>
         <Text style={{ fontSize: 38, fontWeight: '800', color: Palette.ink, marginTop: 2, fontVariant: ['tabular-nums'] }}>
           {score}%
         </Text>
@@ -512,20 +517,36 @@ export default function QuizInterfaceScreen() {
   // ------------------------------------------------------------
   if (result) {
     const passed = result.score >= PASSING_SCORE;
+    // An essay waits for the instructor, so no score is shown until it is graded.
+    const awaiting = Boolean(result.awaiting_grading);
+    const essayCount = result.results.filter((r) => r.essay).length;
+    // The questions checked on submit: everything but the essays.
+    const checkedTotal = result.total - essayCount;
     const verdictColor = passed ? Accent.green.fg : Accent.red.fg;
     const minCorrect = Math.ceil((result.total * PASSING_SCORE) / 100);
     const limit = started.assessment.time_limit_seconds;
     const missed = started.questions.filter((q) => {
       const verdict = result.results.find((r) => r.question_id === q.id);
-      return verdict && !verdict.is_correct;
+      // An essay isn't right or wrong here: the instructor grades it.
+      return verdict && !verdict.essay && !verdict.is_correct;
     });
     const details = [
       {
         label: 'Time Spent',
         value: `${formatClock(result.time_taken_seconds)}${limit ? ` / ${formatClock(limit)}` : ''}`,
       },
-      { label: 'Score', value: `${result.correct}/${result.total}` },
-      { label: 'Min. Passing Score', value: `${minCorrect}/${result.total}` },
+      // With an essay the score is in points, not questions; while it waits there is none yet.
+      ...(awaiting
+        ? []
+        : essayCount > 0
+          ? [
+              { label: 'Score', value: `${Math.round(result.score)}%` },
+              { label: 'Min. Passing Score', value: `${PASSING_SCORE}%` },
+            ]
+          : [
+              { label: 'Score', value: `${result.correct}/${result.total}` },
+              { label: 'Min. Passing Score', value: `${minCorrect}/${result.total}` },
+            ]),
       {
         label: 'Date Finished',
         value: (finishedAt ?? new Date()).toLocaleString([], {
@@ -564,15 +585,34 @@ export default function QuizInterfaceScreen() {
           {user?.name ? <Text style={styles.scoreStudent}>{user.name}</Text> : null}
           <Text style={styles.scoreTitle}>{started.assessment.title}</Text>
 
-          <View style={styles.gaugeWrap}>
-            <ScoreGauge
-              score={result.score}
-              passed={passed}
-              detail={`${result.correct} of ${result.total} correct`}
-              Palette={Palette}
-              color={verdictColor}
-            />
-          </View>
+          {awaiting ? (
+            <View style={styles.pendingBox}>
+              <View style={[styles.pendingIcon, { backgroundColor: Accent.amber.bg }]}>
+                <Ionicons name="hourglass-outline" size={30} color={Accent.amber.fg} />
+              </View>
+              <Text style={styles.pendingTitle}>Waiting for your instructor</Text>
+              <Text style={styles.pendingBody}>
+                {checkedTotal > 0
+                  ? `You got ${result.correct} of ${checkedTotal} of the other questions right. Your score comes out once your instructor grades your ${essayCount === 1 ? 'essay' : 'essays'}.`
+                  : `Your score comes out once your instructor grades your ${essayCount === 1 ? 'essay' : 'essays'}.`}{' '}
+                You&apos;ll get a notification.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.gaugeWrap}>
+              <ScoreGauge
+                score={result.score}
+                passed={passed}
+                detail={
+                  essayCount > 0
+                    ? `${result.correct} of ${checkedTotal} correct, plus ${essayCount === 1 ? 'the essay' : 'the essays'}`
+                    : `${result.correct} of ${result.total} correct`
+                }
+                Palette={Palette}
+                color={verdictColor}
+              />
+            </View>
+          )}
 
           <View style={styles.detailGrid}>
             {details.map((d) => (
@@ -699,6 +739,8 @@ export default function QuizInterfaceScreen() {
   const currentAnswer = answers[currentQuestion.id];
   const selectedIndex = typeof currentAnswer === 'number' ? currentAnswer : null;
   const isIdentification = currentQuestion.question_type === 'short_answer';
+  const isEssay = currentQuestion.question_type === 'essay';
+  const essayText = typeof currentAnswer === 'string' ? currentAnswer : '';
 
   return (
     <ScrollView
@@ -789,6 +831,29 @@ export default function QuizInterfaceScreen() {
         </View>
       )}
 
+      {isEssay && (
+        <View style={styles.options}>
+          <Text style={styles.essayNote}>
+            Essay{currentQuestion.points ? ` · ${currentQuestion.points} points` : ''} · your instructor grades it
+          </Text>
+          <TextInput
+            key={currentQuestion.id}
+            value={essayText}
+            onChangeText={handleType}
+            placeholder="Write your answer"
+            placeholderTextColor={Palette.textMuted}
+            multiline
+            textAlignVertical="top"
+            autoCapitalize="sentences"
+            maxLength={ESSAY_MAX_LENGTH}
+            style={[styles.option, styles.answerInput, styles.essayInput, essayText.length > 0 && styles.optionSelected]}
+          />
+          <Text style={styles.essayCount}>
+            {essayText.length}/{ESSAY_MAX_LENGTH}
+          </Text>
+        </View>
+      )}
+
       <View style={styles.options}>
         {currentQuestion.options.map((option, index) => {
           const isSelected = index === selectedIndex;
@@ -858,6 +923,13 @@ function createStyles(
   },
   optionSelected: { borderColor: Palette.primary, backgroundColor: Palette.primaryTint },
   answerInput: { fontSize: 16, color: Palette.ink },
+  essayInput: { minHeight: 200, alignItems: 'flex-start', lineHeight: 22 },
+  pendingBox: { alignItems: 'center', paddingVertical: Spacing.lg, gap: Spacing.sm },
+  pendingIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
+  pendingTitle: { fontSize: 18, fontWeight: '800', color: Palette.ink, textAlign: 'center' },
+  pendingBody: { fontSize: 13, color: Palette.textSecondary, textAlign: 'center', lineHeight: 19, paddingHorizontal: Spacing.md },
+  essayNote: { fontSize: 12, fontWeight: '600', color: Palette.textSecondary },
+  essayCount: { fontSize: 11, color: Palette.textMuted, textAlign: 'right', fontVariant: ['tabular-nums'] },
   optionText: { fontSize: 14, color: Palette.ink, flex: 1, lineHeight: 20 },
   answeredText: { fontSize: 12, color: Palette.textMuted, marginBottom: Spacing.xl },
   strictBar: {

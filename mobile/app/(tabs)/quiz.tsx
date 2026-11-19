@@ -59,6 +59,9 @@ function QuizRow({
           {quiz.assignment?.required && !done ? (
             <Text style={[styles.chip, { color: Accent.red.fg, backgroundColor: Accent.red.bg }]}>Required</Text>
           ) : null}
+          {done && quiz.awaiting_grading ? (
+            <Text style={[styles.chip, { color: Accent.amber.fg, backgroundColor: Accent.amber.bg }]}>Essay being graded</Text>
+          ) : null}
           {done ? (
             <Text style={styles.chip}>
               {quiz.attempt_count} {quiz.attempt_count === 1 ? 'attempt' : 'attempts'}
@@ -72,7 +75,9 @@ function QuizRow({
         </View>
       </View>
 
-      {done && quiz.grade !== null ? (
+      {done && quiz.grade === null && quiz.awaiting_grading ? (
+        <Ionicons name="hourglass-outline" size={22} color={Accent.amber.fg} />
+      ) : done && quiz.grade !== null ? (
         <ScoreRing score={quiz.grade} size={50} stroke={5} color={accuracyAccent(Accent, quiz.grade).fg} />
       ) : (
         <Ionicons name="chevron-forward" size={18} color={Palette.textFaint} />
