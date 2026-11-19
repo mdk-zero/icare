@@ -215,6 +215,8 @@ export const styles = StyleSheet.create({
     fontWeight: 700,
     color: INK,
   },
+  // A value that is a phrase ("Not yet competent") would wrap at the figure size and make the row tall.
+  tileValuePhrase: { fontSize: 14, marginTop: 6 },
   tileCaption: { fontSize: 8, color: MUTED, marginTop: 2 },
 
   // Callouts
@@ -410,7 +412,7 @@ export function ReportShell({
   /** What the running header says after the title; the subject unless a shorter or fuller label reads better. */
   runningLabel?: string;
   meta: ReportMeta;
-  metaRows: { label: string; value: string }[];
+  metaRows: MetaRow[];
   /** The letterhead wordmark: file bytes on the server, a URL in the browser. */
   logo?: Buffer | string | null;
   /** Landscape for a wide table, such as a column per group member. */
@@ -468,8 +470,14 @@ export function ReportShell({
   );
 }
 
+/** A label and its value; a date may carry the word "Late", set as in a table cell. */
+export interface MetaRow {
+  label: string;
+  value: string | DateCell;
+}
+
 /** Label and value pairs under the letterhead: one column of them, or two when there are four or more. */
-function MetaBlock({ rows }: { rows: { label: string; value: string }[] }) {
+function MetaBlock({ rows }: { rows: MetaRow[] }) {
   if (rows.length === 0) return null;
   const split = rows.length >= 4 ? Math.ceil(rows.length / 2) : rows.length;
   const columns = [rows.slice(0, split), rows.slice(split)].filter((c) => c.length > 0);
@@ -480,7 +488,14 @@ function MetaBlock({ rows }: { rows: { label: string; value: string }[] }) {
           {column.map((row) => (
             <View key={row.label} style={styles.metaRow} wrap={false}>
               <Text style={styles.metaLabel}>{row.label}</Text>
-              <Text style={styles.metaValue}>{row.value}</Text>
+              {typeof row.value === 'string' ? (
+                <Text style={styles.metaValue}>{row.value}</Text>
+              ) : (
+                <Text style={styles.metaValue}>
+                  {row.value.date}
+                  {row.value.late && <Text style={{ fontWeight: 700, color: TONE.practice }}>{'  Late'}</Text>}
+                </Text>
+              )}
             </View>
           ))}
         </View>
@@ -636,6 +651,9 @@ export function countTile(label: string, value: string | number, caption?: strin
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
+/** A tile value that reads as words, not a figure: "Competent", "Not yet performed". */
+const isPhrase = (value: string | number) => typeof value === 'string' && !NUMERIC.test(value);
+
 /**
  * Tiles in a row, left-aligned, so one or two do not stretch across the page.
  * `columns` sets how many fit in a row; by default that is the tile count held
@@ -650,7 +668,9 @@ export function StatGrid({ items, columns }: { items: Tile[]; columns?: number }
         <View key={i} style={[styles.tileCell, { width: `${100 / per}%` }]} wrap={false}>
           <View style={[styles.tile, item.emphasis ? styles.tileEmphasis : {}]}>
             <Text style={styles.tileLabel}>{item.label}</Text>
-            <Text style={[styles.tileValue, item.color ? { color: item.color } : {}]}>{String(item.value)}</Text>
+            <Text style={[styles.tileValue, isPhrase(item.value) ? styles.tileValuePhrase : {}, item.color ? { color: item.color } : {}]}>
+              {String(item.value)}
+            </Text>
             {item.caption && <Text style={styles.tileCaption}>{item.caption}</Text>}
           </View>
         </View>

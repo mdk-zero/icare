@@ -1,22 +1,22 @@
 "use client";
 
 import { pdf, View } from "@react-pdf/renderer";
-import { GRID_AHEAD, Note, ReportShell, Section, StatGrid, Table, registerReportFonts, scoreTile, type ReportDocument, type ReportMeta } from "../reports/kit-ui";
+import { Note, ReportShell, Section, StatGrid, Table, registerReportFonts, type MetaRow, type ReportDocument, type ReportMeta } from "../reports/kit-ui";
 import { addScore, dateLabel, emptyTotals, generatedStamp, type KindTotals } from "../reports/view";
 import { StudentReportBody, type StudentWorkItem } from "../reports/student-sheet";
 import { GroupReportBody, RosterReportBody, SectionReportBody, type SectionStudent } from "../reports/cohort-sheet";
 import { isLateSubmission as isLateAttempt } from "../assessment-timing";
-import { CASE_CRITERIA, caseLevelLabel } from "../case-rubric";
-import { ChecklistSheet } from "../reports/checklist-sheet";
 import { buildSheetSkills } from "../reports/checklist-grades";
 import { parseTarget } from "../reports/targets";
-import { competencyRemark } from "../return-demo-remarks";
+import { CHECKLIST_NOUN, ChecklistGroupBody, ChecklistStudentBody, checklistStudentMeta, type ChecklistMember } from "../reports/checklist-report";
+import { AssessmentReportBody, ScenarioReportBody, assessmentMeta, classSkillScores, type AssessmentStudent, type ScenarioStudent } from "../reports/class-sheet";
+import { CaseReportBody, caseMeta } from "../reports/case-sheet";
+import { DischargeReportBody, dischargeMeta, stayDays } from "../reports/discharge-sheet";
+import { QuizGroupBody, QuizStudentBody, quizStudentMeta } from "../reports/quiz-report";
 import type { GridEntry, GridMember } from "../reports/activity-sheet";
-import { CriterionTable, QuizAnswers, QuizMatrix } from "../reports/quiz-sheet";
-import { answerRows, criterionForGroup, criterionForStudent, matrix, type QuizCriterion, type QuizQuestion, type QuizTry } from "../reports/quiz-model";
+import { criterionForClass, type QuizCriterion, type QuizQuestion, type QuizTry } from "../reports/quiz-model";
 import type { DemoAttempt } from "./fixtures/school";
 import type { DemoDb } from "./store";
-import { scoreDescriptor } from "../task-ratings";
 import type { DemoCaseGroup } from "./fixtures/teaching";
 import type { DemoContext } from "./router";
 import { caseAverage, mean, prediction, quizAverage, submittedAttempts } from "./handlers/derive";
@@ -38,10 +38,6 @@ const LOGO = "/logo-no-bg.png";
 
 const pct = (v: number | null) => (v == null ? "—" : `${Math.round(v)}%`);
 const date = dateLabel;
-/** When it was handed in, flagged when that was past its deadline. */
-const submitted = (a: { submitted_at: string | null; deadline: string | null }) =>
-  a.submitted_at ? `${date(a.submitted_at)}${a.deadline && Date.parse(a.submitted_at) > Date.parse(a.deadline) ? " (late)" : ""}` : "—";
-
 function meta(ctx: Ctx): ReportMeta {
   return {
     campus: DEMO_INSTITUTION,
@@ -50,7 +46,7 @@ function meta(ctx: Ctx): ReportMeta {
   };
 }
 
-function Shell({ ctx, title, subject, runningLabel, rows, orientation, audience, children }: { ctx: Ctx; title: string; subject: string; runningLabel?: string; rows: { label: string; value: string }[]; orientation?: "portrait" | "landscape"; audience?: "instructor-copy"; children: React.ReactNode }) {
+function Shell({ ctx, title, subject, runningLabel, rows, orientation, audience, children }: { ctx: Ctx; title: string; subject: string; runningLabel?: string; rows: MetaRow[]; orientation?: "portrait" | "landscape"; audience?: "instructor-copy"; children: React.ReactNode }) {
   return (
     <ReportShell title={title} subject={subject} runningLabel={runningLabel} meta={meta(ctx)} metaRows={rows} logo={LOGO} orientation={orientation} audience={audience}>
       {children}
@@ -226,107 +222,89 @@ function sectionReport(ctx: Ctx, id: string): Built {
   };
 }
 
+/** A scenario's checklist laid out against the given assignments, one grade column each. */
+function demoSkills(db: DemoDb, scenarioId: string, assignmentIds: string[]) {
+  const tasks = db.tasks.filter((t) => t.scenario_id === scenarioId).sort((a, b) => a.sort_order - b.sort_order);
+  const taskIds = new Set(tasks.map((t) => t.id));
+  const steps = db.steps.filter((st) => taskIds.has(st.task_id)).sort((a, b) => a.position - b.position);
+  return buildSheetSkills({
+    tasks,
+    steps,
+    assignmentIds,
+    completions: db.completions.filter((c) => assignmentIds.includes(c.assignment_id) && taskIds.has(c.task_id)),
+    stepRatings: db.stepRatings.filter((r) => assignmentIds.includes(r.assignment_id)),
+  });
+}
+
 function scenarioReport(ctx: Ctx, id: string): Built {
   const { db } = ctx;
   const sc = db.scenarios.find((s) => s.id === id);
   if (!sc) return { error: "Not found", status: 404 };
   const mine = new Set(visibleStudents(db, ctx.role, ctx.viewer.id).map((s) => s.id));
   const rows = db.assignments.filter((a) => a.scenario_id === id && mine.has(a.student_id));
+  const students: ScenarioStudent[] = rows.map((a) => ({
+    name: userById(db, a.student_id)?.name ?? "Unknown student",
+    group: db.teams.find((t) => t.id === userById(db, a.student_id)?.team_id)?.name ?? null,
+    status: a.status === "completed" ? "Performed" : a.submitted_at ? "Awaiting grade" : a.status === "in_progress" ? "In progress" : a.status === "overdue" ? "Overdue" : "Not started",
+    submitted: a.submitted_at,
+    late: isLate(a.submitted_at, a.deadline),
+    score: a.status === "completed" ? a.score : null,
+  }));
+  const graded = rows.filter((a) => a.status === "completed" && a.score != null).map((a) => a.id);
   return {
     subject: sc.title,
     doc: (
       <Shell ctx={ctx} title="Patient Case Results Report" subject={sc.title} rows={[{ label: "Category", value: sc.category }]}>
-        <StatGrid items={[
-          { label: "Assigned", value: rows.length },
-          { label: "Performed", value: rows.filter((a) => a.status === "completed").length },
-          { label: "Awaiting review", value: rows.filter((a) => a.submitted_at && a.status !== "completed").length },
-          scoreTile("Average", mean(rows.filter((a) => a.score != null).map((a) => a.score!))),
-        ]} />
-        <Section title="Students" />
-        <Table head={["Student", "Group", "Status", "Performed", "Score"]} widths={[3, 2, 1.4, 1.4, 1]} rows={rows.map((a) => {
-          const s = userById(db, a.student_id);
-          return [s?.name ?? "—", teamLabel(db, s?.team_id) ?? "—", a.status === "completed" ? "Performed" : a.submitted_at ? "Awaiting review" : a.status, submitted(a), pct(a.score)];
-        })} />
+        <ScenarioReportBody students={students} skills={classSkillScores(demoSkills(db, id, graded))} />
       </Shell>
     ),
   };
 }
 
-const CHECKLIST = {
-  return_demo: { noun: "Return Demonstration", heading: "Return Demonstration Report" },
-  patient_case: { noun: "Patient Case", heading: "Patient Case Report" },
-} as const;
+const CHECKLIST_HEADING = { return_demo: "Return Demonstration Report", patient_case: "Patient Case Report" } as const;
 
 /** The checklist report of one student or group on a Return Demonstration or a Patient Case. */
-function checklistReport(ctx: Ctx, kind: keyof typeof CHECKLIST, id: string): Built {
+function checklistReport(ctx: Ctx, kind: keyof typeof CHECKLIST_HEADING, id: string): Built {
   const { db } = ctx;
-  const { noun, heading } = CHECKLIST[kind];
   const target = parseTarget(id);
   const demo = target && db.scenarios.find((s) => s.id === target.parentId && (s.kind ?? "patient_case") === kind);
   if (!target || !demo) return { error: "Not found", status: 404 };
   const mine = new Set(visibleStudents(db, ctx.role, ctx.viewer.id).map((s) => s.id));
-  const members = db.assignments
+  const found = db.assignments
     .filter((a) => a.scenario_id === demo.id && mine.has(a.student_id))
     .map((a) => ({ a, student: userById(db, a.student_id) }))
     .filter((m) => (target.kind === "student" ? m.a.student_id === target.studentId : m.student?.team_id === target.teamId))
     .sort((x, y) => (x.student?.name ?? "").localeCompare(y.student?.name ?? ""));
-  if (members.length === 0) return { error: "Not found", status: 404 };
+  if (found.length === 0) return { error: "Not found", status: 404 };
 
-  const tasks = db.tasks.filter((t) => t.scenario_id === demo.id).sort((a, b) => a.sort_order - b.sort_order);
-  const taskIds = new Set(tasks.map((t) => t.id));
-  const steps = db.steps.filter((st) => taskIds.has(st.task_id)).sort((a, b) => a.position - b.position);
-  const ids = members.map((m) => m.a.id);
-  const skills = buildSheetSkills({
-    tasks,
-    steps,
-    assignmentIds: ids,
-    completions: db.completions.filter((c) => ids.includes(c.assignment_id) && taskIds.has(c.task_id)),
-    stepRatings: db.stepRatings.filter((r) => ids.includes(r.assignment_id)),
-  });
-  const score = (a: (typeof members)[number]["a"]) => (a.status === "completed" ? a.score : null);
+  const skills = demoSkills(db, demo.id, found.map((m) => m.a.id));
+  const members: ChecklistMember[] = found.map((m) => ({
+    name: m.student?.name ?? "—",
+    status: m.a.status,
+    score: m.a.status === "completed" ? m.a.score : null,
+    deadline: m.a.deadline,
+    completedAt: m.a.completed_at,
+  }));
+  const heading = CHECKLIST_HEADING[kind];
 
   if (target.kind === "student") {
-    const { a, student } = members[0];
-    const sc = score(a);
+    const student = found[0].student;
     return {
       subject: `${demo.title} ${student?.name ?? ""}`.trim(),
       doc: (
-        <Shell ctx={ctx} title={heading} subject={student?.name ?? "—"} runningLabel={`${student?.name ?? "—"} · ${demo.title}`} rows={[
-          { label: noun, value: demo.title },
-          { label: "Group", value: teamLabel(db, student?.team_id) ?? "—" },
-          { label: "Date of performance", value: date(a.deadline) },
-        ]}>
-          <StatGrid items={[
-            scoreTile("Score", sc, ""),
-            { label: "Rating", value: sc === null ? "—" : scoreDescriptor(sc) },
-            ...(kind === "return_demo"
-              ? [{ label: "Remarks", value: competencyRemark(sc) }]
-              : [{ label: "Status", value: a.status === "completed" ? "Performed" : "Not yet performed" }]),
-          ]} />
-          <Section title="Checklist and grades" ahead={GRID_AHEAD} />
-          <ChecklistSheet columns={["Grade"]} skills={skills} />
+        <Shell ctx={ctx} title={heading} subject={members[0].name} runningLabel={`${members[0].name} · ${demo.title}`} rows={checklistStudentMeta(kind, demo.title, teamLabel(db, student?.team_id) ?? "—", members[0])}>
+          <ChecklistStudentBody kind={kind} member={members[0]} skills={skills} />
         </Shell>
       ),
     };
   }
 
   const label = teamLabel(db, target.teamId) ?? "Group";
-  const scores = members.flatMap((m) => (score(m.a) === null ? [] : [score(m.a)!]));
   return {
     subject: `${demo.title} ${label}`,
     doc: (
-      <Shell ctx={ctx} title={heading} subject={label} runningLabel={`${label} · ${demo.title}`} orientation="landscape" audience="instructor-copy" rows={[{ label: noun, value: demo.title }]}>
-        <StatGrid items={[
-          { label: "Members", value: members.length },
-          { label: "Performed", value: scores.length },
-          scoreTile("Group average", mean(scores)),
-        ]} />
-        <Section title="Members" />
-        <Table head={kind === "return_demo" ? ["Member", "Date of performance", "Score", "Remarks"] : ["Member", "Date of performance", "Status", "Score"]} widths={kind === "return_demo" ? [3, 1.6, 1.8, 1.6] : [3, 1.6, 1.4, 1.6]} rows={members.map((m) => kind === "return_demo"
-          ? [m.student?.name ?? "—", date(m.a.deadline), pct(score(m.a)), competencyRemark(score(m.a))]
-          : [m.student?.name ?? "—", date(m.a.deadline), m.a.status === "completed" ? "Performed" : "Not yet performed", pct(score(m.a))])} />
-        <Section title="Checklist and grades" ahead={GRID_AHEAD} />
-        <ChecklistSheet columns={members.map((m) => m.student?.name ?? "—")} skills={skills} />
+      <Shell ctx={ctx} title={heading} subject={label} runningLabel={`${label} · ${demo.title}`} orientation="landscape" audience="instructor-copy" rows={[{ label: CHECKLIST_NOUN[kind], value: demo.title }]}>
+        <ChecklistGroupBody kind={kind} members={members} skills={skills} />
       </Shell>
     ),
   };
@@ -372,19 +350,25 @@ function demoTry(attempt: DemoAttempt, questions: QuizQuestion[], number: number
   return { number, submittedAt: attempt.submitted_at, score: attempt.score, served: served.map((q) => q.id), criteria: new Map(), answers };
 }
 
+/** A quiz's questions and scoring criteria, in order. */
+function quizParts(db: DemoDb, quizId: string): { questions: QuizQuestion[]; criteria: QuizCriterion[] } {
+  const questions: QuizQuestion[] = db.questions
+    .filter((q) => q.assessment_id === quizId)
+    .sort((a, b) => a.position - b.position)
+    .map((q) => ({ id: q.id, text: q.content, options: q.options, correctIndex: q.correct_index, criteriaId: q.criteria_id }));
+  const criteria: QuizCriterion[] = db.criteria
+    .filter((c) => c.assessment_id === quizId)
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((c) => ({ id: c.id, name: c.name, weight: c.weight }));
+  return { questions, criteria };
+}
+
 function quizDetailReport(ctx: Ctx, id: string): Built {
   const { db } = ctx;
   const target = parseTarget(id);
   const quiz = target && db.quizzes.find((q) => q.id === target.parentId);
   if (!target || !quiz) return { error: "Not found", status: 404 };
-  const questions: QuizQuestion[] = db.questions
-    .filter((q) => q.assessment_id === quiz.id)
-    .sort((a, b) => a.position - b.position)
-    .map((q) => ({ id: q.id, text: q.content, options: q.options, correctIndex: q.correct_index, criteriaId: q.criteria_id }));
-  const criteria: QuizCriterion[] = db.criteria
-    .filter((c) => c.assessment_id === quiz.id)
-    .sort((a, b) => a.sort_order - b.sort_order)
-    .map((c) => ({ id: c.id, name: c.name, weight: c.weight }));
+  const { questions, criteria } = quizParts(db, quiz.id);
   const students = visibleStudents(db, ctx.role, ctx.viewer.id).filter(
     (s) =>
       db.quizAssignments.some((a) => a.assessment_id === quiz.id && a.student_id === s.id) ||
@@ -407,51 +391,26 @@ function quizDetailReport(ctx: Ctx, id: string): Built {
 
   if (target.kind === "student") {
     const student = members[0];
-    const taken = triesOf(student.id);
-    const g = gradeOf(student.id);
     return {
       subject: `${quiz.title} ${student.name}`,
       doc: (
-        <Shell ctx={ctx} title="Quiz Answers Report" subject={student.name} runningLabel={`${student.name} · ${quiz.title}`} rows={[
-          { label: "Quiz", value: quiz.title },
-          { label: "Group", value: teamLabel(db, student.team_id) ?? "—" },
-          { label: "Submitted tries", value: String(taken.length) },
-        ]}>
-          <StatGrid items={[
-            scoreTile("Grade", g),
-            { label: "Submitted tries", value: taken.length },
-            { label: "Remarks", value: g === null ? "Not taken" : g >= 75 ? "Passed" : "Below passing" },
-          ]} />
-          <Section title="Results by criterion" />
-          <CriterionTable columns={["Correct"]} rows={criterionForStudent(questions, criteria, taken)} />
-          {taken.length === 0 ? <Note>{student.name} has not submitted a try yet.</Note> : taken.map((t) => (
-            <View key={t.number}>
-              <Section title={`Try ${t.number} - ${pct(t.score === null ? null : Math.round(t.score))}${t.submittedAt ? ` - ${date(t.submittedAt)}` : ""}`} />
-              <QuizAnswers rows={answerRows(questions, criteria, t)} />
-            </View>
-          ))}
+        <Shell ctx={ctx} title="Quiz Answers Report" subject={student.name} runningLabel={`${student.name} · ${quiz.title}`} rows={quizStudentMeta(quiz.title, teamLabel(db, student.team_id) ?? "—")}>
+          <QuizStudentBody name={student.name} grade={gradeOf(student.id)} taken={triesOf(student.id)} questions={questions} criteria={criteria} />
         </Shell>
       ),
     };
   }
 
   const label = teamLabel(db, target.teamId) ?? "Group";
-  const latest = members.map((m) => ({ name: m.name, latest: triesOf(m.id).at(-1) ?? null }));
-  const { columns, rows } = matrix(questions, criteria, latest);
-  const grades = members.flatMap((m) => (gradeOf(m.id) === null ? [] : [gradeOf(m.id)!]));
   return {
     subject: `${quiz.title} ${label}`,
     doc: (
       <Shell ctx={ctx} title="Quiz Answers Report" subject={label} runningLabel={`${label} · ${quiz.title}`} orientation="landscape" audience="instructor-copy" rows={[{ label: "Quiz", value: quiz.title }]}>
-        <StatGrid items={[
-          { label: "Members", value: members.length },
-          { label: "Completed", value: grades.length },
-          scoreTile("Group average", mean(grades)),
-        ]} />
-        <Section title="Results by criterion" ahead={GRID_AHEAD} />
-        <CriterionTable columns={members.map((m) => m.name)} rows={criterionForGroup(questions, criteria, latest)} />
-        <Section title="Questions" ahead={GRID_AHEAD} />
-        <QuizMatrix columns={columns} rows={rows} />
+        <QuizGroupBody
+          members={members.map((m) => ({ name: m.name, tries: triesOf(m.id).length, grade: gradeOf(m.id), latest: triesOf(m.id).at(-1) ?? null }))}
+          questions={questions}
+          criteria={criteria}
+        />
       </Shell>
     ),
   };
@@ -461,22 +420,31 @@ function assessmentReport(ctx: Ctx, id: string): Built {
   const { db } = ctx;
   const quiz = db.quizzes.find((q) => q.id === id);
   if (!quiz) return { error: "Not found", status: 404 };
-  const students = visibleStudents(db, ctx.role, ctx.viewer.id).filter((s) => db.quizAssignments.some((a) => a.assessment_id === id && a.student_id === s.id));
-  const best = (sid: string) => {
-    const scores = db.attempts.filter((a) => a.assessment_id === id && a.student_id === sid && a.score != null).map((a) => a.score!);
-    return scores.length ? Math.max(...scores) : null;
-  };
+  const { questions, criteria } = quizParts(db, quiz.id);
+  // Given the quiz, or sat it anyway, as the real report counts them.
+  const given = visibleStudents(db, ctx.role, ctx.viewer.id).filter(
+    (s) => db.quizAssignments.some((a) => a.assessment_id === id && a.student_id === s.id) || db.attempts.some((a) => a.assessment_id === id && a.student_id === s.id),
+  );
+  const all: QuizTry[] = [];
+  const students: AssessmentStudent[] = given.map((s) => {
+    const own = db.attempts.filter((a) => a.assessment_id === id && a.student_id === s.id && a.status === "submitted" && a.score != null);
+    all.push(...own.map((a) => demoTry(a, questions, 0)));
+    const grade = own.length ? Math.round(mean(own.map((a) => a.score!))!) : null;
+    return {
+      name: s.name,
+      section: sectionName(db, s.section_id) ?? "No section",
+      group: db.teams.find((t) => t.id === s.team_id)?.name ?? null,
+      tries: own.length,
+      grade,
+      latest: own.map((a) => a.submitted_at ?? "").sort().at(-1) || null,
+      late: own.some((a) => isLateAttempt(a.time_taken_seconds, quiz.time_limit_seconds)),
+    };
+  });
   return {
     subject: quiz.title,
     doc: (
-      <Shell ctx={ctx} title="Quiz Results Report" subject={quiz.title} rows={[]}>
-        <StatGrid items={[
-          { label: "Assigned", value: students.length },
-          { label: "Submitted", value: students.filter((s) => best(s.id) !== null).length },
-          scoreTile("Average best score", mean(students.map((s) => best(s.id)).filter((x): x is number => x !== null))),
-        ]} />
-        <Section title="Results" />
-        <Table head={["Student", "Group", "Best score"]} widths={[3, 2, 1]} rows={students.map((s) => [s.name, teamLabel(db, s.team_id) ?? "—", pct(best(s.id))])} />
+      <Shell ctx={ctx} title="Quiz Results Report" subject={quiz.title} rows={assessmentMeta({ timeLimitSeconds: quiz.time_limit_seconds, maxAttempts: quiz.max_attempts })}>
+        <AssessmentReportBody students={students} criteria={criterionForClass(questions, criteria, all)} />
       </Shell>
     ),
   };
@@ -512,22 +480,19 @@ function caseReport(ctx: Ctx, id: string): Built {
     .filter((s) => s.group_id === g.id)
     .map((s) => ({ name: userById(db, s.student_id)?.name ?? "Student", leader: s.student_id === g.leader_id }))
     .sort((a, b) => Number(b.leader) - Number(a.leader) || a.name.localeCompare(b.name));
+  const leader = members.find((m) => m.leader);
   return {
     subject: `${g.team_name} — ${p?.title ?? "Case"}`,
     doc: (
-      <Shell ctx={ctx} title="Case Presentation Report" subject={p?.title ?? "Case"} rows={[
-        { label: "Group", value: `${g.team_name} · ${g.section_name}` },
-        { label: "Leader", value: members.find((m) => m.leader)?.name ?? "—" },
-        { label: "Slides", value: g.file?.name ?? "—" },
-      ]}>
-        <StatGrid items={[scoreTile("Group score", g.score), { label: "Members", value: String(members.length) }]} />
-        <Section title="Grading" />
-        <Table head={["Criterion", "Weight", "Level"]} widths={[3, 0.8, 1.4]} rows={CASE_CRITERIA.map((c) => {
-          const r = g.ratings.find((x) => x.criterion === c.key);
-          return [c.label, `${c.weight}%`, r ? `${caseLevelLabel(r.level)} (${r.level})` : "—"];
-        })} />
-        <Section title="Members" />
-        <Table head={["Member", "Role"]} widths={[3, 1]} rows={members.map((m) => [m.name, m.leader ? "Group leader" : "Member"])} />
+      <Shell ctx={ctx} title="Case Presentation Report" subject={p?.title ?? "Case"} rows={caseMeta({
+        team: g.team_name,
+        section: g.section_name,
+        leader: leader?.name ?? null,
+        presentedAt: g.submitted_at,
+        late: isLate(g.submitted_at, p?.deadline ?? null),
+        gradedAt: g.graded_at,
+      })}>
+        <CaseReportBody score={g.score} remarks={g.remarks} ratings={g.ratings} members={members} />
       </Shell>
     ),
   };
@@ -541,19 +506,8 @@ function dischargeReport(ctx: Ctx, id: string): Built {
   return {
     subject: patient?.name ?? "Discharge summary",
     doc: (
-      <Shell ctx={ctx} title="Discharge Summary" subject={patient?.name ?? "—"} rows={[
-        { label: "Diagnosis", value: d.diagnosis },
-        { label: "Stay", value: `${date(d.admitted_at)} – ${date(d.discharged_at)}` },
-        { label: "Room", value: d.room_label },
-      ]}>
-        <StatGrid items={[
-          { label: "Vital readings", value: d.vitals_digest.readings ?? 0 },
-          { label: "Flagged", value: d.vitals_digest.flagged ?? 0 },
-        ]} />
-        <Section title="Findings" />
-        <Table head={["Finding", "Severity"]} widths={[4, 1]} rows={(d.vitals_digest.findings ?? []).map((f) => [f.message, f.severity])} emptyText="No findings recorded." />
-        <Section title="Follow-up" />
-        <Table head={["Action", "Detail"]} widths={[2, 4]} rows={d.follow_up.map((f) => [f.title, f.detail])} emptyText="No follow-up drafted yet." />
+      <Shell ctx={ctx} title="Discharge Summary" subject={patient ? `${patient.name}, ${patient.age}` : "—"} rows={dischargeMeta({ diagnosis: d.diagnosis, room: d.room_label, admittedAt: d.admitted_at, dischargedAt: d.discharged_at })}>
+        <DischargeReportBody days={stayDays(d.admitted_at, d.discharged_at)} vitals={d.vitals_digest} followUp={d.follow_up} aiDraftedAt={d.ai_generated_at} />
       </Shell>
     ),
   };

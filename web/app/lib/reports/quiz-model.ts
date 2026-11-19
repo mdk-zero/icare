@@ -1,3 +1,5 @@
+import { PASSING_SCORE } from './bands';
+import type { TagCell } from './kit-ui';
 import type { CriterionRow, QuizAnswerRow, QuizMatrixColumn, QuizMatrixRow } from './quiz-sheet';
 
 /**
@@ -67,6 +69,22 @@ export function answerRows(
   });
 }
 
+/** Where a quiz grade stands: Passed at the pass mark, Below passing under it, Not taken until a try is graded. */
+export const quizRemark = (grade: number | null) => (grade === null ? 'Not taken' : grade >= PASSING_SCORE ? 'Passed' : 'Below passing');
+
+/** The remark as a table cell: Passed green, Below passing red, Not taken muted. */
+export function remarkCell(grade: number | null): TagCell {
+  return { tag: quizRemark(grade), tone: grade === null ? 'muted' : grade >= PASSING_SCORE ? 'pass' : 'low' };
+}
+
+/**
+ * A try's answers with the wrong and blank ones first, then the right ones,
+ * each keeping the number it had when the student was served the questions.
+ */
+export function wrongFirst(rows: readonly QuizAnswerRow[]): QuizAnswerRow[] {
+  return [...rows].sort((a, b) => Number(a.ok === true) - Number(b.ok === true) || a.n - b.n);
+}
+
 const pct = (n: number | null) => (n === null ? '—' : `${Math.round(n)}%`);
 
 /** Each member's latest graded try against every question of the quiz. */
@@ -131,7 +149,30 @@ export function criterionForStudent(
   criteria: readonly QuizCriterion[],
   tries: readonly QuizTry[],
 ): CriterionRow[] {
-  return criteria.map((c) => ({ name: c.name, weight: c.weight, cells: [cell(tally(questions, c, tries))] }));
+  return criteria.map((c) => {
+    const t = tally(questions, c, tries);
+    return { name: c.name, weight: c.weight, cells: [cell(t)], share: t.total === 0 ? null : share(t) };
+  });
+}
+
+/** Criteria with the lowest share first, those with no questions served last; the quiz's own order breaks ties. */
+export function weakestFirst<T extends { share?: number | null }>(rows: readonly T[]): T[] {
+  return rows
+    .map((row, i) => ({ row, i }))
+    .sort((a, b) => (a.row.share ?? 101) - (b.row.share ?? 101) || a.i - b.i)
+    .map(({ row }) => row);
+}
+
+/** The whole class on each criterion, over every given try: questions right out of those served. Null when none were served. */
+export function criterionForClass(
+  questions: readonly QuizQuestion[],
+  criteria: readonly QuizCriterion[],
+  tries: readonly QuizTry[],
+): { name: string; weight: number; score: number | null }[] {
+  return criteria.map((c) => {
+    const t = tally(questions, c, tries);
+    return { name: c.name, weight: c.weight, score: t.total === 0 ? null : share(t) };
+  });
 }
 
 /** A group's results per criterion: one column per member, from their latest try. */

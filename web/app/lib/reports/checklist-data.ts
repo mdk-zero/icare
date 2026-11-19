@@ -1,5 +1,6 @@
 import type { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { buildSheetSkills } from './checklist-grades';
+import { readMatching } from '../fetch-all';
 import { loadGroupings } from './groupings';
 import { scenarioKinds, type ScenarioKind } from '../scenario-kind';
 import type { SheetSkill } from './checklist-sheet';
@@ -109,20 +110,21 @@ export async function loadSheetSkills(
   const stepRows = (steps ?? []) as { id: string; task_id: string; title: string; source: string | null }[];
 
   const ids = [...assignmentIds];
-  const [completions, stepRatings] = ids.length
-    ? await Promise.all([
-        supabase.from('scenario_task_completions').select('assignment_id, task_id, rating').in('assignment_id', ids),
-        supabase.from('scenario_task_step_ratings').select('assignment_id, step_id, rating').in('assignment_id', ids),
-      ])
-    : [{ data: [], error: null }, { data: [], error: null }];
-  if (completions.error) throw new Error(`Unable to read the grades: ${completions.error.message}`);
-  if (stepRatings.error) throw new Error(`Unable to read the step grades: ${stepRatings.error.message}`);
+  // A class's ratings run past PostgREST's 1,000-row cap and its ids past a URL's length, so these read in chunks and pages.
+  const [completions, stepRatings] = await Promise.all([
+    readMatching<{ assignment_id: string; task_id: string; rating: unknown }>(ids, (part, from, to) =>
+      supabase.from('scenario_task_completions').select('id, assignment_id, task_id, rating').in('assignment_id', part).order('id').range(from, to),
+    ),
+    readMatching<{ assignment_id: string; step_id: string; rating: unknown }>(ids, (part, from, to) =>
+      supabase.from('scenario_task_step_ratings').select('id, assignment_id, step_id, rating').in('assignment_id', part).order('id').range(from, to),
+    ),
+  ]);
 
   return buildSheetSkills({
     tasks: taskRows,
     steps: stepRows,
     assignmentIds: ids,
-    completions: (completions.data ?? []) as { assignment_id: string; task_id: string; rating: unknown }[],
-    stepRatings: (stepRatings.data ?? []) as { assignment_id: string; step_id: string; rating: unknown }[],
+    completions,
+    stepRatings,
   });
 }

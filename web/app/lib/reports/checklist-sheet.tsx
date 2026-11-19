@@ -7,7 +7,7 @@
  * points that member earned. Free of server-only code, so the demo lays out the same sheet in the browser.
  */
 import { Text, View } from '@react-pdf/renderer';
-import { MAX_RATING_POINTS, NOT_APPLICABLE, TASK_RATINGS, ratingPoints, type ChecklistRating } from '../task-ratings';
+import { MAX_RATING_POINTS, NOT_APPLICABLE, TASK_RATINGS, ratingPoints, scaledGrade, type ChecklistRating } from '../task-ratings';
 import { LEVEL_COLOR } from './bands';
 import { BRAND_100, FAINT, MUTED, TEAL, TEAL_DARK, fitName, memberColumnWidth, reportFonts, styles } from './kit-ui';
 
@@ -48,7 +48,8 @@ export const stepLetter = (i: number): string =>
 
 const gradeColor = (grade: SheetGrade) => (grade === null ? FAINT : (LEVEL_COLOR[grade] ?? '#1f2937'));
 const pointsText = (p: { earned: number; max: number } | null) => (p ? `${p.earned}/${p.max}` : '—');
-const percent = (p: { earned: number; max: number } | null) => (p ? `${Math.round((p.earned / p.max) * 100)}%` : '');
+// The skill's grade as the grading screen shows it (scaledGrade), not the raw share of points.
+const percent = (p: { earned: number; max: number } | null) => (p ? `${scaledGrade(p.earned, p.max)}%` : '');
 /** What a step's cell shows: the points, "N/A" where the step wasn't on offer, a dash where it wasn't rated. */
 const gradeText = (grade: SheetGrade) => (grade === null ? '—' : grade === NOT_APPLICABLE ? 'N/A' : String(ratingPoints(grade)));
 

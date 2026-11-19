@@ -134,6 +134,8 @@ export interface CriterionRow {
   weight: number;
   /** One cell per column: "5/6 · 83%" for one student, "5/6" over "83%" (two lines) for a member of a group. */
   cells: string[];
+  /** A student's share right, as a percent; null when none of the criterion's questions were served. Left out for a group. */
+  share?: number | null;
 }
 
 /** A cell's last line is its percent, so it takes the percent's band colour. */
