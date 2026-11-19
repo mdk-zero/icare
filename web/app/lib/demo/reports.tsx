@@ -1,7 +1,8 @@
 "use client";
 
 import { pdf, Text, View } from "@react-pdf/renderer";
-import { CourseCriteria, ReportShell, StatGrid, Table, type ReportDocument, type ReportMeta } from "../reports/kit-ui";
+import { CourseCriteria, ReportShell, StatGrid, Table, registerReportFonts, type ReportDocument, type ReportMeta } from "../reports/kit-ui";
+import { dateLabel, generatedStamp } from "../reports/view";
 import { CASE_CRITERIA, caseLevelLabel } from "../case-rubric";
 import { ChecklistSheet } from "../reports/checklist-sheet";
 import { buildSheetSkills } from "../reports/checklist-grades";
@@ -16,13 +17,10 @@ import { scoreDescriptor } from "../task-ratings";
 import type { DemoCaseGroup } from "./fixtures/teaching";
 import type { DemoContext } from "./router";
 import { caseAverage, mean, quizAverage, submittedAttempts } from "./handlers/derive";
-import { sectionName, teamLabel as teamLabelUi, userById, visibleSections, visibleStudents } from "./handlers/scope";
+import { sectionName, teamLabel, userById, visibleSections, visibleStudents } from "./handlers/scope";
 import { DEMO_INSTITUTION } from "./fixtures/school";
 import { demoStudentStandings } from "./handlers/courses";
 import { roleLabel } from "../role-labels";
-
-/** The PDF's built-in Helvetica has no middle dot, so labels use an en dash. */
-const teamLabel: typeof teamLabelUi = (db, id) => teamLabelUi(db, id)?.replace(" – ", " – ") ?? null;
 
 /**
  * The demo's PDF reports: the same letterhead, tiles and tables as the real
@@ -38,7 +36,7 @@ const section = { fontSize: 12, fontWeight: 700, marginTop: 16, marginBottom: 6 
 const note = { fontSize: 8, color: "#6b7280", marginTop: 6 } as const;
 
 const pct = (v: number | null) => (v == null ? "—" : `${Math.round(v)}%`);
-const date = (v: string | null) => (v ? new Date(v).toLocaleDateString("en-PH", { dateStyle: "medium" }) : "—");
+const date = dateLabel;
 /** When it was handed in, flagged when that was past its deadline. */
 const submitted = (a: { submitted_at: string | null; deadline: string | null }) =>
   a.submitted_at ? `${date(a.submitted_at)}${a.deadline && Date.parse(a.submitted_at) > Date.parse(a.deadline) ? " (late)" : ""}` : "—";
@@ -47,7 +45,7 @@ function meta(ctx: Ctx): ReportMeta {
   return {
     campus: DEMO_INSTITUTION,
     generatedBy: ctx.viewer.name,
-    generatedAt: new Date().toLocaleString("en-PH", { dateStyle: "long", timeStyle: "short" }),
+    generatedAt: generatedStamp(new Date()),
   };
 }
 
@@ -511,7 +509,7 @@ function dischargeReport(ctx: Ctx, id: string): Built {
         { label: "Patient", value: patient?.name ?? "—" },
         { label: "Diagnosis", value: d.diagnosis },
         { label: "Stay", value: `${date(d.admitted_at)} – ${date(d.discharged_at)}` },
-        { label: "Room", value: d.room_label.replace(" · ", " – ") },
+        { label: "Room", value: d.room_label },
       ]}>
         <StatGrid items={[
           { label: "Vital readings", value: d.vitals_digest.readings ?? 0 },
@@ -632,11 +630,34 @@ const BUILDERS: Record<string, (ctx: Ctx, id: string) => Built> = {
   summary: (ctx) => summaryReport(ctx),
 };
 
+/**
+ * The report fonts, fetched from /fonts the way the server reads them from
+ * disk. Registered once, after a HEAD check on one file: if the files aren't
+ * served the reports stay on Helvetica rather than fail to render.
+ */
+let fontsReady: Promise<void> | null = null;
+function ensureFonts(): Promise<void> {
+  fontsReady ??= (async () => {
+    let served = false;
+    try {
+      served = (await fetch("/fonts/SourceSans3_400Regular.ttf", { method: "HEAD" })).ok;
+    } catch {
+      // Offline or blocked: Helvetica.
+    }
+    registerReportFonts((file) => {
+      if (!served) throw new Error("Report fonts are not served");
+      return `/fonts/${file}`;
+    });
+  })();
+  return fontsReady;
+}
+
 export async function buildDemoReport(ctx: Ctx, type: string, id: string): Promise<{ response: Response; subject?: string }> {
   const build = BUILDERS[type];
   if (!build) return { response: Response.json({ error: `Unknown report type "${type}"` }, { status: 404 }) };
   const result = build(ctx, id);
   if ("error" in result) return { response: Response.json({ error: result.error }, { status: result.status }) };
+  await ensureFonts();
   const blob = await pdf(result.doc).toBlob();
   const slug = result.subject.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   return {

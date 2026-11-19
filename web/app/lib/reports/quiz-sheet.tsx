@@ -4,6 +4,7 @@
  * server-only code, so the demo lays out the same tables in the browser.
  */
 import { Text, View } from '@react-pdf/renderer';
+import { TONE } from './bands';
 import { TEAL, styles } from './kit-ui';
 
 export interface QuizAnswerRow {
@@ -19,8 +20,8 @@ export interface QuizAnswerRow {
 
 const CRITERION = { fontSize: 6.5, color: '#9ca3af', marginTop: 1 } as const;
 
-const GREEN = '#047857';
-const RED = '#b91c1c';
+const GREEN = TONE.pass;
+const RED = TONE.low;
 const GRAY = '#9ca3af';
 
 const verdict = (ok: boolean | null) => (ok === null ? 'Blank' : ok ? 'Correct' : 'Wrong');
@@ -46,7 +47,7 @@ export function QuizAnswers({ rows, emptyText = 'No answers were recorded for th
             {r.criterion ? <Text style={CRITERION}>{r.criterion}</Text> : null}
           </View>
           <Text style={[cell, { flex: 2.6, color: r.ok === false ? RED : '#1f2937' }]}>{r.chosen ?? '—'}</Text>
-          <Text style={[cell, { flex: 0.9, textAlign: 'center', fontFamily: 'Helvetica-Bold', color: verdictColor(r.ok) }]}>
+          <Text style={[cell, { flex: 0.9, textAlign: 'center', fontWeight: 700, color: verdictColor(r.ok) }]}>
             {verdict(r.ok)}
           </Text>
         </View>
@@ -93,12 +94,12 @@ export function QuizMatrix({ columns, rows }: { columns: QuizMatrixColumn[]; row
         ))}
       </View>
       <View style={[styles.row, { backgroundColor: '#e8f1f3', borderBottomColor: TEAL }]} wrap={false}>
-        <Text style={{ flex: questionFlex, paddingHorizontal: 4, fontSize: font, fontFamily: 'Helvetica-Bold', color: TEAL }}>
+        <Text style={{ flex: questionFlex, paddingHorizontal: 4, fontSize: font, fontWeight: 700, color: TEAL }}>
           Grade · correct
         </Text>
         {columns.map((c, i) => (
           <View key={i} style={{ flex: 1, paddingHorizontal: 2 }}>
-            <Text style={[text, { fontFamily: 'Helvetica-Bold', color: TEAL }]}>{c.score}</Text>
+            <Text style={[text, { fontWeight: 700, color: TEAL }]}>{c.score}</Text>
             <Text style={[text, { fontSize: 6.5, color: '#6b7280' }]}>{c.correct}</Text>
           </View>
         ))}

@@ -1,13 +1,14 @@
-import { readFileSync } from 'node:fs';
+import { accessSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { renderToBuffer } from '@react-pdf/renderer';
 import { NextResponse } from 'next/server';
 import type { ComponentProps } from 'react';
-import { ReportShell as ReportShellUI, type ReportDocument } from './kit-ui';
+import { ReportShell as ReportShellUI, registerReportFonts, type ReportDocument } from './kit-ui';
 
 export {
   TEAL,
   styles,
+  reportFonts,
   scoreColor,
   CourseCriteria,
   StatGrid,
@@ -31,6 +32,18 @@ const LOGO: Buffer | null = (() => {
     return null;
   }
 })();
+
+/**
+ * The report fonts (public/fonts), registered once per server instance. They
+ * are shipped to the report routes like the logo. A missing file is caught
+ * here, because a font that fails to load later would stop the PDF from
+ * rendering at all; the reports then stay on Helvetica.
+ */
+registerReportFonts((file) => {
+  const fontPath = path.join(process.cwd(), 'public', 'fonts', file);
+  accessSync(fontPath);
+  return fontPath;
+});
 
 /** Letterhead, meta block and footer shared by every report type, with the server's logo. */
 export function ReportShell(props: Omit<ComponentProps<typeof ReportShellUI>, 'logo'>) {

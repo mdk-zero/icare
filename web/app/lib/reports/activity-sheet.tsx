@@ -102,10 +102,12 @@ export function ActivityTable({
                 <View key={c?.key ?? `pad-${i}`} style={{ flex: 1, paddingHorizontal: 2 }}>
                   {c && (
                     <>
-                      <Text style={{ fontSize: font, textAlign: 'center', maxLines: 2, textOverflow: 'ellipsis' }}>
+                      {/* Wraps rather than truncating: textkit squeezes the spaces out of a
+                          bold line it cuts with an ellipsis ("AFullSetofVital…"). */}
+                      <Text style={{ fontSize: font, textAlign: 'center' }}>
                         {c.title}
                       </Text>
-                      <Text style={{ fontSize: 6, color: TEAL, textAlign: 'center', fontFamily: 'Helvetica' }}>
+                      <Text style={{ fontSize: 6, color: TEAL, textAlign: 'center' }}>
                         {ACTIVITY_KIND_LABEL[c.kind]}
                       </Text>
                     </>
@@ -119,7 +121,7 @@ export function ActivityTable({
                 <View key={m.name} style={styles.row} wrap={false}>
                   <Text style={{ flex: 2.2, paddingHorizontal: 4, fontSize: font + 0.5 }}>{m.name}</Text>
                   {s === 0 && (
-                    <Text style={[cell, { flex: 0.9, fontFamily: 'Helvetica-Bold', fontSize: font + 0.5 }]}>
+                    <Text style={[cell, { flex: 0.9, fontWeight: 700, fontSize: font + 0.5 }]}>
                       {memberAverage(m.entries) === null ? '—' : `${memberAverage(m.entries)}%`}
                     </Text>
                   )}

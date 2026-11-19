@@ -72,8 +72,13 @@ appear under Recent), the folder route when it opens as a folder, and `buildDemo
   `web/app/lib/auth/live-user.ts`) and fall back as the plan says.
 
 **PDF details**
-- The built-in Helvetica draws plain Latin text only. No emoji, check marks or icon fonts; the
-  demo uses an en dash where the UI shows a middle dot. Test any symbol you add.
+- Reports set in Source Sans 3 (body, tables) and Space Grotesk (titles, tile values) from
+  `web/public/fonts/`, registered by `registerReportFonts` in `kit-ui.tsx`: by file path on the
+  server (`kit.tsx`), by `/fonts/` URL in the demo. A missing file falls back to built-in
+  Helvetica, which lacks ≥ and ≤, so never use those two in copy ("75% and up", "below 50%").
+  Style objects never name a font family; take it from `reportFonts` at render time and set
+  weight with `fontWeight`. Pages are US Letter. No emoji, check marks or icon fonts. Test any
+  symbol you add.
 - Keep the kit's text sizes. Long names wrap inside their cell; wide tables use the plan's
   orientation. Rows that must stay together use `wrap={false}`; headings use `minPresenceAhead`
   so a heading never ends a page alone.

@@ -9,14 +9,10 @@ import { scoreDescriptor } from '../task-ratings';
 import { ofKind, scenarioKinds } from '../scenario-kind';
 import { readMatching } from '../fetch-all';
 import { quizGrade } from '../quiz-attempts';
+import { dateLabel } from './view';
+export { PASSING_SCORE, NEEDS_PRACTICE_BELOW } from './bands';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
-
-/** The College's passing mark for Skill Assessments (see migration 015). */
-export const PASSING_SCORE = 75;
-
-/** Scenario grades below this read "Needs Practice" (task-ratings bands). */
-export const NEEDS_PRACTICE_BELOW = 50;
 
 export function avg(values: number[]): number | null {
   if (values.length === 0) return null;
@@ -43,7 +39,7 @@ export function plural(n: number, one: string, many = `${one}s`): string {
 }
 
 export function date(value: string | null): string {
-  return value ? new Date(value).toLocaleDateString('en-PH', { dateStyle: 'medium' }) : '—';
+  return dateLabel(value);
 }
 
 export function isLate(submittedAt: string | null, deadline: string | null): boolean {

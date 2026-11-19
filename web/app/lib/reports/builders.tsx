@@ -288,7 +288,7 @@ export async function buildStudentReport(
               ) : (
                 own.map((t) => (
                   <View key={t.title} wrap={false} style={{ marginBottom: 4 }}>
-                    <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, marginTop: 4, marginBottom: 2 }}>{t.title}</Text>
+                    <Text style={{ fontWeight: 700, fontSize: 9, marginTop: 4, marginBottom: 2 }}>{t.title}</Text>
                     <Table
                       head={t.head}
                       widths={t.widths ?? (t.cols ? [3, 1.6, 2.1] : [3, 1.3, 1.3, 1.9])}
@@ -436,7 +436,7 @@ export async function buildSectionReport(
             members={g.members}
             heading={
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4, marginBottom: 3 }}>
-                <Text style={{ fontFamily: 'Helvetica-Bold', color: TEAL }}>{g.name}</Text>
+                <Text style={{ fontWeight: 700, color: TEAL }}>{g.name}</Text>
                 <Text style={{ fontSize: 8, color: '#6b7280' }}>{plural(g.members.length, 'member')}</Text>
               </View>
             }
@@ -750,7 +750,7 @@ export async function buildAssessmentReport(
                   styles.cell,
                   {
                     flex: 0.6,
-                    fontFamily: 'Helvetica-Bold',
+                    fontWeight: 700,
                     color: c.score === null ? '#9ca3af' : scoreColor(c.score),
                   },
                 ]}
@@ -786,7 +786,7 @@ export async function buildAssessmentReport(
                   style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, marginBottom: 3 }}
                   wrap={false}
                 >
-                  <Text style={{ fontFamily: 'Helvetica-Bold', color: TEAL }}>{group || 'Students not in a group'}</Text>
+                  <Text style={{ fontWeight: 700, color: TEAL }}>{group || 'Students not in a group'}</Text>
                   <Text style={{ fontSize: 8, color: '#6b7280' }}>{summaryLine(members)}</Text>
                 </View>
                 <Table

@@ -5,6 +5,7 @@
  */
 import {
   Document,
+  Font,
   Image,
   Page,
   Text,
@@ -14,6 +15,7 @@ import {
 } from '@react-pdf/renderer';
 import type { ReactElement, ReactNode } from 'react';
 import { formatGrade, type CourseStanding } from '../course-grading';
+import { scoreColor as bandColor } from './bands';
 
 /** What renderToBuffer accepts: a <Document> root, not any element. */
 export type ReportDocument = ReactElement<DocumentProps>;
@@ -21,11 +23,57 @@ export type ReportDocument = ReactElement<DocumentProps>;
 export const TEAL = '#1B6B7B';
 
 /**
+ * The families the reports draw in. They read Helvetica, the PDF's built-in
+ * face, until registerReportFonts succeeds, so a font file that is missing
+ * never stops a report. Styles read these at render time, not when the module
+ * loads, because the demo registers the files only after checking for them.
+ * Helvetica has no glyph for the "at least" and "at most" signs (they come out
+ * as other letters), so no report copy uses them, whichever font is live.
+ */
+export const reportFonts = { body: 'Helvetica', display: 'Helvetica', semibold: 700, custom: false };
+
+const SOURCE_SANS = 'Source Sans 3';
+const SPACE_GROTESK = 'Space Grotesk';
+
+/**
+ * Registers Source Sans 3 (400, 600, 700) for text and tables, and Space
+ * Grotesk (700) for titles and tile values. Source Sans has the same width
+ * for every digit, so a column of scores lines up, which react-pdf could not
+ * switch on in a font that has proportional digits. `resolve` turns a file
+ * name into a path (the server) or a URL (the demo); if it throws, the
+ * reports stay on Helvetica. Returns whether the fonts are live.
+ */
+export function registerReportFonts(resolve: (file: string) => string): boolean {
+  // Long words in a narrow cell wrap whole rather than breaking mid-word, whichever font is live.
+  Font.registerHyphenationCallback((word) => [word]);
+  if (reportFonts.custom) return true;
+  try {
+    const sans = [
+      { src: resolve('SourceSans3_400Regular.ttf'), fontWeight: 400 },
+      { src: resolve('SourceSans3_600SemiBold.ttf'), fontWeight: 600 },
+      { src: resolve('SourceSans3_700Bold.ttf'), fontWeight: 700 },
+    ];
+    const display = [{ src: resolve('SpaceGrotesk_700Bold.ttf'), fontWeight: 700 }];
+    Font.register({ family: SOURCE_SANS, fonts: sans });
+    Font.register({ family: SPACE_GROTESK, fonts: display });
+  } catch (err) {
+    console.error('Report fonts not available; PDFs will use Helvetica', err);
+    return false;
+  }
+  reportFonts.body = SOURCE_SANS;
+  reportFonts.display = SPACE_GROTESK;
+  reportFonts.semibold = 600;
+  reportFonts.custom = true;
+  return true;
+}
+
+/**
  * Shared look for every generated report. Kept in one place so a new report
  * type inherits the letterhead, table and stat styling rather than restating it.
  */
 export const styles = StyleSheet.create({
-  page: { padding: 40, fontSize: 10, fontFamily: 'Helvetica', color: '#1f2937' },
+  // The font family is set on the Page at render time (see reportFonts), and text inherits it.
+  page: { padding: 40, fontSize: 10, color: '#1f2937' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -39,11 +87,21 @@ export const styles = StyleSheet.create({
   headerText: { flex: 1 },
   // The PNG is 602×200; keep that ratio.
   logo: { width: 108, height: 36 },
-  brand: { fontSize: 18, fontFamily: 'Helvetica-Bold', color: TEAL },
+  brand: {
+    fontSize: 18,
+    get fontFamily() {
+      return reportFonts.display;
+    },
+    fontWeight: 700,
+    color: TEAL,
+  },
   subtitle: { fontSize: 9, color: '#6b7280', marginTop: 2 },
   sectionTitle: {
     fontSize: 12,
-    fontFamily: 'Helvetica-Bold',
+    get fontFamily() {
+      return reportFonts.display;
+    },
+    fontWeight: 700,
     color: TEAL,
     marginTop: 14,
     marginBottom: 6,
@@ -58,7 +116,7 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
   },
-  headRow: { backgroundColor: '#f3f4f6', fontFamily: 'Helvetica-Bold' },
+  headRow: { backgroundColor: '#f3f4f6', fontWeight: 700 },
   cellWide: { flex: 3, paddingHorizontal: 4 },
   cell: { flex: 1, paddingHorizontal: 4, textAlign: 'right' },
   barTrack: { flex: 2, height: 6, backgroundColor: '#e5e7eb', borderRadius: 3, marginHorizontal: 4 },
@@ -71,10 +129,17 @@ export const styles = StyleSheet.create({
     padding: 8,
     alignItems: 'center',
   },
-  statValue: { fontSize: 14, fontFamily: 'Helvetica-Bold', color: TEAL },
+  statValue: {
+    fontSize: 14,
+    get fontFamily() {
+      return reportFonts.display;
+    },
+    fontWeight: 700,
+    color: TEAL,
+  },
   statLabel: { fontSize: 8, color: '#6b7280', marginTop: 2, textAlign: 'center' },
   empty: { color: '#9ca3af', fontSize: 9, paddingVertical: 6 },
-  courseTitle: { fontFamily: 'Helvetica-Bold', marginTop: 10 },
+  courseTitle: { fontWeight: 700, marginTop: 10 },
   courseSub: { fontSize: 8, color: '#6b7280', marginTop: 1, marginBottom: 4 },
   courseGrade: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, paddingHorizontal: 4 },
   note: { fontSize: 8, color: '#6b7280', marginTop: 6 },
@@ -92,10 +157,9 @@ export const styles = StyleSheet.create({
   },
 });
 
+/** The band colour of a score: the shared 75 and 50 cut-offs (bands.ts). */
 export function scoreColor(score: number): string {
-  if (score >= 80) return '#059669';
-  if (score >= 60) return '#d97706';
-  return '#dc2626';
+  return bandColor(score);
 }
 
 export interface ReportMeta {
@@ -127,8 +191,8 @@ export function ReportShell({
   children: ReactNode;
 }) {
   return (
-    <Document title={title}>
-      <Page size="A4" orientation={orientation} style={styles.page} wrap>
+    <Document title={title} language="en-PH" creator="iCARE++" producer="iCARE++">
+      <Page size="LETTER" orientation={orientation} style={[styles.page, { fontFamily: reportFonts.body }]} wrap>
         <View style={styles.header}>
           <View style={styles.headerText}>
             <Text style={styles.brand}>{heading}</Text>
@@ -274,11 +338,11 @@ export function CourseCriteria({ courses }: { courses: CourseCriteriaEntry[] }) 
             />
             {standing.criteria.length > 0 && (
               <View style={styles.courseGrade}>
-                <Text style={{ fontFamily: 'Helvetica-Bold' }}>
+                <Text style={{ fontWeight: 700 }}>
                   Course grade{partial && standing.grade !== null ? ' so far' : ''}{' '}
-                  <Text style={{ fontFamily: 'Helvetica', fontSize: 8, color: '#6b7280' }}>({detail})</Text>
+                  <Text style={{ fontWeight: 400, fontSize: 8, color: '#6b7280' }}>({detail})</Text>
                 </Text>
-                <Text style={{ fontFamily: 'Helvetica-Bold' }}>{standing.invalid ? '—' : gradeText(standing.grade)}</Text>
+                <Text style={{ fontWeight: 700 }}>{standing.invalid ? '—' : gradeText(standing.grade)}</Text>
               </View>
             )}
           </View>

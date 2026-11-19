@@ -6,6 +6,7 @@ import { deanInstitution, ownsRow, viewerDeanId } from '@/app/lib/dean-scope';
 import { logAudit } from '@/app/lib/audit';
 import { renderReport, reportResponse, type ReportMeta } from '@/app/lib/reports/kit';
 import { slugify } from '@/app/lib/reports/data';
+import { generatedStamp } from '@/app/lib/reports/view';
 import { parseTarget } from '@/app/lib/reports/targets';
 import { getFacultySectionIds, isStudentInFacultySections } from '@/app/lib/roster';
 import {
@@ -81,7 +82,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const meta: ReportMeta = {
       campus: campus?.name ?? 'Batangas State University - The NEU ARASOF Nasugbu',
       generatedBy: faculty?.name ?? session.email,
-      generatedAt: new Date().toLocaleString('en-PH', { dateStyle: 'long', timeStyle: 'short' }),
+      generatedAt: generatedStamp(new Date()),
     };
 
     // Faculty reports name only the members of the groups they supervise.

@@ -7,6 +7,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { renderReport, reportResponse, type ReportMeta } from '@/app/lib/reports/kit';
 import { slugify } from '@/app/lib/reports/data';
+import { generatedStamp } from '@/app/lib/reports/view';
 import {
   ADMIN_REPORT_NEEDS_TARGET,
   buildAdminFacultyReport,
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const meta: ReportMeta = {
       campus: campus?.name ?? 'Batangas State University - The NEU ARASOF Nasugbu',
       generatedBy: admin?.name ?? session.email,
-      generatedAt: new Date().toLocaleString('en-PH', { dateStyle: 'long', timeStyle: 'short' }),
+      generatedAt: generatedStamp(new Date()),
       deanLabel: roleLabel('admin', await adminTitleOf(supabase, session.uid)),
     };
 

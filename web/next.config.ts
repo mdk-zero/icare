@@ -64,9 +64,10 @@ const nextConfig: NextConfig = {
   // pdf.js directly, so it is kept out of the bundle the same way.
   serverExternalPackages: ["pdf-parse", "pdfjs-dist"],
   outputFileTracingIncludes: {
-    // The PDF letterhead reads the logo from disk (app/lib/reports/kit.tsx).
-    "/api/faculty/reports/*": ["./public/logo-no-bg.png"],
-    "/api/admin/reports/*": ["./public/logo-no-bg.png"],
+    // The PDF letterhead reads the logo, and the report text its fonts, from
+    // disk (app/lib/reports/kit.tsx).
+    "/api/faculty/reports/*": ["./public/logo-no-bg.png", "./public/fonts/*"],
+    "/api/admin/reports/*": ["./public/logo-no-bg.png", "./public/fonts/*"],
     "/api/faculty/scenarios/analyze-lesson": [
       "./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
     ],

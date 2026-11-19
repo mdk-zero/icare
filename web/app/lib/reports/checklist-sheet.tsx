@@ -8,6 +8,7 @@
  */
 import { Text, View } from '@react-pdf/renderer';
 import { MAX_RATING_POINTS, NOT_APPLICABLE, TASK_RATINGS, ratingLabel, ratingPoints, type ChecklistRating } from '../task-ratings';
+import { LEVEL_COLOR } from './bands';
 import { TEAL, styles } from './kit-ui';
 
 export type SheetGrade = ChecklistRating | null;
@@ -45,14 +46,7 @@ export function skillPoints(grades: readonly SheetGrade[]): { earned: number; ma
 export const stepLetter = (i: number): string =>
   (i >= 26 ? stepLetter(Math.floor(i / 26) - 1) : '') + String.fromCharCode(97 + (i % 26));
 
-const GRADE_COLOR: Record<string, string> = {
-  excellent: '#047857',
-  satisfactory: '#b45309',
-  needs_practice: '#b91c1c',
-  [NOT_APPLICABLE]: '#6b7280',
-};
-
-const gradeColor = (grade: SheetGrade) => (grade === null ? '#9ca3af' : (GRADE_COLOR[grade] ?? '#1f2937'));
+const gradeColor = (grade: SheetGrade) => (grade === null ? '#9ca3af' : (LEVEL_COLOR[grade] ?? '#1f2937'));
 const pointsText = (p: { earned: number; max: number } | null) => (p ? `${p.earned}/${p.max}` : '—');
 const percent = (p: { earned: number; max: number } | null) => (p ? `${Math.round((p.earned / p.max) * 100)}%` : '');
 
@@ -91,7 +85,7 @@ function GradingGrid({ skills }: { skills: SheetSkill[] }) {
         {TASK_RATINGS.map((l) => (
           <View key={l.key} style={level}>
             <Text style={head}>{l.label}</Text>
-            <Text style={[head, { fontSize: 6.5, color: '#6b7280', fontFamily: 'Helvetica' }]}>{l.points} pts</Text>
+            <Text style={[head, { fontSize: 6.5, color: '#6b7280' }]}>{l.points} pts</Text>
           </View>
         ))}
         <Text style={[head, { flex: 0.9, paddingHorizontal: 2 }]}>Points</Text>
@@ -102,10 +96,10 @@ function GradingGrid({ skills }: { skills: SheetSkill[] }) {
           <View style={[styles.row, { backgroundColor: '#e8f1f3', borderBottomColor: TEAL }]} wrap={false} minPresenceAhead={40}>
             <View style={{ flex: 5, flexDirection: 'row', paddingHorizontal: 4 }}>
               <Text style={{ width: 16, fontSize: 8, color: '#6b7280' }}>{skillNo(s)}</Text>
-              <Text style={{ flex: 1, fontFamily: 'Helvetica-Bold', color: TEAL, fontSize: 9 }}>{skill.title}</Text>
+              <Text style={{ flex: 1, fontWeight: 700, color: TEAL, fontSize: 9 }}>{skill.title}</Text>
             </View>
             <View style={{ flex: TASK_RATINGS.length * 1.1 + 0.9, paddingHorizontal: 2 }}>
-              <Text style={{ textAlign: 'right', fontFamily: 'Helvetica-Bold', fontSize: 9, color: gradeColor(skill.levels[0]) }}>
+              <Text style={{ textAlign: 'right', fontWeight: 700, fontSize: 9, color: gradeColor(skill.levels[0]) }}>
                 {pointsText(skill.points[0])}
                 {skill.points[0] ? `  ${percent(skill.points[0])}` : ''}
               </Text>
@@ -160,11 +154,11 @@ function MemberGrid({ columns, skills }: { columns: string[]; skills: SheetSkill
           <View style={[styles.row, { backgroundColor: '#e8f1f3', borderBottomColor: TEAL }]} wrap={false} minPresenceAhead={40}>
             <View style={{ flex: stepFlex, flexDirection: 'row', paddingHorizontal: 4 }}>
               <Text style={{ width: 14, fontSize: font, color: '#6b7280' }}>{skillNo(s)}</Text>
-              <Text style={{ flex: 1, fontFamily: 'Helvetica-Bold', color: TEAL, fontSize: font + 0.5 }}>{skill.title}</Text>
+              <Text style={{ flex: 1, fontWeight: 700, color: TEAL, fontSize: font + 0.5 }}>{skill.title}</Text>
             </View>
             {skill.levels.map((lv, i) => (
               <View key={i} style={{ flex: 1, paddingHorizontal: 2 }}>
-                <Text style={[text, { fontFamily: 'Helvetica-Bold', color: gradeColor(lv) }]}>
+                <Text style={[text, { fontWeight: 700, color: gradeColor(lv) }]}>
                   {lv === null ? '—' : ratingLabel(lv)}
                 </Text>
                 {skill.points[i] ? (
