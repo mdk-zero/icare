@@ -15,12 +15,26 @@ import {
 } from '@react-pdf/renderer';
 import type { ReactElement, ReactNode } from 'react';
 import { formatGrade, type CourseStanding } from '../course-grading';
-import { scoreColor as bandColor } from './bands';
+import { scoreDescriptor } from '../task-ratings';
+import { TINT, TONE, scoreColor as bandColor } from './bands';
 
 /** What renderToBuffer accepts: a <Document> root, not any element. */
 export type ReportDocument = ReactElement<DocumentProps>;
 
 export const TEAL = '#1B6B7B';
+/** The running header and the headings that sit on a teal tint. */
+export const TEAL_DARK = '#145a63';
+/** The portal's Brand-100 and Brand-50: a skill bar's fill, and a tile that carries the headline figure. */
+export const BRAND_100 = '#d9eff2';
+export const BRAND_50 = '#f0f9fa';
+export const INK = '#1f2937';
+export const MUTED = '#4b5563';
+/** The lightest gray allowed for text that matters. */
+export const FAINT = '#6b7280';
+/** A table header's fill. */
+export const SUBTLE = '#f7fafb';
+export const HAIRLINE = '#e6edef';
+export const TILE_BORDER = '#d9e4e7';
 
 /**
  * The families the reports draw in. They read Helvetica, the PDF's built-in
@@ -68,93 +82,201 @@ export function registerReportFonts(resolve: (file: string) => string): boolean 
 }
 
 /**
+ * The page the report being drawn sits on. ReportShell sets it as it renders,
+ * before any of its children do, so a tile grid can pick its default column
+ * count for the paper it is on. A module value rather than React context,
+ * because the server builds these documents in the react-server layer, where
+ * createContext is not available. react-pdf draws one document at a time,
+ * synchronously, so two reports never read each other's.
+ */
+const layout = { landscape: false };
+
+function setPaper(orientation: 'portrait' | 'landscape') {
+  layout.landscape = orientation === 'landscape';
+}
+
+/**
  * Shared look for every generated report. Kept in one place so a new report
  * type inherits the letterhead, table and stat styling rather than restating it.
  */
 export const styles = StyleSheet.create({
   // The font family is set on the Page at render time (see reportFonts), and text inherits it.
-  page: { padding: 40, fontSize: 10, color: '#1f2937' },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 12,
+  // US Letter. The top and bottom leave room for the running header and the footer, which are
+  // absolutely placed; the first page's letterhead is pulled up into the top margin.
+  page: { paddingTop: 56, paddingBottom: 58, paddingHorizontal: 40, fontSize: 10, color: INK },
+
+  // Letterhead
+  letterhead: {
+    marginTop: -18,
+    marginBottom: 12,
+    paddingBottom: 9,
     borderBottomWidth: 2,
     borderBottomColor: TEAL,
-    paddingBottom: 10,
-    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  headerText: { flex: 1 },
+  letterheadText: { flex: 1 },
+  title: {
+    fontSize: 22,
+    get fontFamily() {
+      return reportFonts.display;
+    },
+    fontWeight: 700,
+    color: TEAL,
+  },
+  subject: {
+    fontSize: 13,
+    get fontWeight() {
+      return reportFonts.semibold;
+    },
+    color: INK,
+    marginTop: 2,
+  },
+  institution: { fontSize: 8.5, color: MUTED, marginTop: 3 },
   // The PNG is 602×200; keep that ratio.
   logo: { width: 108, height: 36 },
-  brand: {
-    fontSize: 18,
+
+  // Meta block
+  metaBlock: { flexDirection: 'row', marginBottom: 10 },
+  metaColumn: { flex: 1 },
+  metaRow: { flexDirection: 'row', marginBottom: 2 },
+  metaLabel: { width: 92, fontSize: 8.5, color: MUTED, paddingTop: 1 },
+  metaValue: { flex: 1 },
+
+  // Running header and footer
+  runningWrap: { position: 'absolute', top: 24, left: 40, right: 40 },
+  running: { borderBottomWidth: 0.75, borderBottomColor: HAIRLINE, paddingBottom: 4 },
+  runningText: { fontSize: 8, color: TEAL_DARK },
+  runningBrand: {
+    fontSize: 8.5,
     get fontFamily() {
       return reportFonts.display;
     },
     fontWeight: 700,
     color: TEAL,
   },
-  subtitle: { fontSize: 9, color: '#6b7280', marginTop: 2 },
+  footer: {
+    position: 'absolute',
+    bottom: 22,
+    left: 40,
+    right: 40,
+    borderTopWidth: 0.75,
+    borderTopColor: HAIRLINE,
+    paddingTop: 4,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    fontSize: 7.5,
+    color: MUTED,
+  },
+  footerText: { flex: 1 },
+  footerPage: { marginLeft: 12 },
+  footerCopy: {
+    get fontWeight() {
+      return reportFonts.semibold;
+    },
+    marginTop: 1,
+  },
+
+  // Section headings, notes and empty states
+  sectionHead: { marginTop: 14, marginBottom: 6 },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 13,
     get fontFamily() {
       return reportFonts.display;
     },
     fontWeight: 700,
     color: TEAL,
-    marginTop: 14,
-    marginBottom: 6,
   },
-  metaRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
-  metaLabel: { color: '#6b7280' },
+  sectionCaption: { fontSize: 8, color: MUTED, marginTop: 2 },
+  note: { fontSize: 8, color: MUTED, marginTop: 6 },
+  empty: { color: FAINT, fontSize: 9, paddingVertical: 6 },
+
+  // Tiles
+  tiles: { flexDirection: 'row', flexWrap: 'wrap', marginRight: -8 },
+  tileCell: { paddingRight: 8, paddingBottom: 8 },
+  tile: {
+    flexGrow: 1,
+    backgroundColor: SUBTLE,
+    borderWidth: 1,
+    borderColor: TILE_BORDER,
+    borderRadius: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 9,
+  },
+  tileEmphasis: { backgroundColor: BRAND_50, borderColor: BRAND_100 },
+  tileLabel: { fontSize: 7.5, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: 0.3 },
+  tileValue: {
+    fontSize: 20,
+    marginTop: 3,
+    get fontFamily() {
+      return reportFonts.display;
+    },
+    fontWeight: 700,
+    color: INK,
+  },
+  tileCaption: { fontSize: 8, color: MUTED, marginTop: 2 },
+
+  // Callouts
+  attention: {
+    marginTop: 2,
+    marginBottom: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 9,
+    borderWidth: 1,
+    borderLeftWidth: 3,
+    borderRadius: 3,
+  },
+
+  // Table
+  table: {},
+  tableHead: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    backgroundColor: SUBTLE,
+    borderBottomWidth: 1,
+    borderBottomColor: TEAL,
+    paddingVertical: 5,
+    paddingLeft: 6,
+    paddingRight: 2,
+  },
+  tableHeadLabel: {
+    fontSize: 8.5,
+    get fontWeight() {
+      return reportFonts.semibold;
+    },
+    color: MUTED,
+  },
+  tableHeadSub: { fontSize: 7.5, color: MUTED, marginTop: 1 },
+  tableRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderBottomWidth: 0.75,
+    borderBottomColor: HAIRLINE,
+    paddingVertical: 5,
+    paddingLeft: 6,
+    paddingRight: 2,
+  },
+  tableCell: { paddingHorizontal: 6 },
+  tableText: { fontSize: 9.5 },
+  scoreSlot: { width: 30, textAlign: 'right', fontSize: 9.5, fontWeight: 700 },
+  scoreWord: { flex: 1, fontSize: 9, color: MUTED, marginLeft: 5 },
+
+  // Legacy: the sheets (checklist, activity, quiz) and the builders' own bars still draw with these.
   row: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: HAIRLINE,
     paddingVertical: 4,
     alignItems: 'center',
     overflow: 'hidden',
   },
-  headRow: { backgroundColor: '#f3f4f6', fontWeight: 700 },
+  headRow: { backgroundColor: SUBTLE, fontWeight: 700 },
   cellWide: { flex: 3, paddingHorizontal: 4 },
   cell: { flex: 1, paddingHorizontal: 4, textAlign: 'right' },
-  barTrack: { flex: 2, height: 6, backgroundColor: '#e5e7eb', borderRadius: 3, marginHorizontal: 4 },
-  statGrid: { flexDirection: 'row', gap: 8 },
-  statBox: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 4,
-    padding: 8,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 14,
-    get fontFamily() {
-      return reportFonts.display;
-    },
-    fontWeight: 700,
-    color: TEAL,
-  },
-  statLabel: { fontSize: 8, color: '#6b7280', marginTop: 2, textAlign: 'center' },
-  empty: { color: '#9ca3af', fontSize: 9, paddingVertical: 6 },
+  barTrack: { flex: 2, height: 6, backgroundColor: HAIRLINE, borderRadius: 3, marginHorizontal: 4 },
   courseTitle: { fontWeight: 700, marginTop: 10 },
-  courseSub: { fontSize: 8, color: '#6b7280', marginTop: 1, marginBottom: 4 },
-  courseGrade: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, paddingHorizontal: 4 },
-  note: { fontSize: 8, color: '#6b7280', marginTop: 6 },
-  footer: {
-    position: 'absolute',
-    bottom: 24,
-    left: 40,
-    right: 40,
-    fontSize: 8,
-    color: '#9ca3af',
-    textAlign: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    paddingTop: 6,
-  },
+  courseSub: { fontSize: 8, color: FAINT, marginTop: 1, marginBottom: 4 },
 });
 
 /** The band colour of a score: the shared 75 and 50 cut-offs (bands.ts). */
@@ -170,122 +292,398 @@ export interface ReportMeta {
   deanLabel?: string;
 }
 
-/** Letterhead, meta block and footer shared by every report type. */
+/** Said in the footer of a report that lists each member's grades beside the others'. */
+const INSTRUCTOR_COPY = "Instructor copy: lists each member's grades side by side. Not for the group.";
+
+/**
+ * Letterhead, meta block, running header and footer shared by every report
+ * type. Page 1 opens with the letterhead; later pages open with a one-line
+ * running header that names the report, so a loose sheet can be placed. The
+ * footer on every page says who made the report and when, and numbers it.
+ */
 export function ReportShell({
   title,
-  heading,
+  subject,
+  runningLabel,
   meta,
   metaRows,
   logo,
   orientation = 'portrait',
+  audience,
   children,
 }: {
+  /** The report's name: "Student Progress Report". */
   title: string;
-  heading: string;
+  /** The one line that says who or what it is about: a student, a section, a Patient Case. */
+  subject: string;
+  /** What the running header says after the title; the subject unless a shorter or fuller label reads better. */
+  runningLabel?: string;
   meta: ReportMeta;
   metaRows: { label: string; value: string }[];
   /** The letterhead wordmark: file bytes on the server, a URL in the browser. */
   logo?: Buffer | string | null;
   /** Landscape for a wide table, such as a column per group member. */
   orientation?: 'portrait' | 'landscape';
+  /** "instructor-copy" marks a report that shows members' grades side by side, in its footer. */
+  audience?: 'instructor-copy';
   children: ReactNode;
 }) {
+  setPaper(orientation);
+  const running = runningLabel ?? subject;
   return (
-    <Document title={title} language="en-PH" creator="iCARE++" producer="iCARE++">
+    <Document title={`${title} - ${subject}`} language="en-PH" creator="iCARE++" producer="iCARE++">
       <Page size="LETTER" orientation={orientation} style={[styles.page, { fontFamily: reportFonts.body }]} wrap>
-        <View style={styles.header}>
-          <View style={styles.headerText}>
-            <Text style={styles.brand}>{heading}</Text>
-            <Text style={styles.subtitle}>{meta.campus}, College of Health Sciences</Text>
+        <View style={styles.letterhead}>
+          <View style={styles.letterheadText}>
+            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.subject}>{subject}</Text>
+            <Text style={styles.institution}>{meta.campus}, College of Health Sciences</Text>
           </View>
           {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf's Image has no alt */}
           {logo && <Image src={logo} style={styles.logo} />}
         </View>
 
-        <View>
-          {metaRows.map((row) => (
-            <View key={row.label} style={styles.metaRow}>
-              <Text style={styles.metaLabel}>{row.label}</Text>
-              <Text>{row.value}</Text>
-            </View>
-          ))}
-          <View style={styles.metaRow}>
-            <Text style={styles.metaLabel}>Generated by</Text>
-            <Text>{meta.generatedBy}</Text>
-          </View>
-          <View style={styles.metaRow}>
-            <Text style={styles.metaLabel}>Generated at</Text>
-            <Text>{meta.generatedAt}</Text>
-          </View>
-        </View>
+        <MetaBlock rows={metaRows} />
 
         {children}
 
-        <Text style={styles.footer} fixed>
-          iCARE++  |  Confidential academic record
-        </Text>
+        <View
+          fixed
+          style={styles.runningWrap}
+          render={({ pageNumber }) =>
+            pageNumber === 1 ? null : (
+              <View style={styles.running}>
+                <Text style={styles.runningText}>
+                  <Text style={styles.runningBrand}>iCARE++</Text>
+                  {'    '}
+                  {title} · {running}
+                </Text>
+              </View>
+            )
+          }
+        />
+
+        <View fixed style={styles.footer}>
+          <View style={styles.footerText}>
+            <Text>
+              Generated {meta.generatedAt} by {meta.generatedBy} · Confidential academic record
+            </Text>
+            {audience === 'instructor-copy' && <Text style={styles.footerCopy}>{INSTRUCTOR_COPY}</Text>}
+          </View>
+          <Text style={styles.footerPage} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+        </View>
       </Page>
     </Document>
   );
 }
 
-export function StatGrid({ items }: { items: { label: string; value: string | number }[] }) {
+/** Label and value pairs under the letterhead: one column of them, or two when there are four or more. */
+function MetaBlock({ rows }: { rows: { label: string; value: string }[] }) {
+  if (rows.length === 0) return null;
+  const split = rows.length >= 4 ? Math.ceil(rows.length / 2) : rows.length;
+  const columns = [rows.slice(0, split), rows.slice(split)].filter((c) => c.length > 0);
   return (
-    <View style={styles.statGrid}>
-      {items.map((item) => (
-        <View key={item.label} style={styles.statBox}>
-          <Text style={styles.statValue}>{String(item.value)}</Text>
-          <Text style={styles.statLabel}>{item.label}</Text>
+    <View style={styles.metaBlock}>
+      {columns.map((column, i) => (
+        <View key={i} style={[styles.metaColumn, i === 0 && columns.length > 1 ? { paddingRight: 18 } : {}]}>
+          {column.map((row) => (
+            <View key={row.label} style={styles.metaRow} wrap={false}>
+              <Text style={styles.metaLabel}>{row.label}</Text>
+              <Text style={styles.metaValue}>{row.value}</Text>
+            </View>
+          ))}
         </View>
       ))}
     </View>
   );
 }
 
+// --- Headings, notes and callouts -----------------------------------------------------
+
 /**
- * Simple table. The first column is wide, the rest are right-aligned numerics —
- * which is the shape every report here needs.
+ * A heading with an optional caption that says how the rows below are ordered.
+ * It keeps 70 pt of what follows on the same page, so a heading never ends a
+ * page alone. The content goes after it as siblings, not inside it, because
+ * react-pdf measures what is ahead from the heading's next siblings.
+ */
+export function Section({ title, caption, children }: { title: string; caption?: string; children?: ReactNode }) {
+  return (
+    <>
+      <View style={styles.sectionHead} minPresenceAhead={70}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {caption && <Text style={styles.sectionCaption}>{caption}</Text>}
+      </View>
+      {children}
+    </>
+  );
+}
+
+/** A line of small print: how a figure is worked out, or what a mark means. */
+export function Note({ children }: { children: ReactNode }) {
+  return <Text style={styles.note}>{children}</Text>;
+}
+
+/**
+ * The items that need the reader's eye, in a box with a red bar, or the
+ * `clear` sentence in a quiet one when there are none.
+ */
+export function Attention({ items, clear }: { items: string[]; clear: string }) {
+  const flagged = items.length > 0;
+  return (
+    <View
+      wrap={false}
+      style={[
+        styles.attention,
+        flagged
+          ? { backgroundColor: TINT.low, borderColor: '#f3c9c9', borderLeftColor: TONE.low }
+          : { backgroundColor: SUBTLE, borderColor: TILE_BORDER, borderLeftColor: TILE_BORDER },
+      ]}
+    >
+      {flagged ? (
+        <Text>
+          <Text style={{ fontWeight: 700, color: TONE.low }}>Needs attention: </Text>
+          {items.join(' · ')}
+        </Text>
+      ) : (
+        <Text style={{ color: MUTED }}>{clear}</Text>
+      )}
+    </View>
+  );
+}
+
+/** What the three score colours mean. Squares, not glyphs, so no font has to carry them. */
+export function ScoreKey() {
+  const entries = [
+    { color: TONE.pass, label: '75% and up' },
+    { color: TONE.practice, label: '50 to 74%' },
+    { color: TONE.low, label: 'below 50%' },
+  ];
+  return (
+    <View wrap={false} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6 }}>
+      <Text style={{ fontSize: 8, color: MUTED }}>Score colours:</Text>
+      {entries.map((e) => (
+        <View key={e.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <View style={{ width: 7, height: 7, backgroundColor: e.color, borderRadius: 1 }} />
+          <Text style={{ fontSize: 8, color: MUTED }}>{e.label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** One stacked bar split by count, with each segment's label and count under it. Empty segments are left out. */
+export function Distribution({ segments }: { segments: { label: string; count: number; color: string }[] }) {
+  const shown = segments.filter((s) => s.count > 0);
+  return (
+    <View wrap={false}>
+      <View style={{ flexDirection: 'row', height: 10, borderRadius: 3, overflow: 'hidden', backgroundColor: HAIRLINE }}>
+        {shown.map((s) => (
+          <View key={s.label} style={{ flex: s.count, backgroundColor: s.color }} />
+        ))}
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 5 }}>
+        {segments.map((s) => (
+          <View key={s.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <View style={{ width: 7, height: 7, backgroundColor: s.color, borderRadius: 1 }} />
+            <Text style={{ fontSize: 8.5, color: MUTED }}>
+              {s.label} <Text style={{ fontWeight: 700, color: INK }}>{s.count}</Text>
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// --- Tiles -----------------------------------------------------------------------------
+
+export interface Tile {
+  /** Keep to 16 characters or fewer; details go in the caption. */
+  label: string;
+  value: string | number;
+  caption?: string;
+  /** The value's colour; a score tile sets it from the score's band. */
+  color?: string;
+  /** The Brand-50 fill that marks the headline figure. */
+  emphasis?: boolean;
+}
+
+export interface TileOptions {
+  emphasis?: boolean;
+  /** A count's value colour, such as amber for flagged and red for critical. */
+  color?: string;
+}
+
+/** A tile for a score: the value takes its band's colour and the caption is the verbal rating unless given. */
+export function scoreTile(label: string, score: number | null, caption?: string, opts: TileOptions = {}): Tile {
+  if (score === null) return { label, value: '—', caption, emphasis: opts.emphasis };
+  return {
+    label,
+    value: `${Math.round(score)}%`,
+    caption: caption ?? scoreDescriptor(score),
+    color: bandColor(score),
+    emphasis: opts.emphasis,
+  };
+}
+
+/** A tile for a count or a word. Zero reads "0"; only "no value" is a dash. */
+export function countTile(label: string, value: string | number, caption?: string, opts: TileOptions = {}): Tile {
+  return { label, value, caption, color: opts.color, emphasis: opts.emphasis };
+}
+
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+
+/**
+ * Tiles in a row, left-aligned, so one or two do not stretch across the page.
+ * `columns` sets how many fit in a row; by default that is the tile count held
+ * between 3 and 5 (4 and 6 in landscape). Tiles past a full row wrap to the
+ * next at the same width.
+ */
+export function StatGrid({ items, columns }: { items: Tile[]; columns?: number }) {
+  const per = columns ?? (layout.landscape ? clamp(items.length, 4, 6) : clamp(items.length, 3, 5));
+  return (
+    <View style={styles.tiles}>
+      {items.map((item, i) => (
+        <View key={i} style={[styles.tileCell, { width: `${100 / per}%` }]} wrap={false}>
+          <View style={[styles.tile, item.emphasis ? styles.tileEmphasis : {}]}>
+            <Text style={styles.tileLabel}>{item.label}</Text>
+            <Text style={[styles.tileValue, item.color ? { color: item.color } : {}]}>{String(item.value)}</Text>
+            {item.caption && <Text style={styles.tileCaption}>{item.caption}</Text>}
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// --- Table -----------------------------------------------------------------------------
+
+type Align = 'left' | 'right' | 'center';
+
+/** A column: a label, an optional second line under it, and how it sits. */
+export interface Col {
+  label: string;
+  /** A smaller line under the label: "Prediction, not a grade". */
+  sub?: string;
+  /** Inferred from the cells when not given: right for numbers and scores, left for text. */
+  align?: Align;
+  /** Relative width; the first column is 3 and the others 1 unless set, here or in `widths`. */
+  flex?: number;
+}
+
+/**
+ * One table cell. A score cell shows a band-coloured percent (or `text`, for a
+ * grade that keeps a decimal, such as a course grade) and, with `word`, the
+ * verbal rating after it. A null score is a dash.
+ */
+export type Cell = string | number | { score: number | null; word?: boolean; text?: string } | null;
+
+/** A row, with a tone when it needs a look: red and barred, amber, or a total. */
+export interface TableRow {
+  cells: Cell[];
+  tone?: 'attention' | 'notice' | 'total';
+}
+
+const scoreCell = (c: Cell): c is { score: number | null; word?: boolean; text?: string } =>
+  typeof c === 'object' && c !== null;
+
+const NUMERIC = /^[—\d.,%/\s()+-]+$/;
+
+/** Right when every filled cell is a number, a score or looks like one; left otherwise. */
+function inferAlign(cells: Cell[]): Align {
+  const filled = cells.filter((c) => c !== null && !(typeof c === 'string' && (c.trim() === '' || c === '—')));
+  const numeric = filled.every((c) => (typeof c === 'string' ? NUMERIC.test(c) : true));
+  const words = cells.some((c) => scoreCell(c) && c.word);
+  // A score with its rating after it lines up on the score's right edge, so the group sits at the left.
+  return words ? 'left' : numeric ? 'right' : 'left';
+}
+
+function CellView({ cell, align, bold }: { cell: Cell; align: Align; bold: boolean }) {
+  const weight = bold ? { fontWeight: 700 } : {};
+  if (cell === null || (scoreCell(cell) && cell.score === null)) {
+    // Where a score would end, so the dashes keep to the column the digits are in.
+    const slot = scoreCell(cell) && cell.word ? [styles.scoreSlot, { fontWeight: 400 }] : [styles.tableText, { textAlign: align }];
+    return <Text style={[...slot, { color: FAINT }]}>—</Text>;
+  }
+  if (scoreCell(cell)) {
+    const score = cell.score as number;
+    const shown = cell.text ?? `${Math.round(score)}%`;
+    const color = bandColor(score);
+    if (cell.word) {
+      return (
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+          <Text style={[styles.scoreSlot, { color }]}>{shown}</Text>
+          <Text style={styles.scoreWord}>{scoreDescriptor(score)}</Text>
+        </View>
+      );
+    }
+    return <Text style={[styles.tableText, { textAlign: align, fontWeight: 700, color }]}>{shown}</Text>;
+  }
+  return <Text style={[styles.tableText, { textAlign: align }, weight]}>{String(cell)}</Text>;
+}
+
+/**
+ * The report table. Columns are given as plain labels or as Col objects, and
+ * rows as arrays of cells or { cells, tone }. The header row is fixed, so a
+ * table that runs onto another page repeats it at the top there; rows never
+ * split across a page.
  */
 export function Table({
   head,
   rows,
   widths,
   emptyText = 'No records yet.',
+  caption,
 }: {
-  head: string[];
-  rows: (string | number)[][];
-  /** Relative column widths; by default the first is 3 and the rest 1. */
+  head: (string | Col)[];
+  rows: (Cell[] | TableRow)[];
+  /** Relative column widths; they win over each Col's `flex`. */
   widths?: number[];
   emptyText?: string;
+  /** Small print under the table. */
+  caption?: string;
 }) {
   if (rows.length === 0) {
     return <Text style={styles.empty}>{emptyText}</Text>;
   }
-  const cellStyle = (i: number) => {
-    const base = i === 0 ? styles.cellWide : styles.cell;
-    return widths?.[i] ? [base, { flex: widths[i] }] : base;
-  };
+  const list: TableRow[] = rows.map((r) => (Array.isArray(r) ? { cells: r } : r));
+  const cols = head.map((h) => (typeof h === 'string' ? { label: h } : h));
+  const aligns: Align[] = cols.map((col, i) => col.align ?? (i === 0 ? 'left' : inferAlign(list.map((r) => r.cells[i] ?? null))));
+  const flexOf = (i: number) => widths?.[i] ?? cols[i].flex ?? (i === 0 ? 3 : 1);
   return (
-    <View>
-      <View style={[styles.row, styles.headRow]}>
-        {head.map((label, i) => (
-          <Text key={label} style={cellStyle(i)}>
-            {label}
-          </Text>
+    <View style={styles.table}>
+      <View style={styles.tableHead} fixed>
+        {cols.map((col, i) => (
+          <View key={i} style={[styles.tableCell, { flex: flexOf(i) }]}>
+            <Text style={[styles.tableHeadLabel, { textAlign: aligns[i] }]}>{col.label}</Text>
+            {col.sub && <Text style={[styles.tableHeadSub, { textAlign: aligns[i] }]}>{col.sub}</Text>}
+          </View>
         ))}
       </View>
-      {rows.map((row, r) => (
-        <View key={r} style={styles.row} wrap={false}>
-          {row.map((cell, i) => (
-            <Text key={i} style={cellStyle(i)}>
-              {String(cell)}
-            </Text>
+      {list.map((row, r) => (
+        <View
+          key={r}
+          wrap={false}
+          style={[
+            styles.tableRow,
+            row.tone === 'attention' ? { backgroundColor: TINT.low, borderLeftWidth: 3, borderLeftColor: TONE.low, paddingLeft: 3 } : {},
+            row.tone === 'notice' ? { backgroundColor: TINT.practice } : {},
+            row.tone === 'total' ? { borderTopWidth: 1, borderTopColor: TEAL } : {},
+          ]}
+        >
+          {cols.map((_, i) => (
+            <View key={i} style={[styles.tableCell, { flex: flexOf(i) }]}>
+              <CellView cell={row.cells[i] ?? null} align={aligns[i]} bold={row.tone === 'total'} />
+            </View>
           ))}
         </View>
       ))}
+      {caption && <Text style={styles.note}>{caption}</Text>}
     </View>
   );
 }
+
+// --- Course criteria -----------------------------------------------------------------------
 
 /** One course in a student's report: where its grade comes from, and the student's standing. */
 export interface CourseCriteriaEntry {
@@ -322,39 +720,62 @@ export function CourseCriteria({ courses }: { courses: CourseCriteriaEntry[] }) 
             : standing.auto
               ? `${scored} of ${items} items scored`
               : `${standing.scored_weight}% of the grade scored`;
+        const gradeShown = standing.invalid || standing.grade === null ? null : standing.grade;
         return (
-          <View key={id} wrap={false}>
-            <Text style={styles.courseTitle}>
+          <View key={id} wrap={false} style={{ marginTop: 8 }}>
+            <Text style={courseHeading}>
               {course.code} – {course.title}
             </Text>
             <Text style={styles.courseSub}>
-              {term.name} – Instructor: {instructor}
+              {term.name} · Instructor: {instructor}
             </Text>
             <Table
-              head={['Criteria for Assessment', 'Weight', 'Scored', 'Average']}
+              head={[{ label: 'Criterion' }, { label: 'Weight' }, { label: 'Scored' }, { label: 'Average' }]}
               widths={[3, 1.3, 1.3, 1.9]}
-              rows={standing.criteria.map((c) => [c.name, `${c.weight}%`, `${c.scored}/${c.items}`, gradeText(c.score)])}
+              rows={standing.criteria.map((c) => [
+                c.name,
+                `${c.weight}%`,
+                `${c.scored}/${c.items}`,
+                { score: c.score, text: c.score === null ? undefined : formatGrade(c.score) },
+              ])}
               emptyText={standing.auto ? 'Nothing to grade in this course yet.' : 'No grading criteria set for this course yet.'}
             />
             {standing.criteria.length > 0 && (
-              <View style={styles.courseGrade}>
-                <Text style={{ fontWeight: 700 }}>
-                  Course grade{partial && standing.grade !== null ? ' so far' : ''}{' '}
-                  <Text style={{ fontWeight: 400, fontSize: 8, color: '#6b7280' }}>({detail})</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'flex-end', gap: 6, paddingTop: 5, paddingRight: 6 }}>
+                <Text style={{ fontSize: 8.5, color: MUTED }}>
+                  Course grade{partial && standing.grade !== null ? ' so far' : ''} ({detail})
                 </Text>
-                <Text style={{ fontWeight: 700 }}>{standing.invalid ? '—' : gradeText(standing.grade)}</Text>
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: gradeShown === null ? FAINT : bandColor(gradeShown),
+                  }}
+                >
+                  {standing.invalid ? '—' : gradeText(standing.grade)}
+                </Text>
               </View>
             )}
           </View>
         );
       })}
       {(auto || weighted) && (
-        <Text style={styles.note}>
+        <Note>
           {auto && "Weight is a criterion's share of the course's items: the course grade is the average of every scored item. "}
           {weighted && "The course grade is each criterion's average times its weight, added up. "}
           Work with no score yet is left out, so a grade reads as the grade so far.
-        </Text>
+        </Note>
       )}
     </View>
   );
 }
+
+/** A course's title in the Section font, a step under a Section heading. */
+const courseHeading = {
+  fontSize: 12,
+  get fontFamily() {
+    return reportFonts.display;
+  },
+  fontWeight: 700,
+  color: INK,
+} as const;

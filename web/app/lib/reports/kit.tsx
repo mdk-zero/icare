@@ -10,12 +10,23 @@ export {
   styles,
   reportFonts,
   scoreColor,
+  scoreTile,
+  countTile,
+  Attention,
   CourseCriteria,
+  Distribution,
+  Note,
+  ScoreKey,
+  Section,
   StatGrid,
   Table,
+  type Cell,
+  type Col,
   type CourseCriteriaEntry,
   type ReportDocument,
   type ReportMeta,
+  type Tile,
+  type TableRow,
 } from './kit-ui';
 
 /**
@@ -45,7 +56,7 @@ registerReportFonts((file) => {
   return fontPath;
 });
 
-/** Letterhead, meta block and footer shared by every report type, with the server's logo. */
+/** Letterhead, meta block, running header and footer shared by every report type, with the server's logo. */
 export function ReportShell(props: Omit<ComponentProps<typeof ReportShellUI>, 'logo'>) {
   return <ReportShellUI {...props} logo={LOGO} />;
 }

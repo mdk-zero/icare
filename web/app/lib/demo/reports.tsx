@@ -1,7 +1,7 @@
 "use client";
 
 import { pdf, Text, View } from "@react-pdf/renderer";
-import { CourseCriteria, ReportShell, StatGrid, Table, registerReportFonts, type ReportDocument, type ReportMeta } from "../reports/kit-ui";
+import { CourseCriteria, Note, ReportShell, Section, StatGrid, Table, registerReportFonts, scoreTile, type ReportDocument, type ReportMeta } from "../reports/kit-ui";
 import { dateLabel, generatedStamp } from "../reports/view";
 import { CASE_CRITERIA, caseLevelLabel } from "../case-rubric";
 import { ChecklistSheet } from "../reports/checklist-sheet";
@@ -32,8 +32,6 @@ type Ctx = DemoContext;
 type Built = { subject: string; doc: ReportDocument } | { error: string; status: number };
 
 const LOGO = "/logo-no-bg.png";
-const section = { fontSize: 12, fontWeight: 700, marginTop: 16, marginBottom: 6 } as const;
-const note = { fontSize: 8, color: "#6b7280", marginTop: 6 } as const;
 
 const pct = (v: number | null) => (v == null ? "—" : `${Math.round(v)}%`);
 const date = dateLabel;
@@ -49,17 +47,13 @@ function meta(ctx: Ctx): ReportMeta {
   };
 }
 
-function Shell({ ctx, title, heading, rows, orientation, children }: { ctx: Ctx; title: string; heading: string; rows: { label: string; value: string }[]; orientation?: "portrait" | "landscape"; children: React.ReactNode }) {
+function Shell({ ctx, title, subject, runningLabel, rows, orientation, audience, children }: { ctx: Ctx; title: string; subject: string; runningLabel?: string; rows: { label: string; value: string }[]; orientation?: "portrait" | "landscape"; audience?: "instructor-copy"; children: React.ReactNode }) {
   return (
-    <ReportShell title={title} heading={heading} meta={meta(ctx)} metaRows={rows} logo={LOGO} orientation={orientation}>
+    <ReportShell title={title} subject={subject} runningLabel={runningLabel} meta={meta(ctx)} metaRows={rows} logo={LOGO} orientation={orientation} audience={audience}>
       {children}
-      <Text style={note}>Demo report: built from sample data in your browser.</Text>
+      <Note>Demo report: built from sample data in your browser.</Note>
     </ReportShell>
   );
-}
-
-function H({ children }: { children: string }) {
-  return <Text style={section}>{children}</Text>;
 }
 
 // --- Instructor reports -----------------------------------------------------------
@@ -77,32 +71,31 @@ function studentReport(ctx: Ctx, id: string): Built {
   return {
     subject: s.name,
     doc: (
-      <Shell ctx={ctx} title={`Student report — ${s.name}`} heading="Student Performance Report" rows={[
-        { label: "Student", value: s.name },
+      <Shell ctx={ctx} title="Student Progress Report" subject={s.name} rows={[
         { label: "Section / group", value: teamLabel(db, s.team_id) ?? sectionName(db, s.section_id) ?? "—" },
         { label: "Risk check", value: s.risk_level === "at_risk" ? `Low performing (${Math.round((s.risk_probability ?? 0) * 100)}%)` : "On track" },
       ]}>
         <StatGrid items={[
-          { label: "Patient case average", value: pct(caseAverage(db, id)) },
-          { label: "Quiz average", value: pct(quizAverage(db, id)) },
+          scoreTile("Patient case average", caseAverage(db, id)),
+          scoreTile("Quiz average", quizAverage(db, id)),
           { label: "Cases performed", value: cases.filter((a) => a.status === "completed").length },
         ]} />
-        <H>Courses and assessment criteria</H>
+        <Section title="Courses and assessment criteria" />
         <CourseCriteria courses={demoStudentStandings(db, id)} />
-        <H>Patient cases</H>
+        <Section title="Patient cases" />
         <Table head={["Case", "Score", "Performed"]} widths={[4, 1, 1.4]} rows={cases.map((a) => [
           db.scenarios.find((x) => x.id === a.scenario_id)?.title ?? "—",
           pct(a.score),
           submitted(a),
         ])} />
-        <H>Return Demonstrations</H>
+        <Section title="Return Demonstrations" />
         <Table head={["Return Demonstration", "Score", "Performed", "Remarks"]} widths={[4, 1, 1.4, 1.6]} rows={returnDemos.map((a) => [
           db.scenarios.find((x) => x.id === a.scenario_id)?.title ?? "—",
           pct(a.score),
           a.status === "completed" ? date(a.completed_at) : "—",
           competencyRemark(a.status === "completed" ? a.score : null),
         ])} />
-        <H>Quizzes</H>
+        <Section title="Quizzes" />
         <Table head={["Quiz", "Score", "Submitted"]} widths={[4, 1, 1.4]} rows={attempts.map((a) => [
           db.quizzes.find((q) => q.id === a.assessment_id)?.title ?? "—",
           pct(a.score),
@@ -153,14 +146,14 @@ function sectionReport(ctx: Ctx, id: string): Built {
   return {
     subject: name,
     doc: (
-      <Shell ctx={ctx} title={`Section report — ${name}`} heading="Section Performance Report" orientation="landscape" rows={[{ label: "Section", value: name }]}>
+      <Shell ctx={ctx} title="Section Performance Report" subject={name} orientation="landscape" rows={[]}>
         <StatGrid items={[
           { label: "Students", value: students.length },
-          { label: "Case average", value: pct(mean(students.map((s) => caseAverage(db, s.id)).filter((x): x is number => x !== null))) },
-          { label: "Quiz average", value: pct(mean(students.map((s) => quizAverage(db, s.id)).filter((x): x is number => x !== null))) },
+          scoreTile("Case average", mean(students.map((s) => caseAverage(db, s.id)).filter((x): x is number => x !== null))),
+          scoreTile("Quiz average", mean(students.map((s) => quizAverage(db, s.id)).filter((x): x is number => x !== null))),
           { label: "Low performing", value: students.filter((s) => s.risk_level === "at_risk").length },
         ]} />
-        <H>Groups</H>
+        <Section title="Groups" />
         {groups.map((g) => (
           <ActivityTable key={g.group} members={g.members} heading={<Text style={{ fontWeight: 700, marginTop: 4, marginBottom: 3 }}>{g.group}</Text>} />
         ))}
@@ -178,14 +171,14 @@ function scenarioReport(ctx: Ctx, id: string): Built {
   return {
     subject: sc.title,
     doc: (
-      <Shell ctx={ctx} title={`Patient case report — ${sc.title}`} heading="Patient Case Report" rows={[{ label: "Patient case", value: sc.title }, { label: "Category", value: sc.category }]}>
+      <Shell ctx={ctx} title="Patient Case Results Report" subject={sc.title} rows={[{ label: "Category", value: sc.category }]}>
         <StatGrid items={[
           { label: "Assigned", value: rows.length },
           { label: "Performed", value: rows.filter((a) => a.status === "completed").length },
           { label: "Awaiting review", value: rows.filter((a) => a.submitted_at && a.status !== "completed").length },
-          { label: "Average", value: pct(mean(rows.filter((a) => a.score != null).map((a) => a.score!))) },
+          scoreTile("Average", mean(rows.filter((a) => a.score != null).map((a) => a.score!))),
         ]} />
-        <H>Students</H>
+        <Section title="Students" />
         <Table head={["Student", "Group", "Status", "Performed", "Score"]} widths={[3, 2, 1.4, 1.4, 1]} rows={rows.map((a) => {
           const s = userById(db, a.student_id);
           return [s?.name ?? "—", teamLabel(db, s?.team_id) ?? "—", a.status === "completed" ? "Performed" : a.submitted_at ? "Awaiting review" : a.status, submitted(a), pct(a.score)];
@@ -234,20 +227,19 @@ function checklistReport(ctx: Ctx, kind: keyof typeof CHECKLIST, id: string): Bu
     return {
       subject: `${demo.title} ${student?.name ?? ""}`.trim(),
       doc: (
-        <Shell ctx={ctx} title={`${noun} — ${demo.title}`} heading={heading} rows={[
+        <Shell ctx={ctx} title={heading} subject={student?.name ?? "—"} runningLabel={`${student?.name ?? "—"} · ${demo.title}`} rows={[
           { label: noun, value: demo.title },
-          { label: "Student", value: student?.name ?? "—" },
           { label: "Group", value: teamLabel(db, student?.team_id) ?? "—" },
           { label: "Date of performance", value: date(a.deadline) },
         ]}>
           <StatGrid items={[
-            { label: "Score", value: pct(sc) },
+            scoreTile("Score", sc, ""),
             { label: "Rating", value: sc === null ? "—" : scoreDescriptor(sc) },
             ...(kind === "return_demo"
               ? [{ label: "Remarks", value: competencyRemark(sc) }]
               : [{ label: "Status", value: a.status === "completed" ? "Performed" : "Not yet performed" }]),
           ]} />
-          <H>Checklist and grades</H>
+          <Section title="Checklist and grades" />
           <ChecklistSheet columns={["Grade"]} skills={skills} />
         </Shell>
       ),
@@ -259,21 +251,17 @@ function checklistReport(ctx: Ctx, kind: keyof typeof CHECKLIST, id: string): Bu
   return {
     subject: `${demo.title} ${label}`,
     doc: (
-      <Shell ctx={ctx} title={`${noun} — ${demo.title}`} heading={heading} orientation="landscape" rows={[
-        { label: noun, value: demo.title },
-        { label: "Group", value: label },
-        { label: "Members", value: String(members.length) },
-      ]}>
+      <Shell ctx={ctx} title={heading} subject={label} runningLabel={`${label} · ${demo.title}`} orientation="landscape" audience="instructor-copy" rows={[{ label: noun, value: demo.title }]}>
         <StatGrid items={[
           { label: "Members", value: members.length },
           { label: "Performed", value: scores.length },
-          { label: "Group average", value: pct(mean(scores)) },
+          scoreTile("Group average", mean(scores)),
         ]} />
-        <H>Members</H>
+        <Section title="Members" />
         <Table head={kind === "return_demo" ? ["Member", "Date of performance", "Score", "Remarks"] : ["Member", "Date of performance", "Status", "Score"]} widths={kind === "return_demo" ? [3, 1.6, 1.8, 1.6] : [3, 1.6, 1.4, 1.6]} rows={members.map((m) => kind === "return_demo"
           ? [m.student?.name ?? "—", date(m.a.deadline), pct(score(m.a)), competencyRemark(score(m.a))]
           : [m.student?.name ?? "—", date(m.a.deadline), m.a.status === "completed" ? "Performed" : "Not yet performed", pct(score(m.a))])} />
-        <H>Checklist and grades</H>
+        <Section title="Checklist and grades" />
         <ChecklistSheet columns={members.map((m) => m.student?.name ?? "—")} skills={skills} />
       </Shell>
     ),
@@ -293,16 +281,13 @@ function sectionGroupReport(ctx: Ctx, teamId: string): Built {
   return {
     subject: label,
     doc: (
-      <Shell ctx={ctx} title={`Group report — ${label}`} heading="Group Performance Report" orientation="landscape" rows={[
-        { label: "Group", value: label },
-        { label: "Members", value: String(members.length) },
-      ]}>
+      <Shell ctx={ctx} title="Group Performance Report" subject={label} orientation="landscape" audience="instructor-copy" rows={[]}>
         <StatGrid items={[
           { label: "Members", value: members.length },
-          { label: "Case average", value: pct(mean(members.map((s) => caseAverage(db, s.id)).filter((x): x is number => x !== null))) },
-          { label: "Quiz average", value: pct(mean(members.map((s) => quizAverage(db, s.id)).filter((x): x is number => x !== null))) },
+          scoreTile("Case average", mean(members.map((s) => caseAverage(db, s.id)).filter((x): x is number => x !== null))),
+          scoreTile("Quiz average", mean(members.map((s) => quizAverage(db, s.id)).filter((x): x is number => x !== null))),
         ]} />
-        <H>Work given to this group</H>
+        <Section title="Work given to this group" />
         <ActivityTable members={members.map((s) => ({ name: s.name, entries: demoGrid(db, s.id) }))} />
       </Shell>
     ),
@@ -369,22 +354,21 @@ function quizDetailReport(ctx: Ctx, id: string): Built {
     return {
       subject: `${quiz.title} ${student.name}`,
       doc: (
-        <Shell ctx={ctx} title={`Quiz — ${quiz.title}`} heading="Quiz Answers Report" rows={[
+        <Shell ctx={ctx} title="Quiz Answers Report" subject={student.name} runningLabel={`${student.name} · ${quiz.title}`} rows={[
           { label: "Quiz", value: quiz.title },
-          { label: "Student", value: student.name },
           { label: "Group", value: teamLabel(db, student.team_id) ?? "—" },
           { label: "Submitted tries", value: String(taken.length) },
         ]}>
           <StatGrid items={[
-            { label: "Grade", value: pct(g) },
+            scoreTile("Grade", g),
             { label: "Submitted tries", value: taken.length },
             { label: "Remarks", value: g === null ? "Not taken" : g >= 75 ? "Passed" : "Below passing" },
           ]} />
-          <H>Results by criterion</H>
+          <Section title="Results by criterion" />
           <CriterionTable columns={["Correct"]} rows={criterionForStudent(questions, criteria, taken)} />
-          {taken.length === 0 ? <Text style={note}>{student.name} has not submitted a try yet.</Text> : taken.map((t) => (
+          {taken.length === 0 ? <Note>{student.name} has not submitted a try yet.</Note> : taken.map((t) => (
             <View key={t.number}>
-              <H>{`Try ${t.number} - ${pct(t.score === null ? null : Math.round(t.score))}${t.submittedAt ? ` - ${date(t.submittedAt)}` : ""}`}</H>
+              <Section title={`Try ${t.number} - ${pct(t.score === null ? null : Math.round(t.score))}${t.submittedAt ? ` - ${date(t.submittedAt)}` : ""}`} />
               <QuizAnswers rows={answerRows(questions, criteria, t)} />
             </View>
           ))}
@@ -400,19 +384,15 @@ function quizDetailReport(ctx: Ctx, id: string): Built {
   return {
     subject: `${quiz.title} ${label}`,
     doc: (
-      <Shell ctx={ctx} title={`Quiz — ${quiz.title}`} heading="Quiz Answers Report" orientation="landscape" rows={[
-        { label: "Quiz", value: quiz.title },
-        { label: "Group", value: label },
-        { label: "Members", value: String(members.length) },
-      ]}>
+      <Shell ctx={ctx} title="Quiz Answers Report" subject={label} runningLabel={`${label} · ${quiz.title}`} orientation="landscape" audience="instructor-copy" rows={[{ label: "Quiz", value: quiz.title }]}>
         <StatGrid items={[
           { label: "Members", value: members.length },
           { label: "Completed", value: grades.length },
-          { label: "Group average", value: pct(mean(grades)) },
+          scoreTile("Group average", mean(grades)),
         ]} />
-        <H>Results by criterion</H>
+        <Section title="Results by criterion" />
         <CriterionTable columns={members.map((m) => m.name)} rows={criterionForGroup(questions, criteria, latest)} />
-        <H>Questions</H>
+        <Section title="Questions" />
         <QuizMatrix columns={columns} rows={rows} />
       </Shell>
     ),
@@ -431,13 +411,13 @@ function assessmentReport(ctx: Ctx, id: string): Built {
   return {
     subject: quiz.title,
     doc: (
-      <Shell ctx={ctx} title={`Quiz report — ${quiz.title}`} heading="Quiz Results Report" rows={[{ label: "Quiz", value: quiz.title }]}>
+      <Shell ctx={ctx} title="Quiz Results Report" subject={quiz.title} rows={[]}>
         <StatGrid items={[
           { label: "Assigned", value: students.length },
           { label: "Submitted", value: students.filter((s) => best(s.id) !== null).length },
-          { label: "Average best score", value: pct(mean(students.map((s) => best(s.id)).filter((x): x is number => x !== null))) },
+          scoreTile("Average best score", mean(students.map((s) => best(s.id)).filter((x): x is number => x !== null))),
         ]} />
-        <H>Results</H>
+        <Section title="Results" />
         <Table head={["Student", "Group", "Best score"]} widths={[3, 2, 1]} rows={students.map((s) => [s.name, teamLabel(db, s.team_id) ?? "—", pct(best(s.id))])} />
       </Shell>
     ),
@@ -450,13 +430,13 @@ function rosterReport(ctx: Ctx): Built {
   return {
     subject: "Roster summary",
     doc: (
-      <Shell ctx={ctx} title="Roster summary" heading="Roster Summary" rows={[{ label: "Sections", value: visibleSections(db, ctx.role, ctx.viewer.id).map((s) => s.name).join(", ") }]}>
+      <Shell ctx={ctx} title="Roster Summary Report" subject={ctx.role === "admin" ? "Your students" : "Your groups"} rows={[{ label: "Sections", value: visibleSections(db, ctx.role, ctx.viewer.id).map((s) => s.name).join(", ") }]}>
         <StatGrid items={[
           { label: "Students", value: students.length },
           { label: "With graded work", value: students.filter((s) => caseAverage(db, s.id) !== null).length },
           { label: "Low performing", value: students.filter((s) => s.risk_level === "at_risk").length },
         ]} />
-        <H>Every student</H>
+        <Section title="Every student" />
         <Table head={["Student", "Section / group", "Cases", "Quizzes"]} widths={[3, 2.4, 1, 1]} rows={students.map((s) => [s.name, teamLabel(db, s.team_id) ?? "—", pct(caseAverage(db, s.id)), pct(quizAverage(db, s.id))])} />
       </Shell>
     ),
@@ -478,19 +458,18 @@ function caseReport(ctx: Ctx, id: string): Built {
   return {
     subject: `${g.team_name} — ${p?.title ?? "Case"}`,
     doc: (
-      <Shell ctx={ctx} title="Case presentation" heading="Case Presentation" rows={[
+      <Shell ctx={ctx} title="Case Presentation Report" subject={p?.title ?? "Case"} rows={[
         { label: "Group", value: `${g.team_name} · ${g.section_name}` },
-        { label: "Presentation", value: p?.title ?? "—" },
         { label: "Leader", value: members.find((m) => m.leader)?.name ?? "—" },
         { label: "Slides", value: g.file?.name ?? "—" },
       ]}>
-        <StatGrid items={[{ label: "Group score", value: pct(g.score) }, { label: "Members", value: String(members.length) }]} />
-        <H>Grading</H>
+        <StatGrid items={[scoreTile("Group score", g.score), { label: "Members", value: String(members.length) }]} />
+        <Section title="Grading" />
         <Table head={["Criterion", "Weight", "Level"]} widths={[3, 0.8, 1.4]} rows={CASE_CRITERIA.map((c) => {
           const r = g.ratings.find((x) => x.criterion === c.key);
           return [c.label, `${c.weight}%`, r ? `${caseLevelLabel(r.level)} (${r.level})` : "—"];
         })} />
-        <H>Members</H>
+        <Section title="Members" />
         <Table head={["Member", "Role"]} widths={[3, 1]} rows={members.map((m) => [m.name, m.leader ? "Group leader" : "Member"])} />
       </Shell>
     ),
@@ -505,8 +484,7 @@ function dischargeReport(ctx: Ctx, id: string): Built {
   return {
     subject: patient?.name ?? "Discharge summary",
     doc: (
-      <Shell ctx={ctx} title="Discharge summary" heading="Discharge Summary" rows={[
-        { label: "Patient", value: patient?.name ?? "—" },
+      <Shell ctx={ctx} title="Discharge Summary" subject={patient?.name ?? "—"} rows={[
         { label: "Diagnosis", value: d.diagnosis },
         { label: "Stay", value: `${date(d.admitted_at)} – ${date(d.discharged_at)}` },
         { label: "Room", value: d.room_label },
@@ -515,9 +493,9 @@ function dischargeReport(ctx: Ctx, id: string): Built {
           { label: "Vital readings", value: d.vitals_digest.readings ?? 0 },
           { label: "Flagged", value: d.vitals_digest.flagged ?? 0 },
         ]} />
-        <H>Findings</H>
+        <Section title="Findings" />
         <Table head={["Finding", "Severity"]} widths={[4, 1]} rows={(d.vitals_digest.findings ?? []).map((f) => [f.message, f.severity])} emptyText="No findings recorded." />
-        <H>Follow-up</H>
+        <Section title="Follow-up" />
         <Table head={["Action", "Detail"]} widths={[2, 4]} rows={d.follow_up.map((f) => [f.title, f.detail])} emptyText="No follow-up drafted yet." />
       </Shell>
     ),
@@ -534,7 +512,7 @@ function facultyReport(ctx: Ctx, id: string): Built {
   return {
     subject: id ? faculty[0].name : "All instructors",
     doc: (
-      <Shell ctx={ctx} title="Instructor report" heading="Instructor Report" rows={[{ label: "Scope", value: id ? faculty[0].name : "Every instructor" }]}>
+      <Shell ctx={ctx} title={id ? "Instructor Report" : "All Instructors Report"} subject={id ? faculty[0].name : "Your instructors"} rows={[]}>
         <Table head={["Instructor", "Groups", "Students", "Cases graded", "Last sign-in"]} widths={[3, 2.4, 1, 1, 1.4]} rows={faculty.map((f) => {
           const groups = groupsOf(f.id);
           const members = db.users.filter((u) => u.role === "student" && groups.some((g) => g.id === u.team_id));
@@ -558,7 +536,7 @@ function roomsReport(ctx: Ctx, id: string): Built {
   return {
     subject: id ? `${rooms[0].room_number} – ${rooms[0].name}` : "All rooms",
     doc: (
-      <Shell ctx={ctx} title="Room report" heading="Ward Room Report" rows={[{ label: "Rooms", value: String(rooms.length) }]}>
+      <Shell ctx={ctx} title={id ? "Room Report" : "All Rooms Report"} subject={id ? rooms[0].name : "Your ward"} rows={id ? [{ label: "Number", value: rooms[0].room_number }, { label: "Status", value: rooms[0].status }] : [{ label: "Rooms", value: String(rooms.length) }]}>
         <Table head={["Room", "Status", "Beds", "Patients"]} widths={[3, 1.2, 1, 1]} rows={rooms.map((r) => [
           `${r.room_number} – ${r.name}`, r.status, r.capacity, db.patients.filter((p) => p.room_id === r.id && p.status === "admitted").length,
         ])} />
@@ -573,7 +551,7 @@ function usersReport(ctx: Ctx, id: string): Built {
   return {
     subject: id ? (users[0]?.name ?? "User") : "All accounts",
     doc: (
-      <Shell ctx={ctx} title="Account report" heading="Account Report" rows={[{ label: "Accounts", value: String(users.length) }]}>
+      <Shell ctx={ctx} title={id ? "User Report" : "All Users Report"} subject={id ? (users[0]?.name ?? "User") : "Your users"} rows={id ? [] : [{ label: "Users", value: String(users.length) }]}>
         <Table head={["Name", "Role", "Section", "Last sign-in"]} widths={[3, 1.2, 1.4, 1.4]} rows={users.map((u) => [
           u.name, roleLabel(u.role, u.admin_title), sectionName(db, u.section_id) ?? "—", date(u.last_sign_in_at),
         ])} />
@@ -589,14 +567,14 @@ function summaryReport(ctx: Ctx): Built {
   return {
     subject: title,
     doc: (
-      <Shell ctx={ctx} title={title} heading="Program Summary" rows={[{ label: "Sections", value: db.sections.map((s) => s.name).join(", ") }]}>
+      <Shell ctx={ctx} title={`${roleLabel("admin", ctx.viewer.admin_title)} Summary Report`} subject="Your instructors and students" rows={[{ label: "Sections", value: db.sections.map((s) => s.name).join(", ") }]}>
         <StatGrid items={[
           { label: "Students", value: students.length },
           { label: "Instructors", value: db.users.filter((u) => u.role === "faculty").length },
           { label: "On track", value: `${students.filter((s) => s.risk_level === "safe").length}/${students.length}` },
           { label: "Patients admitted", value: db.patients.filter((p) => p.status === "admitted").length },
         ]} />
-        <H>Sections</H>
+        <Section title="Sections" />
         <Table head={["Section", "Students", "Case average", "Quiz average"]} widths={[2, 1, 1.2, 1.2]} rows={db.sections.map((sec) => {
           const members = students.filter((s) => s.section_id === sec.id);
           return [

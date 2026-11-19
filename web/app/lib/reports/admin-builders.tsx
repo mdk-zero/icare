@@ -1,8 +1,8 @@
 import { adminVisibleUserIds, ownsFaculty, type AdminScope } from '@/app/lib/admin-scope';
 import { Text } from '@react-pdf/renderer';
 import type { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { ReportShell, StatGrid, Table, styles, type ReportMeta, type ReportDocument } from './kit';
-import { avg, date as fmtDate, grade, gradeTile, groupNames, pct, plural, studentWork } from './data';
+import { ReportShell, Section, StatGrid, scoreTile, Table, type ReportMeta, type ReportDocument } from './kit';
+import { avg, date as fmtDate, grade, groupNames, plural, studentWork } from './data';
 import { readMatching } from '../fetch-all';
 import { kindOf, scenarioKinds } from '../scenario-kind';
 import { termStatus } from '../course-progress';
@@ -214,12 +214,9 @@ export async function buildAdminFacultyReport(
     const pdf = (
       <ReportShell
         title="All Instructors Report"
-        heading="All Instructors Report"
+        subject={scope ? 'Your instructors' : 'All instructors'}
         meta={meta}
-        metaRows={[
-          { label: 'Scope', value: scope ? 'Your instructors' : 'All instructors' },
-          { label: 'Instructors', value: String(faculty.length) },
-        ]}
+        metaRows={[]}
       >
         <Text style={lead}>
           {plural(faculty.length, 'instructor')} {faculty.length === 1 ? 'supervises' : 'supervise'}{' '}
@@ -236,7 +233,7 @@ export async function buildAdminFacultyReport(
             { label: 'Awaiting grade', value: totals.awaiting },
           ]}
         />
-        <Text style={styles.sectionTitle}>Instructors</Text>
+        <Section title="Instructors" />
         <Table
           head={['Name / Email', 'Groups', 'Students', 'Graded', 'Awaiting', 'Last login']}
           widths={[3, 0.9, 1, 0.9, 1, 1.4]}
@@ -293,18 +290,17 @@ export async function buildAdminFacultyReport(
 
   const pdf = (
     <ReportShell
-      title={`Instructor Report - ${faculty.name}`}
-      heading="Instructor Report"
+      title="Instructor Report"
+      subject={faculty.name}
       meta={meta}
       metaRows={[
-        { label: 'Instructor', value: faculty.name },
         { label: 'Email', value: faculty.email },
         { label: 'Joined', value: fmtDate(faculty.created_at) },
         { label: 'Last login', value: fmtDate(faculty.last_login_at) },
         { label: 'Sections', value: sections.join(', ') || 'None' },
       ]}
     >
-      <Text style={styles.sectionTitle}>Summary</Text>
+      <Section title="Summary" />
       <StatGrid
         items={[
           { label: 'Groups', value: l.groups.length },
@@ -316,7 +312,7 @@ export async function buildAdminFacultyReport(
         ]}
       />
 
-      <Text style={styles.sectionTitle}>Groups supervised</Text>
+      <Section title="Groups supervised" />
       <Table
         head={['Group', 'Members', 'Graded', 'Patient case average']}
         widths={[3, 1, 1, 2]}
@@ -383,20 +379,17 @@ export async function buildAdminRoomReport(
     const activeRooms = (rooms ?? []).filter((r) => r.status === 'active' || !r.status).length;
     const description = `This report covers all ${rooms?.length ?? 0} rooms with a total capacity of ${totalCapacity}, ${totalOccupied} currently occupied (${utilPct}% utilization). ${activeRooms} rooms are active.`;
 
-    const metaRows = [
-      { label: 'Scope', value: 'All Rooms' },
-      { label: 'Total', value: String(rooms?.length ?? 0) },
-    ];
+    const metaRows = [{ label: 'Rooms', value: String(rooms?.length ?? 0) }];
 
     const pdf = (
       <ReportShell
         title="All Rooms Report"
-        heading="All Rooms Report"
+        subject="Your ward"
         meta={meta}
         metaRows={metaRows}
       >
         <Text style={lead}>{description}</Text>
-        <Text style={styles.sectionTitle}>Room Roster</Text>
+        <Section title="Room Roster" />
         <Table
           head={['Room', 'Number', 'Capacity', 'Occupied', 'Status']}
           rows={rows}
@@ -432,20 +425,19 @@ export async function buildAdminRoomReport(
   const description = `Report for ${room.name} (${room.room_number}), a ${roomStatusLabel} room with a capacity of ${capacity}. Currently ${occupancy} ${occupancy === 1 ? 'student is' : 'students are'} assigned, leaving ${available} ${available === 1 ? 'spot' : 'spots'} available.`;
 
   const metaRows = [
-    { label: 'Room', value: room.name },
     { label: 'Number', value: room.room_number },
     { label: 'Status', value: roomStatusLabel },
   ];
 
   const pdf = (
     <ReportShell
-      title={`Room Report - ${room.name}`}
-      heading="Room Report"
+      title="Room Report"
+      subject={room.name}
       meta={meta}
       metaRows={metaRows}
     >
       <Text style={lead}>{description}</Text>
-      <Text style={styles.sectionTitle}>Occupancy</Text>
+      <Section title="Occupancy" />
       <StatGrid
         items={[
           { label: 'Capacity', value: capacity },
@@ -454,7 +446,7 @@ export async function buildAdminRoomReport(
         ]}
       />
 
-      <Text style={styles.sectionTitle}>Current Occupants</Text>
+      <Section title="Current Occupants" />
       <Table
         head={['Student', 'Email', 'Since']}
         rows={occupants.map((o) => [o.name, o.email, o.since])}
@@ -505,20 +497,17 @@ export async function buildAdminUserReport(
     const adminCount = byRole.get('admin') ?? 0;
     const description = `This report covers all ${users?.length ?? 0} users: ${studentCount} students, ${facultyCount} instructors, and ${plural(adminCount, roles.admin.toLowerCase())}.`;
 
-    const metaRows = [
-      { label: 'Scope', value: 'All Users' },
-      { label: 'Total', value: String(users?.length ?? 0) },
-    ];
+    const metaRows = [{ label: 'Users', value: String(users?.length ?? 0) }];
 
     const pdf = (
       <ReportShell
         title="All Users Report"
-        heading="All Users Report"
+        subject="Your users"
         meta={meta}
         metaRows={metaRows}
       >
         <Text style={lead}>{description}</Text>
-        <Text style={styles.sectionTitle}>Overview</Text>
+        <Section title="Overview" />
         <StatGrid
           items={[
             { label: 'Students', value: studentCount },
@@ -526,7 +515,7 @@ export async function buildAdminUserReport(
             { label: `${roles.admin}s`, value: adminCount },
           ]}
         />
-        <Text style={styles.sectionTitle}>User Roster</Text>
+        <Section title="User Roster" />
         <Table
           head={['Name / Email', 'Role', 'Joined', 'Last login']}
           rows={rows}
@@ -562,11 +551,10 @@ export async function buildAdminUserReport(
 
   const pdf = (
     <ReportShell
-      title={`User Report - ${user.name}`}
-      heading="User Report"
+      title="User Report"
+      subject={user.name}
       meta={meta}
       metaRows={[
-        { label: 'Name', value: user.name },
         { label: 'Email', value: user.email },
         { label: 'Role', value: roleNames(meta)[user.role] ?? user.role },
         ...(isStudent
@@ -581,20 +569,20 @@ export async function buildAdminUserReport(
     >
       {w && (
         <>
-          <Text style={styles.sectionTitle}>Graded work</Text>
+          <Section title="Graded work" />
           <StatGrid
             items={[
               { label: 'Patient cases graded', value: `${w.scenariosGraded}/${w.scenariosAssigned}` },
-              gradeTile('Patient case grade', w.scenarioAverage),
-              { label: 'Case presentations', value: pct(w.caseAverage) },
-              { label: 'Quizzes', value: pct(w.quizAverage) },
+              scoreTile('Patient case grade', w.scenarioAverage),
+              scoreTile('Case presentations', w.caseAverage),
+              scoreTile('Quizzes', w.quizAverage),
             ]}
           />
         </>
       )}
       {load && (
         <>
-          <Text style={styles.sectionTitle}>Supervision</Text>
+          <Section title="Supervision" />
           <StatGrid
             items={[
               { label: 'Groups', value: load.groups.length },
@@ -690,19 +678,17 @@ export async function buildAdminSummaryReport(
   const dean = roleNames(meta).admin;
   const description = `${dean} overview with ${plural(totalStudents, 'student')}, ${totalFaculty} instructors, ${plural(totalAdmins, dean.toLowerCase())} and ${plural(totalRooms, 'room')} (${totalOccupied} of ${totalCapacity} places occupied).`;
 
-  const metaRows = [
-    { label: 'Scope', value: scope ? 'Your instructors and students' : 'Everyone' },
-  ];
+  const metaRows: { label: string; value: string }[] = [];
 
   const pdf = (
     <ReportShell
       title={`${dean} Summary Report`}
-      heading={`${dean} Summary Report`}
+      subject="Your instructors and students"
       meta={meta}
       metaRows={metaRows}
     >
       <Text style={lead}>{description}</Text>
-      <Text style={styles.sectionTitle}>Overview</Text>
+      <Section title="Overview" />
       <StatGrid
         items={[
           { label: 'Students', value: totalStudents },
@@ -712,7 +698,7 @@ export async function buildAdminSummaryReport(
         ]}
       />
 
-      <Text style={styles.sectionTitle}>Grading</Text>
+      <Section title="Grading" />
       <StatGrid
         items={[
           { label: 'Grades given', value: gradesGiven },
@@ -721,7 +707,7 @@ export async function buildAdminSummaryReport(
         ]}
       />
 
-      <Text style={styles.sectionTitle}>Instructors</Text>
+      <Section title="Instructors" />
       <Table
         head={['Name', 'Email', 'Joined', 'Last login']}
         widths={[2, 2.6, 1.2, 1.2]}
@@ -729,7 +715,7 @@ export async function buildAdminSummaryReport(
         emptyText="No instructor accounts yet."
       />
 
-      <Text style={styles.sectionTitle}>Rooms</Text>
+      <Section title="Rooms" />
       <Table
         head={['Room', 'Number', 'Capacity', 'Occupied', 'Status']}
         rows={roomRows}

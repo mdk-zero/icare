@@ -1,7 +1,7 @@
 import { Text, View } from '@react-pdf/renderer';
 import type { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getFacultyStudentIds } from '@/app/lib/roster';
-import { CourseCriteria, ReportShell, StatGrid, TEAL, Table, scoreColor, styles, type ReportMeta, type ReportDocument } from './kit';
+import { CourseCriteria, Note, ReportShell, Section, StatGrid, TEAL, Table, scoreColor, scoreTile, styles, type ReportMeta, type ReportDocument } from './kit';
 import {
   CASE_STATUS_LABEL,
   NEEDS_PRACTICE_BELOW,
@@ -9,7 +9,6 @@ import {
   avg,
   date,
   grade,
-  gradeTile,
   groupNames,
   isLate,
   pct,
@@ -84,7 +83,6 @@ export type BuildResult = BuiltReport | { error: string; status: number };
  */
 export type StudentScope = readonly string[] | null;
 
-const note = { fontSize: 8, color: '#6b7280', marginTop: 6 } as const;
 
 // ---------------------------------------------------------------------------
 // Student — everything one student has been graded on
@@ -251,29 +249,28 @@ export async function buildStudentReport(
 
   const pdf = (
     <ReportShell
-      title={`Student Report - ${student.name}`}
-      heading="Student Progress Report"
+      title="Student Progress Report"
+      subject={student.name}
       meta={meta}
       metaRows={[
-        { label: 'Student', value: student.name },
         { label: 'Email', value: student.email },
         { label: 'Section', value: section },
         { label: 'Group', value: groups.get(studentId) ?? 'No group' },
       ]}
     >
-      <Text style={styles.sectionTitle}>Summary</Text>
+      <Section title="Summary" />
       <StatGrid
         items={[
-          gradeTile('Patient case average', avg(scoresOf(scenarioRows))),
-          gradeTile('Case presentation average', avg(scoresOf(caseRows))),
-          { label: 'Quiz average', value: pct(avg(scoresOf(quizRows))) },
+          scoreTile('Patient case average', avg(scoresOf(scenarioRows))),
+          scoreTile('Case presentation average', avg(scoresOf(caseRows))),
+          scoreTile('Quiz average', avg(scoresOf(quizRows))),
         ]}
       />
 
-      <Text style={styles.sectionTitle}>Courses and criteria for assessment</Text>
+      <Section title="Courses and criteria for assessment" />
       <CourseCriteria courses={courses} />
 
-      <Text style={styles.sectionTitle}>Assigned work by course</Text>
+      <Section title="Assigned work by course" />
       {blocks.length === 0 ? (
         <Text style={styles.empty}>Nothing has been assigned to this student yet.</Text>
       ) : (
@@ -302,18 +299,18 @@ export async function buildStudentReport(
         })
       )}
 
-      <Text style={styles.sectionTitle}>Skill areas</Text>
+      <Section title="Skill areas" />
       <Table
         head={['Area', 'Ratings', 'Latest']}
         rows={areas.map(([name, a]) => [name, a.count, `${a.latest}%`])}
         emptyText="No skill area ratings recorded yet."
       />
 
-      <Text style={note}>
+      <Note>
         Only work assigned to the student is listed. Grades use the verbal scale instructors grade on: Excellent,
         Satisfactory or Needs Practice. A quiz grade is the average of the student&apos;s graded tries. Skill
         Assessments pass at {PASSING_SCORE}%.
-      </Text>
+      </Note>
     </ReportShell>
   );
 
@@ -405,28 +402,27 @@ export async function buildSectionReport(
 
   const pdf = (
     <ReportShell
-      title={`Section Report - ${section.name}`}
-      heading="Section Performance Report"
+      title="Section Performance Report"
+      subject={section.name}
       orientation="landscape"
       meta={meta}
       metaRows={[
-        { label: 'Section', value: section.name },
         { label: 'Students', value: String(roster.length) },
         { label: 'Groups', value: String([...byGroup.keys()].filter((g) => g !== 'No group').length) },
       ]}
     >
-      <Text style={styles.sectionTitle}>Summary</Text>
+      <Section title="Summary" />
       <StatGrid
         items={[
           { label: 'Students', value: roster.length },
-          gradeTile('Patient case average', avg(scenarioAverages)),
-          gradeTile('Return demo average', avg(demoAverages)),
-          { label: 'Quiz average', value: pct(avg(quizAverages)) },
+          scoreTile('Patient case average', avg(scenarioAverages)),
+          scoreTile('Return demo average', avg(demoAverages)),
+          scoreTile('Quiz average', avg(quizAverages)),
           { label: 'Needs Practice', value: needsPractice },
         ]}
       />
 
-      <Text style={styles.sectionTitle}>Groups</Text>
+      <Section title="Groups" />
       {groupBlocks.length === 0 ? (
         <Text style={styles.empty}>No students in this section yet.</Text>
       ) : (
@@ -444,17 +440,17 @@ export async function buildSectionReport(
         ))
       )}
 
-      <Text style={styles.sectionTitle}>Skill areas (section mean)</Text>
+      <Section title="Skill areas (section mean)" />
       <Table
         head={['Area', 'Ratings', 'Mean']}
         rows={areaRows}
         emptyText="No skill area ratings recorded for this section yet."
       />
-      <Text style={note}>
+      <Note>
         Patient cases counts graded out of assigned. A quiz average is over the quizzes the student has taken, each
         graded as the average of its graded tries. Needs Practice counts students whose patient case average is
         below {NEEDS_PRACTICE_BELOW}%.
-      </Text>
+      </Note>
     </ReportShell>
   );
 
@@ -506,28 +502,27 @@ export async function buildScenarioReport(
 
   const pdf = (
     <ReportShell
-      title={`Patient Case Report - ${scenario.title}`}
-      heading="Patient Case Report"
+      title="Patient Case Results Report"
+      subject={scenario.title}
       meta={meta}
       metaRows={[
-        { label: 'Patient Case', value: scenario.title },
         { label: 'Category', value: String(scenario.category) },
       ]}
     >
-      <Text style={styles.sectionTitle}>Summary</Text>
+      <Section title="Summary" />
       <StatGrid
         items={[
           { label: 'Assigned', value: rows.length },
           { label: 'Awaiting grade', value: awaiting },
           { label: 'Performed', value: graded.length },
-          gradeTile('Average grade', avg(graded)),
+          scoreTile('Average grade', avg(graded)),
         ]}
       />
 
-      <Text style={styles.sectionTitle}>Grades</Text>
+      <Section title="Grades" />
       <Table head={['Level', 'Students']} rows={levels} emptyText="Nothing performed yet." />
 
-      <Text style={styles.sectionTitle}>Students</Text>
+      <Section title="Students" />
       <Table
         head={['Student', 'Group', 'Status', 'Performed', 'Grade']}
         widths={[2.4, 1, 1.4, 1.4, 1.9]}
@@ -694,11 +689,10 @@ export async function buildAssessmentReport(
 
   const pdf = (
     <ReportShell
-      title={`Quiz Results - ${assessment.title}`}
-      heading="Quiz Results Report"
+      title="Quiz Results Report"
+      subject={assessment.title}
       meta={meta}
       metaRows={[
-        { label: 'Quiz', value: assessment.title },
         { label: 'Status', value: assessment.is_published ? 'Published' : 'Draft' },
         {
           label: 'Time limit',
@@ -708,18 +702,18 @@ export async function buildAssessmentReport(
         { label: 'Passing grade', value: `${PASSING_SCORE}%` },
       ]}
     >
-      <Text style={styles.sectionTitle}>Summary</Text>
+      <Section title="Summary" />
       <StatGrid
         items={[
           { label: 'Given the quiz', value: rows.length },
           { label: 'Completed', value: grades.length },
           { label: 'Not started', value: rows.length - grades.length },
-          { label: 'Class average', value: pct(avg(grades)) },
+          scoreTile('Class average', avg(grades)),
           { label: `Passed (${PASSING_SCORE}% and up)`, value: grades.length ? `${passed} (${pct(passRate)})` : '—' },
         ]}
       />
 
-      <Text style={styles.sectionTitle}>Results by criterion</Text>
+      <Section title="Results by criterion" />
       {criteriaRows.length === 0 ? (
         <Text style={styles.empty}>This quiz has no scoring criteria.</Text>
       ) : (
@@ -759,26 +753,25 @@ export async function buildAssessmentReport(
               </Text>
             </View>
           ))}
-          <Text style={note}>
+          <Note>
             The share of each criterion&apos;s questions the class answered right, over every graded try. The
             shortest bars are the skills to review with the class.
-          </Text>
+          </Note>
         </View>
       )}
 
-      <Text style={styles.sectionTitle}>Grade distribution</Text>
+      <Section title="Grade distribution" />
       <Table head={['Grade', 'Students']} rows={bands} emptyText="No one has completed the quiz yet." />
 
       {sections.length === 0 ? (
         <>
-          <Text style={styles.sectionTitle}>Students</Text>
+          <Section title="Students" />
           <Text style={styles.empty}>This quiz has not been given to anyone yet.</Text>
         </>
       ) : (
         sections.map((sec) => (
           <View key={sec.section}>
-            <Text style={styles.sectionTitle}>{`Section ${sec.section}`}</Text>
-            <Text style={styles.courseSub}>{summaryLine(sec.list)}</Text>
+            <Section title={`Section ${sec.section}`} caption={summaryLine(sec.list)} />
             {sec.groups.map(({ group, members }) => (
               // A group stays on one page, its heading with its students.
               <View key={group || 'none'} style={{ marginBottom: 8 }} wrap={false}>
@@ -805,10 +798,10 @@ export async function buildAssessmentReport(
           </View>
         ))
       )}
-      <Text style={note}>
+      <Note>
         A grade is the average of the student&apos;s graded tries; review quizzes don&apos;t count. Late marks a try
         handed in more than a minute past the time limit; it is still graded and counted.
-      </Text>
+      </Note>
     </ReportShell>
   );
 
@@ -864,25 +857,22 @@ export async function buildRosterReport(
   const pdf = (
     <ReportShell
       title="Roster Summary Report"
-      heading="Roster Summary Report"
+      subject={session.role === 'admin' ? 'Your students' : 'Your groups'}
       meta={meta}
-      metaRows={[
-        { label: 'Scope', value: session.role === 'admin' ? 'Your students' : 'Your groups' },
-        { label: 'Students', value: String(rows.length) },
-      ]}
+      metaRows={[]}
     >
-      <Text style={styles.sectionTitle}>Summary</Text>
+      <Section title="Summary" />
       <StatGrid
         items={[
           { label: 'Students', value: rows.length },
-          gradeTile('Patient case average', avg(scenarioAverages)),
-          gradeTile('Return demo average', avg(demoAverages)),
-          { label: 'Quiz average', value: pct(avg(quizAverages)) },
+          scoreTile('Patient case average', avg(scenarioAverages)),
+          scoreTile('Return demo average', avg(demoAverages)),
+          scoreTile('Quiz average', avg(quizAverages)),
           { label: 'Nothing graded yet', value: noWork },
         ]}
       />
 
-      <Text style={styles.sectionTitle}>Students</Text>
+      <Section title="Students" />
       <Table
         head={['Student', 'Section', 'Group', 'Patient case grade', 'Return demo grade', 'Case grade', 'Quiz average']}
         widths={[2.1, 1, 1, 1.8, 1.8, 0.9, 1.1]}
@@ -980,11 +970,10 @@ export async function buildDischargeReport(
 
   const pdf = (
     <ReportShell
-      title={`Discharge Summary — ${name}`}
-      heading="Discharge Summary"
+      title="Discharge Summary"
+      subject={`${name}${patient?.age != null ? `, ${patient.age}` : ''}`}
       meta={meta}
       metaRows={[
-        { label: 'Patient', value: `${name}${patient?.age != null ? `, ${patient.age}` : ''}` },
         { label: 'Record ID', value: patient?.mimic_id ?? '—' },
         { label: 'Diagnosis', value: summary.diagnosis || '—' },
         { label: 'Room', value: summary.room_label || '—' },
@@ -993,7 +982,7 @@ export async function buildDischargeReport(
         { label: 'Length of stay', value: days === null ? '—' : `${days} day(s)` },
       ]}
     >
-      <Text style={styles.sectionTitle}>Stay at a glance</Text>
+      <Section title="Stay at a glance" />
       <StatGrid
         items={[
           { label: 'Vitals readings', value: vitals.readings ?? 0 },
@@ -1004,14 +993,14 @@ export async function buildDischargeReport(
         ]}
       />
 
-      <Text style={styles.sectionTitle}>Vital signs over the stay</Text>
+      <Section title="Vital signs over the stay" />
       <Table
         head={['Vital', 'Min', 'Avg', 'Max', 'Readings']}
         rows={vitalRows}
         emptyText="No vital signs were charted during this stay."
       />
 
-      <Text style={styles.sectionTitle}>Abnormal findings</Text>
+      <Section title="Abnormal findings" />
       {(vitals.findings ?? []).length === 0 ? (
         <Text style={styles.empty}>No readings fell outside their reference range.</Text>
       ) : (
@@ -1024,7 +1013,7 @@ export async function buildDischargeReport(
         ))
       )}
 
-      <Text style={styles.sectionTitle}>Follow-up recommendations</Text>
+      <Section title="Follow-up recommendations" />
       {followUp.length === 0 ? (
         <Text style={styles.empty}>
           No follow-up recommendations have been drafted for this discharge.
@@ -1136,18 +1125,17 @@ export async function buildCaseReport(
 
   const pdf = (
     <ReportShell
-      title={`Case Presentation — ${g.team_name}`}
-      heading="Case Presentation"
+      title="Case Presentation Report"
+      subject={title}
       meta={meta}
       metaRows={[
         { label: 'Group', value: [g.team_name, g.section_name].filter(Boolean).join(' · ') },
-        { label: 'Presentation', value: title },
         { label: 'Leader', value: leader?.name ?? '—' },
         { label: 'Slides', value: g.file_name ?? '—' },
         { label: 'Presented', value: `${date(g.submitted_at)}${late ? ' (late)' : ''}` },
       ]}
     >
-      <Text style={styles.sectionTitle}>Result</Text>
+      <Section title="Result" />
       <StatGrid
         items={[
           { label: 'Group score', value: score === null ? '—' : `${score}%` },
@@ -1158,7 +1146,7 @@ export async function buildCaseReport(
       <Table head={['Criterion', 'Weight', 'Level', 'Points', 'Remarks']} widths={[3, 0.8, 1.4, 0.8, 2]} rows={rubricRows} />
       {g.remarks ? <Text style={{ marginTop: 6 }}>Instructor remarks: {g.remarks}</Text> : null}
 
-      <Text style={styles.sectionTitle}>Members</Text>
+      <Section title="Members" />
       <Text style={{ marginBottom: 4 }}>Graded as a group: every member receives the group score.</Text>
       <Table
         head={['Member', 'Role']}
@@ -1218,21 +1206,21 @@ export async function buildChecklistReport(
     const p = members[0];
     const pdf = (
       <ReportShell
-        title={`${noun} - ${roster.title} - ${p.name}`}
-        heading={heading}
+        title={heading}
+        subject={p.name}
+        runningLabel={`${p.name} · ${roster.title}`}
         meta={meta}
         metaRows={[
           { label: noun, value: roster.title },
-          { label: 'Student', value: p.name },
           { label: 'Group', value: p.groupLabel },
           { label: 'Date of performance', value: date(p.deadline) },
           { label: 'Performed', value: date(p.completedAt) },
         ]}
       >
-        <Text style={styles.sectionTitle}>Result</Text>
+        <Section title="Result" />
         <StatGrid
           items={[
-            { label: 'Score', value: pct(p.score) },
+            scoreTile('Score', p.score, ''),
             { label: 'Rating', value: p.score === null ? '—' : scoreDescriptor(p.score) },
             // A Return Demonstration's remark already says where it stands, so it has no status tile.
             ...(kind === 'return_demo'
@@ -1240,7 +1228,7 @@ export async function buildChecklistReport(
               : [{ label: 'Status', value: statusOf(p) }]),
           ]}
         />
-        <Text style={styles.sectionTitle}>Checklist and grades</Text>
+        <Section title="Checklist and grades" />
         <ChecklistSheet columns={['Grade']} skills={skills} />
       </ReportShell>
     );
@@ -1251,25 +1239,23 @@ export async function buildChecklistReport(
   const groupLabel = members[0].groupLabel;
   const pdf = (
     <ReportShell
-      title={`${noun} - ${roster.title} - ${groupLabel}`}
-      heading={heading}
+      title={heading}
+      subject={groupLabel}
+      runningLabel={`${groupLabel} · ${roster.title}`}
       orientation="landscape"
+      audience="instructor-copy"
       meta={meta}
-      metaRows={[
-        { label: noun, value: roster.title },
-        { label: 'Group', value: groupLabel },
-        { label: 'Members', value: String(members.length) },
-      ]}
+      metaRows={[{ label: noun, value: roster.title }]}
     >
-      <Text style={styles.sectionTitle}>Summary</Text>
+      <Section title="Summary" />
       <StatGrid
         items={[
           { label: 'Members', value: members.length },
           { label: 'Performed', value: graded.length },
-          gradeTile('Group average', avg(graded)),
+          scoreTile('Group average', avg(graded)),
         ]}
       />
-      <Text style={styles.sectionTitle}>Members</Text>
+      <Section title="Members" />
       <Table
         head={kind === 'return_demo' ? ['Member', 'Date of performance', 'Score', 'Remarks'] : ['Member', 'Date of performance', 'Status', 'Score']}
         widths={kind === 'return_demo' ? [3, 1.6, 1.8, 1.6] : [3, 1.6, 1.4, 1.6]}
@@ -1279,7 +1265,7 @@ export async function buildChecklistReport(
             : [m.name, date(m.deadline), statusOf(m), grade(m.score)],
         )}
       />
-      <Text style={styles.sectionTitle}>Checklist and grades</Text>
+      <Section title="Checklist and grades" />
       <ChecklistSheet columns={members.map((m) => m.name)} skills={skills} />
     </ReportShell>
   );
@@ -1322,30 +1308,28 @@ export async function buildSectionGroupReport(
 
   const pdf = (
     <ReportShell
-      title={`Group Report - ${sectionName} - ${team.name}`}
-      heading="Group Performance Report"
+      title="Group Performance Report"
+      subject={`${sectionName} · ${team.name}`}
       orientation="landscape"
+      audience="instructor-copy"
       meta={meta}
-      metaRows={[
-        { label: 'Group', value: `${sectionName} · ${team.name}` },
-        { label: 'Members', value: String(rows.length) },
-      ]}
+      metaRows={[]}
     >
-      <Text style={styles.sectionTitle}>Summary</Text>
+      <Section title="Summary" />
       <StatGrid
         items={[
           { label: 'Members', value: rows.length },
-          gradeTile('Patient case average', avg(caseAverages)),
-          gradeTile('Return demo average', avg(demoAverages)),
-          { label: 'Quiz average', value: pct(avg(quizAverages)) },
+          scoreTile('Patient case average', avg(caseAverages)),
+          scoreTile('Return demo average', avg(demoAverages)),
+          scoreTile('Quiz average', avg(quizAverages)),
         ]}
       />
-      <Text style={styles.sectionTitle}>Work given to this group</Text>
+      <Section title="Work given to this group" />
       <ActivityTable members={gridMembers} />
-      <Text style={note}>
+      <Note>
         Only the work assigned to the group&apos;s members is listed. A dash means it is not done yet; a blank means
         it was not given to that member.
-      </Text>
+      </Note>
     </ReportShell>
   );
   return { subject: `${sectionName} ${team.name}`, pdf };
@@ -1383,42 +1367,42 @@ export async function buildQuizDetailReport(
     const taken = tries.get(p.studentId) ?? [];
     const pdf = (
       <ReportShell
-        title={`Quiz - ${roster.title} - ${p.name}`}
-        heading="Quiz Answers Report"
+        title="Quiz Answers Report"
+        subject={p.name}
+        runningLabel={`${p.name} · ${roster.title}`}
         meta={meta}
         metaRows={[
           { label: 'Quiz', value: roster.title },
-          { label: 'Student', value: p.name },
           { label: 'Group', value: p.groupLabel },
           { label: 'Submitted tries', value: String(p.tries) },
         ]}
       >
-        <Text style={styles.sectionTitle}>Result</Text>
+        <Section title="Result" />
         <StatGrid
           items={[
-            { label: 'Grade', value: pct(p.grade) },
+            scoreTile('Grade', p.grade),
             { label: 'Submitted tries', value: p.tries },
             { label: 'Remarks', value: p.grade === null ? 'Not taken' : p.grade >= PASSING_SCORE ? 'Passed' : 'Below passing' },
           ]}
         />
-        <Text style={styles.sectionTitle}>Results by criterion</Text>
+        <Section title="Results by criterion" />
         <CriterionTable columns={['Correct']} rows={criterionForStudent(questions, criteria, taken)} />
         {taken.length === 0 ? (
           <Text style={styles.empty}>{p.name} has not submitted a try yet.</Text>
         ) : (
           taken.map((t) => (
             <View key={t.number}>
-              <Text style={styles.sectionTitle}>
-                {`Try ${t.number} - ${pct(t.score === null ? null : Math.round(t.score))}${t.submittedAt ? ` - ${date(t.submittedAt)}` : ''}`}
-              </Text>
+              <Section
+                title={`Try ${t.number} - ${pct(t.score === null ? null : Math.round(t.score))}${t.submittedAt ? ` - ${date(t.submittedAt)}` : ''}`}
+              />
               <QuizAnswers rows={answerRows(questions, criteria, t)} />
             </View>
           ))
         )}
-        <Text style={note}>
+        <Note>
           The grade is the average of the graded tries; review quizzes don&apos;t count. Each question is shown as the
           student was served it.
-        </Text>
+        </Note>
       </ReportShell>
     );
     return { subject: `${roster.title} ${p.name}`, pdf };
@@ -1430,25 +1414,23 @@ export async function buildQuizDetailReport(
   const groupLabel = members[0].groupLabel;
   const pdf = (
     <ReportShell
-      title={`Quiz - ${roster.title} - ${groupLabel}`}
-      heading="Quiz Answers Report"
+      title="Quiz Answers Report"
+      subject={groupLabel}
+      runningLabel={`${groupLabel} · ${roster.title}`}
       orientation="landscape"
+      audience="instructor-copy"
       meta={meta}
-      metaRows={[
-        { label: 'Quiz', value: roster.title },
-        { label: 'Group', value: groupLabel },
-        { label: 'Members', value: String(members.length) },
-      ]}
+      metaRows={[{ label: 'Quiz', value: roster.title }]}
     >
-      <Text style={styles.sectionTitle}>Summary</Text>
+      <Section title="Summary" />
       <StatGrid
         items={[
           { label: 'Members', value: members.length },
           { label: 'Completed', value: grades.length },
-          { label: 'Group average', value: pct(avg(grades)) },
+          scoreTile('Group average', avg(grades)),
         ]}
       />
-      <Text style={styles.sectionTitle}>Members</Text>
+      <Section title="Members" />
       <Table
         head={['Member', 'Submitted tries', 'Grade', 'Remarks']}
         widths={[3, 1.2, 1.2, 1.6]}
@@ -1459,13 +1441,13 @@ export async function buildQuizDetailReport(
           m.grade === null ? 'Not taken' : m.grade >= PASSING_SCORE ? 'Passed' : 'Below passing',
         ])}
       />
-      <Text style={styles.sectionTitle}>Results by criterion</Text>
+      <Section title="Results by criterion" />
       <CriterionTable columns={members.map((m) => m.name)} rows={criterionForGroup(questions, criteria, latest)} />
-      <Text style={styles.sectionTitle}>Questions</Text>
+      <Section title="Questions" />
       <QuizMatrix columns={columns} rows={rows} />
-      <Text style={note}>
+      <Note>
         Each member&apos;s latest graded try. A dash means the question was not served to that member.
-      </Text>
+      </Note>
     </ReportShell>
   );
   return { subject: `${roster.title} ${groupLabel}`, pdf };
