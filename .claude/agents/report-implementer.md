@@ -38,10 +38,14 @@ the main session runs `./check.sh` and commits them.
 **Match the reports around you.** Copy the shape of the closest existing builder in
 `web/app/lib/reports/builders.tsx` (Instructor) or `admin-builders.tsx` (Dean and Program
 Chair): a `build<Name>Report(supabase, meta, id, scope)` that returns `{ subject, pdf }` or
-`{ error, status }`. Draw with the kit in `kit-ui.tsx` (`ReportShell`, `StatGrid`, `Table`,
-`CourseCriteria`, `styles`, `scoreColor`) and the sheets beside it; format with the helpers in
-`data.ts`. A part two reports need goes into `kit-ui.tsx`, which must stay free of server-only
-imports so the demo can use it. Comments explain why, not what, and only where the surrounding
+`{ error, status }`. Draw with the kit in `kit-ui.tsx` (`ReportShell`, `scoreTile`/`countTile`
+in a `StatGrid`, `Table` with `Col`/`Cell`, `Section`, `Attention`, `Note`, `ScoreKey`,
+`Distribution`, `CourseBlock`) and the sheets beside it (`student-sheet`, `cohort-sheet`,
+`class-sheet`, `checklist-report`, `quiz-report`, `case-sheet`, `discharge-sheet`,
+`dean-sheet`, which the demo builds from too); colour scores with `bands.ts`, pool averages
+with the totals helpers in `view.ts`, and format with the helpers in `data.ts` and `view.ts`.
+A part two reports need goes into `kit-ui.tsx`, which must stay free of server-only imports so
+the demo can use it. Comments explain why, not what, and only where the surrounding
 code would have one.
 
 **Register the type everywhere it is listed.** The type array and its `NEEDS_TARGET` record,

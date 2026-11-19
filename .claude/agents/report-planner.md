@@ -32,13 +32,19 @@ text.
 ## How reports are built
 
 - **Kit.** `web/app/lib/reports/kit-ui.tsx` holds the parts every report shares, with no
-  server-only code so the demo can render them in the browser: `ReportShell` (letterhead,
-  heading, meta rows, footer, `orientation`), `StatGrid` (tiles), `Table`, `CourseCriteria`,
-  `styles`, `TEAL` and `scoreColor`. `kit.tsx` adds the server's logo, `renderReport` and
-  `reportResponse`. Larger parts: `checklist-sheet.tsx`, `activity-sheet.tsx`,
-  `quiz-sheet.tsx`, each with a `*-data.ts` loader. Formatting helpers (`pct`, `grade`,
-  `date`, `plural`, `isLate`, `slugify`, `PASSING_SCORE`, `NEEDS_PRACTICE_BELOW`) are in
-  `data.ts`. Plan with these parts first; a new shared part goes in `kit-ui.tsx` so every
+  server-only code so the demo can render them in the browser: `ReportShell` (letterhead
+  with title and subject, compact meta rows, running header on pages 2+, footer with page
+  numbers and the Instructor copy line, `orientation`), `scoreTile`/`countTile` in a
+  `StatGrid`, `Table` (`Col`/`Cell`, fixed header row, row tones), `Section`, `Attention`,
+  `Note`, `ScoreKey`, `Distribution` and `CourseBlock`. `bands.ts` holds the score bands and
+  colours (75/50); `view.ts` holds Philippine-time dates, the pooled totals (`addScore`,
+  `poolTotals`, `averageOf`), `orderForAction`, `workTiles` and `attentionItems`. `kit.tsx`
+  adds the server's logo and fonts, `renderReport` and `reportResponse`. Each report's body
+  lives in a sheet the builder and the demo share (`student-sheet`, `cohort-sheet`,
+  `class-sheet`, `checklist-report`, `quiz-report`, `case-sheet`, `discharge-sheet`,
+  `dean-sheet`), drawn from `checklist-sheet`, `activity-sheet` and `quiz-sheet` with their
+  `*-data.ts` loaders. Formatting helpers (`date`, `isLate`, `slugify`, `PASSING_SCORE`,
+  `NEEDS_PRACTICE_BELOW`, `DORMANT_DAYS`) are in `data.ts`. Pages are US Letter. Plan with these parts first; a new shared part goes in `kit-ui.tsx` so every
   report can use it.
 - **Builders.** Instructor reports are in `builders.tsx` (`REPORT_TYPES`,
   `REPORT_NEEDS_TARGET`), Dean and Program Chair reports in `admin-builders.tsx`

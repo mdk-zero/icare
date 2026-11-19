@@ -8,7 +8,7 @@
 import { Text } from '@react-pdf/renderer';
 import { PASSING_SCORE, TONE } from './bands';
 import { belowPass, overallOf } from './cohort-sheet';
-import { Note, Attention, ScoreKey, Section, StatGrid, Table, countTile, scoreTile, styles, type Cell, type Tile } from './kit-ui';
+import { Note, Attention, ScoreKey, Section, StatGrid, Table, countTile, scoreTile, styles, tableAhead, type Cell, type Tile } from './kit-ui';
 import {
   DORMANT_DAYS,
   averageOf,
@@ -408,7 +408,7 @@ export function SummaryBody({ students, sections, instructors, awaiting, oldestA
         emptyText="No instructor accounts yet."
       />
 
-      <Section title="Rooms" />
+      <Section title="Rooms" ahead={tableAhead(rooms.count === 0 ? 0 : 1)} />
       <Table
         head={['Rooms', 'Capacity', 'Occupied', 'Utilisation']}
         widths={[3, 1, 1, 1.2]}

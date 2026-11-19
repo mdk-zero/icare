@@ -1,7 +1,7 @@
 "use client";
 
 import { pdf } from "@react-pdf/renderer";
-import { Note, ReportShell, registerReportFonts, type MetaRow, type ReportDocument, type ReportMeta } from "../reports/kit-ui";
+import { ReportShell, registerReportFonts, type MetaRow, type ReportDocument, type ReportMeta } from "../reports/kit-ui";
 import { addScore, dateLabel, earlierOf, emptyTotals, generatedStamp, poolTotals, totalOf, type KindTotals } from "../reports/view";
 import { FacultyListBody, FacultyOneBody, RoomOneBody, RoomsListBody, SummaryBody, UserOneBody, UsersListBody, type InstructorFacts, type InstructorRow, type InstructorTotals, type RoomRow, type SupervisedGroup } from "../reports/dean-sheet";
 import { StudentReportBody, type StudentWorkItem } from "../reports/student-sheet";
@@ -49,9 +49,8 @@ function meta(ctx: Ctx): ReportMeta {
 
 function Shell({ ctx, title, subject, runningLabel, rows, orientation, audience, children }: { ctx: Ctx; title: string; subject: string; runningLabel?: string; rows: MetaRow[]; orientation?: "portrait" | "landscape"; audience?: "instructor-copy"; children: React.ReactNode }) {
   return (
-    <ReportShell title={title} subject={subject} runningLabel={runningLabel} meta={meta(ctx)} metaRows={rows} logo={LOGO} orientation={orientation} audience={audience}>
+    <ReportShell title={title} subject={subject} runningLabel={runningLabel} meta={meta(ctx)} metaRows={rows} logo={LOGO} orientation={orientation} audience={audience} footerNote="Demo report: built from sample data in your browser.">
       {children}
-      <Note>Demo report: built from sample data in your browser.</Note>
     </ReportShell>
   );
 }

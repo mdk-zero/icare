@@ -5,10 +5,8 @@
  * submitted attempts, each quiz the average of its graded tries.
  */
 import type { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { scoreDescriptor } from '../task-ratings';
 import { ofKind, scenarioKinds } from '../scenario-kind';
 import { readMatching } from '../fetch-all';
-import { quizGrade } from '../quiz-attempts';
 import { addScore, dateLabel, emptyTotals, type KindTotals } from './view';
 export { PASSING_SCORE, NEEDS_PRACTICE_BELOW } from './bands';
 // Defined beside the other pure report figures so the demo can use it; see the note there.
@@ -19,25 +17,6 @@ type Supabase = ReturnType<typeof getSupabaseAdmin>;
 export function avg(values: number[]): number | null {
   if (values.length === 0) return null;
   return Math.round(values.reduce((sum, v) => sum + v, 0) / values.length);
-}
-
-export function pct(value: number | null): string {
-  return value === null ? '—' : `${value}%`;
-}
-
-/** "82% Satisfactory", or a dash when nothing is graded. */
-export function grade(score: number | null): string {
-  return score === null ? '—' : `${score}% ${scoreDescriptor(score)}`;
-}
-
-/** A stat tile for a grade: the percent as the value, the verbal level in the label. */
-export function gradeTile(label: string, score: number | null): { label: string; value: string } {
-  return { label: score === null ? label : `${label}: ${scoreDescriptor(score)}`, value: pct(score) };
-}
-
-/** "1 admin", "3 admins". */
-export function plural(n: number, one: string, many = `${one}s`): string {
-  return `${n} ${n === 1 ? one : many}`;
 }
 
 export function date(value: string | null): string {
@@ -84,18 +63,6 @@ export async function groupNames(supabase: Supabase, studentIds: readonly string
 }
 
 export interface StudentWork {
-  scenariosAssigned: number;
-  scenariosGraded: number;
-  scenarioAverage: number | null;
-  returnDemosAssigned: number;
-  returnDemosGraded: number;
-  returnDemoAverage: number | null;
-  casesGraded: number;
-  caseAverage: number | null;
-  /** Quizzes with at least one graded try. */
-  quizzesTaken: number;
-  /** Across those quizzes, each graded as the average of its graded tries (quizGrade), as the app grades them. */
-  quizAverage: number | null;
   /**
    * Every graded piece of work, summed by kind for the "Overall average" (see view.ts).
    * Each submitted quiz try counts on its own; practice runs do not.
@@ -118,7 +85,7 @@ export async function studentWork(
 
   type Scenario = { student_id: string; scenario_id: string; status: string; score: number | null };
   type Case = { student_id: string; status: string; score: number | null };
-  type Attempt = { student_id: string; assessment_id: string; score: number | null };
+  type Attempt = { student_id: string; score: number | null };
   const [scenarios, cases, attempts] = await Promise.all([
     readMatching<Scenario>(ids, (part, from, to) =>
       supabase.from('scenario_assignments').select('id, student_id, scenario_id, status, score').in('student_id', part).order('id').range(from, to),
@@ -133,7 +100,7 @@ export async function studentWork(
     readMatching<Attempt>(ids, (part, from, to) =>
       supabase
         .from('assessment_attempts')
-        .select('id, student_id, assessment_id, score')
+        .select('id, student_id, score')
         .eq('status', 'submitted')
         .in('student_id', part)
         .order('id')
@@ -141,67 +108,27 @@ export async function studentWork(
     ),
   ]);
 
-  const lists = new Map<
-    string,
-    { scenario: number[]; assigned: number; demo: number[]; demos: number; kase: number[]; quiz: Map<string, number[]>; totals: KindTotals }
-  >();
-  const entry = (id: string) => {
-    let e = lists.get(id);
-    if (!e) lists.set(id, (e = { scenario: [], assigned: 0, demo: [], demos: 0, kase: [], quiz: new Map(), totals: emptyTotals() }));
-    return e;
+  const totals = new Map<string, KindTotals>();
+  const of = (id: string) => {
+    let t = totals.get(id);
+    if (!t) totals.set(id, (t = emptyTotals()));
+    return t;
   };
   // Patient Cases and Return Demonstrations (072) are counted apart.
   const kinds = await scenarioKinds(supabase, [...new Set(scenarios.map((a) => a.scenario_id))]);
-  for (const a of ofKind(scenarios, kinds, 'patient_case', (row) => row.scenario_id)) {
-    const e = entry(a.student_id);
-    e.assigned += 1;
-    if (a.status === 'completed' && a.score !== null) {
-      e.scenario.push(Number(a.score));
-      addScore(e.totals, 'patient_case', Number(a.score));
-    }
-  }
-  for (const a of ofKind(scenarios, kinds, 'return_demo', (row) => row.scenario_id)) {
-    const e = entry(a.student_id);
-    e.demos += 1;
-    if (a.status === 'completed' && a.score !== null) {
-      e.demo.push(Number(a.score));
-      addScore(e.totals, 'return_demo', Number(a.score));
+  for (const kind of ['patient_case', 'return_demo'] as const) {
+    for (const a of ofKind(scenarios, kinds, kind, (row) => row.scenario_id)) {
+      if (a.status === 'completed' && a.score !== null) addScore(of(a.student_id), kind, Number(a.score));
     }
   }
   for (const c of cases) {
-    if (c.status === 'graded' && c.score !== null) {
-      const e = entry(c.student_id);
-      e.kase.push(Number(c.score));
-      addScore(e.totals, 'case_presentation', Number(c.score));
-    }
+    if (c.status === 'graded' && c.score !== null) addScore(of(c.student_id), 'case_presentation', Number(c.score));
   }
   for (const a of attempts) {
-    if (a.score === null) continue;
-    const e = entry(a.student_id);
-    e.quiz.set(a.assessment_id, [...(e.quiz.get(a.assessment_id) ?? []), Number(a.score)]);
-    addScore(e.totals, 'quiz', Number(a.score));
+    if (a.score !== null) addScore(of(a.student_id), 'quiz', Number(a.score));
   }
 
-  for (const id of ids) {
-    const e = lists.get(id);
-    const quizGrades = [...(e?.quiz.values() ?? [])].flatMap((tries) => {
-      const g = quizGrade(tries);
-      return g === null ? [] : [g];
-    });
-    work.set(id, {
-      scenariosAssigned: e?.assigned ?? 0,
-      scenariosGraded: e?.scenario.length ?? 0,
-      scenarioAverage: avg(e?.scenario ?? []),
-      returnDemosAssigned: e?.demos ?? 0,
-      returnDemosGraded: e?.demo.length ?? 0,
-      returnDemoAverage: avg(e?.demo ?? []),
-      casesGraded: e?.kase.length ?? 0,
-      caseAverage: avg(e?.kase ?? []),
-      quizzesTaken: quizGrades.length,
-      quizAverage: avg(quizGrades),
-      totals: e?.totals ?? emptyTotals(),
-    });
-  }
+  for (const id of ids) work.set(id, { totals: totals.get(id) ?? emptyTotals() });
   return work;
 }
 

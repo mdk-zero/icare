@@ -177,17 +177,10 @@ export const styles = StyleSheet.create({
     },
     marginTop: 1,
   },
+  footerNote: { marginTop: 1 },
 
   // Section headings, notes and empty states
   sectionHead: { marginTop: 14, marginBottom: 6 },
-  sectionTitle: {
-    fontSize: 13,
-    get fontFamily() {
-      return reportFonts.display;
-    },
-    fontWeight: 700,
-    color: TEAL,
-  },
   sectionCaption: { fontSize: 8, color: MUTED, marginTop: 2 },
   note: { fontSize: 8, color: MUTED, marginTop: 6 },
   empty: { color: FAINT, fontSize: 9, paddingVertical: 6 },
@@ -275,7 +268,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 5,
   },
 
-  // Legacy: the sheets' body rows and the builders' own bars still draw with these.
+  // The sheets' body rows (checklist, quiz and activity grids) draw with this.
   row: {
     flexDirection: 'row',
     borderBottomWidth: 1,
@@ -284,11 +277,6 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
   },
-  headRow: { backgroundColor: SUBTLE, fontWeight: 700 },
-  cellWide: { flex: 3, paddingHorizontal: 4 },
-  cell: { flex: 1, paddingHorizontal: 4, textAlign: 'right' },
-  barTrack: { flex: 2, height: 6, backgroundColor: HAIRLINE, borderRadius: 3, marginHorizontal: 4 },
-  courseTitle: { fontWeight: 700, marginTop: 10 },
   courseSub: { fontSize: 8, color: FAINT, marginTop: 1, marginBottom: 4 },
 });
 
@@ -298,6 +286,13 @@ export const styles = StyleSheet.create({
  * this much, so a grid's header never ends a page alone.
  */
 export const GRID_AHEAD = 150;
+
+/**
+ * What a heading over a short table asks to have after it: the header row and every row, up to
+ * the default 70 pt. A one-row table needs about 50 pt, so its heading stays on a page that has
+ * that much left instead of moving for room the table never uses.
+ */
+export const tableAhead = (rows: number) => Math.min(70, 26 + 25 * rows);
 
 /** The content width of a landscape Letter page (792 less the 40 pt margins), which the member grids lay out in. */
 const LANDSCAPE_WIDTH = 712;
@@ -403,6 +398,7 @@ export function ReportShell({
   logo,
   orientation = 'portrait',
   audience,
+  footerNote,
   children,
 }: {
   /** The report's name: "Student Progress Report". */
@@ -419,6 +415,12 @@ export function ReportShell({
   orientation?: 'portrait' | 'landscape';
   /** "instructor-copy" marks a report that shows members' grades side by side, in its footer. */
   audience?: 'instructor-copy';
+  /**
+   * A line in the footer, such as the demo's "built from sample data", after the Instructor copy
+   * line when there is one so the footer stays two lines. It sits in the footer, not after the
+   * content, so it can never land alone on a page of its own.
+   */
+  footerNote?: string;
   children: ReactNode;
 }) {
   setPaper(orientation);
@@ -461,7 +463,14 @@ export function ReportShell({
             <Text>
               Generated {meta.generatedAt} by {meta.generatedBy} · Confidential academic record
             </Text>
-            {audience === 'instructor-copy' && <Text style={styles.footerCopy}>{INSTRUCTOR_COPY}</Text>}
+            {audience === 'instructor-copy' ? (
+              <Text style={styles.footerCopy}>
+                {INSTRUCTOR_COPY}
+                {footerNote && <Text style={{ fontWeight: 400 }}>{`  ·  ${footerNote}`}</Text>}
+              </Text>
+            ) : (
+              footerNote && <Text style={styles.footerNote}>{footerNote}</Text>
+            )}
           </View>
           <Text style={styles.footerPage} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
         </View>
@@ -506,6 +515,15 @@ function MetaBlock({ rows }: { rows: MetaRow[] }) {
 
 // --- Headings, notes and callouts -----------------------------------------------------
 
+const sectionHeading = {
+  fontSize: 13,
+  get fontFamily() {
+    return reportFonts.display;
+  },
+  fontWeight: 700,
+  color: TEAL,
+} as const;
+
 /**
  * A heading with an optional caption that says how the rows below are ordered.
  * It keeps 70 pt of what follows on the same page, so a heading never ends a
@@ -528,7 +546,7 @@ export function Section({
     <>
       {/* wrap={false}: react-pdf skips minPresenceAhead for a heading that straddles the page end, and splits it. */}
       <View style={styles.sectionHead} minPresenceAhead={ahead} wrap={false}>
-        <Text style={styles.sectionTitle}>{title}</Text>
+        <Text style={sectionHeading}>{title}</Text>
         {caption && <Text style={styles.sectionCaption}>{caption}</Text>}
       </View>
       {children}
