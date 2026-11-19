@@ -23,13 +23,13 @@ import { averageOf, orderByOverall, poolTotals, totalOf, workTiles, type KindTot
 import type { WorkKind } from '../work-kinds';
 
 /** A student's overall average, the Analytics way; null when nothing is graded. */
-const overallOf = (totals: KindTotals) => averageOf(totalOf(totals));
+export const overallOf = (totals: KindTotals) => averageOf(totalOf(totals));
 
 /** "1 student", "12 students". */
 const countOf = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** Students whose overall average is under the pass mark, and how many have any graded work to judge. */
-function belowPass(overalls: (number | null)[]) {
+export function belowPass(overalls: (number | null)[]) {
   const graded = overalls.filter((o): o is number => o !== null);
   return { below: graded.filter((o) => o < PASSING_SCORE).length, graded: graded.length };
 }

@@ -11,6 +11,8 @@ import { readMatching } from '../fetch-all';
 import { quizGrade } from '../quiz-attempts';
 import { addScore, dateLabel, emptyTotals, type KindTotals } from './view';
 export { PASSING_SCORE, NEEDS_PRACTICE_BELOW } from './bands';
+// Defined beside the other pure report figures so the demo can use it; see the note there.
+export { DORMANT_DAYS } from './view';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 

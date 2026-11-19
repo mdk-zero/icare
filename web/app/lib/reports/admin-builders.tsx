@@ -1,9 +1,23 @@
 import { adminVisibleUserIds, ownsFaculty, type AdminScope } from '@/app/lib/admin-scope';
-import { Text } from '@react-pdf/renderer';
 import type { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { ReportShell, Section, StatGrid, scoreTile, Table, type ReportMeta, type ReportDocument } from './kit';
-import { avg, date as fmtDate, grade, groupNames, plural, studentWork } from './data';
-import { readMatching } from '../fetch-all';
+import { ReportShell, type ReportMeta, type ReportDocument } from './kit';
+import { date as fmtDate, groupNames, studentWork } from './data';
+import {
+  FacultyListBody,
+  FacultyOneBody,
+  RoomOneBody,
+  RoomsListBody,
+  SummaryBody,
+  UserOneBody,
+  UsersListBody,
+  type AccountRow,
+  type InstructorFacts,
+  type InstructorRow,
+  type RoomRow,
+  type SupervisedGroup,
+} from './dean-sheet';
+import { earlierOf, emptyTotals, poolTotals, totalOf } from './view';
+import { fetchAll, readMatching } from '../fetch-all';
 import { kindOf, scenarioKinds } from '../scenario-kind';
 import { termStatus } from '../course-progress';
 import { loadOfferingRosters } from '../courses';
@@ -32,17 +46,12 @@ export interface BuiltReport {
 
 export type BuildResult = BuiltReport | { error: string; status: number };
 
-const lead = { fontSize: 10, color: '#4b5563', marginTop: 10, marginBottom: 12, lineHeight: 1.4 } as const;
-
 // ---------------------------------------------------------------------------
 // Faculty — the groups each faculty member supervises, and their grading
 // ---------------------------------------------------------------------------
 
-/** Pads an empty id list so an `in` filter matches nothing rather than erroring. */
-const idsOrNone = (ids: readonly string[]) => (ids.length ? [...ids] : ['00000000-0000-0000-0000-000000000000']);
-
 interface FacultyLoad {
-  groups: { id: string; label: string; section: string }[];
+  groups: { id: string; label: string; section: string; memberIds: string[] }[];
   /** Their roster: their group members, plus whole sections and added students on their running courses. */
   studentIds: string[];
   /** Patient Cases they finalized. */
@@ -54,6 +63,8 @@ interface FacultyLoad {
   awaiting: number;
   /** The work behind `awaiting`, so totals across instructors count each piece once. */
   awaitingIds: string[];
+  /** The earliest `submitted_at` among that work; null when nothing is waiting. */
+  oldestAwaitingAt: string | null;
 }
 
 /**
@@ -67,7 +78,7 @@ async function facultyLoad(supabase: Supabase, facultyIds: readonly string[]): P
   const load = new Map<string, FacultyLoad>(
     facultyIds.map((id) => [
       id,
-      { groups: [], studentIds: [], scenariosGraded: 0, demosGraded: 0, casesGraded: 0, awaiting: 0, awaitingIds: [] },
+      { groups: [], studentIds: [], scenariosGraded: 0, demosGraded: 0, casesGraded: 0, awaiting: 0, awaitingIds: [], oldestAwaitingAt: null },
     ]),
   );
   if (facultyIds.length === 0) return load;
@@ -78,9 +89,12 @@ async function facultyLoad(supabase: Supabase, facultyIds: readonly string[]): P
     (part, from, to) => supabase.from('teams').select('id, name, faculty_id, sections(name)').in('faculty_id', part).order('id').range(from, to),
   );
   const teamOwner = new Map<string, string>();
+  const groupOf = new Map<string, FacultyLoad['groups'][number]>();
   for (const t of teams) {
     const section = t.sections?.name ?? 'No section';
-    load.get(t.faculty_id)?.groups.push({ id: t.id, label: `${section} / ${t.name}`, section });
+    const group = { id: t.id, label: `${section} / ${t.name}`, section, memberIds: [] as string[] };
+    load.get(t.faculty_id)?.groups.push(group);
+    groupOf.set(t.id, group);
     teamOwner.set(t.id, t.faculty_id);
   }
 
@@ -91,6 +105,7 @@ async function facultyLoad(supabase: Supabase, facultyIds: readonly string[]): P
   for (const m of members) {
     const owner = teamOwner.get(m.team_id);
     if (owner) roster.get(owner)!.add(m.student_id);
+    groupOf.get(m.team_id)?.memberIds.push(m.student_id);
   }
 
   // Their running courses' rosters (a course they teach this semester or next).
@@ -142,18 +157,18 @@ async function facultyLoad(supabase: Supabase, facultyIds: readonly string[]): P
     readMatching<{ graded_by: string }>(ids, (part, from, to) =>
       supabase.from('case_submissions').select('id, graded_by').eq('status', 'graded').in('graded_by', part).order('id').range(from, to),
     ).catch(() => []),
-    readMatching<{ id: string; student_id: string }>(students, (part, from, to) =>
+    readMatching<{ id: string; student_id: string; submitted_at: string | null }>(students, (part, from, to) =>
       supabase
         .from('scenario_assignments')
-        .select('id, student_id')
+        .select('id, student_id, submitted_at')
         .neq('status', 'completed')
         .not('submitted_at', 'is', null)
         .in('student_id', part)
         .order('id')
         .range(from, to),
     ),
-    readMatching<{ id: string; student_id: string }>(students, (part, from, to) =>
-      supabase.from('case_submissions').select('id, student_id').eq('status', 'submitted').in('student_id', part).order('id').range(from, to),
+    readMatching<{ id: string; student_id: string; submitted_at: string | null }>(students, (part, from, to) =>
+      supabase.from('case_submissions').select('id, student_id, submitted_at').eq('status', 'submitted').in('student_id', part).order('id').range(from, to),
     ).catch(() => []),
   ]);
   const kinds = await scenarioKinds(supabase, [...new Set(finalized.map((r) => r.scenario_id))]);
@@ -173,6 +188,7 @@ async function facultyLoad(supabase: Supabase, facultyIds: readonly string[]): P
         const e = load.get(facultyId)!;
         e.awaiting += 1;
         e.awaitingIds.push(`${prefix}:${r.id}`);
+        e.oldestAwaitingAt = earlierOf(e.oldestAwaitingAt, r.submitted_at);
       }
     }
   }
@@ -187,7 +203,39 @@ function loadTotals(load: Map<string, FacultyLoad>) {
     students: new Set(all.flatMap((l) => l.studentIds)).size,
     graded: all.reduce((n, l) => n + l.scenariosGraded + l.demosGraded + l.casesGraded, 0),
     awaiting: new Set(all.flatMap((l) => l.awaitingIds)).size,
+    oldestAwaitingAt: all.reduce<string | null>((oldest, l) => earlierOf(oldest, l.oldestAwaitingAt), null),
   };
+}
+
+const graded = (l: FacultyLoad) => l.scenariosGraded + l.demosGraded + l.casesGraded;
+
+const instructorFacts = (l: FacultyLoad): InstructorFacts => ({
+  groups: l.groups.length,
+  students: l.studentIds.length,
+  patientCasesGraded: l.scenariosGraded,
+  returnDemosGraded: l.demosGraded,
+  casesGraded: l.casesGraded,
+  awaiting: l.awaiting,
+  oldestAwaitingAt: l.oldestAwaitingAt,
+});
+
+interface FacultyAccount {
+  id: string;
+  name: string;
+  email: string;
+  created_at: string | null;
+  last_login_at: string | null;
+}
+
+/** The instructor accounts in scope; every one, paged, before the ownership column exists. */
+async function readFaculty(supabase: Supabase, facultyIds: readonly string[] | null): Promise<FacultyAccount[]> {
+  const select = 'id, name, email, created_at, last_login_at';
+  const rows = facultyIds
+    ? await readMatching<FacultyAccount>(facultyIds, (part, from, to) =>
+        supabase.from('users').select(select).eq('role', 'faculty').in('id', part).order('id').range(from, to),
+      )
+    : await fetchAll<FacultyAccount>((from, to) => supabase.from('users').select(select).eq('role', 'faculty').order('id').range(from, to));
+  return rows.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function buildAdminFacultyReport(
@@ -196,96 +244,53 @@ export async function buildAdminFacultyReport(
   facultyId: string,
   scope: AdminScope | null = null,
 ): Promise<BuildResult> {
+  const now = new Date();
   if (facultyId && !ownsFaculty(scope, facultyId)) return { error: 'Instructor not found', status: 404 };
   if (!facultyId) {
-    let facultyQuery = supabase
-      .from('users')
-      .select('id, name, email, last_login_at')
-      .eq('role', 'faculty')
-      .order('name');
-    if (scope) facultyQuery = facultyQuery.in('id', idsOrNone(scope.facultyIds));
-    const { data: allFaculty } = await facultyQuery;
-    const faculty = allFaculty ?? [];
+    const faculty = await readFaculty(supabase, scope ? scope.facultyIds : null);
     const load = await facultyLoad(supabase, faculty.map((f) => f.id));
-
     const totals = loadTotals(load);
-    const withoutGroups = faculty.filter((f) => (load.get(f.id)?.groups.length ?? 0) === 0).length;
+
+    const rows: InstructorRow[] = faculty.map((f) => {
+      const l = load.get(f.id)!;
+      return {
+        name: f.name,
+        groups: l.groups.length,
+        students: l.studentIds.length,
+        graded: graded(l),
+        awaiting: l.awaiting,
+        oldestAwaitingAt: l.oldestAwaitingAt,
+        lastLogin: f.last_login_at,
+      };
+    });
 
     const pdf = (
-      <ReportShell
-        title="All Instructors Report"
-        subject={scope ? 'Your instructors' : 'All instructors'}
-        meta={meta}
-        metaRows={[]}
-      >
-        <Text style={lead}>
-          {plural(faculty.length, 'instructor')} {faculty.length === 1 ? 'supervises' : 'supervise'}{' '}
-          {plural(totals.groups, 'group')} with {plural(totals.students, 'student')}.{' '}
-          {withoutGroups > 0
-            ? `${withoutGroups} ${withoutGroups === 1 ? 'has' : 'have'} no group yet.`
-            : 'Every one of them has a group.'}
-        </Text>
-        <StatGrid
-          items={[
-            { label: 'Instructors', value: faculty.length },
-            { label: 'Students supervised', value: totals.students },
-            { label: 'Grades given', value: totals.graded },
-            { label: 'Awaiting grade', value: totals.awaiting },
-          ]}
-        />
-        <Section title="Instructors" />
-        <Table
-          head={['Name / Email', 'Groups', 'Students', 'Graded', 'Awaiting', 'Last login']}
-          widths={[3, 0.9, 1, 0.9, 1, 1.4]}
-          rows={faculty.map((f) => {
-            const l = load.get(f.id)!;
-            return [
-              `${f.name}\n${f.email}`,
-              l.groups.length,
-              l.studentIds.length,
-              l.scenariosGraded + l.demosGraded + l.casesGraded,
-              l.awaiting,
-              fmtDate(f.last_login_at),
-            ];
-          })}
-          emptyText="No instructor accounts yet."
-        />
-        <Text style={{ fontSize: 8, color: '#6b7280', marginTop: 6 }}>
-          Students are each instructor&apos;s roster: their group members, plus whole sections and students
-          added by hand on their courses this semester. Graded counts the patient cases, return demonstrations
-          and case presentations they graded. Awaiting counts work their students handed in that is not graded
-          yet. The totals count a student or a piece of work shared by two instructors once.
-        </Text>
+      <ReportShell title="All Instructors Report" subject={scope ? 'Your instructors' : 'All instructors'} meta={meta} metaRows={[]}>
+        <FacultyListBody rows={rows} totals={totals} now={now} />
       </ReportShell>
     );
 
     return { subject: 'all-faculty', pdf };
   }
 
-  const { data: faculty } = await supabase
-    .from('users')
-    .select('id, name, email, created_at, last_login_at')
-    .eq('id', facultyId)
-    .eq('role', 'faculty')
-    .maybeSingle();
+  const [{ data: faculty }, loads] = await Promise.all([
+    supabase.from('users').select('id, name, email, created_at, last_login_at').eq('id', facultyId).eq('role', 'faculty').maybeSingle(),
+    facultyLoad(supabase, [facultyId]),
+  ]);
   if (!faculty) return { error: 'Instructor not found', status: 404 };
 
-  const l = (await facultyLoad(supabase, [facultyId])).get(facultyId)!;
-  const work = await studentWork(supabase, l.studentIds);
-  const { data: memberRows } = l.groups.length
-    ? await supabase.from('team_members').select('team_id, student_id').in('team_id', l.groups.map((g) => g.id))
-    : { data: [] as { team_id: string; student_id: string }[] };
+  const l = loads.get(facultyId)!;
+  const work = await studentWork(supabase, [...new Set(l.groups.flatMap((g) => g.memberIds))]);
 
-  const groupRows = l.groups
-    .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }))
-    .map((g) => {
-      const ids = (memberRows ?? []).filter((m) => m.team_id === g.id).map((m) => m.student_id as string);
-      const graded = ids.flatMap((id) => {
-        const a = work.get(id)?.scenarioAverage;
-        return a === null || a === undefined ? [] : [a];
-      });
-      return [g.label, ids.length, `${graded.length}/${ids.length}`, grade(avg(graded))];
-    });
+  const groups: SupervisedGroup[] = l.groups.map((g) => {
+    const totals = poolTotals(g.memberIds.map((id) => work.get(id)?.totals ?? emptyTotals()));
+    return {
+      name: g.label,
+      members: g.memberIds.length,
+      withWork: g.memberIds.filter((id) => totalOf(work.get(id)?.totals ?? emptyTotals()).n > 0).length,
+      totals,
+    };
+  });
   const sections = [...new Set(l.groups.map((g) => g.section))].sort();
 
   const pdf = (
@@ -295,30 +300,12 @@ export async function buildAdminFacultyReport(
       meta={meta}
       metaRows={[
         { label: 'Email', value: faculty.email },
+        { label: 'Sections', value: sections.join(', ') || 'None' },
         { label: 'Joined', value: fmtDate(faculty.created_at) },
         { label: 'Last login', value: fmtDate(faculty.last_login_at) },
-        { label: 'Sections', value: sections.join(', ') || 'None' },
       ]}
     >
-      <Section title="Summary" />
-      <StatGrid
-        items={[
-          { label: 'Groups', value: l.groups.length },
-          { label: 'Students', value: l.studentIds.length },
-          { label: 'Patient cases graded', value: l.scenariosGraded },
-          { label: 'Return demos graded', value: l.demosGraded },
-          { label: 'Cases graded', value: l.casesGraded },
-          { label: 'Awaiting grade', value: l.awaiting },
-        ]}
-      />
-
-      <Section title="Groups supervised" />
-      <Table
-        head={['Group', 'Members', 'Graded', 'Patient case average']}
-        widths={[3, 1, 1, 2]}
-        rows={groupRows}
-        emptyText="Not supervising any group yet."
-      />
+      <FacultyOneBody facts={instructorFacts(l)} groups={groups} now={now} />
     </ReportShell>
   );
 
@@ -345,6 +332,34 @@ function roleNames(meta: ReportMeta): Record<string, string> {
 // Rooms — one room's details and current assignments
 // ---------------------------------------------------------------------------
 
+/**
+ * The rooms of a Dean's ward (077), or every room without a limit, with how
+ * many students each one holds now. The assignments are read for these rooms
+ * only and paged, so a busy ward is never cut off at the row cap.
+ */
+async function readRooms(supabase: Supabase, deanId: string | null): Promise<RoomRow[]> {
+  let query = supabase.from('rooms').select('id, name, room_number, capacity, status').order('room_number');
+  if (deanId) query = query.eq('admin_id', deanId);
+  const { data, error } = await query;
+  if (error) throw error;
+  const rooms = (data ?? []) as { id: string; name: string; room_number: string; capacity: number | null; status: string | null }[];
+
+  const held = await readMatching<{ room_id: string }>(
+    rooms.map((r) => r.id),
+    (part, from, to) => supabase.from('room_assignments').select('id, room_id').in('room_id', part).is('ends_at', null).order('id').range(from, to),
+  );
+  const occupancy = new Map<string, number>();
+  for (const a of held) occupancy.set(a.room_id, (occupancy.get(a.room_id) ?? 0) + 1);
+
+  return rooms.map((r) => ({
+    name: r.name,
+    number: r.room_number,
+    capacity: r.capacity ?? 0,
+    occupied: occupancy.get(r.id) ?? 0,
+    status: r.status ?? 'active',
+  }));
+}
+
 export async function buildAdminRoomReport(
   supabase: Supabase,
   meta: ReportMeta,
@@ -352,106 +367,47 @@ export async function buildAdminRoomReport(
   /** The Dean whose ward this is (077); null for every room. */
   deanId: string | null = null,
 ): Promise<BuildResult> {
-  let roomsQuery = supabase.from('rooms').select('*').order('room_number');
-  if (deanId) roomsQuery = roomsQuery.eq('admin_id', deanId);
   if (!roomId) {
-    const [{ data: rooms }, { data: activeAssignments }] = await Promise.all([
-      roomsQuery,
-      supabase.from('room_assignments').select('room_id').is('ends_at', null),
-    ]);
-
-    const occupancy = new Map<string, number>();
-    for (const a of activeAssignments ?? []) {
-      occupancy.set(a.room_id, (occupancy.get(a.room_id) ?? 0) + 1);
-    }
-
-    const rows = (rooms ?? []).map((r) => [
-      r.name,
-      r.room_number,
-      String(r.capacity ?? 0),
-      String(occupancy.get(r.id) ?? 0),
-      r.status ?? 'active',
-    ]);
-
-    const totalCapacity = (rooms ?? []).reduce((sum, r) => sum + (r.capacity ?? 0), 0);
-    const totalOccupied = (rooms ?? []).reduce((sum, r) => sum + (occupancy.get(r.id) ?? 0), 0);
-    const utilPct = totalCapacity > 0 ? Math.round((totalOccupied / totalCapacity) * 100) : 0;
-    const activeRooms = (rooms ?? []).filter((r) => r.status === 'active' || !r.status).length;
-    const description = `This report covers all ${rooms?.length ?? 0} rooms with a total capacity of ${totalCapacity}, ${totalOccupied} currently occupied (${utilPct}% utilization). ${activeRooms} rooms are active.`;
-
-    const metaRows = [{ label: 'Rooms', value: String(rooms?.length ?? 0) }];
-
+    const rooms = await readRooms(supabase, deanId);
     const pdf = (
-      <ReportShell
-        title="All Rooms Report"
-        subject="Your ward"
-        meta={meta}
-        metaRows={metaRows}
-      >
-        <Text style={lead}>{description}</Text>
-        <Section title="Room Roster" />
-        <Table
-          head={['Room', 'Number', 'Capacity', 'Occupied', 'Status']}
-          rows={rows}
-          emptyText="No rooms created yet."
-        />
+      <ReportShell title="All Rooms Report" subject="Your ward" meta={meta} metaRows={[]}>
+        <RoomsListBody rooms={rooms} />
       </ReportShell>
     );
 
     return { subject: 'all-rooms', pdf };
   }
 
-  const { data: room } = await roomsQuery.eq('id', roomId).maybeSingle();
+  let roomQuery = supabase.from('rooms').select('id, name, room_number, capacity, status').eq('id', roomId);
+  if (deanId) roomQuery = roomQuery.eq('admin_id', deanId);
+  const { data: room } = await roomQuery.maybeSingle();
 
   if (!room) return { error: 'Room not found', status: 404 };
 
-  const { data: assignments } = await supabase
+  // Two foreign keys point at users (the student and who assigned them), so the embed names the first.
+  const { data: assignments, error } = await supabase
     .from('room_assignments')
-    .select('id, users(name, email), started_at')
+    .select('id, starts_at, users!room_assignments_student_id_fkey(name)')
     .eq('room_id', roomId)
     .is('ends_at', null);
+  if (error) throw error;
 
   const occupants = (assignments ?? []).map((a) => ({
-    name: (a as unknown as { users: { name: string; email: string } | null }).users?.name ?? 'Unknown',
-    email: (a as unknown as { users: { name: string; email: string } | null }).users?.email ?? '',
-    since: fmtDate(a.started_at),
+    name: (a as unknown as { users: { name: string } | null }).users?.name ?? 'Unknown',
+    since: a.starts_at as string | null,
   }));
-
-  const occupancy = occupants.length;
-  const capacity = room.capacity ?? 0;
-
-  const roomStatusLabel = room.status ?? 'active';
-  const available = Math.max(0, capacity - occupancy);
-  const description = `Report for ${room.name} (${room.room_number}), a ${roomStatusLabel} room with a capacity of ${capacity}. Currently ${occupancy} ${occupancy === 1 ? 'student is' : 'students are'} assigned, leaving ${available} ${available === 1 ? 'spot' : 'spots'} available.`;
-
-  const metaRows = [
-    { label: 'Number', value: room.room_number },
-    { label: 'Status', value: roomStatusLabel },
-  ];
 
   const pdf = (
     <ReportShell
       title="Room Report"
       subject={room.name}
       meta={meta}
-      metaRows={metaRows}
+      metaRows={[
+        { label: 'Number', value: room.room_number },
+        { label: 'Status', value: (room.status ?? 'active').replace(/^./, (c: string) => c.toUpperCase()) },
+      ]}
     >
-      <Text style={lead}>{description}</Text>
-      <Section title="Occupancy" />
-      <StatGrid
-        items={[
-          { label: 'Capacity', value: capacity },
-          { label: 'Occupied', value: occupancy },
-          { label: 'Available', value: available },
-        ]}
-      />
-
-      <Section title="Current Occupants" />
-      <Table
-        head={['Student', 'Email', 'Since']}
-        rows={occupants.map((o) => [o.name, o.email, o.since])}
-        emptyText="No students assigned to this room."
-      />
+      <RoomOneBody capacity={room.capacity ?? 0} occupants={occupants} />
     </ReportShell>
   );
 
@@ -469,58 +425,29 @@ export async function buildAdminUserReport(
   scope: AdminScope | null = null,
   adminId = '',
 ): Promise<BuildResult> {
+  const now = new Date();
   const visible = scope ? adminVisibleUserIds(scope, adminId) : null;
   if (userId && visible && !visible.includes(userId)) return { error: 'User not found', status: 404 };
   if (!userId) {
-    let usersQuery = supabase
-      .from('users')
-      .select('id, name, email, role, created_at, last_login_at')
-      .order('name');
-    if (visible) usersQuery = usersQuery.in('id', visible);
-    const { data: users } = await usersQuery;
+    type Account = { id: string; name: string; email: string; role: string; created_at: string | null; last_login_at: string | null };
+    const select = 'id, name, email, role, created_at, last_login_at';
+    const users = visible
+      ? await readMatching<Account>(visible, (part, from, to) => supabase.from('users').select(select).in('id', part).order('id').range(from, to))
+      : await fetchAll<Account>((from, to) => supabase.from('users').select(select).order('id').range(from, to));
     const roles = roleNames(meta);
 
-    const rows = (users ?? []).map((u) => [
-      `${u.name}\n${u.email}`,
-      roles[u.role] ?? u.role,
-      fmtDate(u.created_at),
-      fmtDate(u.last_login_at),
-    ]);
-
-    const byRole = new Map<string, number>();
-    for (const u of users ?? []) {
-      byRole.set(u.role, (byRole.get(u.role) ?? 0) + 1);
-    }
-
-    const studentCount = byRole.get('student') ?? 0;
-    const facultyCount = byRole.get('faculty') ?? 0;
-    const adminCount = byRole.get('admin') ?? 0;
-    const description = `This report covers all ${users?.length ?? 0} users: ${studentCount} students, ${facultyCount} instructors, and ${plural(adminCount, roles.admin.toLowerCase())}.`;
-
-    const metaRows = [{ label: 'Users', value: String(users?.length ?? 0) }];
+    const rows: AccountRow[] = users.map((u) => ({
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      roleName: roles[u.role] ?? u.role,
+      createdAt: u.created_at,
+      lastLogin: u.last_login_at,
+    }));
 
     const pdf = (
-      <ReportShell
-        title="All Users Report"
-        subject="Your users"
-        meta={meta}
-        metaRows={metaRows}
-      >
-        <Text style={lead}>{description}</Text>
-        <Section title="Overview" />
-        <StatGrid
-          items={[
-            { label: 'Students', value: studentCount },
-            { label: 'Instructors', value: facultyCount },
-            { label: `${roles.admin}s`, value: adminCount },
-          ]}
-        />
-        <Section title="User Roster" />
-        <Table
-          head={['Name / Email', 'Role', 'Joined', 'Last login']}
-          rows={rows}
-          emptyText="No users yet."
-        />
+      <ReportShell title="All Users Report" subject="Your users" meta={meta} metaRows={[]}>
+        <UsersListBody rows={rows} now={now} />
       </ReportShell>
     );
 
@@ -535,19 +462,17 @@ export async function buildAdminUserReport(
 
   if (!user) return { error: 'User not found', status: 404 };
 
-  const joinedDate = fmtDate(user.created_at);
-  const lastLogin = fmtDate(user.last_login_at);
   const isStudent = user.role === 'student';
 
-  const [groups, work, { data: section }] = await Promise.all([
+  const [groups, work, { data: section }, loads] = await Promise.all([
     isStudent ? groupNames(supabase, [userId]) : Promise.resolve(new Map<string, string>()),
     isStudent ? studentWork(supabase, [userId]) : Promise.resolve(null),
     user.section_id
       ? supabase.from('sections').select('name').eq('id', user.section_id).maybeSingle()
       : Promise.resolve({ data: null }),
+    user.role === 'faculty' ? facultyLoad(supabase, [userId]) : Promise.resolve(null),
   ]);
-  const w = work?.get(userId);
-  const load = user.role === 'faculty' ? (await facultyLoad(supabase, [userId])).get(userId)! : null;
+  const load = loads?.get(userId) ?? null;
 
   const pdf = (
     <ReportShell
@@ -563,163 +488,96 @@ export async function buildAdminUserReport(
               { label: 'Group', value: groups.get(userId) ?? 'No group' },
             ]
           : []),
-        { label: 'Joined', value: joinedDate },
-        { label: 'Last login', value: lastLogin },
+        { label: 'Joined', value: fmtDate(user.created_at) },
+        { label: 'Last login', value: fmtDate(user.last_login_at) },
       ]}
     >
-      {w && (
-        <>
-          <Section title="Graded work" />
-          <StatGrid
-            items={[
-              { label: 'Patient cases graded', value: `${w.scenariosGraded}/${w.scenariosAssigned}` },
-              scoreTile('Patient case grade', w.scenarioAverage),
-              scoreTile('Case presentations', w.caseAverage),
-              scoreTile('Quizzes', w.quizAverage),
-            ]}
-          />
-        </>
-      )}
-      {load && (
-        <>
-          <Section title="Supervision" />
-          <StatGrid
-            items={[
-              { label: 'Groups', value: load.groups.length },
-              { label: 'Students', value: load.studentIds.length },
-              { label: 'Grades given', value: load.scenariosGraded + load.demosGraded + load.casesGraded },
-              { label: 'Awaiting grade', value: load.awaiting },
-            ]}
-          />
-        </>
-      )}
+      <UserOneBody student={work?.get(userId)?.totals} instructor={load ? instructorFacts(load) : undefined} now={now} />
     </ReportShell>
   );
 
   return { subject: user.name, pdf };
 }
 
-
 // ---------------------------------------------------------------------------
-// Summary — all faculty, rooms, and users at a glance
+// Summary — the Dean's cohort at a glance: results, grading backlog, workload, ward
 // ---------------------------------------------------------------------------
 
+/**
+ * Reads: students, instructors and their loads, graded work, sections and
+ * rooms all start together; only the room counts wait for the rooms. The
+ * graded work comes from studentWork, which pages every table past the row
+ * cap and chunks the id lists, and sums the same rows as dw.fact_student_work
+ * (the Analytics page), so the cohort figures match it.
+ */
 export async function buildAdminSummaryReport(
   supabase: Supabase,
   meta: ReportMeta,
   scope: AdminScope | null = null,
-  adminId = '',
   /** The Dean whose ward this is (077); null for every room. */
   deanId: string | null = null,
 ): Promise<BuildResult> {
-  let facultyQuery = supabase
-    .from('users')
-    .select('id, name, email, created_at, last_login_at')
-    .eq('role', 'faculty')
-    .order('name');
-  let countQuery = supabase.from('users').select('role').in('role', ['student', 'faculty', 'admin']);
-  // Only this admin's faculty, students (053) and rooms (077).
-  if (scope) {
-    facultyQuery = facultyQuery.in('id', idsOrNone(scope.facultyIds));
-    countQuery = countQuery.in('id', adminVisibleUserIds(scope, adminId));
-  }
-  let roomsQuery = supabase.from('rooms').select('*').order('room_number');
-  if (deanId) roomsQuery = roomsQuery.eq('admin_id', deanId);
-  const [{ data: faculty }, { data: rooms }, { data: userCounts }] = await Promise.all([
-    facultyQuery,
-    roomsQuery,
-    countQuery,
+  const now = new Date();
+  type StudentRow = { id: string; section_id: string | null; sections: { name: string } | null };
+  const readStudents = (ids: readonly string[] | null) =>
+    ids
+      ? readMatching<StudentRow>(ids, (part, from, to) =>
+          supabase.from('users').select('id, section_id, sections!section_id(name)').eq('role', 'student').in('id', part).order('id').range(from, to),
+        )
+      : fetchAll<StudentRow>((from, to) =>
+          supabase.from('users').select('id, section_id, sections!section_id(name)').eq('role', 'student').order('id').range(from, to),
+        );
+
+  // Before the ownership columns (053) there is no scope, so the lists are read first and the rest follows.
+  const early = scope ? null : await Promise.all([readStudents(null), readFaculty(supabase, null)]);
+  const studentIds = scope ? scope.studentIds : early![0].map((s) => s.id);
+  const facultyIds = scope ? scope.facultyIds : early![1].map((f) => f.id);
+
+  const [studentRows, faculty, load, work, sectionRows, rooms] = await Promise.all([
+    early ? early[0] : readStudents(studentIds),
+    early ? early[1] : readFaculty(supabase, facultyIds),
+    facultyLoad(supabase, facultyIds),
+    studentWork(supabase, studentIds),
+    // Sections in scope are listed even when nobody is in them yet.
+    scope
+      ? readMatching<{ id: string; name: string }>(scope.sectionIds, (part, from, to) =>
+          supabase.from('sections').select('id, name').in('id', part).order('id').range(from, to),
+        )
+      : Promise.resolve([] as { id: string; name: string }[]),
+    readRooms(supabase, deanId),
   ]);
 
-  const byRole = new Map<string, number>();
-  for (const u of userCounts ?? []) {
-    byRole.set(u.role, (byRole.get(u.role) ?? 0) + 1);
-  }
-
-  const { data: activeAssignments } = await supabase
-    .from('room_assignments')
-    .select('room_id')
-    .is('ends_at', null);
-
-  const occupancy = new Map<string, number>();
-  for (const a of activeAssignments ?? []) {
-    occupancy.set(a.room_id, (occupancy.get(a.room_id) ?? 0) + 1);
-  }
-
-  const facultyRows = (faculty ?? []).map((f) => [
-    f.name,
-    f.email,
-    fmtDate(f.created_at),
-    fmtDate(f.last_login_at),
-  ]);
-
-  const roomRows = (rooms ?? []).map((r) => [
-    r.name,
-    r.room_number,
-    String(r.capacity ?? 0),
-    String(occupancy.get(r.id) ?? 0),
-    r.status ?? 'active',
-  ]);
-
-  const totalStudents = byRole.get('student') ?? 0;
-  const totalFaculty = byRole.get('faculty') ?? 0;
-  const totalAdmins = byRole.get('admin') ?? 0;
-  const totalRooms = rooms?.length ?? 0;
-  const totalCapacity = (rooms ?? []).reduce((sum, r) => sum + (r.capacity ?? 0), 0);
-  const totalOccupied = (rooms ?? []).reduce((sum, r) => sum + (occupancy.get(r.id) ?? 0), 0);
-  const studentIds = scope ? scope.studentIds : null;
-  const load = await facultyLoad(supabase, (faculty ?? []).map((f) => f.id));
   const totals = loadTotals(load);
-  const awaiting = totals.awaiting;
-  const gradesGiven = totals.graded;
   const onARoster = new Set([...load.values()].flatMap((l) => l.studentIds));
-  const ungrouped = studentIds === null ? null : studentIds.filter((id) => !onARoster.has(id)).length;
 
-  const dean = roleNames(meta).admin;
-  const description = `${dean} overview with ${plural(totalStudents, 'student')}, ${totalFaculty} instructors, ${plural(totalAdmins, dean.toLowerCase())} and ${plural(totalRooms, 'room')} (${totalOccupied} of ${totalCapacity} places occupied).`;
-
-  const metaRows: { label: string; value: string }[] = [];
+  const instructors: InstructorRow[] = faculty.map((f) => {
+    const l = load.get(f.id)!;
+    return {
+      name: f.name,
+      groups: l.groups.length,
+      students: l.studentIds.length,
+      graded: graded(l),
+      awaiting: l.awaiting,
+      oldestAwaitingAt: l.oldestAwaitingAt,
+      lastLogin: f.last_login_at,
+    };
+  });
 
   const pdf = (
-    <ReportShell
-      title={`${dean} Summary Report`}
-      subject="Your instructors and students"
-      meta={meta}
-      metaRows={metaRows}
-    >
-      <Text style={lead}>{description}</Text>
-      <Section title="Overview" />
-      <StatGrid
-        items={[
-          { label: 'Students', value: totalStudents },
-          { label: 'Instructors', value: totalFaculty },
-          { label: `${dean}s`, value: totalAdmins },
-          { label: 'Rooms', value: totalRooms },
-        ]}
-      />
-
-      <Section title="Grading" />
-      <StatGrid
-        items={[
-          { label: 'Grades given', value: gradesGiven },
-          { label: 'Awaiting grade', value: awaiting },
-          { label: "Students on no instructor's roster", value: ungrouped ?? '—' },
-        ]}
-      />
-
-      <Section title="Instructors" />
-      <Table
-        head={['Name', 'Email', 'Joined', 'Last login']}
-        widths={[2, 2.6, 1.2, 1.2]}
-        rows={facultyRows}
-        emptyText="No instructor accounts yet."
-      />
-
-      <Section title="Rooms" />
-      <Table
-        head={['Room', 'Number', 'Capacity', 'Occupied', 'Status']}
-        rows={roomRows}
-        emptyText="No rooms created yet."
+    <ReportShell title={`${roleNames(meta).admin} Summary Report`} subject="Your instructors and students" meta={meta} metaRows={[]}>
+      <SummaryBody
+        students={studentRows.map((s) => ({ section: s.sections?.name ?? 'No section', totals: work.get(s.id)?.totals ?? emptyTotals() }))}
+        sections={sectionRows.map((s) => s.name)}
+        instructors={instructors}
+        awaiting={totals.awaiting}
+        oldestAwaitingAt={totals.oldestAwaitingAt}
+        notOnRoster={scope ? studentIds.filter((id) => !onARoster.has(id)).length : null}
+        rooms={{
+          count: rooms.length,
+          capacity: rooms.reduce((n, r) => n + r.capacity, 0),
+          occupied: rooms.reduce((n, r) => n + r.occupied, 0),
+        }}
+        now={now}
       />
     </ReportShell>
   );

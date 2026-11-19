@@ -1,8 +1,9 @@
 "use client";
 
-import { pdf, View } from "@react-pdf/renderer";
-import { Note, ReportShell, Section, StatGrid, Table, registerReportFonts, type MetaRow, type ReportDocument, type ReportMeta } from "../reports/kit-ui";
-import { addScore, dateLabel, emptyTotals, generatedStamp, type KindTotals } from "../reports/view";
+import { pdf } from "@react-pdf/renderer";
+import { Note, ReportShell, registerReportFonts, type MetaRow, type ReportDocument, type ReportMeta } from "../reports/kit-ui";
+import { addScore, dateLabel, earlierOf, emptyTotals, generatedStamp, poolTotals, totalOf, type KindTotals } from "../reports/view";
+import { FacultyListBody, FacultyOneBody, RoomOneBody, RoomsListBody, SummaryBody, UserOneBody, UsersListBody, type InstructorFacts, type InstructorRow, type InstructorTotals, type RoomRow, type SupervisedGroup } from "../reports/dean-sheet";
 import { StudentReportBody, type StudentWorkItem } from "../reports/student-sheet";
 import { GroupReportBody, RosterReportBody, SectionReportBody, type SectionStudent } from "../reports/cohort-sheet";
 import { isLateSubmission as isLateAttempt } from "../assessment-timing";
@@ -15,11 +16,12 @@ import { DischargeReportBody, dischargeMeta, stayDays } from "../reports/dischar
 import { QuizGroupBody, QuizStudentBody, quizStudentMeta } from "../reports/quiz-report";
 import type { GridEntry, GridMember } from "../reports/activity-sheet";
 import { criterionForClass, type QuizCriterion, type QuizQuestion, type QuizTry } from "../reports/quiz-model";
-import type { DemoAttempt } from "./fixtures/school";
+import type { DemoAttempt, DemoRoom } from "./fixtures/school";
 import type { DemoDb } from "./store";
+import type { DemoUser } from "./fixtures/people";
 import type { DemoCaseGroup } from "./fixtures/teaching";
 import type { DemoContext } from "./router";
-import { caseAverage, mean, prediction, quizAverage, submittedAttempts } from "./handlers/derive";
+import { mean, prediction, submittedAttempts } from "./handlers/derive";
 import { sectionName, teamLabel, userById, visibleStudents } from "./handlers/scope";
 import { DEMO_INSTITUTION } from "./fixtures/school";
 import { demoStudentStandings } from "./handlers/courses";
@@ -36,7 +38,6 @@ type Built = { subject: string; doc: ReportDocument } | { error: string; status:
 
 const LOGO = "/logo-no-bg.png";
 
-const pct = (v: number | null) => (v == null ? "—" : `${Math.round(v)}%`);
 const date = dateLabel;
 function meta(ctx: Ctx): ReportMeta {
   return {
@@ -515,42 +516,138 @@ function dischargeReport(ctx: Ctx, id: string): Built {
 
 // --- Dean reports ---------------------------------------------------------------------
 
+/** The Dean's own instructors, as the Instructors page lists them. */
+const deanInstructors = (db: DemoDb, viewerId: string) => db.users.filter((u) => u.role === "faculty" && u.admin_id === viewerId);
+
+/**
+ * What an instructor looks after and has graded, from the demo's data, as the
+ * real report reads it: their roster (groups, whole sections, added students),
+ * the work they finalized, and what their students handed in that is not
+ * graded yet. `waiting` keys each piece so a total counts a shared one once.
+ */
+function demoLoad(db: DemoDb, instructor: DemoUser) {
+  const roster = visibleStudents(db, "faculty", instructor.id);
+  const ids = new Set(roster.map((s) => s.id));
+  const demoIds = new Set(db.scenarios.filter((x) => x.kind === "return_demo").map((x) => x.id));
+  const finalized = db.assignments.filter((a) => a.finalized_by === instructor.id && a.status === "completed");
+  const waitingWork = db.assignments.filter((a) => ids.has(a.student_id) && a.status !== "completed" && a.submitted_at);
+  const waitingCases = db.caseSubmissions.filter((c) => ids.has(c.student_id) && c.status === "submitted");
+  const groups = db.teams.filter((t) => t.faculty_id === instructor.id);
+  const patientCasesGraded = finalized.filter((a) => !demoIds.has(a.scenario_id)).length;
+  const returnDemosGraded = finalized.length - patientCasesGraded;
+  const casesGraded = db.caseSubmissions.filter((c) => c.graded_by === instructor.id && c.status === "graded").length;
+  const oldest = [...waitingWork.map((a) => a.submitted_at), ...waitingCases.map((c) => c.submitted_at)].reduce<string | null>((o, v) => earlierOf(o, v), null);
+  const facts: InstructorFacts = {
+    groups: groups.length,
+    students: roster.length,
+    patientCasesGraded,
+    returnDemosGraded,
+    casesGraded,
+    awaiting: waitingWork.length + waitingCases.length,
+    oldestAwaitingAt: oldest,
+  };
+  return {
+    facts,
+    groups,
+    roster,
+    waiting: [...waitingWork.map((a) => `s:${a.id}`), ...waitingCases.map((c) => `c:${c.id}`)],
+    row: {
+      name: instructor.name,
+      groups: facts.groups,
+      students: facts.students,
+      graded: patientCasesGraded + returnDemosGraded + casesGraded,
+      awaiting: facts.awaiting,
+      oldestAwaitingAt: oldest,
+      lastLogin: instructor.last_sign_in_at,
+    } satisfies InstructorRow,
+  };
+}
+
+/** Totals across instructors, with each student and each waiting piece counted once. */
+function demoLoadTotals(loads: ReturnType<typeof demoLoad>[]): InstructorTotals {
+  return {
+    students: new Set(loads.flatMap((l) => l.roster.map((s) => s.id))).size,
+    graded: loads.reduce((n, l) => n + l.row.graded, 0),
+    awaiting: new Set(loads.flatMap((l) => l.waiting)).size,
+    oldestAwaitingAt: loads.reduce<string | null>((o, l) => earlierOf(o, l.facts.oldestAwaitingAt), null),
+  };
+}
+
 function facultyReport(ctx: Ctx, id: string): Built {
   const { db } = ctx;
-  const faculty = db.users.filter((u) => u.role === "faculty" && (!id || u.id === id));
-  if (faculty.length === 0) return { error: "Not found", status: 404 };
-  const groupsOf = (fid: string) => db.teams.filter((t) => t.faculty_id === fid);
+  const now = new Date();
+  const faculty = deanInstructors(db, ctx.viewer.id).filter((u) => !id || u.id === id);
+  if (faculty.length === 0 || (id && faculty.length !== 1)) return { error: "Not found", status: 404 };
+  const loads = faculty.map((f) => demoLoad(db, f));
+
+  if (!id) {
+    return {
+      subject: "All instructors",
+      doc: (
+        <Shell ctx={ctx} title="All Instructors Report" subject="Your instructors" rows={[]}>
+          <FacultyListBody rows={loads.map((l) => l.row)} totals={demoLoadTotals(loads)} now={now} />
+        </Shell>
+      ),
+    };
+  }
+
+  const [f] = faculty;
+  const load = loads[0];
+  const groups: SupervisedGroup[] = load.groups.map((g) => {
+    const members = db.users.filter((u) => u.role === "student" && u.team_id === g.id);
+    const totals = members.map((m) => demoTotals(db, m.id));
+    return { name: teamLabel(db, g.id) ?? g.name, members: members.length, withWork: totals.filter((t) => totalOf(t).n > 0).length, totals: poolTotals(totals) };
+  });
+  const sections = [...new Set(load.groups.map((g) => sectionName(db, g.section_id) ?? "No section"))].sort();
   return {
-    subject: id ? faculty[0].name : "All instructors",
+    subject: f.name,
     doc: (
-      <Shell ctx={ctx} title={id ? "Instructor Report" : "All Instructors Report"} subject={id ? faculty[0].name : "Your instructors"} rows={[]}>
-        <Table head={["Instructor", "Groups", "Students", "Cases graded", "Last sign-in"]} widths={[3, 2.4, 1, 1, 1.4]} rows={faculty.map((f) => {
-          const groups = groupsOf(f.id);
-          const members = db.users.filter((u) => u.role === "student" && groups.some((g) => g.id === u.team_id));
-          return [
-            f.name,
-            groups.map((g) => teamLabel(db, g.id)).join("; ") || "—",
-            members.length,
-            db.assignments.filter((a) => a.finalized_by === f.id).length,
-            date(f.last_sign_in_at),
-          ];
-        })} />
+      <Shell ctx={ctx} title="Instructor Report" subject={f.name} rows={[
+        { label: "Email", value: f.email },
+        { label: "Sections", value: sections.join(", ") || "None" },
+        { label: "Joined", value: date(f.created_at) },
+        { label: "Last login", value: date(f.last_sign_in_at) },
+      ]}>
+        <FacultyOneBody facts={load.facts} groups={groups} now={now} />
       </Shell>
     ),
   };
 }
 
+/** A room and how many students are assigned to it now, as the Rooms page counts them. */
+const demoRoomRow = (db: DemoDb, r: DemoRoom): RoomRow => ({
+  name: r.name,
+  number: r.room_number,
+  capacity: r.capacity,
+  occupied: db.roomAssignments.filter((a) => a.room_id === r.id && !a.ends_at).length,
+  status: r.status,
+});
+
 function roomsReport(ctx: Ctx, id: string): Built {
   const { db } = ctx;
-  const rooms = db.rooms.filter((r) => !id || r.id === id);
-  if (rooms.length === 0) return { error: "Not found", status: 404 };
+  if (!id) {
+    return {
+      subject: "All rooms",
+      doc: (
+        <Shell ctx={ctx} title="All Rooms Report" subject="Your ward" rows={[]}>
+          <RoomsListBody rooms={db.rooms.map((r) => demoRoomRow(db, r))} />
+        </Shell>
+      ),
+    };
+  }
+  const room = db.rooms.find((r) => r.id === id);
+  if (!room) return { error: "Not found", status: 404 };
+  const occupants = db.roomAssignments
+    .filter((a) => a.room_id === room.id && !a.ends_at)
+    .map((a) => ({ name: userById(db, a.student_id)?.name ?? "Unknown", since: a.starts_at }));
   return {
-    subject: id ? `${rooms[0].room_number} – ${rooms[0].name}` : "All rooms",
+    subject: room.name,
     doc: (
-      <Shell ctx={ctx} title={id ? "Room Report" : "All Rooms Report"} subject={id ? rooms[0].name : "Your ward"} rows={id ? [{ label: "Number", value: rooms[0].room_number }, { label: "Status", value: rooms[0].status }] : [{ label: "Rooms", value: String(rooms.length) }]}>
-        <Table head={["Room", "Status", "Beds", "Patients"]} widths={[3, 1.2, 1, 1]} rows={rooms.map((r) => [
-          `${r.room_number} – ${r.name}`, r.status, r.capacity, db.patients.filter((p) => p.room_id === r.id && p.status === "admitted").length,
-        ])} />
+      <Shell ctx={ctx} title="Room Report" subject={room.name} rows={[
+        { label: "Number", value: room.room_number },
+        { label: "Status", value: room.status.charAt(0).toUpperCase() + room.status.slice(1) },
+      ]}>
+        <RoomOneBody capacity={room.capacity} occupants={occupants} />
       </Shell>
     ),
   };
@@ -558,14 +655,45 @@ function roomsReport(ctx: Ctx, id: string): Built {
 
 function usersReport(ctx: Ctx, id: string): Built {
   const { db } = ctx;
-  const users = db.users.filter((u) => u.role !== "super_admin" && (!id || u.id === id));
+  const now = new Date();
+  // Their students, their own instructors and themselves: the accounts the Users page lists.
+  const users = db.users.filter((u) => u.role === "student" || (u.role === "faculty" && u.admin_id === ctx.viewer.id) || u.id === ctx.viewer.id);
+  const roleName = (u: DemoUser) => roleLabel(u.role, u.admin_title);
+
+  if (!id) {
+    return {
+      subject: "All users",
+      doc: (
+        <Shell ctx={ctx} title="All Users Report" subject="Your users" rows={[]}>
+          <UsersListBody
+            rows={users.map((u) => ({ name: u.name, email: u.email, role: u.role, roleName: roleName(u), createdAt: u.created_at, lastLogin: u.last_sign_in_at }))}
+            now={now}
+          />
+        </Shell>
+      ),
+    };
+  }
+
+  const user = users.find((u) => u.id === id);
+  if (!user) return { error: "Not found", status: 404 };
+  const isStudent = user.role === "student";
+  const label = isStudent ? teamLabel(db, user.team_id) : null;
+  const [section, ...group] = (label ?? sectionName(db, user.section_id) ?? "Unassigned").split(" · ");
   return {
-    subject: id ? (users[0]?.name ?? "User") : "All accounts",
+    subject: user.name,
     doc: (
-      <Shell ctx={ctx} title={id ? "User Report" : "All Users Report"} subject={id ? (users[0]?.name ?? "User") : "Your users"} rows={id ? [] : [{ label: "Users", value: String(users.length) }]}>
-        <Table head={["Name", "Role", "Section", "Last sign-in"]} widths={[3, 1.2, 1.4, 1.4]} rows={users.map((u) => [
-          u.name, roleLabel(u.role, u.admin_title), sectionName(db, u.section_id) ?? "—", date(u.last_sign_in_at),
-        ])} />
+      <Shell ctx={ctx} title="User Report" subject={user.name} rows={[
+        { label: "Email", value: user.email },
+        { label: "Role", value: roleName(user) },
+        ...(isStudent ? [{ label: "Section", value: section }, { label: "Group", value: group.join(" · ") || "No group" }] : []),
+        { label: "Joined", value: date(user.created_at) },
+        { label: "Last login", value: date(user.last_sign_in_at) },
+      ]}>
+        <UserOneBody
+          student={isStudent ? demoTotals(db, user.id) : undefined}
+          instructor={user.role === "faculty" ? demoLoad(db, user).facts : undefined}
+          now={now}
+        />
       </Shell>
     ),
   };
@@ -573,29 +701,27 @@ function usersReport(ctx: Ctx, id: string): Built {
 
 function summaryReport(ctx: Ctx): Built {
   const { db } = ctx;
+  const now = new Date();
   const students = db.users.filter((u) => u.role === "student");
-  const title = `${roleLabel("admin", ctx.viewer.admin_title)} summary`;
+  const loads = deanInstructors(db, ctx.viewer.id).map((f) => demoLoad(db, f));
+  const totals = demoLoadTotals(loads);
+  const onARoster = new Set(loads.flatMap((l) => l.roster.map((s) => s.id)));
+  const rooms = db.rooms.map((r) => demoRoomRow(db, r));
+  const dean = roleLabel("admin", ctx.viewer.admin_title);
   return {
-    subject: title,
+    subject: `${dean} summary`,
     doc: (
-      <Shell ctx={ctx} title={`${roleLabel("admin", ctx.viewer.admin_title)} Summary Report`} subject="Your instructors and students" rows={[{ label: "Sections", value: db.sections.map((s) => s.name).join(", ") }]}>
-        <StatGrid items={[
-          { label: "Students", value: students.length },
-          { label: "Instructors", value: db.users.filter((u) => u.role === "faculty").length },
-          { label: "On track", value: `${students.filter((s) => s.risk_level === "safe").length}/${students.length}` },
-          { label: "Patients admitted", value: db.patients.filter((p) => p.status === "admitted").length },
-        ]} />
-        <Section title="Sections" />
-        <Table head={["Section", "Students", "Case average", "Quiz average"]} widths={[2, 1, 1.2, 1.2]} rows={db.sections.map((sec) => {
-          const members = students.filter((s) => s.section_id === sec.id);
-          return [
-            sec.name,
-            members.length,
-            pct(mean(members.map((s) => caseAverage(db, s.id)).filter((x): x is number => x !== null))),
-            pct(mean(members.map((s) => quizAverage(db, s.id)).filter((x): x is number => x !== null))),
-          ];
-        })} />
-        <View />
+      <Shell ctx={ctx} title={`${dean} Summary Report`} subject="Your instructors and students" rows={[]}>
+        <SummaryBody
+          students={students.map((s) => ({ section: sectionName(db, s.section_id) ?? "No section", totals: demoTotals(db, s.id) }))}
+          sections={db.sections.map((s) => s.name)}
+          instructors={loads.map((l) => l.row)}
+          awaiting={totals.awaiting}
+          oldestAwaitingAt={totals.oldestAwaitingAt}
+          notOnRoster={students.filter((s) => !onARoster.has(s.id)).length}
+          rooms={{ count: rooms.length, capacity: rooms.reduce((n, r) => n + r.capacity, 0), occupied: rooms.reduce((n, r) => n + r.occupied, 0) }}
+          now={now}
+        />
       </Shell>
     ),
   };

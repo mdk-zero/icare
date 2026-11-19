@@ -28,6 +28,35 @@ export function generatedStamp(now: Date): string {
   return now.toLocaleString('en-PH', { dateStyle: 'long', timeStyle: 'short', timeZone: PH_TZ });
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * No sign-in for this long reads as dormant on the Users report. The Report
+ * Center page (dean/reports/page-client.tsx) keeps its own copy of the 30;
+ * keep the two the same. data.ts re-exports this.
+ */
+export const DORMANT_DAYS = 30;
+
+/** Whole days since a moment, never below 0; null when there is none (a dash, or "never"). */
+export function daysSince(value: string | null | undefined, now: Date = new Date()): number | null {
+  if (!value) return null;
+  const then = new Date(value).getTime();
+  return Number.isNaN(then) ? null : Math.max(0, Math.floor((now.getTime() - then) / DAY_MS));
+}
+
+/** How long something has waited: "today", "1 day", "5 days"; a dash when there is nothing waiting. */
+export function waitLabel(value: string | null | undefined, now: Date = new Date()): string {
+  const days = daysSince(value, now);
+  if (days === null) return '—';
+  return days === 0 ? 'today' : `${days} ${days === 1 ? 'day' : 'days'}`;
+}
+
+/** The earlier of two moments; either may be missing. */
+export function earlierOf(a: string | null, b: string | null): string | null {
+  if (!a || !b) return a ?? b;
+  return new Date(a).getTime() <= new Date(b).getTime() ? a : b;
+}
+
 // ---------------------------------------------------------------------------
 // Totals: how every report reaches an "Overall average"
 // ---------------------------------------------------------------------------

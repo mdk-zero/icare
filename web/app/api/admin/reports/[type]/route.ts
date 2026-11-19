@@ -72,7 +72,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         result = await buildAdminUserReport(supabase, meta, id, scope, session.uid);
         break;
       case 'summary':
-        result = await buildAdminSummaryReport(supabase, meta, scope, session.uid, deanId);
+        result = await buildAdminSummaryReport(supabase, meta, scope, deanId);
         break;
     }
 

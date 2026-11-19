@@ -700,6 +700,12 @@ export interface DateCell {
   late?: boolean;
 }
 
+/** A name with a smaller line under it, such as an account's email. */
+export interface PairCell {
+  text: string;
+  sub: string;
+}
+
 /** A short word that carries a tone: "Low performing" in red, "On track" muted. */
 export interface TagCell {
   tag: string;
@@ -717,7 +723,7 @@ interface ScoreCellValue {
  * grade that keeps a decimal, such as a course grade) and, with `word`, the
  * verbal rating after it. A null score is a dash.
  */
-export type Cell = string | number | ScoreCellValue | DateCell | TagCell | null;
+export type Cell = string | number | ScoreCellValue | DateCell | TagCell | PairCell | null;
 
 /** A row, with a tone when it needs a look: red and barred, amber, or a total. */
 export interface TableRow {
@@ -728,6 +734,7 @@ export interface TableRow {
 const scoreCell = (c: Cell): c is ScoreCellValue => typeof c === 'object' && c !== null && 'score' in c;
 const dateCell = (c: Cell): c is DateCell => typeof c === 'object' && c !== null && 'date' in c;
 const tagCell = (c: Cell): c is TagCell => typeof c === 'object' && c !== null && 'tag' in c;
+const pairCell = (c: Cell): c is PairCell => typeof c === 'object' && c !== null && 'sub' in c && 'text' in c;
 
 const TAG_COLOR: Record<TagCell['tone'], string> = { low: TONE.low, practice: TONE.practice, pass: TONE.pass, muted: MUTED };
 
@@ -736,7 +743,7 @@ const NUMERIC = /^[—\d.,%/\s()+-]+$/;
 /** Right when every filled cell is a number, a score or looks like one; left otherwise. */
 function inferAlign(cells: Cell[]): Align {
   const filled = cells.filter((c) => c !== null && !(typeof c === 'string' && (c.trim() === '' || c === '—')));
-  const numeric = filled.every((c) => (typeof c === 'string' ? NUMERIC.test(c) : !dateCell(c) && !tagCell(c)));
+  const numeric = filled.every((c) => (typeof c === 'string' ? NUMERIC.test(c) : !dateCell(c) && !tagCell(c) && !pairCell(c)));
   const words = cells.some((c) => scoreCell(c) && c.word);
   // A score with its rating after it lines up on the score's right edge, so the group sits at the left.
   return words ? 'left' : numeric ? 'right' : 'left';
@@ -762,6 +769,14 @@ function CellView({ cell, align, bold }: { cell: Cell; align: Align; bold: boole
       <Text style={[styles.tableText, { textAlign: align, color: TAG_COLOR[cell.tone], fontWeight: cell.tone === 'muted' ? 400 : 700 }]}>
         {cell.tag}
       </Text>
+    );
+  }
+  if (pairCell(cell)) {
+    return (
+      <View>
+        <Text style={[styles.tableText, weight]}>{cell.text}</Text>
+        <Text style={{ fontSize: 8.5, color: MUTED }}>{cell.sub}</Text>
+      </View>
     );
   }
   if (scoreCell(cell)) {
