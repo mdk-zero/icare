@@ -262,7 +262,18 @@ export const styles = StyleSheet.create({
   scoreSlot: { width: 30, textAlign: 'right', fontSize: 9.5, fontWeight: 700 },
   scoreWord: { flex: 1, fontSize: 9, color: MUTED, marginLeft: 5 },
 
-  // Legacy: the sheets (checklist, activity, quiz) and the builders' own bars still draw with these.
+  // The sheets' header row: the table header's look without its side padding, because the sheets'
+  // rows have none and their flex columns must line up from the header down.
+  gridHead: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    backgroundColor: SUBTLE,
+    borderBottomWidth: 1,
+    borderBottomColor: TEAL,
+    paddingVertical: 5,
+  },
+
+  // Legacy: the sheets' body rows and the builders' own bars still draw with these.
   row: {
     flexDirection: 'row',
     borderBottomWidth: 1,
@@ -278,6 +289,86 @@ export const styles = StyleSheet.create({
   courseTitle: { fontWeight: 700, marginTop: 10 },
   courseSub: { fontSize: 8, color: FAINT, marginTop: 1, marginBottom: 4 },
 });
+
+/**
+ * What a heading over a member grid asks to have after it: the header row (up to four lines
+ * of names), the legend and the first rows. react-pdf keeps a heading with what follows only by
+ * this much, so a grid's header never ends a page alone.
+ */
+export const GRID_AHEAD = 150;
+
+/** The content width of a landscape Letter page (792 less the 40 pt margins), which the member grids lay out in. */
+const LANDSCAPE_WIDTH = 712;
+/** What the question or step column of a member grid keeps at the least, however many members. */
+const GRID_LABEL_WIDTH = 220;
+
+/**
+ * The width of one member's column in the checklist grid and the quiz matrix:
+ * 64 pt, narrower only when many members would squeeze the step or question
+ * column below 220 pt. Fixed, not flex, so the two grids line up and a header
+ * name wraps inside a column that does not move with its neighbours.
+ */
+export function memberColumnWidth(count: number): number {
+  return Math.min(64, Math.floor((LANDSCAPE_WIDTH - GRID_LABEL_WIDTH) / Math.max(count, 1)));
+}
+
+/** Advance widths of Source Sans 3 semibold for the printable ASCII from the space on, in 1/1000 em. */
+const SEMIBOLD_WIDTHS = [
+  200, 315, 482, 513, 513, 841, 639, 275, 324, 324, 438, 513, 275, 322, 275, 344, 513, 513, 513, 513, 513, 513, 513, 513, 513, 513, 275,
+  275, 513, 513, 513, 444, 875, 558, 597, 576, 625, 538, 510, 628, 663, 282, 494, 597, 502, 745, 657, 674, 582, 674, 592, 545, 546, 655,
+  536, 800, 541, 501, 540, 324, 344, 324, 513, 500, 549, 516, 563, 462, 564, 507, 317, 520, 558, 262, 263, 522, 271, 843, 560, 549, 564,
+  564, 373, 431, 361, 556, 495, 748, 481, 495, 443, 324, 255, 324, 513,
+];
+
+/** The width of one letter in em; accented and other letters count as an average one. */
+const letterWidth = (ch: string): number => {
+  const code = ch.charCodeAt(0) - 32;
+  return (SEMIBOLD_WIDTHS[code] ?? 540) / 1000;
+};
+
+/**
+ * Lays a name out for a column `width` pt wide, as the lines it will take, with
+ * a newline between them. react-pdf wraps at spaces only (hyphenation is off),
+ * so a long surname such as "Pangilinan-Magbanua" would run past its column
+ * into the next one. A word that is too wide breaks after its hyphen, and
+ * failing that between two letters; every name stays whole, with no ellipsis.
+ */
+export function fitName(name: string, width: number, fontSize = 8): string {
+  // The column keeps 1 pt either side; a hyphen may hang half a point over rather than strand a letter.
+  const room = (width - 2 + 0.5) / fontSize;
+  const wide = (w: string) => [...w].reduce((n, ch) => n + letterWidth(ch), 0);
+  const pieces: string[] = [];
+  for (const word of name.split(/\s+/).filter(Boolean)) {
+    // Break after a hyphen first ("Cruz-" / "Villanueva"), keeping the hyphen on the upper line.
+    for (const part of word.split(/(?<=-)/)) {
+      let rest = part;
+      while (wide(rest) > room && rest.length > 1) {
+        let cut = rest.length - 1;
+        while (cut > 1 && wide(rest.slice(0, cut)) > room) cut -= 1;
+        pieces.push(rest.slice(0, cut));
+        rest = rest.slice(cut);
+      }
+      pieces.push(rest);
+    }
+    pieces.push(' ');
+  }
+  // Join pieces greedily: a piece goes on the line while it fits; a space is a break where it doesn't.
+  const lines: string[] = [];
+  let line = '';
+  for (const piece of pieces) {
+    if (piece === ' ') {
+      if (line && !line.endsWith(' ')) line += ' ';
+      continue;
+    }
+    if (line && wide(line + piece) > room) {
+      lines.push(line.trimEnd());
+      line = '';
+    }
+    line += piece;
+  }
+  if (line.trim()) lines.push(line.trimEnd());
+  return lines.join('\n');
+}
 
 /** The band colour of a score: the shared 75 and 50 cut-offs (bands.ts). */
 export function scoreColor(score: number): string {
@@ -406,10 +497,21 @@ function MetaBlock({ rows }: { rows: { label: string; value: string }[] }) {
  * page alone. The content goes after it as siblings, not inside it, because
  * react-pdf measures what is ahead from the heading's next siblings.
  */
-export function Section({ title, caption, children }: { title: string; caption?: string; children?: ReactNode }) {
+export function Section({
+  title,
+  caption,
+  ahead = 70,
+  children,
+}: {
+  title: string;
+  caption?: string;
+  /** How much room must follow the heading on its page; a grid with a tall header asks for more (GRID_AHEAD). */
+  ahead?: number;
+  children?: ReactNode;
+}) {
   return (
     <>
-      <View style={styles.sectionHead} minPresenceAhead={70}>
+      <View style={styles.sectionHead} minPresenceAhead={ahead}>
         <Text style={styles.sectionTitle}>{title}</Text>
         {caption && <Text style={styles.sectionCaption}>{caption}</Text>}
       </View>

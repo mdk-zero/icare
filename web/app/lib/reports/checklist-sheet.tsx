@@ -3,13 +3,13 @@
  * instructor sees it while grading: skills numbered 01, 02…, each step lettered
  * a, b, c… with where Taylor's has it, and the grade beside it. One student gets
  * the grading grid itself (a mark under Excellent, Satisfactory or Needs
- * Practice, and the points); a group gets a column per member. Free of
- * server-only code, so the demo lays out the same sheet in the browser.
+ * Practice, and the points); a group gets a column per member, each cell the
+ * points that member earned. Free of server-only code, so the demo lays out the same sheet in the browser.
  */
 import { Text, View } from '@react-pdf/renderer';
-import { MAX_RATING_POINTS, NOT_APPLICABLE, TASK_RATINGS, ratingLabel, ratingPoints, type ChecklistRating } from '../task-ratings';
+import { MAX_RATING_POINTS, NOT_APPLICABLE, TASK_RATINGS, ratingPoints, type ChecklistRating } from '../task-ratings';
 import { LEVEL_COLOR } from './bands';
-import { TEAL, styles } from './kit-ui';
+import { BRAND_100, FAINT, MUTED, TEAL, TEAL_DARK, fitName, memberColumnWidth, reportFonts, styles } from './kit-ui';
 
 export type SheetGrade = ChecklistRating | null;
 
@@ -46,11 +46,14 @@ export function skillPoints(grades: readonly SheetGrade[]): { earned: number; ma
 export const stepLetter = (i: number): string =>
   (i >= 26 ? stepLetter(Math.floor(i / 26) - 1) : '') + String.fromCharCode(97 + (i % 26));
 
-const gradeColor = (grade: SheetGrade) => (grade === null ? '#9ca3af' : (LEVEL_COLOR[grade] ?? '#1f2937'));
+const gradeColor = (grade: SheetGrade) => (grade === null ? FAINT : (LEVEL_COLOR[grade] ?? '#1f2937'));
 const pointsText = (p: { earned: number; max: number } | null) => (p ? `${p.earned}/${p.max}` : '—');
 const percent = (p: { earned: number; max: number } | null) => (p ? `${Math.round((p.earned / p.max) * 100)}%` : '');
+/** What a step's cell shows: the points, "N/A" where the step wasn't on offer, a dash where it wasn't rated. */
+const gradeText = (grade: SheetGrade) => (grade === null ? '—' : grade === NOT_APPLICABLE ? 'N/A' : String(ratingPoints(grade)));
 
-const SOURCE = { fontSize: 6.5, color: '#9ca3af', marginTop: 1 } as const;
+const SOURCE = { fontSize: 7, color: FAINT, marginTop: 1 } as const;
+const headLabel = () => ({ fontSize: 8, fontWeight: reportFonts.semibold, color: MUTED, textAlign: 'center' as const });
 
 export function ChecklistSheet({
   columns,
@@ -70,122 +73,146 @@ const skillNo = (i: number) => String(i + 1).padStart(2, '0');
 
 /** One student: the grading sheet, a mark under the level each step was given. */
 function GradingGrid({ skills }: { skills: SheetSkill[] }) {
-  const head = { fontSize: 8, textAlign: 'center' as const };
   const level = { flex: 1.1, paddingHorizontal: 2 };
   const mark = (key: string, on: boolean, color: string) => (
     <View key={key} style={[level, { alignItems: 'center' }]}>
       {on && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />}
     </View>
   );
+  const stepRow = (step: SheetStep, r: number) => {
+    const grade = step.grades[0];
+    return (
+      <View key={r} style={styles.row} wrap={false}>
+        <View style={{ flex: 5, flexDirection: 'row', paddingHorizontal: 4, paddingLeft: 14 }}>
+          <Text style={{ width: 12, fontSize: 8, color: FAINT }}>{stepLetter(r)}.</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 9 }}>{step.title}</Text>
+            {step.source ? <Text style={SOURCE}>Taylor&apos;s {step.source}</Text> : null}
+          </View>
+        </View>
+        {TASK_RATINGS.map((l) => mark(l.key, grade === l.key, gradeColor(l.key)))}
+        <Text style={{ flex: 0.9, paddingHorizontal: 2, textAlign: 'center', fontSize: 9, color: gradeColor(grade) }}>
+          {gradeText(grade)}
+        </Text>
+      </View>
+    );
+  };
 
   return (
     <View>
-      <View style={[styles.row, styles.headRow]} fixed>
+      <View style={styles.gridHead} fixed>
         <Text style={{ flex: 5, paddingHorizontal: 4, fontSize: 9 }}> </Text>
         {TASK_RATINGS.map((l) => (
           <View key={l.key} style={level}>
-            <Text style={head}>{l.label}</Text>
-            <Text style={[head, { fontSize: 6.5, color: '#6b7280' }]}>{l.points} pts</Text>
+            <Text style={headLabel()}>{l.label}</Text>
+            <Text style={{ fontSize: 7.5, color: FAINT, textAlign: 'center' }}>{l.points} pts</Text>
           </View>
         ))}
-        <Text style={[head, { flex: 0.9, paddingHorizontal: 2 }]}>Points</Text>
+        <Text style={[headLabel(), { flex: 0.9, paddingHorizontal: 2 }]}>Points</Text>
       </View>
 
       {skills.map((skill, s) => (
         <View key={s}>
-          <View style={[styles.row, { backgroundColor: '#e8f1f3', borderBottomColor: TEAL }]} wrap={false} minPresenceAhead={40}>
-            <View style={{ flex: 5, flexDirection: 'row', paddingHorizontal: 4 }}>
-              <Text style={{ width: 16, fontSize: 8, color: '#6b7280' }}>{skillNo(s)}</Text>
-              <Text style={{ flex: 1, fontWeight: 700, color: TEAL, fontSize: 9 }}>{skill.title}</Text>
-            </View>
-            <View style={{ flex: TASK_RATINGS.length * 1.1 + 0.9, paddingHorizontal: 2 }}>
-              <Text style={{ textAlign: 'right', fontWeight: 700, fontSize: 9, color: gradeColor(skill.levels[0]) }}>
-                {pointsText(skill.points[0])}
-                {skill.points[0] ? `  ${percent(skill.points[0])}` : ''}
-              </Text>
-            </View>
-          </View>
-
-          {skill.steps.map((step, r) => {
-            const grade = step.grades[0];
-            return (
-              <View key={r} style={styles.row} wrap={false}>
-                <View style={{ flex: 5, flexDirection: 'row', paddingHorizontal: 4, paddingLeft: 14 }}>
-                  <Text style={{ width: 12, fontSize: 8, color: '#9ca3af' }}>{stepLetter(r)}.</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 8.5 }}>{step.title}</Text>
-                    {step.source ? <Text style={SOURCE}>Taylor&apos;s {step.source}</Text> : null}
-                  </View>
-                </View>
-                {TASK_RATINGS.map((l) => mark(l.key, grade === l.key, gradeColor(l.key)))}
-                <Text style={{ flex: 0.9, paddingHorizontal: 2, textAlign: 'center', fontSize: 9, color: gradeColor(grade) }}>
-                  {grade === null ? '—' : grade === NOT_APPLICABLE ? 'N/A' : ratingPoints(grade)}
+          {/* A skill's row travels with its first step, so it never ends a page alone. */}
+          <View wrap={false}>
+            <View style={[styles.row, { backgroundColor: BRAND_100, borderBottomColor: TEAL }]}>
+              <View style={{ flex: 5, flexDirection: 'row', paddingHorizontal: 4 }}>
+                <Text style={{ width: 16, fontSize: 8, color: FAINT }}>{skillNo(s)}</Text>
+                <Text style={{ flex: 1, fontWeight: 700, color: TEAL_DARK, fontSize: 9.5 }}>{skill.title}</Text>
+              </View>
+              <View style={{ flex: TASK_RATINGS.length * 1.1 + 0.9, paddingHorizontal: 2 }}>
+                <Text style={{ textAlign: 'right', fontWeight: 700, fontSize: 9, color: gradeColor(skill.levels[0]) }}>
+                  {pointsText(skill.points[0])}
+                  {skill.points[0] ? `  ${percent(skill.points[0])}` : ''}
                 </Text>
               </View>
-            );
-          })}
+            </View>
+            {skill.steps.slice(0, 1).map((step, r) => stepRow(step, r))}
+          </View>
+          {skill.steps.slice(1).map((step, r) => stepRow(step, r + 1))}
         </View>
       ))}
     </View>
   );
 }
 
-/** A group: the same lettered steps, a column per member with the grade each earned. */
+/** What the points in the member grid stand for, in the colours the cells use. */
+function PointsLegend() {
+  const part = (text: string, color: string) => (
+    <Text key={text} style={{ fontWeight: 700, color }}>
+      {text}
+    </Text>
+  );
+  return (
+    <Text style={{ fontSize: 8, color: MUTED, marginBottom: 5 }}>
+      Points per step: {part('3', LEVEL_COLOR.excellent)} Excellent · {part('2', LEVEL_COLOR.satisfactory)} Satisfactory ·{' '}
+      {part('1', LEVEL_COLOR.needs_practice)} Needs Practice · {part('N/A', LEVEL_COLOR.not_applicable)} not applicable ·{' '}
+      {part('—', FAINT)} not rated
+    </Text>
+  );
+}
+
+/** A group: the same lettered steps, a column per member with the points each earned. */
 function MemberGrid({ columns, skills }: { columns: string[]; skills: SheetSkill[] }) {
-  // Landscape, up to ten members: the more columns, the smaller the type.
-  const font = columns.length > 7 ? 6.5 : columns.length > 4 ? 7.5 : 8;
-  const text = { fontSize: font, textAlign: 'center' as const };
-  const cell = { ...text, flex: 1, paddingHorizontal: 2 };
-  const stepFlex = columns.length > 7 ? 3.2 : columns.length > 4 ? 3.6 : 4.5;
+  // Landscape. Fixed member columns, so the step column takes whatever is left and a name wraps
+  // inside its column rather than squeezing the others (the type stays 8 pt at any count).
+  const width = memberColumnWidth(columns.length);
+  const cell = { width, paddingHorizontal: 1 };
+  const text = { fontSize: 8, textAlign: 'center' as const };
+  const stepRow = (step: SheetStep, r: number) => (
+    <View key={r} style={styles.row} wrap={false}>
+      <View style={{ flex: 1, flexDirection: 'row', paddingHorizontal: 4, paddingLeft: 12 }}>
+        <Text style={{ width: 11, fontSize: 8, color: FAINT }}>{stepLetter(r)}.</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 8 }}>{step.title}</Text>
+          {step.source ? <Text style={SOURCE}>Taylor&apos;s {step.source}</Text> : null}
+        </View>
+      </View>
+      {step.grades.map((grade, i) => (
+        <View key={i} style={cell}>
+          <Text style={[text, { fontWeight: grade === null ? 400 : 700, color: gradeColor(grade) }]}>{gradeText(grade)}</Text>
+        </View>
+      ))}
+    </View>
+  );
 
   return (
     <View>
-      <View style={[styles.row, styles.headRow]} fixed>
-        <Text style={{ flex: stepFlex, paddingHorizontal: 4, fontSize: font + 1 }}> </Text>
+      <PointsLegend />
+      <View style={styles.gridHead} fixed>
+        <Text style={{ flex: 1, paddingHorizontal: 4, fontSize: 8.5 }}> </Text>
         {columns.map((name, i) => (
-          <Text key={i} style={cell}>
-            {name}
-          </Text>
+          <View key={i} style={cell}>
+            <Text style={headLabel()}>{fitName(name, width)}</Text>
+          </View>
         ))}
       </View>
 
       {skills.map((skill, s) => (
         <View key={s}>
-          <View style={[styles.row, { backgroundColor: '#e8f1f3', borderBottomColor: TEAL }]} wrap={false} minPresenceAhead={40}>
-            <View style={{ flex: stepFlex, flexDirection: 'row', paddingHorizontal: 4 }}>
-              <Text style={{ width: 14, fontSize: font, color: '#6b7280' }}>{skillNo(s)}</Text>
-              <Text style={{ flex: 1, fontWeight: 700, color: TEAL, fontSize: font + 0.5 }}>{skill.title}</Text>
-            </View>
-            {skill.levels.map((lv, i) => (
-              <View key={i} style={{ flex: 1, paddingHorizontal: 2 }}>
-                <Text style={[text, { fontWeight: 700, color: gradeColor(lv) }]}>
-                  {lv === null ? '—' : ratingLabel(lv)}
-                </Text>
-                {skill.points[i] ? (
-                  <Text style={[text, { fontSize: 6.5, color: '#6b7280' }]}>
-                    {pointsText(skill.points[i])} · {percent(skill.points[i])}
-                  </Text>
-                ) : null}
+          {/* A skill's row travels with its first step, so it never ends a page alone. */}
+          <View wrap={false}>
+            <View style={[styles.row, { backgroundColor: BRAND_100, borderBottomColor: TEAL }]}>
+              <View style={{ flex: 1, flexDirection: 'row', paddingHorizontal: 4 }}>
+                <Text style={{ width: 14, fontSize: 8, color: FAINT }}>{skillNo(s)}</Text>
+                <Text style={{ flex: 1, fontWeight: 700, color: TEAL_DARK, fontSize: 8.5 }}>{skill.title}</Text>
               </View>
-            ))}
-          </View>
-
-          {skill.steps.map((step, r) => (
-            <View key={r} style={styles.row} wrap={false}>
-              <View style={{ flex: stepFlex, flexDirection: 'row', paddingHorizontal: 4, paddingLeft: 12 }}>
-                <Text style={{ width: 11, fontSize: font, color: '#9ca3af' }}>{stepLetter(r)}.</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: font }}>{step.title}</Text>
-                  {step.source ? <Text style={SOURCE}>Taylor&apos;s {step.source}</Text> : null}
+              {skill.points.map((p, i) => (
+                <View key={i} style={cell}>
+                  {p ? (
+                    <>
+                      <Text style={[text, { fontWeight: 700, color: gradeColor(skill.levels[i]) }]}>{pointsText(p)}</Text>
+                      <Text style={[text, { fontWeight: 700, color: gradeColor(skill.levels[i]) }]}>{percent(p)}</Text>
+                    </>
+                  ) : (
+                    <Text style={[text, { color: FAINT }]}>—</Text>
+                  )}
                 </View>
-              </View>
-              {step.grades.map((grade, i) => (
-                <Text key={i} style={[cell, { color: gradeColor(grade) }]}>
-                  {grade === null ? '—' : ratingLabel(grade)}
-                </Text>
               ))}
             </View>
-          ))}
+            {skill.steps.slice(0, 1).map((step, r) => stepRow(step, r))}
+          </View>
+          {skill.steps.slice(1).map((step, r) => stepRow(step, r + 1))}
         </View>
       ))}
     </View>

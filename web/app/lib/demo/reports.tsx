@@ -1,14 +1,14 @@
 "use client";
 
 import { pdf, Text, View } from "@react-pdf/renderer";
-import { CourseCriteria, Note, ReportShell, Section, StatGrid, Table, registerReportFonts, scoreTile, type ReportDocument, type ReportMeta } from "../reports/kit-ui";
+import { CourseCriteria, GRID_AHEAD, Note, ReportShell, Section, StatGrid, Table, registerReportFonts, scoreTile, type ReportDocument, type ReportMeta } from "../reports/kit-ui";
 import { dateLabel, generatedStamp } from "../reports/view";
 import { CASE_CRITERIA, caseLevelLabel } from "../case-rubric";
 import { ChecklistSheet } from "../reports/checklist-sheet";
 import { buildSheetSkills } from "../reports/checklist-grades";
 import { parseTarget } from "../reports/targets";
 import { competencyRemark } from "../return-demo-remarks";
-import { ActivityTable, type GridEntry, type GridMember } from "../reports/activity-sheet";
+import { ActivityTable, activityAhead, type GridEntry, type GridMember } from "../reports/activity-sheet";
 import { CriterionTable, QuizAnswers, QuizMatrix } from "../reports/quiz-sheet";
 import { answerRows, criterionForGroup, criterionForStudent, matrix, type QuizCriterion, type QuizQuestion, type QuizTry } from "../reports/quiz-model";
 import type { DemoAttempt } from "./fixtures/school";
@@ -153,7 +153,7 @@ function sectionReport(ctx: Ctx, id: string): Built {
           scoreTile("Quiz average", mean(students.map((s) => quizAverage(db, s.id)).filter((x): x is number => x !== null))),
           { label: "Low performing", value: students.filter((s) => s.risk_level === "at_risk").length },
         ]} />
-        <Section title="Groups" />
+        <Section title="Groups" ahead={activityAhead(groups[0]?.members ?? [])} />
         {groups.map((g) => (
           <ActivityTable key={g.group} members={g.members} heading={<Text style={{ fontWeight: 700, marginTop: 4, marginBottom: 3 }}>{g.group}</Text>} />
         ))}
@@ -239,7 +239,7 @@ function checklistReport(ctx: Ctx, kind: keyof typeof CHECKLIST, id: string): Bu
               ? [{ label: "Remarks", value: competencyRemark(sc) }]
               : [{ label: "Status", value: a.status === "completed" ? "Performed" : "Not yet performed" }]),
           ]} />
-          <Section title="Checklist and grades" />
+          <Section title="Checklist and grades" ahead={GRID_AHEAD} />
           <ChecklistSheet columns={["Grade"]} skills={skills} />
         </Shell>
       ),
@@ -261,7 +261,7 @@ function checklistReport(ctx: Ctx, kind: keyof typeof CHECKLIST, id: string): Bu
         <Table head={kind === "return_demo" ? ["Member", "Date of performance", "Score", "Remarks"] : ["Member", "Date of performance", "Status", "Score"]} widths={kind === "return_demo" ? [3, 1.6, 1.8, 1.6] : [3, 1.6, 1.4, 1.6]} rows={members.map((m) => kind === "return_demo"
           ? [m.student?.name ?? "—", date(m.a.deadline), pct(score(m.a)), competencyRemark(score(m.a))]
           : [m.student?.name ?? "—", date(m.a.deadline), m.a.status === "completed" ? "Performed" : "Not yet performed", pct(score(m.a))])} />
-        <Section title="Checklist and grades" />
+        <Section title="Checklist and grades" ahead={GRID_AHEAD} />
         <ChecklistSheet columns={members.map((m) => m.student?.name ?? "—")} skills={skills} />
       </Shell>
     ),
@@ -278,6 +278,7 @@ function sectionGroupReport(ctx: Ctx, teamId: string): Built {
   const label = teamLabel(db, teamId);
   const members = groupMembers(ctx, teamId);
   if (!label || members.length === 0) return { error: "Not found", status: 404 };
+  const grid: GridMember[] = members.map((s) => ({ name: s.name, entries: demoGrid(db, s.id) }));
   return {
     subject: label,
     doc: (
@@ -287,8 +288,8 @@ function sectionGroupReport(ctx: Ctx, teamId: string): Built {
           scoreTile("Case average", mean(members.map((s) => caseAverage(db, s.id)).filter((x): x is number => x !== null))),
           scoreTile("Quiz average", mean(members.map((s) => quizAverage(db, s.id)).filter((x): x is number => x !== null))),
         ]} />
-        <Section title="Work given to this group" />
-        <ActivityTable members={members.map((s) => ({ name: s.name, entries: demoGrid(db, s.id) }))} />
+        <Section title="Work given to this group" ahead={activityAhead(grid)} />
+        <ActivityTable members={grid} />
       </Shell>
     ),
   };
@@ -390,9 +391,9 @@ function quizDetailReport(ctx: Ctx, id: string): Built {
           { label: "Completed", value: grades.length },
           scoreTile("Group average", mean(grades)),
         ]} />
-        <Section title="Results by criterion" />
+        <Section title="Results by criterion" ahead={GRID_AHEAD} />
         <CriterionTable columns={members.map((m) => m.name)} rows={criterionForGroup(questions, criteria, latest)} />
-        <Section title="Questions" />
+        <Section title="Questions" ahead={GRID_AHEAD} />
         <QuizMatrix columns={columns} rows={rows} />
       </Shell>
     ),

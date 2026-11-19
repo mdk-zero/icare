@@ -60,6 +60,7 @@ export function answerRows(
         question: q.text,
         criterion: criterion ? (nameOf.get(criterion) ?? null) : null,
         chosen: a ? optionText(q, a.selected) : null,
+        correct: optionText(q, q.correctIndex),
         ok: a ? a.ok : null,
       },
     ];
@@ -118,8 +119,11 @@ function tally(questions: readonly QuizQuestion[], criterion: QuizCriterion, tri
   return { right, total };
 }
 
-const cell = ({ right, total }: { right: number; total: number }) =>
-  total === 0 ? '—' : `${right}/${total} · ${Math.round((right / total) * 100)}%`;
+const share = ({ right, total }: { right: number; total: number }) => Math.round((right / total) * 100);
+
+/** One line for a student's wide column; a member's narrow one stacks the count over the percent. */
+const cell = (t: { right: number; total: number }, stacked = false) =>
+  t.total === 0 ? '—' : `${t.right}/${t.total}${stacked ? '\n' : ' · '}${share(t)}%`;
 
 /** A student's results per criterion, over every graded try. */
 export function criterionForStudent(
@@ -139,6 +143,6 @@ export function criterionForGroup(
   return criteria.map((c) => ({
     name: c.name,
     weight: c.weight,
-    cells: members.map((m) => (m.latest ? cell(tally(questions, c, [m.latest])) : '—')),
+    cells: members.map((m) => (m.latest ? cell(tally(questions, c, [m.latest]), true) : '—')),
   }));
 }

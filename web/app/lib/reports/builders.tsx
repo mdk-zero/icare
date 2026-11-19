@@ -1,7 +1,7 @@
 import { Text, View } from '@react-pdf/renderer';
 import type { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { getFacultyStudentIds } from '@/app/lib/roster';
-import { CourseCriteria, Note, ReportShell, Section, StatGrid, TEAL, Table, scoreColor, scoreTile, styles, type ReportMeta, type ReportDocument } from './kit';
+import { CourseCriteria, GRID_AHEAD, Note, ReportShell, Section, StatGrid, TEAL, Table, scoreColor, scoreTile, styles, type ReportMeta, type ReportDocument } from './kit';
 import {
   CASE_STATUS_LABEL,
   NEEDS_PRACTICE_BELOW,
@@ -29,7 +29,7 @@ import { loadChecklistRoster, loadSheetSkills, type Performer } from './checklis
 import { parseTarget } from './targets';
 import { competencyRemark } from '../return-demo-remarks';
 import { loadActivityGrid } from './activity-data';
-import { ActivityTable, type GridMember } from './activity-sheet';
+import { ActivityTable, activityAhead, type GridMember } from './activity-sheet';
 import { loadGroupings } from './groupings';
 import { loadQuizCriteria, loadQuizQuestions, loadQuizRoster, loadQuizTries } from './quiz-data';
 import { answerRows, criterionForGroup, criterionForStudent, matrix } from './quiz-model';
@@ -422,7 +422,7 @@ export async function buildSectionReport(
         ]}
       />
 
-      <Section title="Groups" />
+      <Section title="Groups" ahead={activityAhead(groupBlocks[0]?.members ?? [])} />
       {groupBlocks.length === 0 ? (
         <Text style={styles.empty}>No students in this section yet.</Text>
       ) : (
@@ -1228,7 +1228,7 @@ export async function buildChecklistReport(
               : [{ label: 'Status', value: statusOf(p) }]),
           ]}
         />
-        <Section title="Checklist and grades" />
+        <Section title="Checklist and grades" ahead={GRID_AHEAD} />
         <ChecklistSheet columns={['Grade']} skills={skills} />
       </ReportShell>
     );
@@ -1265,7 +1265,7 @@ export async function buildChecklistReport(
             : [m.name, date(m.deadline), statusOf(m), grade(m.score)],
         )}
       />
-      <Section title="Checklist and grades" />
+      <Section title="Checklist and grades" ahead={GRID_AHEAD} />
       <ChecklistSheet columns={members.map((m) => m.name)} skills={skills} />
     </ReportShell>
   );
@@ -1324,11 +1324,10 @@ export async function buildSectionGroupReport(
           scoreTile('Quiz average', avg(quizAverages)),
         ]}
       />
-      <Section title="Work given to this group" />
+      <Section title="Work given to this group" ahead={activityAhead(gridMembers)} />
       <ActivityTable members={gridMembers} />
       <Note>
-        Only the work assigned to the group&apos;s members is listed. A dash means it is not done yet; a blank means
-        it was not given to that member.
+        Only the work assigned to the group&apos;s members is listed.
       </Note>
     </ReportShell>
   );
@@ -1441,9 +1440,9 @@ export async function buildQuizDetailReport(
           m.grade === null ? 'Not taken' : m.grade >= PASSING_SCORE ? 'Passed' : 'Below passing',
         ])}
       />
-      <Section title="Results by criterion" />
+      <Section title="Results by criterion" ahead={GRID_AHEAD} />
       <CriterionTable columns={members.map((m) => m.name)} rows={criterionForGroup(questions, criteria, latest)} />
-      <Section title="Questions" />
+      <Section title="Questions" ahead={GRID_AHEAD} />
       <QuizMatrix columns={columns} rows={rows} />
       <Note>
         Each member&apos;s latest graded try. A dash means the question was not served to that member.

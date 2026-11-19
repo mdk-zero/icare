@@ -15,6 +15,7 @@ export {
   Attention,
   CourseCriteria,
   Distribution,
+  GRID_AHEAD,
   Note,
   ScoreKey,
   Section,
