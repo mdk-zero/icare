@@ -171,9 +171,10 @@ export default function RoomsBoard() {
               </p>
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+            // One room gets the full width, its activities laid out as a grid.
+            <div className={shown.length === 1 ? "grid gap-4" : "grid gap-4 md:grid-cols-2 2xl:grid-cols-3"}>
               {shown.map((room) => (
-                <RoomCard key={room.id} room={room} activities={byRoom.get(room.id) ?? []} />
+                <RoomCard key={room.id} room={room} activities={byRoom.get(room.id) ?? []} wide={shown.length === 1} />
               ))}
             </div>
           )}
@@ -183,7 +184,8 @@ export default function RoomsBoard() {
   );
 }
 
-function RoomCard({ room, activities }: { room: Room; activities: RoomActivity[] }) {
+/** A room and what is assigned in it: a list in the room grid, tiles when it has the page to itself. */
+function RoomCard({ room, activities, wide = false }: { room: Room; activities: RoomActivity[]; wide?: boolean }) {
   const students = activities.reduce((n, a) => n + a.students, 0);
   return (
     <section className="flex flex-col overflow-hidden rounded-2xl border border-hairline bg-surface shadow-tile">
@@ -204,11 +206,26 @@ function RoomCard({ room, activities }: { room: Room; activities: RoomActivity[]
       {activities.length === 0 ? (
         <p className="px-4 py-5 text-sm text-gray-400">Nothing assigned here yet.</p>
       ) : (
-        <ul className="divide-y divide-hairline">
+        // Tiles at least 20rem wide, so a group's name and date fit on one line.
+        <ul className={wide ? "grid grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))] gap-3 p-4" : "divide-y divide-hairline"}>
           {activities.map((a) => {
             const demo = a.kind === "return_demo";
+            const groups = (
+              <ul className="mt-2 space-y-1">
+                {a.groups.map((g) => (
+                  <li key={g.key} className="flex items-center justify-between gap-2 rounded-lg bg-subtle px-2.5 py-1.5 text-xs">
+                    <span className="flex min-w-0 items-center gap-1.5 text-gray-700">
+                      <FontAwesomeIcon icon={faUsers} className="h-3 w-3 shrink-0 text-gray-400" aria-hidden />
+                      <span className="truncate font-medium">{g.label}</span>
+                      <span className="shrink-0 text-gray-400">{g.count}</span>
+                    </span>
+                    <span className="shrink-0 tabular-nums text-gray-600">{dateLabel(g.deadline)}</span>
+                  </li>
+                ))}
+              </ul>
+            );
             return (
-              <li key={a.scenario_id} className="px-4 py-3">
+              <li key={a.scenario_id} className={wide ? "rounded-xl border border-hairline p-3" : "px-4 py-3"}>
                 <div className="flex items-start gap-3">
                   <span
                     className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
@@ -219,7 +236,9 @@ function RoomCard({ room, activities }: { room: Room; activities: RoomActivity[]
                     <FontAwesomeIcon icon={demo ? faHandHoldingMedical : faUserInjured} className="h-3.5 w-3.5" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-gray-900">{a.title}</p>
+                    <p className={`${wide ? "line-clamp-2" : "truncate"} text-sm font-semibold text-gray-900`} title={a.title}>
+                      {a.title}
+                    </p>
                     {a.patient && (
                       <p className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-700">
                         <FontAwesomeIcon icon={faUserInjured} className="h-3 w-3 text-brand-600" aria-hidden />
@@ -245,20 +264,11 @@ function RoomCard({ room, activities }: { room: Room; activities: RoomActivity[]
                         {a.done}/{a.students} graded
                       </span>
                     </p>
-                    <ul className="mt-2 space-y-1">
-                      {a.groups.map((g) => (
-                        <li key={g.key} className="flex items-center justify-between gap-2 rounded-lg bg-subtle px-2.5 py-1.5 text-xs">
-                          <span className="flex min-w-0 items-center gap-1.5 text-gray-700">
-                            <FontAwesomeIcon icon={faUsers} className="h-3 w-3 shrink-0 text-gray-400" aria-hidden />
-                            <span className="truncate font-medium">{g.label}</span>
-                            <span className="shrink-0 text-gray-400">{g.count}</span>
-                          </span>
-                          <span className="shrink-0 tabular-nums text-gray-600">{dateLabel(g.deadline)}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    {!wide && groups}
                   </div>
                 </div>
+                {/* A tile gives its groups the full width, under the icon too. */}
+                {wide && groups}
               </li>
             );
           })}
