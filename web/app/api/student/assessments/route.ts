@@ -53,13 +53,25 @@ export async function GET() {
         // counted for the student's own record.
         supabase
           .from('assessment_attempts')
-          .select('assessment_id, score, submitted_at, status')
+          .select('id, assessment_id, score, submitted_at, status')
           .eq('student_id', session.uid)
           .in('status', canPractice ? [...GRADED_SPENT_STATUSES, PRACTICE_STATUS] : GRADED_SPENT_STATUSES)
           .order('submitted_at', { ascending: false }),
       ]);
 
     const attempts = (allAttempts ?? []).filter((a) => a.status === 'submitted');
+
+    // Tries with an essay (097) the instructor hasn't graded yet; before 097
+    // the column isn't there and none are. They count toward no grade until
+    // graded, so a quiz never shows a score the essay isn't in yet.
+    const { data: awaitingRows, error: awaitingError } = await supabase
+      .from('assessment_attempts')
+      .select('id, assessment_id')
+      .eq('student_id', session.uid)
+      .eq('awaiting_grading', true);
+    const awaitingRowsList = awaitingError ? [] : (awaitingRows ?? []);
+    const awaitingQuizzes = new Set(awaitingRowsList.map((r) => r.assessment_id as string));
+    const awaitingTries = new Set(awaitingRowsList.map((r) => r.id as string));
 
     if (pubError || asgError || attError) {
       console.error('Failed to fetch student assessments', pubError ?? asgError ?? attError);
@@ -105,9 +117,17 @@ export async function GET() {
       spentByAssessment.set(at.assessment_id, (spentByAssessment.get(at.assessment_id) ?? 0) + 1);
     }
 
+    // Every graded try, awaiting an essay or not, for the count and the date.
+    const triesByAssessment = new Map<string, { count: number; submitted_at: string }>();
+    for (const at of attempts ?? []) {
+      const cur = triesByAssessment.get(at.assessment_id);
+      if (cur) cur.count += 1;
+      else triesByAssessment.set(at.assessment_id, { count: 1, submitted_at: at.submitted_at });
+    }
+
     // Newest first, so the first graded try seen per quiz dates the record.
     const gradedByAssessment = new Map<string, { scores: (number | null)[]; submitted_at: string }>();
-    for (const at of attempts ?? []) {
+    for (const at of (attempts ?? []).filter((a) => !awaitingTries.has(a.id as string))) {
       const cur = gradedByAssessment.get(at.assessment_id);
       if (cur) cur.scores.push(at.score);
       else gradedByAssessment.set(at.assessment_id, { scores: [at.score], submitted_at: at.submitted_at });
@@ -161,8 +181,10 @@ export async function GET() {
         grade,
         // The old name for the grade, for installed apps that still read it.
         best_score: grade,
-        attempt_count: graded?.scores.length ?? 0,
-        last_submitted_at: graded?.submitted_at ?? null,
+        // An essay waits for the instructor; the grade counts it 0 until then.
+        awaiting_grading: awaitingQuizzes.has(a.id as string),
+        attempt_count: triesByAssessment.get(a.id as string)?.count ?? 0,
+        last_submitted_at: triesByAssessment.get(a.id as string)?.submitted_at ?? null,
         max_attempts: maxAttempts,
         attempts_used: spent,
         attempts_remaining: attemptsRemaining,

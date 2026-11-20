@@ -7,8 +7,9 @@
 
 export const SHORT_ANSWER = 'short_answer';
 
-/** How many filled options a question of this type needs: one accepted answer, or two choices. */
-export const minOptions = (questionType: unknown) => (questionType === SHORT_ANSWER ? 1 : 2);
+/** How many filled options a question of this type needs: one accepted answer, none for an essay, or two choices. */
+export const minOptions = (questionType: unknown) =>
+  questionType === SHORT_ANSWER ? 1 : questionType === 'essay' ? 0 : 2;
 
 /** Lowercase, no punctuation, single spaces: "  Hypo-thermia. " reads as "hypo thermia". */
 export function normalizeAnswer(text: string): string {

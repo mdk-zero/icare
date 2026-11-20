@@ -14,6 +14,14 @@ import {
   practiceLive,
 } from '@/app/lib/quiz-practice';
 import { quizGrade } from '@/app/lib/quiz-attempts';
+import {
+  ESSAY_MAX_LENGTH,
+  isEssay,
+  paperPoints,
+  scoreCriteria,
+  scorePaper,
+  type CriterionScore,
+} from '@/app/lib/essay';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -22,7 +30,7 @@ interface RouteParams {
 interface SubmittedAnswer {
   question_id: string;
   selected_index: number | null;
-  /** What the student typed, for a short answer question. */
+  /** What the student typed, for a short answer or essay question. */
   answer_text?: string | null;
   time_spent_seconds?: number;
 }
@@ -63,7 +71,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         a.selected_index === null || a.selected_index === undefined
           ? null
           : Number(a.selected_index),
-      answer_text: typeof a.answer_text === 'string' ? a.answer_text.slice(0, 500) : null,
+      // Room for an essay; a short answer is checked against a word or two.
+      answer_text: typeof a.answer_text === 'string' ? a.answer_text.slice(0, ESSAY_MAX_LENGTH) : null,
       time_spent_seconds:
         a.time_spent_seconds === undefined ? undefined : Math.max(0, Number(a.time_spent_seconds)),
     }));
@@ -157,7 +166,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const { data: questionRows, error: qError } = await supabase
       .from('questions')
-      .select('id, correct_index, explanation, question_type, options')
+      .select('id, correct_index, explanation, question_type, options, points')
       .in(
         'id',
         served.map((s) => s.question_id),
@@ -176,7 +185,26 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .filter((q): q is NonNullable<typeof q> => q !== null);
 
     const answerByQuestion = new Map(answers.map((a) => [a.question_id, a]));
-    const graded = questions.map((q) => {
+
+    // Essays (097) are graded by the instructor. One left blank has nothing to
+    // read, so it is 0 at once; a written one waits, counting 0 until graded.
+    const essays = questions
+      .filter((q) => isEssay(q.question_type))
+      .map((q) => {
+        const text = answerByQuestion.get(q.id)?.answer_text?.trim() ?? '';
+        return {
+          question_id: q.id,
+          criteria_id: q.criteria_id,
+          position: q.position,
+          answer_text: text,
+          max_points: paperPoints(q),
+          blank: text.length === 0,
+          time_spent_seconds: answerByQuestion.get(q.id)?.time_spent_seconds ?? null,
+        };
+      });
+    const essayIds = new Set(essays.map((e) => e.question_id));
+
+    const graded = questions.filter((q) => !essayIds.has(q.id)).map((q) => {
       const submitted = answerByQuestion.get(q.id);
       if (q.question_type === SHORT_ANSWER) {
         const typed = submitted?.answer_text?.trim() || null;
@@ -213,18 +241,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     });
 
     const correctCount = graded.filter((g) => g.is_correct).length;
-    const score = Math.round((correctCount / questions.length) * 10000) / 100;
+    const correctById = new Map(graded.map((g) => [g.question_id, g.is_correct]));
+    // Each checked question is worth 1, as before; an essay its own points.
+    const paper = questions.map((q) => {
+      const essay = essays.find((e) => e.question_id === q.id);
+      return essay
+        ? { question_id: q.id, criteria_id: q.criteria_id, max: essay.max_points, earned: 0 }
+        : { question_id: q.id, criteria_id: q.criteria_id, max: 1, earned: correctById.get(q.id) ? 1 : 0 };
+    });
+    const score = scorePaper(paper);
+    // A review isn't graded, so its essays don't wait for anyone.
+    const hasEssays = essays.length > 0;
 
     // ---------- weighted criteria scoring ----------
-    let criteriaBreakdown: {
-      criteria_id: string;
-      criteria_name: string;
-      weight: number;
-      correct: number;
-      total: number;
-      score: number;
-      weighted_score: number;
-    }[] = [];
+    let criteriaBreakdown: CriterionScore[] = [];
 
     // Criteria own their questions outright now. Matching on a shared
     // competency, as this used to, let a question tagged with two competencies
@@ -239,27 +269,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const assessmentCriteria = criteriaRows ?? [];
 
     if (assessmentCriteria.length > 0) {
-      const correctByQuestion = new Map(graded.map((g) => [g.question_id, g.is_correct]));
-
-      criteriaBreakdown = assessmentCriteria
-        .map((c) => {
-          const mine = served.filter((s) => s.criteria_id === c.id);
-          const total = mine.length;
-          const correct = mine.filter((s) => correctByQuestion.get(s.question_id)).length;
-          const pct = total > 0 ? Math.round((correct / total) * 10000) / 100 : 0;
-
-          return {
-            criteria_id: c.id,
-            criteria_name: c.name,
-            weight: c.weight,
-            correct,
-            total,
-            score: pct,
-            weighted_score: Math.round(pct * (c.weight / 100) * 100) / 100,
-          };
-        })
-        // A review only covers what was wrong, so a skill left out of it isn't a 0%.
-        .filter((c) => !practice || c.total > 0);
+      criteriaBreakdown = scoreCriteria(paper, assessmentCriteria, { practice });
     }
     const timeLimit = quiz?.time_limit_seconds;
 
@@ -275,11 +285,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       gradedScore = quizGrade((tries ?? []).map((t) => t.score));
     }
 
-    const respond = (finalScore: number, timeTaken: number) =>
+    const awaiting = !practice && essays.some((e) => !e.blank);
+    const respond = (finalScore: number, timeTaken: number, awaitingGrading = awaiting) =>
       NextResponse.json({
         score: finalScore,
         correct: correctCount,
         total: questions.length,
+        // Essays the instructor still has to grade: the score counts them 0 until then.
+        awaiting_grading: awaitingGrading,
         time_taken_seconds: timeTaken,
         // Graded and counted either way; a late one is flagged, not refused.
         // A review has no grade to flag.
@@ -287,9 +300,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         practice,
         ...(practice ? { graded_score: gradedScore } : {}),
         criteria_breakdown: criteriaBreakdown,
-        results: [...graded]
-          .sort((a, b) => a.position - b.position)
-          .map((g) => ({
+        results: [
+          ...graded.map((g) => ({
+            position: g.position,
             question_id: g.question_id,
             selected_index: g.selected_index,
             correct_index: g.correct_index,
@@ -300,11 +313,28 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
               ? { answer_text: g.answer_text, accepted_answer: g.accepted_answer }
               : {}),
           })),
+          // An essay: what was written and what it is worth, graded later.
+          ...essays.map((e) => ({
+            position: e.position,
+            question_id: e.question_id,
+            selected_index: null,
+            correct_index: 0,
+            is_correct: false,
+            explanation: '',
+            essay: true,
+            answer_text: e.answer_text,
+            max_points: e.max_points,
+            points_awarded: e.blank ? 0 : null,
+          })),
+        ]
+          .sort((a, b) => a.position - b.position)
+          .map(({ position: _position, ...rest }) => rest),
       });
 
     if (alreadySubmitted) {
       return respond(Number(attempt.score ?? score), Number(attempt.time_taken_seconds ?? 0));
     }
+    // Essays can only be written once 097 is there, so the column is too.
 
     const timeTaken = Math.max(
       0,
@@ -323,6 +353,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         submitted_at: new Date().toISOString(),
         score,
         time_taken_seconds: timeTaken,
+        ...(hasEssays ? { awaiting_grading: awaiting } : {}),
       })
       .eq('id', attemptId)
       .eq('status', 'in_progress')
@@ -351,6 +382,35 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     );
     if (answersError) console.error('Failed to save answers for attempt', attemptId, answersError);
 
+    // The essays, for the instructor to grade. A blank one is graded 0 now,
+    // and reads as a wrong answer like any other.
+    if (hasEssays) {
+      const now = new Date().toISOString();
+      const { error: essaysError } = await supabase.from('essay_answers').insert(
+        essays.map((e) => ({
+          attempt_id: attemptId,
+          question_id: e.question_id,
+          answer_text: e.answer_text,
+          max_points: e.max_points,
+          ...(e.blank ? { points_awarded: 0, graded_at: now } : {}),
+        })),
+      );
+      if (essaysError) console.error('Failed to save essays for attempt', attemptId, essaysError);
+      const blank = essays.filter((e) => e.blank);
+      if (blank.length > 0) {
+        const { error: blankError } = await supabase.from('attempt_answers').insert(
+          blank.map((e) => ({
+            attempt_id: attemptId,
+            question_id: e.question_id,
+            selected_index: null,
+            is_correct: false,
+            time_spent_seconds: e.time_spent_seconds,
+          })),
+        );
+        if (blankError) console.error('Failed to save blank essays for attempt', attemptId, blankError);
+      }
+    }
+
     if (criteriaBreakdown.length > 0) {
       const { error: criteriaError } = await supabase.from('attempt_criteria_scores').insert(
         criteriaBreakdown.map((cb) => ({
@@ -368,13 +428,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       if (criteriaError) console.error('Failed to save criteria scores for attempt', attemptId, criteriaError);
     }
 
-    // Roll the breakdown up into per-competency standing. Only the request
+    // Roll the breakdown up into per-competency standing (after the last essay
+    // is graded, when there are essays to grade). Only the request
     // that finalized the attempt gets here, so it runs once. Awaited so the
     // scores exist by the time the student sees their results, but never
     // allowed to fail the submission; the backfill can recover a missed one.
     // Not for a review: a re-run of questions already seen with their answers
     // would lift the standing without showing anything new.
-    if (!practice && criteriaBreakdown.length > 0) {
+    if (!practice && !awaiting && criteriaBreakdown.length > 0) {
       try {
         await deriveCompetencyScoresForAttempt(supabase, attemptId);
       } catch (err) {
@@ -403,6 +464,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           time_taken_seconds: timeTaken,
           late,
           practice,
+          ...(hasEssays ? { essays: essays.length, awaiting_grading: awaiting } : {}),
         },
       },
       request,
@@ -410,7 +472,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // A graded result moves the ML's picture of the student, so re-score them
     // after the response goes out. Review quizzes don't reach its features.
-    if (!practice) refreshStudentInBackground(session.uid);
+    // An essay still to grade holds that back until the instructor grades it.
+    if (!practice && !awaiting) refreshStudentInBackground(session.uid);
 
     return respond(score, timeTaken);
   } catch (err) {

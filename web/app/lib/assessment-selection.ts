@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { SHORT_ANSWER } from './short-answer';
+import { isEssay, paperPoints } from './essay';
 import { scoredStatuses } from './quiz-practice';
 import { DEFAULT_BKT, answersInOrder, loadBktParameters, oldestFirst, traceMastery } from './bkt';
 import { loadChecklistAnswers } from './checklist-answers';
@@ -47,9 +48,11 @@ export interface SelectedQuestion {
   id: string;
   criteria_id: string | null;
   content: string;
-  /** The choices; empty for a short answer question, whose accepted answers stay on the server. */
+  /** The choices; empty for a short answer question, whose accepted answers stay on the server, and an essay. */
   options: string[];
   question_type: string;
+  /** What an essay is worth (097), so the student can see it; absent on other questions. */
+  points?: number;
   /** 0-based order within this attempt. */
   position: number;
 }
@@ -97,12 +100,18 @@ interface QuestionRow {
   content: string;
   options: unknown;
   question_type: string | null;
+  points?: number | null;
   criteria_id: string | null;
 }
 
-/** What a student is shown of a question's options: none for short answer, which would give the answer away. */
-function servedChoices(q: { options: unknown; question_type: string | null }) {
+/**
+ * What a student is shown of a question's options: none for short answer,
+ * which would give the answer away, nor for an essay, which has none. An
+ * essay says what it is worth.
+ */
+function servedChoices(q: { options: unknown; question_type: string | null; points?: number | null }) {
   const question_type = q.question_type || 'multiple_choice';
+  if (isEssay(question_type)) return { options: [] as string[], question_type, points: paperPoints(q) };
   const options = question_type === SHORT_ANSWER || !Array.isArray(q.options) ? [] : (q.options as string[]);
   return { options, question_type };
 }
@@ -149,7 +158,7 @@ export async function loadServedQuestions(
 
   const { data: questions } = await supabase
     .from('questions')
-    .select('id, content, options, question_type')
+    .select('id, content, options, question_type, points')
     .in(
       'id',
       served.map((s) => s.question_id),
@@ -370,7 +379,7 @@ export async function selectQuestionsForAttempt(
     readCriteria('id, name, min_questions, sort_order, skill_id'),
     supabase
       .from('questions')
-      .select('id, position, content, options, question_type, criteria_id')
+      .select('id, position, content, options, question_type, points, criteria_id')
       .eq('assessment_id', assessmentId)
       .order('position', { ascending: true }),
   ]);
@@ -583,7 +592,8 @@ async function dealReview(
     return {
       bucket,
       mastery: traceMastery(skillParams, sequences.get(bucket.kc) ?? []),
-      questions: shuffle(bucket.pool.filter((q) => missed.has(q.id)), rng),
+      // An essay needs the instructor, and a review isn't graded, so it stays out.
+      questions: shuffle(bucket.pool.filter((q) => missed.has(q.id) && !isEssay(q.question_type)), rng),
     };
   });
 

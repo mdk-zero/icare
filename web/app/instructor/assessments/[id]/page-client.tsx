@@ -1,5 +1,6 @@
 "use client";
 
+import { ESSAY_DEFAULT_POINTS } from "../../../lib/essay";
 import { DEFAULT_ATTEMPTS, MIN_ATTEMPTS, attemptLimit } from "@/app/lib/quiz-attempts";
 import { acceptedAnswers } from "@/app/lib/short-answer";
 import { describeTimeLimit, formatTimeLimit, parseTimeLimit } from "@/app/lib/time-limit";
@@ -349,7 +350,9 @@ export default function AssessmentQuestionsClient({
           builders[q.id] = {
             content: q.content,
             options:
-              q.question_type === "short_answer"
+              q.question_type === "essay"
+                ? []
+                : q.question_type === "short_answer"
                 ? (acceptedAnswers(q.options, q.explanation).length > 0 ? acceptedAnswers(q.options, q.explanation) : [""])
                 : q.options.length >= 2
                   ? [...q.options]
@@ -427,14 +430,28 @@ export default function AssessmentQuestionsClient({
     markDirty(qId);
   };
 
-  /** Short answer keeps accepted answers where the choices go, so switching to or from it starts that list afresh. */
+  /**
+   * Short answer keeps accepted answers where the choices go, and an essay has
+   * none, so switching to or from either starts that list afresh. An essay is
+   * worth 10 points to start with; leaving it goes back to 1.
+   */
   const changeQuestionType = (qId: string, type: string) => {
     setQuestionBuilders((prev) => {
       const form = prev[qId];
       if (!form) return prev;
-      const crossing = (form.question_type === "short_answer") !== (type === "short_answer");
-      const options = !crossing ? form.options : type === "short_answer" ? [""] : ["", ""];
-      return { ...prev, [qId]: { ...form, question_type: type, options, correct_index: crossing ? 0 : form.correct_index } };
+      const kind = (t: string) => (t === "short_answer" || t === "essay" ? t : "choices");
+      const crossing = kind(form.question_type) !== kind(type);
+      const options = !crossing ? form.options : type === "essay" ? [] : type === "short_answer" ? [""] : ["", ""];
+      const points =
+        type === "essay" && form.points === 1
+          ? ESSAY_DEFAULT_POINTS
+          : form.question_type === "essay" && type !== "essay"
+            ? 1
+            : form.points;
+      return {
+        ...prev,
+        [qId]: { ...form, question_type: type, options, points, correct_index: crossing ? 0 : form.correct_index },
+      };
     });
     markDirty(qId);
   };
@@ -485,8 +502,17 @@ export default function AssessmentQuestionsClient({
 
     // True / False draws its own two choices, so the typed options (left over from multiple choice) don't count.
     const filledOptions =
-      form.question_type === "true_false" ? ["True", "False"] : form.options.filter((o) => o.trim().length > 0);
-    if (form.question_type === "short_answer") {
+      form.question_type === "essay"
+        ? []
+        : form.question_type === "true_false"
+          ? ["True", "False"]
+          : form.options.filter((o) => o.trim().length > 0);
+    if (form.question_type === "essay") {
+      if (!form.content.trim()) {
+        toast("Question needs content");
+        return false;
+      }
+    } else if (form.question_type === "short_answer") {
       if (!form.content.trim() || filledOptions.length < 1) {
         toast("Question needs content and at least one accepted answer");
         return false;
@@ -495,7 +521,7 @@ export default function AssessmentQuestionsClient({
       toast("Question needs content and at least two options");
       return false;
     }
-    if (form.correct_index >= filledOptions.length) {
+    if (form.question_type !== "essay" && form.correct_index >= filledOptions.length) {
       toast("Mark one of the filled options as correct");
       return false;
     }
@@ -507,7 +533,7 @@ export default function AssessmentQuestionsClient({
     const payload = {
       content: form.content,
       options: filledOptions,
-      correct_index: form.question_type === "short_answer" ? 0 : form.correct_index,
+      correct_index: form.question_type === "short_answer" || form.question_type === "essay" ? 0 : form.correct_index,
       question_type: form.question_type,
       points: form.points,
       explanation: form.explanation,
@@ -1064,6 +1090,7 @@ export default function AssessmentQuestionsClient({
                 <option value="multiple_choice">Multiple choice</option>
                 <option value="true_false">True / False</option>
                 <option value="short_answer">Identification</option>
+                <option value="essay">Essay</option>
               </select>
             </div>
             {isEditing && (dirtyQuestions.has(q.id) || q.id.startsWith("new_")) && (
@@ -1203,6 +1230,14 @@ export default function AssessmentQuestionsClient({
                 </button>
               )}
             </div>
+          )}
+
+          {/* Essay: the student writes; the instructor grades it out of its points */}
+          {form.question_type === "essay" && (
+            <p className={`text-xs ${isEditing ? "text-gray-500" : "text-gray-400"}`}>
+              Students write their answer. You grade it out of its points on the quiz&apos;s Results page; until
+              then it counts as 0.
+            </p>
           )}
         </div>
 

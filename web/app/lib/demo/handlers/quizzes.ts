@@ -34,6 +34,50 @@ function canEdit(ctx: Ctx, quiz: DemoQuiz) {
 
 const NOT_YOURS = () => json({ error: "Only the instructor who created this assessment can change it." }, 403);
 
+// --- Essays (097) -------------------------------------------------------------
+// Demo tries were taken before any essay was asked, so a quiz given an essay
+// shows each submitted try with a written answer to grade. Grades live for the
+// visit, like everything else in the demo.
+
+const DEMO_ESSAY_ANSWERS = [
+  "I would first check the patient's identity with two identifiers and explain the procedure. Then I would perform hand hygiene, gather the equipment, and assess the site before starting. I would monitor the patient's response and document the findings and any teaching given.",
+  "Safety comes first: identify the patient, explain what will happen, and keep their privacy. I would compare the result with the baseline and report anything abnormal to the nurse in charge.",
+  "Check the order, wash hands, and identify the patient. Do the procedure carefully and write it in the chart.",
+];
+
+const essayGrades = new Map<string, { points: number; feedback: string | null; graded_at: string }>();
+const essayKey = (attemptId: string, questionId: string) => `${attemptId}:${questionId}`;
+
+function essaysOf(ctx: Ctx, quizId: string) {
+  return questionsOf(ctx, quizId).filter((q) => q.question_type === "essay");
+}
+
+function essayAttempt(ctx: Ctx, quizId: string, attempt: { id: string; score: number | null }, index: number) {
+  const essays = essaysOf(ctx, quizId);
+  const rows = essays.map((q, i) => {
+    const grade = essayGrades.get(essayKey(attempt.id, q.id)) ?? null;
+    return {
+      question_id: q.id,
+      question: q.content,
+      guidance: q.explanation || null,
+      position: q.position,
+      answer_text: DEMO_ESSAY_ANSWERS[(index + i) % DEMO_ESSAY_ANSWERS.length],
+      max_points: q.points || 10,
+      points_awarded: grade?.points ?? null,
+      feedback: grade?.feedback ?? null,
+      graded_at: grade?.graded_at ?? null,
+    };
+  });
+  const awaiting = rows.some((r) => r.points_awarded === null);
+  const max = rows.reduce((sum, r) => sum + r.max_points, 0);
+  const earned = rows.reduce((sum, r) => sum + (r.points_awarded ?? 0), 0);
+  // The try's own score stands for its checked questions; the essays add to it.
+  const checked = questionsOf(ctx, quizId).length - essays.length;
+  const base = ((attempt.score ?? 0) / 100) * checked;
+  const score = checked + max > 0 ? Math.round(((base + earned) / (checked + max)) * 10000) / 100 : 0;
+  return { rows, awaiting, score };
+}
+
 function questionsOf(ctx: Ctx, quizId: string) {
   return ctx.db.questions.filter((q) => q.assessment_id === quizId).sort((a, b) => a.position - b.position);
 }
@@ -542,6 +586,67 @@ route("POST", "/api/faculty/assessments/:id/assign", (ctx) => {
   return { success: true, student_count: targets.size, added_sections: added };
 });
 
+route("GET", "/api/faculty/assessments/:id/essays", (ctx) => {
+  if (!staffOnly(ctx)) return forbidden();
+  const { db } = ctx;
+  const quiz = db.quizzes.find((q) => q.id === ctx.params.id);
+  if (!quiz) return notFound("Assessment not found");
+  if (essaysOf(ctx, quiz.id).length === 0) return { attempts: [], enabled: true };
+  const studentId = ctx.query.get("student_id");
+  const scope = scopedIds(ctx);
+  const tries = db.attempts
+    .filter((a) => a.assessment_id === quiz.id && a.status === "submitted" && scope.has(a.student_id))
+    .filter((a) => !studentId || a.student_id === studentId)
+    .sort((a, b) => (b.submitted_at ?? "").localeCompare(a.submitted_at ?? ""));
+  return {
+    enabled: true,
+    attempts: tries.map((a, i) => {
+      const student = db.users.find((u) => u.id === a.student_id);
+      const essay = essayAttempt(ctx, quiz.id, a, i);
+      return {
+        attempt_id: a.id,
+        student_id: a.student_id,
+        student_name: student?.name ?? "Student",
+        student_email: student?.email ?? "",
+        picture_url: student?.picture_url ?? null,
+        sex: student?.sex ?? null,
+        submitted_at: a.submitted_at,
+        score: essay.score,
+        awaiting_grading: essay.awaiting,
+        essays: essay.rows,
+      };
+    }),
+  };
+});
+
+route("POST", "/api/faculty/attempts/:id/essays", (ctx) => {
+  if (!staffOnly(ctx)) return forbidden();
+  const { db, body } = ctx;
+  const attempt = db.attempts.find((a) => a.id === ctx.params.id);
+  if (!attempt || !scopedIds(ctx).has(attempt.student_id)) return notFound("Attempt not found");
+  const essays = essaysOf(ctx, attempt.assessment_id);
+  const grades = Array.isArray(body?.grades) ? (body.grades as { question_id?: unknown; points?: unknown; feedback?: unknown }[]) : [];
+  if (grades.length === 0) return json({ error: "Send at least one grade" }, 400);
+  const now = new Date().toISOString();
+  for (const g of grades) {
+    const q = essays.find((e) => e.id === g.question_id);
+    if (!q) return json({ error: "That essay is not on this attempt" }, 400);
+    const max = q.points || 10;
+    const points = Number(g.points);
+    if (!Number.isInteger(points) || points < 0 || points > max) {
+      return json({ error: `Give a whole number of points from 0 to ${max}` }, 400);
+    }
+    const feedback = typeof g.feedback === "string" && g.feedback.trim() ? g.feedback.trim() : null;
+    essayGrades.set(essayKey(attempt.id, q.id), { points, feedback, graded_at: now });
+  }
+  const index = db.attempts
+    .filter((a) => a.assessment_id === attempt.assessment_id && a.student_id === attempt.student_id && a.status === "submitted")
+    .sort((a, b) => (b.submitted_at ?? "").localeCompare(a.submitted_at ?? ""))
+    .findIndex((a) => a.id === attempt.id);
+  const result = essayAttempt(ctx, attempt.assessment_id, attempt, Math.max(0, index));
+  return { score: result.score, awaiting_grading: result.awaiting };
+});
+
 route("GET", "/api/faculty/assessments/:id/results", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   const { db } = ctx;
@@ -565,8 +670,15 @@ route("GET", "/api/faculty/assessments/:id/results", (ctx) => {
       .filter((a) => a.status === "submitted")
       .sort((a, b) => (b.submitted_at ?? "").localeCompare(a.submitted_at ?? ""));
     const latest = submitted[0] ?? null;
-    const scores = submitted.map((a) => a.score).filter((x): x is number => x !== null);
+    const essayTries = essaysOf(ctx, quiz.id).length
+      ? submitted.map((a, i) => ({ ...a, ...essayAttempt(ctx, quiz.id, a, i) }))
+      : [];
+    // A try with an essay still to grade counts once it is graded.
+    const scores = (essayTries.length ? essayTries.filter((a) => !a.awaiting) : submitted)
+      .map((a) => a.score)
+      .filter((x): x is number => x !== null);
     return {
+      to_grade: essayTries.filter((a) => a.awaiting).length,
       student_id: s.id,
       name: s.name,
       email: s.email,
@@ -601,7 +713,9 @@ route("GET", "/api/faculty/assessments/:id/results", (ctx) => {
     },
     results,
     audience: hasAssignments ? "assigned" : "visibility",
+    has_essays: essaysOf(ctx, quiz.id).length > 0,
     summary: {
+      to_grade: results.reduce((sum, r) => sum + r.to_grade, 0),
       total: results.length,
       submitted: results.filter((r) => r.status === "submitted").length,
       in_progress: results.filter((r) => r.status === "in_progress").length,

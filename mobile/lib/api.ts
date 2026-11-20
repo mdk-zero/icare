@@ -277,6 +277,8 @@ export interface StudentAssessment {
   } | null;
   /** The quiz's grade: the average of the graded tries. */
   grade: number | null;
+  /** An essay on a graded try waits for the instructor; the grade counts it 0 until then. */
+  awaiting_grading?: boolean;
   attempt_count: number;
   last_submitted_at: string | null;
   /** Tries allowed; null is unlimited. */
@@ -321,9 +323,11 @@ export interface AttemptQuestion {
   id: string;
   position: number;
   content: string;
-  /** The choices; empty for identification, where the student types the answer. */
+  /** The choices; empty for identification and essays, where the student types the answer. */
   options: string[];
   question_type?: string;
+  /** What an essay is worth, graded by the instructor. */
+  points?: number;
 }
 
 export interface StartedAttempt {
@@ -359,6 +363,8 @@ export interface AttemptResult {
   practice?: boolean;
   /** For practice: the graded score it left alone (null if no graded try was scored). */
   graded_score?: number | null;
+  /** An essay waits for the instructor's grade; the score counts it 0 until then. */
+  awaiting_grading?: boolean;
   results: {
     question_id: string;
     selected_index: number | null;
@@ -368,6 +374,10 @@ export interface AttemptResult {
     /** Identification only: what the student typed, and the answer it was checked against. */
     answer_text?: string | null;
     accepted_answer?: string | null;
+    /** An essay: what it is worth, and its points once graded (0 at once when left blank). */
+    essay?: boolean;
+    max_points?: number;
+    points_awarded?: number | null;
   }[];
 }
 

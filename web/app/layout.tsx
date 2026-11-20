@@ -35,6 +35,9 @@ export const metadata: Metadata = {
   title: "iCARE++ | Clinical Competency Platform",
   description:
     "A scalable machine learning-driven clinical competency assessment and adaptive learning system for nursing students.",
+  // The name under the icon when the portal is added to an iPhone's home
+  // screen; the tab title is too long and gets cut off. The icon is app/apple-icon.png.
+  appleWebApp: { title: "iCARE++" },
 };
 
 export default function RootLayout({
