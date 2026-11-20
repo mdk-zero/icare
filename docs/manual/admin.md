@@ -298,8 +298,9 @@ To accept an account request:
 
    *Figure 5. An account request in the notifications popover, with Accept and Decline under the request.*
 
-2. Select **Accept**, or the request itself. The **Users** page opens with the **New account**
-   dialog filled in with the person's name, email and sex. A note above the form reads "From an
+2. Select **Accept**. (Selecting the request itself opens its own page, which has **Accept** and
+   **Decline** too.) The **Users** page opens with the **New account** dialog filled in with the
+   person's name, email and sex. A note above the form reads "From an
    account request. Check the details and pick a role; the request is marked accepted once the
    account is created."
 
@@ -638,7 +639,8 @@ reply goes to the person by email.
 To find a request:
 
 1. In the sidebar, select **Support Requests**. The page opens with **Needs Reply** selected.
-   Selecting a support request in the bell opens it directly.
+   Selecting a support request in the bell opens its notification page; **Open the support
+   request** there opens it here.
 2. Optional: Select a filter: **Needs Reply**, **Answered**, **Resolved** or **All**. Each shows
    how many requests it has.
 3. Select a request in the list. It opens beside the list; on a phone it replaces the list, and

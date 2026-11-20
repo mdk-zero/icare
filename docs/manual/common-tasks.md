@@ -222,14 +222,15 @@ To read new notifications:
 
    *Figure 4. The notifications popover, with unread notifications and Mark all read.*
 
-2. Select a notification to mark it read.
-3. Optional: Select **Mark all read** (double tick) to mark them all read.
+2. Select a notification. Its own page opens, with "Back to notifications" at the top (see
+   [Open a notification](#open-a-notification)).
+3. Optional: Select **Mark all read** (double tick) to mark them all read without opening them.
 
-**Result:** The red number on the bell goes down. An announcement from the Admins opens on the
-**Notifications** page, so you can read it in full. With nothing unread, the popover reads "All
-caught up". To close it, press **Esc** or select anywhere outside it.
+**Result:** The notification is marked read and the red number on the bell goes down. With
+nothing unread, the popover reads "All caught up". To close it, press **Esc** or select anywhere
+outside it.
 
-Some notifications carry their own buttons:
+Some notifications carry their own buttons, under them in the popover and on their page:
 
 - Deans and Program Chairs: a grade change request has **Accept** and **Decline**
   ([Approve or decline a grade change](dean.md#approve-or-decline-a-grade-change)).
@@ -255,15 +256,37 @@ To see all notifications:
 
 3. Optional: Select **All**, **Unread**, **Alerts** or **Warnings** to show only those.
 4. Optional: Select **Mark read** under a notification, or **Mark all read** in the page header.
+5. Optional: Select a notification to open its page (see [Open a notification](#open-a-notification)).
 
-**Result:** Notifications are listed under "Today", "Yesterday" or their date. A **Live** badge
-means new ones appear as they arrive. If it reads **Reconnecting**, new ones appear once the
-connection is back; reload the page if it stays that way.
+**Result:** Notifications are listed under "Today", "Yesterday" or their date, each cut to a few
+lines. A **Live** badge means new ones appear as they arrive. If it reads **Reconnecting**, new
+ones appear once the connection is back; reload the page if it stays that way.
 
-> [!NOTE]
-> Notifications don't open the record they are about. Selecting one only marks it read. To act
-> on it, open the record from its own page, such as **Patient Cases** or **Students**. Admins are
-> the exception for account and support requests ([Admin guide](admin.md)).
+### Open a notification
+
+Every notification has a page of its own, with the whole message. Selecting a notification in the
+bell, or anywhere on its card on the **Notifications** page, opens it. The buttons on a card, such
+as **Mark read** or **Accept**, act on their own and don't open the page.
+
+The page shows the notification's title, what kind it is and when it came (for example "Update ·
+Monday, November 16, 2026 at 9:30 AM"), and the whole message. A vital signs alert also lists what
+was flagged, with what to do about each finding. Opening the page marks the notification read.
+
+When a notification is about something you can open, its page has a button for it. The same button
+shows on its card on the **Notifications** page:
+
+| Notification | Button | Opens |
+|---|---|---|
+| A new course assignment (Instructors) | **Open the course** | The course's page |
+| A grade change approved or declined (Instructors) | **Open Review Submissions** | The Patient Case's grading page, or **Patient Cases** for an older notification |
+| A Case Presentation handed in (Instructors) | **Open the Case Presentation** | The Case Presentation's page |
+| A help request, a vital signs alert, a low performance flag, or a student moved between groups | **Open the student's profile** | The student's profile (Instructors, Deans and Program Chairs) |
+| A reply to your Help & Support message | **Open Help & Support** | Your **Help & Support** page |
+| A support request (Admins) | **Open the support request** | The request on **Support Requests** |
+
+Announcements have no such button: the message is the whole of it. Account requests and grade
+change requests have **Accept** and **Decline** instead. To go back to the list, select **Back to
+notifications** at the top of the page.
 
 ## Your profile and settings
 
