@@ -103,8 +103,8 @@ lists the other names, so you can match what you see to what you read.
 - **Section**: a class of students, such as BSN 3101.
 - **Group**: a smaller set of students in a section, supervised by one instructor. An instructor
   sees the students in the groups they supervise.
-- **Course**: a subject taught in a semester, such as NCM 101, given to an instructor by their
-  Dean or Program Chair.
+- **Course**: a laboratory subject taught in a semester, such as NCM 112L, given to an instructor
+  by their Dean or Program Chair.
 - **Semester**: the term a course runs in, such as "1st Semester AY 2026–2027".
 - **Low performing**: a student the nightly prediction marks as likely to fall behind. Deans,
   Program Chairs and Instructors can also run the prediction by hand.

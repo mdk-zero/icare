@@ -470,7 +470,7 @@ row("COM-10", "common/10-help-support.png", "faculty", async (page, r) => {
 row("COM-11", "common/11-analytics-filter-bar.png", "faculty", async (page, r) => {
   await go(page, "/instructor/analytics");
   await page.getByRole("button", { name: /^Course:/ }).click();
-  await page.getByRole("button", { name: /^NCM 101/ }).first().click();
+  await page.getByRole("button", { name: /^NCM 114L/ }).first().click();
   await settle(page);
   await page.getByRole("button", { name: /^Sections:/ }).click();
   await page.waitForTimeout(400);
@@ -731,7 +731,7 @@ row("DEAN-10", "dean/10-courses.png", "dean", async (page, r) => {
 row("DEAN-11", "dean/11-add-course.png", "dean", async (page, r) => {
   await go(page, "/dean/courses/new");
   // Semester and year stay on the current term; then the course and instructor.
-  // The plan's NCM 103 isn't in the demo curriculum's first-semester list.
+  // The demo's own courses are already added; NCM 105L is another of the first-semester list.
   await choose(page.locator("select", { has: page.locator("option", { hasText: "Choose a course" }) }), /^NCM 105L/);
   await choose(page.locator("select", { has: page.locator("option", { hasText: "Choose an instructor" }) }), /^Liza Fernandez/);
   await page.waitForTimeout(400);
@@ -835,7 +835,7 @@ row("INS-02", "instructor/02-students.png", "faculty", async (page, r) => {
 });
 
 row("INS-03", "instructor/03-edit-groups.png", "faculty", async (page, r) => {
-  await openInstructorRoster(page, "NCM 101", "BSN 3101");
+  await openInstructorRoster(page, "NCM 114L", "BSN 3101");
   await page.getByRole("radio", { name: /Edit groups/ }).click();
   await settle(page);
   // Scrolled to the end, so the group cards and "Not in a group" are both in frame.
@@ -844,7 +844,7 @@ row("INS-03", "instructor/03-edit-groups.png", "faculty", async (page, r) => {
 });
 
 row("INS-04", "instructor/04-student-profile.png", "faculty", async (page, r) => {
-  await openInstructorRoster(page, "NCM 101", "BSN 3101");
+  await openInstructorRoster(page, "NCM 114L", "BSN 3101");
   await page.getByRole("button", { name: "View Mark Anthony Cruz's profile" }).click();
   await page.waitForURL(/\/instructor\/students\//);
   await settle(page);
@@ -854,18 +854,18 @@ row("INS-04", "instructor/04-student-profile.png", "faculty", async (page, r) =>
 
 row("INS-05", "instructor/05-course-criteria.png", "faculty", async (page, r) => {
   await go(page, "/instructor/courses");
-  await page.getByRole("link", { name: "NCM 101" }).first().click();
+  await page.getByRole("link", { name: "NCM 114L" }).first().click();
   await page.waitForURL(/\/instructor\/courses\/[^/?]+$/);
   await settle(page);
   await shot.viewport(page, r);
 });
 
-// The Progress grid for the current NCM 101. Since the automatic grading split
+// The Progress grid for the current NCM 114L. Since the automatic grading split
 // (070) the grid takes no scores ("Scores can't be entered here"), so the shot
 // is the grid itself, not a score dialog.
 row("INS-06", "instructor/06-progress.png", "faculty", async (page, r) => {
   await go(page, "/instructor/courses");
-  await page.getByRole("link", { name: "NCM 101" }).first().click();
+  await page.getByRole("link", { name: "NCM 114L" }).first().click();
   await page.waitForURL(/\/instructor\/courses\/[^/?]+$/);
   await settle(page);
   await page.getByRole("tab", { name: /^Progress/ }).click();
@@ -880,7 +880,7 @@ row("INS-07", "instructor/07-patient-cases.png", "faculty", async (page, r) => {
 
 row("INS-08", "instructor/08-create-patient-case.png", "faculty", async (page, r) => {
   await go(page, "/instructor/scenarios/new");
-  await page.getByRole("radio", { name: /^NCM 101/ }).click();
+  await page.getByRole("radio", { name: /^NCM 114L/ }).click();
   await page.getByPlaceholder(/Search name/).fill("Rosa");
   await page.getByText("Rosa Delgado").first().click();
   // The room defaults to where the patient already is (Room 201).
@@ -891,7 +891,11 @@ row("INS-08", "instructor/08-create-patient-case.png", "faculty", async (page, r
 
 row("INS-09", "instructor/09-assign-patient-case.png", "faculty", async (page, r) => {
   await go(page, "/instructor/scenarios");
-  await patientCaseCard(page, "Fever Workup").getByRole("button", { name: /Actions/ }).click();
+  // The card sits under the fold: scroll first, or the scroll closes the menu as it opens.
+  const card = patientCaseCard(page, "Fever Workup");
+  await card.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(800);
+  await card.getByRole("button", { name: /Actions/ }).click();
   await page.getByRole("menuitem", { name: /Assign/ }).click();
   const d = page.locator('[role="dialog"][aria-labelledby="assign-students-title"]');
   await d.waitFor();
@@ -941,7 +945,7 @@ row("INS-12", "instructor/12-return-demo-new.png", "faculty", async (page, r) =>
   // Tall enough for the form down to the skill list.
   await page.setViewportSize({ width: DESKTOP.width, height: 1250 });
   await go(page, "/instructor/return-demos/new");
-  await page.getByRole("radio", { name: /^NCM 101/ }).click();
+  await page.getByRole("radio", { name: /^NCM 114L/ }).click();
   await page.getByPlaceholder(/Vital Signs Return/).fill("Blood Pressure Return Demonstration");
   await page.getByRole("button", { name: /^Chapter 1 · Vital Signs/ }).click();
   await page.locator("label", { hasText: /^\s*1-7/ }).first().click();
@@ -954,7 +958,7 @@ row("INS-13", "instructor/13-quiz-editor.png", "faculty", async (page, r) => {
   await page.getByRole("button", { name: /New Quiz/ }).click();
   await page.waitForURL(/\/instructor\/assessments\/new/);
   await settle(page);
-  await page.getByRole("radio", { name: /^NCM 101/ }).click();
+  await page.getByRole("radio", { name: /^NCM 114L/ }).click();
   await page.getByPlaceholder("e.g. Vital Signs Fundamentals").fill("Blood Pressure Check");
   await page.getByRole("radio", { name: /With AI/ }).click();
   await page.locator("#ai-skill").selectOption("1-7");
@@ -996,6 +1000,9 @@ row("INS-14", "instructor/14-grade-group.png", "faculty", async (page, r) => {
 
 row("INS-15", "instructor/15-library.png", "faculty", async (page, r) => {
   await go(page, "/instructor/library");
+  // The list opens on the first course by code; the blood pressure skills are NCM 114L's.
+  await page.getByRole("radio", { name: /^NCM 114L/ }).click();
+  await settle(page);
   await page.getByRole("button", { name: /Assessing Brachial Artery Blood Pressure/ }).click();
   await settle(page);
   await shot.viewport(page, r);

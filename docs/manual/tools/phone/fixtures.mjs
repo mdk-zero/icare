@@ -729,17 +729,22 @@ const material = (n, skill, kind, title, author, course, seen) => ({
   course,
   seen,
 });
-const NCM101 = { code: 'NCM 101', title: 'Health Assessment' };
-const NCM103 = { code: 'NCM 103', title: 'Fundamentals of Nursing Practice' };
+// The web demo's two Third Year, First Semester courses (course-rules.ts).
+const NCM114L = { code: 'NCM 114L', title: 'Care of Older Person' };
+const NCM112L = {
+  code: 'NCM 112L',
+  title:
+    'Care of Clients With Problems in Oxygenation, Fluid and Electrolytes, Infectious, Inflammatory and Immunologic Response, Cellular Aberrations, Acute and Chronic (Skills Lab and RLE)',
+};
 const checklistTitle = (skill) => `Skill ${skill} checklist: ${skillTitle(skill)}`;
 
 const MATERIALS = [
-  material(61, '1-1', 'pdf', checklistTitle('1-1'), 'Jose Reyes', NCM101, true),
-  material(62, '1-4', 'link', checklistTitle('1-4'), 'Liza Fernandez', NCM101, true),
-  material(50, '1-7', 'note', 'Blood pressure: the five mistakes we see most', 'Maria Santos', NCM101, true),
-  material(63, '1-7', 'pdf', checklistTitle('1-7'), 'Maria Santos', NCM101, false),
-  material(64, '14-1', 'pdf', checklistTitle('14-1'), 'Liza Fernandez', NCM101, true),
-  material(65, '14-3', 'link', checklistTitle('14-3'), 'Jose Reyes', NCM103, false),
+  material(61, '1-1', 'pdf', checklistTitle('1-1'), 'Jose Reyes', NCM114L, true),
+  material(62, '1-4', 'link', checklistTitle('1-4'), 'Liza Fernandez', NCM114L, true),
+  material(50, '1-7', 'note', 'Blood pressure: the five mistakes we see most', 'Maria Santos', NCM114L, true),
+  material(63, '1-7', 'pdf', checklistTitle('1-7'), 'Maria Santos', NCM114L, false),
+  material(64, '14-1', 'pdf', checklistTitle('14-1'), 'Liza Fernandez', NCM114L, true),
+  material(65, '14-3', 'link', checklistTitle('14-3'), 'Jose Reyes', NCM112L, false),
 ];
 
 export function library() {
@@ -772,7 +777,7 @@ export function studentCourses() {
     courses: [
       {
         id: id(18, 521),
-        course: NCM101,
+        course: NCM114L,
         term: TERM,
         instructor: INSTRUCTOR.name,
         requirements: [
@@ -787,7 +792,7 @@ export function studentCourses() {
       },
       {
         id: id(18, 522),
-        course: NCM103,
+        course: NCM112L,
         term: TERM,
         instructor: INSTRUCTOR.name,
         requirements: [
@@ -813,7 +818,7 @@ export function facultyCourses() {
     offerings: [
       {
         id: id(18, 521),
-        course: { id: id(18, 511), ...NCM101 },
+        course: { id: id(18, 511), ...NCM114L },
         term: TERM,
         sections,
         student_count: 15,
@@ -822,7 +827,7 @@ export function facultyCourses() {
       },
       {
         id: id(18, 522),
-        course: { id: id(18, 512), ...NCM103 },
+        course: { id: id(18, 512), ...NCM112L },
         term: TERM,
         sections,
         student_count: 15,

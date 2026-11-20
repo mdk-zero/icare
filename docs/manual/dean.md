@@ -625,7 +625,7 @@ To add a course:
 2. Select **Add Course**. The **Add Course** page opens.
 3. Under **Semester**, choose the **Semester** (**First Semester**, **Second Semester** or **Midterm**) and the **Academic year**.
 4. If the semester is new, the page says it's added when you assign. Check the **Starts** and **Ends** dates. Only work graded within these dates counts toward the course.
-5. Under **Course**, choose the course. If it isn't one of your courses yet, you can enter an optional **Description**; **Detect with AI** later reads it to find the course's skills.
+5. Under **Course**, choose the course. The list holds only the laboratory courses your curriculum puts in the chosen semester, so it changes with **Semester**; **Midterm** lists none unless your curriculum has midyear courses. If it isn't one of your courses yet, you can enter an optional **Description**; **Detect with AI** later reads it to find the course's skills.
 6. Under **Instructor**, choose the instructor.
 7. Check the **Course assignment** card beside the steps.
 8. Select **Add course**.
@@ -638,6 +638,9 @@ To add a course:
 
 > [!NOTE]
 > There is no separate button for a new semester: a semester is added here. Only the instructor can add sections to a course. If semesters overlap, the page warns you; work graded in the overlap counts for both.
+
+> [!IMPORTANT]
+> Courses follow your curriculum: the one in use on **Curriculum**, or the built-in list of BSN laboratory courses if you have none in use. A course can only be added if it is one of its laboratory courses. It can only be given in the semester the curriculum puts it in (NCM 112L only in a First Semester, for example), and only to sections of its year level. The year is the first digit of the section's number: BSN 3101 is a Third Year section. You have one semester of each kind per academic year, so "1st Semester AY 2026–2027" can't be added twice under another spelling. Anything that breaks these rules is refused with a message that says why, such as "NCM 112L is a First Semester course in your curriculum (Third Year), so it can't be given in 2nd Semester AY 2026–2027." Courses given before these rules keep working, so you can still edit or remove them.
 
 **Who is notified:** The instructor gets the notification "New course assignment": "You were assigned *code* *title* (*semester*). Add the sections you teach it in, then set up its requirements checklist."
 

@@ -453,6 +453,10 @@ students of your groups there, or the whole section where you supervise no group
 
 - Your Dean or Program Chair has created the sections. If none exist, the dialog reads "There are
   no sections to choose from yet. Ask your Dean or Program Chair to add them."
+- Only sections of the course's year level are listed, since a course is taught to the year its
+  curriculum puts it in. The year is the first digit of the section's number: BSN 3101 is a Third
+  Year section. The dialog says so at the top, for example "NCM 114L is a Third Year course, so
+  only Third Year sections are listed."
 
 To choose the sections you teach:
 
@@ -460,7 +464,8 @@ To choose the sections you teach:
 2. In the page header, select **Sections**, or **Add sections** on the banner of a course with no
    sections. The **<course code> sections** dialog opens.
 3. Select the box of each section you teach. Each row says "Your groups: …" or "No group of yours
-   here, so the whole section joins your roster".
+   here, so the whole section joins your roster". A section of another year that was on the course
+   before this rule shows "You can take it off, but not add it back."
 4. Select **Save sections**.
 
 **Result:** The message "Sections saved" appears. If you clear a section, the dialog first warns
@@ -472,7 +477,7 @@ After the semester ends, the sections can't change.
 
 The **Criteria for Assessment** tab shows what makes up the course grade.
 
-![NCM 101's Criteria for Assessment tab listing the course's activities by part.](img/instructor/05-course-criteria.png)
+![NCM 114L's Criteria for Assessment tab listing the course's activities by part.](img/instructor/05-course-criteria.png)
 
 *Figure 5. The Criteria for Assessment tab, with the course's activities listed under each part.*
 
@@ -499,7 +504,7 @@ The grade works like this:
 The **Progress** tab shows every student against every item of the course. It fills in on its own
 as you grade work in iCARE++.
 
-![The Progress grid for NCM 101, with students down the side and the course's items across the top.](img/instructor/06-progress.png)
+![The Progress grid for NCM 114L, with students down the side and the course's items across the top.](img/instructor/06-progress.png)
 
 *Figure 6. The Progress grid for a course.*
 

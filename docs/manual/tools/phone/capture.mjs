@@ -33,7 +33,8 @@ const BASE = arg('base', 'http://localhost:3998');
 const ONLY = arg('only', '')?.split(',').filter(Boolean) ?? [];
 const RAW = arg('raw', null);
 const OUT = path.join(repo, 'docs', 'manual', 'img');
-const PASSWORD = 'any-password';
+// The mock signs anyone in, so this is never checked; the masked field shows its length.
+const PASSWORD = 'dummy-passwo';
 
 const results = [];
 
@@ -379,7 +380,7 @@ const GROUPS = {
   async ins(browser) {
     const s = await session(browser, { role: 'faculty' });
     await signIn(s.page, INSTRUCTOR.email);
-    await text(s.page, 'NCM 103').waitFor();
+    await text(s.page, 'NCM 112L').waitFor();
     await shot(s, 'INS-17', 'instructor/17-app-courses.png');
     await s.context.close();
   },
