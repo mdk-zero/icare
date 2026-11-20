@@ -52,6 +52,7 @@ import {
   type FacultyCourseSummary,
 } from "../../lib/api";
 import { inputClassName, labelClassName } from "../cases/case-ui";
+import TruncatedText from "../../components/TruncatedText";
 
 const KINDS: { kind: LibraryKind; label: string; icon: IconDefinition; tint: string }[] = [
   { kind: "video", label: "YouTube video", icon: faPlay, tint: "bg-rose-50 text-rose-600" },
@@ -250,10 +251,11 @@ export default function LibraryClient() {
           {[
             ...offerings.map((o) => ({
               key: o.id,
-              label: `${o.course.code} · ${o.course.title}`,
+              label: o.course.code,
+              title: o.course.title,
               n: allMaterials.filter((m) => m.offering_id === o.id).length,
             })),
-            ...(looseCount > 0 ? [{ key: "none", label: "Not in a course", n: looseCount }] : []),
+            ...(looseCount > 0 ? [{ key: "none", label: "Not in a course", title: "", n: looseCount }] : []),
           ].map((c) => {
             const on = c.key === courseKey;
             return (
@@ -263,12 +265,13 @@ export default function LibraryClient() {
                 role="radio"
                 aria-checked={on}
                 onClick={() => setPickedCourse(c.key)}
-                className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
+                className={`inline-flex min-w-0 max-w-full items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm transition-colors sm:max-w-md ${
                   on ? "border-brand-600 bg-brand-600 text-white" : "border-gray-300 bg-surface text-gray-700 hover:border-brand-600/50"
                 }`}
               >
-                {c.label}
-                <span className={`rounded-full px-1.5 text-xs tabular-nums ${on ? "bg-white/20" : "bg-gray-100 text-gray-500"}`}>{c.n}</span>
+                <span className="shrink-0">{c.label}{c.title ? " ·" : ""}</span>
+                {c.title && <TruncatedText text={c.title} />}
+                <span className={`shrink-0 rounded-full px-1.5 text-xs tabular-nums ${on ? "bg-white/20" : "bg-gray-100 text-gray-500"}`}>{c.n}</span>
               </button>
             );
           })}
@@ -799,11 +802,12 @@ function MaterialEditor({
                       // Every section of the new course, to start with.
                       setChosen(new Set(o.sections.map((s) => s.name)));
                     }}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                    className={`inline-flex min-w-0 max-w-full items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors sm:max-w-sm ${
                       on ? "bg-brand-600 text-white border-brand-600" : "border-gray-300 text-gray-600 hover:border-brand-600/50"
                     }`}
                   >
-                    {o.course.code} · {o.course.title}
+                    <span className="shrink-0">{o.course.code} ·</span>
+                    <TruncatedText text={o.course.title} />
                   </button>
                 );
               })}

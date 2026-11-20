@@ -13,6 +13,7 @@ import {
 import { fetchSkillCatalog, type SkillSuggestion, type SkillSummary } from "../lib/api";
 import { EcgLoader } from "./EcgLoader";
 import { loadingToast } from "./Toast";
+import TruncatedText from "./TruncatedText";
 
 type Result<T> = { data: T; error?: undefined } | { data?: undefined; error: string };
 
@@ -163,9 +164,11 @@ export default function CourseSkillsModal({
               <h2 className="truncate font-display text-lg font-semibold text-gray-900">
                 {course.code} skills
               </h2>
-              <p className="truncate text-sm text-gray-500">
-                {selected.size} selected · shared by every instructor teaching {course.title}
-              </p>
+              <TruncatedText
+                as="p"
+                text={`${selected.size} selected · shared by every instructor teaching ${course.title}`}
+                className="text-sm text-gray-500"
+              />
             </div>
           </div>
           <button

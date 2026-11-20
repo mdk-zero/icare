@@ -48,6 +48,7 @@ import {
   type GroupBucket,
 } from "../../dean/student-management/roster-view";
 import { rememberStudentsView, studentsHref } from "../../lib/students-view";
+import TruncatedText from "../../components/TruncatedText";
 
 /** Long enough to read a sentence with numbers in it. */
 const ML_TOAST_MS = 8000;
@@ -92,7 +93,10 @@ function DrillCard({
           <FontAwesomeIcon icon={icon} className="h-5 w-5" />
         </span>
         <div className="min-w-0">
-          <p className="truncate font-semibold text-gray-900">{title}</p>
+          {/* Above the card's button, so hovering shows the whole title; a click still opens the card. */}
+          <span onClick={onOpen} className="relative z-[1] block cursor-pointer">
+            <TruncatedText as="p" text={title} className="font-semibold text-gray-900" />
+          </span>
           <p className="truncate text-xs text-gray-500">{subtitle}</p>
         </div>
       </div>
@@ -449,8 +453,9 @@ export default function TeamsClient() {
               <FontAwesomeIcon icon={faArrowLeft} className="h-3.5 w-3.5" />
               All courses
             </button>
-            <h2 className="font-display truncate text-lg font-bold text-gray-900">
-              {course.course.code} <span className="font-normal text-gray-500">{course.course.title}</span>
+            <h2 className="flex min-w-0 flex-1 items-baseline gap-2 font-display text-lg font-bold text-gray-900">
+              <span className="shrink-0">{course.course.code}</span>
+              <TruncatedText text={course.course.title} className="font-normal text-gray-500" />
             </h2>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

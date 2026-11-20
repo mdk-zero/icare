@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import LiveClock from "./LiveClock";
+import TruncatedText from "./TruncatedText";
 
 interface PageHeaderProps {
   /**
@@ -9,6 +10,8 @@ interface PageHeaderProps {
    */
   badge?: { icon: ReactNode; label: string };
   title: string;
+  /** One line, cut with "…" and whole on hover, for a title that can run long (a course's). */
+  truncateTitle?: boolean;
   subtitle?: string;
   action?: {
     icon: ReactNode;
@@ -55,7 +58,7 @@ function eyebrow(badge: PageHeaderProps["badge"], title: string): string | null 
 const STEP_MS = 45;
 const step = (index: number) => ({ animationDelay: `${index * STEP_MS}ms` });
 
-export default function PageHeader({ badge, title, subtitle, action }: PageHeaderProps) {
+export default function PageHeader({ badge, title, truncateTitle, subtitle, action }: PageHeaderProps) {
   const label = eyebrow(badge, title);
 
   return (
@@ -73,12 +76,21 @@ export default function PageHeader({ badge, title, subtitle, action }: PageHeade
               {label}
             </p>
           )}
-          <h1
-            className="animate-rise text-balance font-display text-[29px] font-semibold leading-[1.03] tracking-[-0.025em] text-slate-900 sm:text-[37px]"
-            style={step(1)}
-          >
-            {title}
-          </h1>
+          {truncateTitle ? (
+            <TruncatedText
+              as="h1"
+              text={title}
+              style={step(1)}
+              className="animate-rise pb-0.5 font-display text-[29px] font-semibold leading-[1.1] tracking-[-0.025em] text-slate-900 sm:text-[37px]"
+            />
+          ) : (
+            <h1
+              className="animate-rise text-balance font-display text-[29px] font-semibold leading-[1.03] tracking-[-0.025em] text-slate-900 sm:text-[37px]"
+              style={step(1)}
+            >
+              {title}
+            </h1>
+          )}
           {/* A measure, not a container width: long standfirsts stay readable
               on a wide screen instead of running the full width of the page. */}
           {subtitle && (

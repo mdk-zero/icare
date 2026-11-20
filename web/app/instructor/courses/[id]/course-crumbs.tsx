@@ -8,6 +8,7 @@ import { usePageData } from "../../../lib/use-page-data";
 import { fetchMyCourses, type FacultyCourseSummary } from "../../../lib/api";
 import { termStatus, type TermStatus } from "../../../lib/course-progress";
 import { courseTabHref, type CourseTab } from "../course-tabs";
+import TruncatedText from "../../../components/TruncatedText";
 
 const NO_COURSES: FacultyCourseSummary[] = [];
 const STATUS_ORDER: Record<TermStatus, number> = { current: 0, upcoming: 1, ended: 2 };
@@ -92,7 +93,7 @@ export default function CourseCrumbs({ offeringId, code, tab }: { offeringId: st
                         className={`flex items-center gap-2.5 px-3 py-2 text-sm transition-colors hover:bg-subtle ${here ? "bg-brand-600/5" : ""}`}
                       >
                         <span className={`shrink-0 font-semibold ${here ? "text-brand-700" : "text-gray-800"}`}>{o.course.code}</span>
-                        <span className="truncate text-gray-500">{o.course.title}</span>
+                        <TruncatedText text={o.course.title} className="text-gray-500" />
                         {here && <FontAwesomeIcon icon={faCheck} className="ml-auto h-3 w-3 shrink-0 text-brand-600" />}
                       </Link>
                     );

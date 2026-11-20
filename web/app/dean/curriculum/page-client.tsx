@@ -52,6 +52,7 @@ import {
   type CurriculumIssue,
 } from "../../lib/curriculum";
 import { CourseModal, NameModal } from "./course-modal";
+import TruncatedText from "../../components/TruncatedText";
 
 const NONE: CurriculumSummary[] = [];
 const NO_COURSES: CurriculumCourseRow[] = [];
@@ -194,7 +195,9 @@ function TermTable({
                       {course.code}
                     </button>
                   </td>
-                  <td className="px-2 py-2.5 text-gray-800">{course.title}</td>
+                  <td className="px-2 py-2.5 text-gray-800">
+                    <TruncatedText text={course.title} className="max-w-md" />
+                  </td>
                   <td className="px-2 py-2.5 text-right tabular-nums text-gray-600">{course.lecture_units}</td>
                   <td className="px-2 py-2.5 text-right tabular-nums text-gray-600">{course.lab_units}</td>
                   <td className="px-2 py-2.5 text-right font-semibold tabular-nums text-gray-900">{courseUnits(course)}</td>

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBookMedical, faCheck, faChevronDown } from "@fortawesome/free-solid-svg-icons";
 import { termStatus, type TermStatus } from "../../lib/course-progress";
+import TruncatedText from "../../components/TruncatedText";
 
 const STATUS_ORDER: Record<TermStatus, number> = { current: 0, upcoming: 1, ended: 2 };
 
@@ -89,11 +90,10 @@ export default function CourseFilter<T extends CourseChoice>({
         disabled={loading}
         aria-expanded={open}
         aria-label={`Course: ${summary}`}
-        title={selected ? summary : undefined}
         className="flex max-w-full items-center gap-2 rounded-lg border border-hairline bg-surface px-3 py-1.5 text-sm text-gray-700 transition-colors hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50 sm:max-w-56 xl:max-w-72"
       >
         <FontAwesomeIcon icon={faBookMedical} className="h-3.5 w-3.5 shrink-0 text-brand-600" />
-        <span className="min-w-0 truncate font-medium">{summary}</span>
+        <TruncatedText text={summary} className="font-medium" />
         <FontAwesomeIcon
           icon={faChevronDown}
           className={`h-3 w-3 shrink-0 text-gray-400 transition-transform motion-reduce:transition-none ${open ? "rotate-180" : ""}`}
@@ -116,8 +116,9 @@ export default function CourseFilter<T extends CourseChoice>({
                   return (
                     <button key={o.id} type="button" onClick={() => pick(o)} aria-pressed={on} className={rowClass}>
                       <span className="min-w-0">
-                        <span className="block truncate">
-                          <span className="font-semibold text-gray-900">{o.course.code}</span> {o.course.title}
+                        <span className="flex min-w-0 items-baseline gap-1">
+                          <span className="shrink-0 font-semibold text-gray-900">{o.course.code}</span>
+                          <TruncatedText text={o.course.title} />
                         </span>
                         {o.instructor && <span className="block truncate text-xs text-gray-500">{o.instructor}</span>}
                       </span>

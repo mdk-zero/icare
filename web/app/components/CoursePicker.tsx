@@ -5,6 +5,7 @@ import { faCheck } from "@fortawesome/free-solid-svg-icons";
 import { fetchMyCourses, type FacultyCourseSummary } from "../lib/api";
 import { termStatus } from "../lib/course-progress";
 import { usePageData } from "../lib/use-page-data";
+import TruncatedText from "./TruncatedText";
 
 const NO_OFFERINGS: FacultyCourseSummary[] = [];
 
@@ -54,13 +55,13 @@ export default function CoursePicker({
               role="radio"
               aria-checked={on}
               onClick={() => onChange(o.id)}
-              className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
+              className={`inline-flex min-w-0 max-w-full items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm transition-colors sm:max-w-md ${
                 on ? "border-brand-600 bg-brand-600 text-white" : "border-gray-300 bg-surface text-gray-700 hover:border-brand-600/50"
               }`}
             >
-              {on && <FontAwesomeIcon icon={faCheck} className="h-3 w-3" />}
-              <span className="font-semibold">{o.course.code}</span>
-              <span className={on ? "text-white/80" : "text-gray-500"}>{o.course.title}</span>
+              {on && <FontAwesomeIcon icon={faCheck} className="h-3 w-3 shrink-0" />}
+              <span className="shrink-0 font-semibold">{o.course.code}</span>
+              <TruncatedText text={o.course.title} className={on ? "text-white/80" : "text-gray-500"} />
             </button>
           );
         })}

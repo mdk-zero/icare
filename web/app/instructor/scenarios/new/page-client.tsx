@@ -45,6 +45,7 @@ import { TAYLORS_CHAPTERS } from "../../../../scripts/taylors-chapters";
 import { EMPTY_PATIENT_CASE, PatientFields, patientCaseForm, TimeLimitPicker } from "../patient-fields";
 import { timeLimitLabel } from "../../../lib/activity-time";
 import type { PatientCase } from "../../../lib/ai/scenario";
+import TruncatedText from "../../../components/TruncatedText";
 
 const inputClassName =
   "w-full px-3.5 py-2.5 bg-surface border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-600/25 focus:border-brand-600 transition-all text-sm";
@@ -460,15 +461,15 @@ export default function NewScenarioClient({ editId }: { editId?: string } = {}) 
                         role="radio"
                         aria-checked={on}
                         onClick={() => setForm((prev) => ({ ...prev, offeringId: o.id }))}
-                        className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
+                        className={`inline-flex min-w-0 max-w-full items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm transition-colors sm:max-w-md ${
                           on
                             ? "border-brand-600 bg-brand-600 text-white"
                             : "border-gray-300 bg-surface text-gray-700 hover:border-brand-600/50"
                         }`}
                       >
-                        {on && <FontAwesomeIcon icon={faCheck} className="h-3 w-3" />}
-                        <span className="font-semibold">{o.course.code}</span>
-                        <span className={on ? "text-white/80" : "text-gray-500"}>{o.course.title}</span>
+                        {on && <FontAwesomeIcon icon={faCheck} className="h-3 w-3 shrink-0" />}
+                        <span className="shrink-0 font-semibold">{o.course.code}</span>
+                        <TruncatedText text={o.course.title} className={on ? "text-white/80" : "text-gray-500"} />
                       </button>
                     );
                   })}

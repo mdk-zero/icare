@@ -29,6 +29,7 @@ import {
   type TermStatus,
 } from "../../lib/course-progress";
 import { COURSE_TABS, courseTabHref } from "./course-tabs";
+import TruncatedText from "../../components/TruncatedText";
 
 const NO_COURSES: FacultyCourseSummary[] = [];
 
@@ -240,11 +241,12 @@ function CourseCard({ offering: o }: { offering: FacultyCourseSummary }) {
           <div className="min-w-0">
             <Link
               href={courseTabHref(o.id)}
-              className="font-display text-lg font-semibold text-gray-900 outline-none after:absolute after:inset-0 after:rounded-2xl focus-visible:after:ring-2 focus-visible:after:ring-brand-600/40"
+              className="block outline-none after:absolute after:inset-0 after:rounded-2xl focus-visible:after:ring-2 focus-visible:after:ring-brand-600/40"
             >
-              {o.course.code}
+              <span className="font-display text-lg font-semibold text-gray-900">{o.course.code}</span>
+              {/* Above the link's overlay, so hovering shows the whole title; a click still follows the link. */}
+              <TruncatedText text={o.course.title} className="relative z-[1] text-sm text-gray-600" />
             </Link>
-            <p className="truncate text-sm text-gray-600">{o.course.title}</p>
           </div>
           <FontAwesomeIcon
             icon={faChevronRight}

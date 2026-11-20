@@ -143,6 +143,7 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
           label: offering?.term.name ?? "Course",
         }}
         title={offering ? `${offering.course.code} · ${offering.course.title}` : "Course"}
+        truncateTitle
         subtitle={
           offering
             ? offering.sections.length

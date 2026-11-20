@@ -12,6 +12,7 @@ import { usePageData } from "../../../lib/use-page-data";
 import type { CourseChoice } from "../CourseFilter";
 import { PodiumLeaderboard, PodiumLeaderboardSkeleton } from "../Leaderboard";
 import { formatRange } from "../dates";
+import TruncatedText from "../../../components/TruncatedText";
 
 const NO_SECTIONS: Section[] = [];
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -82,10 +83,18 @@ export default function LeaderboardClient({ dean = false }: { dean?: boolean }) 
           <FontAwesomeIcon icon={faArrowLeft} className="w-3.5 h-3.5" />
           Back to analytics
         </Link>
-        <p className="text-sm text-gray-500">
-          {course && `${course.course.code} ${course.course.title} · `}
-          {course?.instructor && `${course.instructor} · `}
-          {sectionLabel} · <span className="tabular-nums">{rangeLabel}</span>
+        <p className="flex min-w-0 items-baseline gap-1 text-sm text-gray-500">
+          {course && (
+            <>
+              <span className="shrink-0">{course.course.code}</span>
+              <TruncatedText text={course.course.title} className="max-w-xs" />
+              <span className="shrink-0">·</span>
+            </>
+          )}
+          <span className="shrink-0">
+            {course?.instructor && `${course.instructor} · `}
+            {sectionLabel} · <span className="tabular-nums">{rangeLabel}</span>
+          </span>
         </p>
       </div>
 

@@ -17,6 +17,7 @@ import {
 } from "../../lib/curriculum";
 import { loadingToast } from "../../components/Toast";
 import { ErrorNote, ModalActions, ModalFrame, inputClass, labelClass } from "../courses/modals";
+import { clip } from "../../lib/text";
 
 const YEARS = Array.from({ length: CURRICULUM_LIMITS.years }, (_, i) => i + 1);
 
@@ -98,7 +99,7 @@ function RequisitePicker({
                   const blocked = blockedReason(c);
                   return (
                     <option key={c.id} value={c.id} disabled={blocked !== null}>
-                      {c.code} · {c.title}
+                      {c.code} · {clip(c.title, 64)}
                       {blocked ? ` (${blocked})` : ""}
                     </option>
                   );

@@ -39,6 +39,8 @@ import { COURSE_LIMITS, formatTermDates, termsOverlap } from "../../lib/course-p
 import { semesterNumber } from "../../lib/course-rules";
 import { EcgLoader } from "../../components/EcgLoader";
 import { loadingToast } from "../../components/Toast";
+import TruncatedText from "../../components/TruncatedText";
+import { clip } from "../../lib/text";
 
 type Result<T> = { data: T; error?: undefined } | { data?: undefined; error: string };
 
@@ -94,7 +96,7 @@ export function ModalFrame({
             </span>
             <div className="min-w-0">
               <h2 className="truncate font-display text-lg font-semibold text-gray-900">{title}</h2>
-              <p className="truncate text-sm text-gray-500">{subtitle}</p>
+              <TruncatedText as="p" text={subtitle} className="text-sm text-gray-500" />
             </div>
           </div>
           <button
@@ -276,7 +278,7 @@ export function CoursePicker({
         <optgroup key={g.label} label={g.label}>
           {g.courses.map((c) => (
             <option key={c.code} value={c.code} disabled={taken?.(c.code)}>
-              {c.code} · {c.title}
+              {c.code} · {clip(c.title, 64)}
               {taken?.(c.code) ? " (already added)" : ""}
             </option>
           ))}
@@ -286,7 +288,7 @@ export function CoursePicker({
         <optgroup label="Your other courses">
           {others.map((c) => (
             <option key={c.code} value={c.code}>
-              {c.code} · {c.title}
+              {c.code} · {clip(c.title, 64)}
             </option>
           ))}
         </optgroup>
@@ -420,7 +422,7 @@ export function CourseFormModal({
         {course ? (
           <div className="rounded-xl border border-hairline bg-subtle px-4 py-3">
             <p className="font-mono text-xs font-semibold text-brand-700">{course.code}</p>
-            <p className="text-sm font-medium text-gray-800">{course.title}</p>
+            <TruncatedText as="p" text={course.title} className="text-sm font-medium text-gray-800" />
           </div>
         ) : (
           <div>
@@ -680,9 +682,7 @@ export function AssignmentModal({
         {offering ? (
           <div className="rounded-xl border border-hairline bg-subtle px-4 py-3">
             <p className="text-xs text-gray-500">{editTerm?.name}</p>
-            <p className="text-sm font-medium text-gray-800">
-              {code} · {course?.title}
-            </p>
+            <TruncatedText as="p" text={`${code} · ${course?.title ?? ""}`} className="text-sm font-medium text-gray-800" />
           </div>
         ) : (
           <>

@@ -38,6 +38,7 @@ import { takeDrafts } from "../draft-handoff";
 import { EcgLoader } from "../../../components/EcgLoader";
 import LiveClock from "../../../components/LiveClock";
 import { criteriaWeights } from "../../../lib/criteria-weights";
+import TruncatedText from "../../../components/TruncatedText";
 
 const inputClassName =
   "w-full px-4 py-3 bg-surface border border-gray-400 rounded-xl text-gray-900 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 focus:bg-surface transition-all text-sm shadow-sm";
@@ -1521,9 +1522,16 @@ export default function AssessmentQuestionsClient({
                 {(() => {
                   const course = courseOfferings.find((o) => o.id === assessment.offering_id);
                   return (
-                    <span className={`inline-flex items-center gap-1.5 ${course ? "" : "text-amber-700"}`}>
-                      <FontAwesomeIcon icon={faBookMedical} className="h-3 w-3 text-gray-400" />
-                      {course ? `${course.course.code} · ${course.course.title}` : "Not in a course"}
+                    <span className={`inline-flex min-w-0 max-w-full items-center gap-1.5 ${course ? "" : "text-amber-700"}`}>
+                      <FontAwesomeIcon icon={faBookMedical} className="h-3 w-3 shrink-0 text-gray-400" />
+                      {course ? (
+                        <>
+                          <span className="shrink-0">{course.course.code} ·</span>
+                          <TruncatedText text={course.course.title} className="max-w-xs" />
+                        </>
+                      ) : (
+                        "Not in a course"
+                      )}
                     </span>
                   );
                 })()}

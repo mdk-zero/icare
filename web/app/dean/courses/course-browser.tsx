@@ -31,6 +31,7 @@ import {
 import SkillsTab from "../../instructor/courses/[id]/skills-tab";
 import AddStudentModal from "../../instructor/courses/[id]/add-student-modal";
 import RosterModal from "./roster-modal";
+import TruncatedText from "../../components/TruncatedText";
 
 const NO_SKILLS: SkillSummary[] = [];
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -131,7 +132,7 @@ export default function CourseBrowser({
           <h2 className="font-display text-xl font-semibold text-gray-900">
             {course.code} · {section.name}
           </h2>
-          <p className="text-sm text-gray-500">{course.title}</p>
+          <TruncatedText as="p" text={course.title} className="text-sm text-gray-500" />
         </div>
         <div role="tablist" aria-label="Section" className="mb-4 flex gap-1 shadow-[inset_0_-1px_0_var(--color-hairline)]">
           {(
@@ -268,10 +269,10 @@ export default function CourseBrowser({
     return (
       <div>
         <Crumbs items={[{ label: "Courses", onClick: () => openCourse(null) }, { label: course.code }]} />
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
             <h2 className="font-display text-xl font-semibold text-gray-900">{course.code}</h2>
-            <p className="text-sm text-gray-500">{course.title}</p>
+            <TruncatedText as="p" text={course.title} className="text-sm text-gray-500" />
           </div>
           <ActionsMenu
             variant="compact"
@@ -361,7 +362,8 @@ export default function CourseBrowser({
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-display text-lg font-semibold text-gray-900">{c.code}</p>
-                      <p className="truncate text-sm text-gray-600">{c.title}</p>
+                      {/* Above the button's overlay, so hovering shows the whole title; a click still opens the course. */}
+                      <TruncatedText as="p" text={c.title} className="relative z-[1] text-sm text-gray-600" />
                     </div>
                     <FontAwesomeIcon
                       icon={faChevronRight}
@@ -418,7 +420,7 @@ export default function CourseBrowser({
               <div key={c.id} className="flex items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-surface px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-gray-700">{c.code}</p>
-                  <p className="truncate text-xs text-gray-500">{c.title}</p>
+                  <TruncatedText as="p" text={c.title} className="text-xs text-gray-500" />
                 </div>
                 <button
                   type="button"
