@@ -4,7 +4,7 @@ import { json, notFound, route, type DemoContext } from "../router";
 import { newId } from "../store";
 import type { DemoScenario } from "../fixtures/school";
 import { audit } from "./shared";
-import { addSkillTasks, caseGroupsOf, myStudentIds, newAssignment } from "./faculty";
+import { addSkillTasks, caseGroupsOf, myStudentIds, newAssignment, roomFrom } from "./faculty";
 import { parseDeadline } from "@/app/lib/deadline-input";
 import { customFormKey, formByKey, type FormPageImage, type ReturnDemoForm } from "@/app/lib/return-demo-forms";
 import { sanitizeCustomForm } from "@/app/lib/form-import";
@@ -137,6 +137,7 @@ route("POST", "/api/faculty/return-demos", async (ctx) => {
     offering_id: input.offering_id ?? null,
     kind: "return_demo",
     form_keys: input.forms ?? [],
+    time_limit_minutes: input.time_limit_minutes ?? null,
   };
   ctx.db.scenarios.push(demo);
   const added = input.checklist
@@ -225,6 +226,7 @@ route("GET", "/api/faculty/return-demos/:id", (ctx) => {
     return_demo: {
       ...summary(ctx, demo),
       forms: demo.form_keys ?? [],
+      time_limit_minutes: demo.time_limit_minutes ?? null,
       tasks: tasks.map((t) => ({
         id: t.id,
         skill_id: t.skill_id,
@@ -265,6 +267,7 @@ route("PATCH", "/api/faculty/return-demos/:id", async (ctx) => {
   if (input.title !== undefined) demo.title = input.title;
   if (input.description !== undefined) demo.description = input.description;
   if (input.forms !== undefined) demo.form_keys = input.forms;
+  if (input.time_limit_minutes !== undefined) demo.time_limit_minutes = input.time_limit_minutes;
   demo.updated_at = new Date().toISOString();
 
   let added = 0;
@@ -345,7 +348,9 @@ route("POST", "/api/faculty/return-demos/:id/assign", (ctx) => {
   if (rows.length === 0) return json({ error: "Everyone chosen already has this Return Demonstration" }, 409);
 
   const required = typeof body?.required === "boolean" ? body.required : true;
-  db.assignments.unshift(...rows.map((r) => newAssignment(demo, r.student_id, deadline.value as string, required, viewer.id, r.team_id)));
+  db.assignments.unshift(
+    ...rows.map((r) => ({ ...newAssignment(demo, r.student_id, deadline.value as string, required, viewer.id, r.team_id), room_id: roomFrom(ctx) })),
+  );
   audit(db, viewer, "return_demo.assign", "scenarios", { message: `Assigned Return Demonstration “${demo.title}” to ${rows.length} student(s)` }, demo.id);
   return json({ assigned: rows.length, skipped }, 201);
 });

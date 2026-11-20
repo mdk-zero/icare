@@ -19,15 +19,17 @@ export async function notifyCaseAssigned(
   scenario: { id: string; title: string; patient_id: string | null },
   assignments: { id: string; student_id: string }[],
   deadline: Date,
+  roomName?: string,
 ): Promise<void> {
   if (assignments.length === 0) return;
+  const where = roomName ? ` in ${roomName}` : '';
   const { error } = await insertNotifications(supabase,
     assignments.map((a) => ({
       user_id: a.student_id,
       type: 'assignment_created',
       title: 'New patient case assigned',
       // Performed on its date, not due by it.
-      body: `You have been assigned "${scenario.title}". You'll perform it on ${performLabel(deadline)}.`,
+      body: `You have been assigned "${scenario.title}". You'll perform it${where} on ${performLabel(deadline)}.`,
       data: { kind: 'scenario', scenario_id: scenario.id, assignment_id: a.id, patient_id: scenario.patient_id },
     })),
   );
@@ -43,15 +45,17 @@ export async function notifyReturnDemoAssigned(
   demo: { id: string; title: string },
   assignments: { id: string; student_id: string }[],
   deadline: Date,
+  roomName?: string,
 ): Promise<void> {
   if (assignments.length === 0) return;
+  const where = roomName ? ` in ${roomName}` : '';
   const day = deadline.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric' });
   const { error } = await insertNotifications(supabase,
     assignments.map((a) => ({
       user_id: a.student_id,
       type: 'assignment_created',
       title: 'New Return Demonstration',
-      body: `You'll demonstrate "${demo.title}" on ${day}. Open it to see the checklist.`,
+      body: `You'll demonstrate "${demo.title}"${where} on ${day}. Open it to see the checklist.`,
       data: { kind: 'return_demo', scenario_id: demo.id, assignment_id: a.id },
     })),
   );

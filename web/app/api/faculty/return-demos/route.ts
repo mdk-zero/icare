@@ -8,6 +8,7 @@ import { addChecklistTasks } from '@/app/lib/checklist-import-server';
 import { ensureCategories } from '@/app/lib/scenario-categories';
 import { parseReturnDemoInput, RETURN_DEMO_CATEGORY } from '@/app/lib/return-demos';
 import { knownFormKeys } from '@/app/lib/return-demo-forms-server';
+import { isMissingRoomColumns, ROOMS_NEED_MIGRATION } from '@/app/lib/activity-room';
 import { FORMS_NEED_MIGRATION, isMissingForms, listReturnDemos, needsMigration, returnDemosReady } from '@/app/lib/return-demos-server';
 
 // Difficulty is retired, but scenarios.difficulty is NOT NULL with no default.
@@ -74,6 +75,8 @@ export async function POST(request: NextRequest) {
       .insert({
         // Only named when there are forms, so a database without 094 can still make one without.
         ...(forms.length ? { form_keys: forms } : {}),
+        // The same for a time limit (098).
+        ...(input.time_limit_minutes ? { time_limit_minutes: input.time_limit_minutes } : {}),
         created_by: session.uid,
         ...course.value,
         kind: 'return_demo',
@@ -88,6 +91,9 @@ export async function POST(request: NextRequest) {
       })
       .select('id')
       .single();
+    if (isMissingRoomColumns(error)) {
+      return NextResponse.json({ error: ROOMS_NEED_MIGRATION }, { status: 503 });
+    }
     if (error && forms.length && isMissingForms(error)) {
       return NextResponse.json({ error: FORMS_NEED_MIGRATION }, { status: 503 });
     }

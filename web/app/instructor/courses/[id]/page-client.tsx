@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -42,6 +42,7 @@ import CourseCrumbs from "./course-crumbs";
 import CourseTabBar, { COURSE_TAB_PANEL_ID, courseTabId } from "./course-tab-bar";
 import { ChecklistSkeleton } from "./checklist-section";
 import SkillsTab from "./skills-tab";
+import { itemGroupsFrom } from "./item-groups";
 import GradingTab from "./grading-tab";
 import { afterItemSaved, followServer, isDirty, startDraft } from "../grading-draft";
 import { courseTabHref, parseCourseTab, type CourseTab } from "../course-tabs";
@@ -93,6 +94,8 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
     () => fetchCourseProgress(offeringId),
   );
   const completedCount = Object.values(progressData?.data?.totals ?? {}).reduce((n, t) => n + t, 0);
+  // Which groups each item is given to, for the Criteria tab's group filter and tags.
+  const itemGroups = useMemo(() => itemGroupsFrom(progressData?.data), [progressData?.data]);
   // The Grading tab's unsaved edits live here, so looking at another tab
   // doesn't throw them away. They follow the server's split while clean.
   const serverGrading = detail?.grading ?? null;
@@ -278,6 +281,8 @@ export default function FacultyCourseClient({ offeringId }: { offeringId: string
             onNewItem={(leafId) => addRequirement(null, null, leafId)}
             onEditItem={setEditing}
             onRemoveItem={setRemoving}
+            itemGroups={itemGroups.byItem}
+            groups={itemGroups.groups}
           />
         )}
 

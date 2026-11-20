@@ -8,6 +8,7 @@ import { getScopedStudentIds } from '@/app/lib/admin-scope';
 import { isMissingTeamTables, manageableTeam, TEAMS_NEED_MIGRATION } from '@/app/lib/teams';
 import { mergeAssignees } from '@/app/lib/return-demos';
 import { canEdit, loadReturnDemo } from '@/app/lib/return-demos-server';
+import { isMissingRoomColumns, resolveRoom, ROOMS_NEED_MIGRATION } from '@/app/lib/activity-room';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -108,6 +109,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Everyone chosen already has this Return Demonstration' }, { status: 409 });
     }
 
+    // The room they demonstrate in (098), one of the Dean's rooms.
+    const room = await resolveRoom(supabase, session, body.room_id);
+    if ('error' in room) return NextResponse.json({ error: room.error }, { status: 400 });
+
     const required = typeof body.required === 'boolean' ? body.required : true;
     const { data: inserted, error: insertError } = await supabase.from('scenario_assignments').insert(
       rows.map((r) => ({
@@ -118,8 +123,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         deadline: deadline.value as string,
         required,
         status: 'pending' as const,
+        ...(room.value ? { room_id: room.value } : {}),
       })),
     ).select('id, student_id');
+    if (isMissingRoomColumns(insertError)) return NextResponse.json({ error: ROOMS_NEED_MIGRATION }, { status: 503 });
     if (insertError) throw insertError;
 
     // Each student hears about it, on their phone too.
@@ -128,6 +135,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       { id, title: loaded.demo.title },
       ((inserted ?? []) as { id: string; student_id: string }[]),
       new Date(deadline.value as string),
+      room.name,
     );
 
     await logAudit(
@@ -161,8 +169,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const body = ((await request.json().catch(() => null)) ?? {}) as Record<string, unknown>;
   const studentIds = ids(body.student_ids);
   if (studentIds.length === 0) return NextResponse.json({ error: 'Choose at least one student' }, { status: 400 });
-  const deadline = parseDeadline(body.deadline);
-  if (!deadline.ok) return NextResponse.json({ error: deadline.error }, { status: 400 });
+  // The date, the room (098), or both; a room alone leaves the date as it is.
+  const roomOnly = body.room_id !== undefined && body.deadline === undefined;
+  const deadline = roomOnly ? null : parseDeadline(body.deadline);
+  if (deadline && !deadline.ok) return NextResponse.json({ error: deadline.error }, { status: 400 });
 
   try {
     const supabase = getSupabaseAdmin();
@@ -171,13 +181,19 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (!canEdit(session, loaded.demo)) {
       return NextResponse.json({ error: 'Only its maker can change this Return Demonstration' }, { status: 403 });
     }
+    const room = await resolveRoom(supabase, session, body.room_id);
+    if ('error' in room) return NextResponse.json({ error: room.error }, { status: 400 });
     const { data, error } = await supabase
       .from('scenario_assignments')
-      .update({ deadline: new Date(deadline.value as string).toISOString() })
+      .update({
+        ...(deadline ? { deadline: new Date(deadline.value as string).toISOString() } : {}),
+        ...(room.value !== undefined ? { room_id: room.value } : {}),
+      })
       .eq('scenario_id', id)
       .in('student_id', studentIds)
       .neq('status', 'completed')
       .select('id');
+    if (isMissingRoomColumns(error)) return NextResponse.json({ error: ROOMS_NEED_MIGRATION }, { status: 503 });
     if (error) throw error;
     return NextResponse.json({ updated: (data ?? []).length });
   } catch (err) {

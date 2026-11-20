@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCircleCheck,
@@ -18,6 +18,7 @@ import { EcgLoader } from "../../../components/EcgLoader";
 import { loadingToast } from "../../../components/Toast";
 import { saveCourseGrading, type CourseRequirement } from "../../../lib/api";
 import { inTopicOrder, requirementNames } from "../../../lib/course-progress";
+import { GroupFilter, ItemGroupsContext } from "./item-groups";
 import {
   GRADING_CHANGED,
   GRADING_ENDED_LOCK,
@@ -93,6 +94,8 @@ export default function GradingTab({
   onNewItem,
   onEditItem,
   onRemoveItem,
+  itemGroups,
+  groups,
 }: {
   offeringId: string;
   requirements: CourseRequirement[];
@@ -107,6 +110,10 @@ export default function GradingTab({
   onNewItem: (leafId: string | null) => void;
   onEditItem: (requirement: CourseRequirement) => void;
   onRemoveItem: (requirement: CourseRequirement) => void;
+  /** Which groups each item is given to (null: everyone), from the Progress data. */
+  itemGroups: Map<string, string[] | null>;
+  /** Every group on the roster, for the filter. */
+  groups: string[];
 }) {
   const { draft } = state;
   const dirty = isDirty(state);
@@ -122,6 +129,25 @@ export default function GradingTab({
     return new Map(ordered.map((r, i) => [r.id, list[i]]));
   }, [ordered]);
 
+  // The group picked in the filter ("" for all). Items keep their order and
+  // numbers; one given to everyone shows whichever group is picked.
+  const [group, setGroup] = useState("");
+  const picked = groups.includes(group) ? group : "";
+  const visible = picked
+    ? ordered.filter((r) => {
+        const g = itemGroups.get(r.id);
+        return !g || g.includes(picked);
+      })
+    : ordered;
+  const withGroups = (node: ReactNode) => (
+    <ItemGroupsContext.Provider value={itemGroups}>
+      <div className="space-y-4">
+        <GroupFilter groups={groups} value={picked} onChange={setGroup} shown={visible.length} total={ordered.length} />
+        {node}
+      </div>
+    </ItemGroupsContext.Provider>
+  );
+
   const plainActions = (r: CourseRequirement): MenuAction[] => [
     { label: "Edit", icon: faPenToSquare, onClick: () => onEditItem(r) },
     { label: "Remove", icon: faTrashCan, danger: true, onClick: () => onRemoveItem(r) },
@@ -130,7 +156,7 @@ export default function GradingTab({
   const wholeChecklist = (
     <ChecklistSection
       title="Checklist"
-      items={ordered}
+      items={visible}
       names={names}
       locked={locked}
       onNew={() => onNewItem(null)}
@@ -155,11 +181,11 @@ export default function GradingTab({
 
   // Since 070 the parts are the course's activities, and there is nothing to edit.
   if (grading?.auto) {
-    return <AutoGrading split={grading} requirements={ordered} names={names} />;
+    return withGroups(<AutoGrading split={grading} requirements={visible} names={names} />);
   }
 
   if (!gradingReady) {
-    return (
+    return withGroups(
       <div className="space-y-4">
         <div className="flex items-start gap-2.5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 h-4 w-4 shrink-0" />
@@ -198,7 +224,7 @@ export default function GradingTab({
   };
 
   if (!draft) {
-    return (
+    return withGroups(
       <div className="space-y-4">
         <div className="rounded-xl border border-dashed border-gray-300 bg-surface px-6 py-10 text-center">
           <span className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600/10 text-brand-600">
@@ -255,7 +281,7 @@ export default function GradingTab({
       parts: [...draft.parts, { id: newId(), name: "", weight: Math.max(0, round(100 - partsTotal)), items: [], components: [] }],
     });
 
-  const unfiled = ordered.filter((r) => leafOf(draft, r.id) === null);
+  const unfiled = visible.filter((r) => leafOf(draft, r.id) === null);
 
   const rowActions = (r: CourseRequirement): MenuAction[] => [
     { label: "Edit", icon: faPenToSquare, onClick: () => onEditItem(r) },
@@ -266,7 +292,7 @@ export default function GradingTab({
   // A part's items as rows, by kind and then checklist order, each with its share, and the add buttons.
   const leafItems = (leaf: GradePart, label: string) => {
     const filed = new Set(leaf.items);
-    const rows = ordered.filter((r) => filed.has(r.id));
+    const rows = visible.filter((r) => filed.has(r.id));
     const shares = itemShares(leaf);
     return (
       <div className="min-w-0">
@@ -347,7 +373,7 @@ export default function GradingTab({
     </button>
   );
 
-  return (
+  return withGroups(
     <div className="space-y-4">
       {locked && (
         <div className="flex items-start gap-2.5 rounded-xl border border-hairline bg-subtle px-4 py-3 text-sm text-gray-600">

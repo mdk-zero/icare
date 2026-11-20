@@ -5,6 +5,7 @@ import ActionsMenu, { type MenuAction } from "../../../components/ActionsMenu";
 import type { CourseRequirement } from "../../../lib/api";
 import { requirementDetail, topicKey } from "../../../lib/course-progress";
 import { TOPICS, TopicIcon } from "../topics";
+import { ItemGroupTags } from "./item-groups";
 
 /**
  * One checklist item: its kind's icon, its "Quiz #2" name, what meets it,
@@ -28,6 +29,7 @@ export default function ItemRow({
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-gray-800">{name}</p>
         <p className="text-xs text-gray-500">{requirementDetail(r)}</p>
+        <ItemGroupTags requirementId={r.id} />
         {r.removed && (
           <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
             <FontAwesomeIcon icon={faTriangleExclamation} className="h-2.5 w-2.5" />

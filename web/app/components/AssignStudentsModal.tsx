@@ -2,8 +2,8 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCalendarDay, faCheck, faSearch, faTimes, faUser, faUserPlus, faUsers } from "@fortawesome/free-solid-svg-icons";
-import { fetchCourseRoster, type CourseRosterStudent } from "../lib/api";
+import { faCalendarDay, faCheck, faDoorOpen, faSearch, faTimes, faUser, faUserPlus, faUsers } from "@fortawesome/free-solid-svg-icons";
+import { fetchCourseRoster, fetchRooms, type CourseRosterStudent, type Room } from "../lib/api";
 import { deadlineFromInput } from "../lib/deadline-input";
 import Avatar from "./Avatar";
 import { EcgLoader } from "./EcgLoader";
@@ -13,10 +13,12 @@ const inputClassName =
 const labelClassName = "block text-sm font-bold text-gray-800 mb-2";
 
 /**
- * Assigning a patient case or a Return Demonstration: a date of performance,
- * then the students the instructor handles in its course, one block per
- * section with a sticky row per group. Who already has it shows as Assigned
- * and can't be picked again. Shared so both read the same.
+ * Assigning a patient case or a Return Demonstration: a date of performance
+ * and the room it is performed in, then the students the instructor handles in
+ * its course, one block per section with a sticky row per group. Who already
+ * has it shows as Assigned and can't be picked again. The room goes to the
+ * students picked this time, so each group can be given its own room by
+ * assigning group by group. Shared so both read the same.
  */
 export default function AssignStudentsModal({
   heading,
@@ -45,11 +47,23 @@ export default function AssignStudentsModal({
   /** Shown above the student list. */
   note?: ReactNode;
   onClose: () => void;
-  /** Gets the picked students and the deadline (end of the picked day); resolves when done. */
-  onAssign: (studentIds: string[], deadline: string) => Promise<void>;
+  /** Gets the picked students, the deadline (end of the picked day) and the room, if any; resolves when done. */
+  onAssign: (studentIds: string[], deadline: string, roomId: string | null) => Promise<void>;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [date, setDate] = useState("");
+  const [roomId, setRoomId] = useState("");
+  // The Dean's rooms; null while loading.
+  const [rooms, setRooms] = useState<Room[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    void fetchRooms().then((list) => {
+      if (live) setRooms(list.filter((r) => r.status !== "inactive"));
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
   const [query, setQuery] = useState("");
   const [assigning, setAssigning] = useState(false);
   // Null while loading.
@@ -113,7 +127,7 @@ export default function AssignStudentsModal({
     if (count === 0 || !deadline) return;
     setAssigning(true);
     try {
-      await onAssign(selected, deadline);
+      await onAssign(selected, deadline, roomId || null);
     } finally {
       setAssigning(false);
     }
@@ -152,24 +166,56 @@ export default function AssignStudentsModal({
               <FontAwesomeIcon icon={faCalendarDay} className="text-brand-600" />
               Assignment Settings
             </h3>
-            <div>
-              <label htmlFor="assign-students-date" className={labelClassName}>
-                Date of performance
-              </label>
-              <div className="relative">
-                <FontAwesomeIcon
-                  icon={faCalendarDay}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
-                />
-                <input
-                  id="assign-students-date"
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className={inputClassName + " pl-10"}
-                />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="assign-students-date" className={labelClassName}>
+                  Date of performance
+                </label>
+                <div className="relative">
+                  <FontAwesomeIcon
+                    icon={faCalendarDay}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
+                  />
+                  <input
+                    id="assign-students-date"
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className={inputClassName + " pl-10"}
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="assign-students-room" className={labelClassName}>
+                  Room
+                </label>
+                <div className="relative">
+                  <FontAwesomeIcon
+                    icon={faDoorOpen}
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500"
+                  />
+                  <select
+                    id="assign-students-room"
+                    value={roomId}
+                    onChange={(e) => setRoomId(e.target.value)}
+                    disabled={rooms === null}
+                    className={inputClassName + " pl-10 cursor-pointer disabled:cursor-wait"}
+                  >
+                    <option value="">{rooms === null ? "Loading rooms…" : "No room"}</option>
+                    {(rooms ?? []).map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name} · Room {r.room_number}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
+            <p className="mt-2 text-xs text-gray-500">
+              {rooms !== null && rooms.length === 0
+                ? "No rooms yet. Your Dean or Program Chair adds them under Wards."
+                : `The room goes to the students you pick now. To give each group its own room, assign one group at a time.`}
+            </p>
           </div>
 
           {note}

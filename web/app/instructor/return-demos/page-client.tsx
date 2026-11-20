@@ -322,13 +322,14 @@ export default function ReturnDemosClient() {
           fallbackOfferingIds={(data?.offerings ?? []).map((o) => o.id)}
           alreadyAssigned={new Set((assignTarget.assigned_groups ?? []).flatMap((g) => g.student_ids))}
           onClose={() => setAssignTarget(null)}
-          onAssign={async (studentIds, deadline) => {
+          onAssign={async (studentIds, deadline, roomId) => {
             // An assigned Return Demonstration is always required, like a patient case.
             const result = await assignReturnDemo(assignTarget.id, {
               team_ids: [],
               student_ids: studentIds,
               deadline,
               required: true,
+              room_id: roomId,
             });
             if (result.error) {
               toast(result.error, "error");

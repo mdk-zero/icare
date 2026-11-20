@@ -99,6 +99,8 @@ export interface DemoScenario {
   kind?: "patient_case" | "return_demo";
   /** A Return Demonstration's forms (094), by key; absent means none. */
   form_keys?: string[];
+  /** Minutes the student has once they start (098); absent or null for none. */
+  time_limit_minutes?: number | null;
 }
 
 export interface DemoTask {
@@ -138,6 +140,8 @@ export interface DemoAssignment {
   submitted_at: string | null;
   finalized_by: string | null;
   team_id: string | null;
+  /** The room it is performed in (098); absent or null for none. */
+  room_id?: string | null;
   /** What the student entered on a Return Demonstration's forms (094), by form key. */
   forms?: Record<string, { rows: FormRow[]; submitted_at: string | null; updated_at: string }>;
 }
