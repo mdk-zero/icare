@@ -93,18 +93,19 @@ test.describe('Dean, demo', () => {
   });
 
   test('TC-DEAN-05: only the Dean can edit the ward layout', async ({ page, browser }, testInfo) => {
+    // Both portals show the same rooms board; only the Dean's has "Rooms & layout" (the editor).
+    const layoutButton = { name: /Arrange the floor plan/ };
     await page.goto('/dean/wards');
     await expect(page.getByRole('heading', { level: 1, name: 'Wards' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Edit Layout' })).toBeVisible();
+    await expect(page.getByRole('button', layoutButton)).toBeVisible();
     await evidence(page, testInfo, 'TC-DEAN-05-dean-wards');
 
     const other = await browser.newPage();
     try {
       await startDemo(other, 'Instructor');
       await other.goto('/instructor/monitoring');
-      await expect(other.getByRole('heading', { level: 1, name: 'Ward Management' })).toBeVisible();
-      await expect(other.getByRole('button', { name: 'Room Layout' })).toBeVisible();
-      await expect(other.getByRole('button', { name: 'Edit Layout' })).toHaveCount(0);
+      await expect(other.getByRole('heading', { level: 1, name: 'Wards' })).toBeVisible();
+      await expect(other.getByRole('button', layoutButton)).toHaveCount(0);
     } finally {
       await other.close();
     }
