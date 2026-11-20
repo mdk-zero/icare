@@ -29,32 +29,28 @@ import { gradedLabel, performOn } from "@/lib/return-demos";
 import {
   fetchWard,
   fetchMyCases,
-  WardRoom,
-  WardPatient,
+  roomLabel,
   WardAssignment,
   CaseListItem,
 } from "@/lib/api";
+import { timeLimitLabel } from "@/lib/time-limit";
 
 /**
  * The Clinic tab: the ward's floor plan as the Dean laid it out first (rooms
  * not on the plan follow as cards, four to a page, as does the whole ward
  * before any room is placed). Below it, Pending Tasks: open patient cases and
  * unfinished write-ups; then Graded Patient Cases and Hospital Cases. Each is
- * a dropdown that scrolls with the page. Students find the room with
- * their patient and walk into it to read the scenario brief and task
- * checklist. The ward arrives in one cached read (/api/student/ward), so the
- * rooms still show offline.
+ * a dropdown that scrolls with the page. Rooms are only where students
+ * perform (098): a room with the student's unfinished work is ringed, and
+ * tapping a room lists what they do there. The ward arrives in one cached
+ * read (/api/student/ward), so the rooms still show offline.
  */
 
 function AssignmentBanner({
   assignment,
-  patient,
-  room,
   onPress,
 }: {
   assignment: WardAssignment;
-  patient: WardPatient | null;
-  room: WardRoom | null;
   onPress: () => void;
 }) {
   const { Palette, Accent, Shadow, Type } = useTheme();
@@ -83,22 +79,23 @@ function AssignmentBanner({
         <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
       </View>
 
-      {patient ? (
+      {assignment.patient_name ? (
         <View style={styles.bannerRow}>
-          <Ionicons name="bed-outline" size={13} color={Palette.textSecondary} />
+          <Ionicons name="person-outline" size={13} color={Palette.textSecondary} />
           <Text style={styles.bannerRowText} numberOfLines={1}>
-            {patient.name}
-            {room ? ` · ${room.name} · Room ${room.room_number}` : ""}
+            {assignment.patient_name}
           </Text>
         </View>
-      ) : (
+      ) : null}
+      {assignment.room || assignment.time_limit_minutes ? (
         <View style={styles.bannerRow}>
-          <Ionicons name="alert-circle-outline" size={13} color={Accent.amber.fg} />
-          <Text style={[styles.bannerRowText, { color: Accent.amber.fg }]}>
-            No patient linked — ask your instructor
+          <Ionicons name="location-outline" size={13} color={Palette.textSecondary} />
+          <Text style={styles.bannerRowText} numberOfLines={1}>
+            {assignment.room ? roomLabel(assignment.room) : "Room to be announced"}
+            {assignment.time_limit_minutes ? ` · ${timeLimitLabel(assignment.time_limit_minutes)}` : ""}
           </Text>
         </View>
-      )}
+      ) : null}
 
       {assignment.tasks_total > 0 ? (
         <View style={styles.progressWrap}>
@@ -281,7 +278,6 @@ export default function ClinicScreen() {
   const pending = loading && !data;
 
   const rooms = data?.rooms ?? [];
-  const patients = data?.patients ?? [];
   const assignments = data?.assignments ?? [];
   const fixtures = data?.fixtures ?? [];
   const onPlan = rooms.filter(
@@ -289,18 +285,16 @@ export default function ClinicScreen() {
   );
   const offPlan = onPlan.length > 0 ? rooms.filter((r) => !onPlan.includes(r)) : rooms;
 
-  const patientsById = new Map(patients.map((p) => [p.id, p]));
-  const roomsById = new Map(rooms.map((r) => [r.id, r]));
   const openAssignments = assignments.filter((a) => a.status !== "completed");
   // Newest graded first; the list comes newest-assigned first.
   const completedAssignments = assignments
     .filter((a) => a.status === "completed")
     .sort((a, b) => (b.completed_at ?? "").localeCompare(a.completed_at ?? ""));
-  // The room to ring on the plan: the first open assignment's patient.
+  // The room to ring on the plan: where the soonest unfinished activity is performed.
   const myRoomId =
-    openAssignments
-      .map((a) => (a.patient_id ? patientsById.get(a.patient_id)?.room_id : null))
-      .find((roomId): roomId is string => Boolean(roomId)) ?? null;
+    (data?.activities ?? [])
+      .filter((a) => a.status !== "completed")
+      .sort((a, b) => (a.deadline ?? "~").localeCompare(b.deadline ?? "~"))[0]?.room_id ?? null;
 
   const caseList = cases.data ?? [];
   // Write-ups still in the student's hands: not started, or a draft.
@@ -380,7 +374,7 @@ export default function ClinicScreen() {
         {error && !data ? <EmptyState icon="cloud-offline-outline" message={error} /> : null}
 
         <View style={styles.section}>
-          <SectionHeader title="Room Layout" subtitle="Tap a room to see who is in it" />
+          <SectionHeader title="Room Layout" subtitle="Tap a room to see what you do there" />
           {pending ? <FloorPlanSkeleton /> : null}
           {onPlan.length > 0 ? (
             <FloorPlan
@@ -437,14 +431,6 @@ export default function ClinicScreen() {
                 <AssignmentBanner
                   key={assignment.id}
                   assignment={assignment}
-                  patient={
-                    assignment.patient_id ? (patientsById.get(assignment.patient_id) ?? null) : null
-                  }
-                  room={
-                    assignment.patient_id
-                      ? (roomsById.get(patientsById.get(assignment.patient_id)?.room_id ?? "") ?? null)
-                      : null
-                  }
                   onPress={() => openAssignment(assignment)}
                 />
               ))}
@@ -469,10 +455,6 @@ export default function ClinicScreen() {
                   <CompletedCaseCard
                     key={assignment.id}
                     assignment={assignment}
-                    patient={
-                      assignment.patient_id ? (patientsById.get(assignment.patient_id) ?? null) : null
-                    }
-                    // The brief, not the patient: a patient's page follows their open case.
                     onPress={() => router.push(`/clinic/assignment/${assignment.id}`)}
                   />
                 ))}
@@ -520,11 +502,9 @@ const CASE_STATUS: Record<
 /** A graded patient case: its score and when it was graded. Opens the brief with every task's grade. */
 function CompletedCaseCard({
   assignment,
-  patient,
   onPress,
 }: {
   assignment: WardAssignment;
-  patient: WardPatient | null;
   onPress: () => void;
 }) {
   const { Palette, Accent, Shadow, Type } = useTheme();

@@ -38,14 +38,14 @@ export const manilaDay = (iso: string) => new Date(Date.parse(iso) + MANILA_OFFS
  * a skill's BKT parameters; `summaryOf` its title, chapter and skill area.
  */
 export function traceMasteryHistory(
-  answers: readonly { skill_id: string; at: string | null; correct: boolean }[],
+  answers: readonly { skill_id: string; at: string | null; correct: boolean; weight?: number }[],
   paramsFor: (skillId: string) => BktParams,
   summaryOf: (skillId: string) => { title: string; chapter: number; area: string } | undefined,
 ): SkillMasteryHistory[] {
-  const perSkill = new Map<string, { at: string; correct: boolean }[]>();
+  const perSkill = new Map<string, { at: string; correct: boolean; weight?: number }[]>();
   for (const a of answers) {
     if (!a.at) continue;
-    perSkill.set(a.skill_id, [...(perSkill.get(a.skill_id) ?? []), { at: a.at, correct: a.correct }]);
+    perSkill.set(a.skill_id, [...(perSkill.get(a.skill_id) ?? []), { at: a.at, correct: a.correct, weight: a.weight }]);
   }
 
   return [...perSkill.keys()]
@@ -54,7 +54,7 @@ export function traceMasteryHistory(
       const points: MasteryPoint[] = [];
       let known = params.p_init;
       for (const answer of perSkill.get(skill)!) {
-        known = updateMastery(known, answer.correct, params);
+        known = updateMastery(known, answer.correct, params, answer.weight ?? 1);
         const day = manilaDay(answer.at);
         const last = points[points.length - 1];
         if (last && last.day === day) {

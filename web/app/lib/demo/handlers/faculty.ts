@@ -828,12 +828,18 @@ route("POST", "/api/faculty/teams/:id/assign-cases", (ctx) => {
       skipped.push(member.name);
       continue;
     }
-    db.assignments.unshift(newAssignment(scenario, member.id, deadline, body?.required !== false, viewer.id, team.id));
+    db.assignments.unshift({ ...newAssignment(scenario, member.id, deadline, body?.required !== false, viewer.id, team.id), room_id: roomFrom(ctx) });
     assigned.push(member.name);
   }
   audit(db, viewer, "scenario.assign", "scenarios", { message: `Assigned “${scenario.title}” to ${teamLabel(db, team.id)}` }, scenario.id);
   return { scenario_title: scenario.title, assigned, skipped };
 });
+
+/** The room picked when assigning (098), if it is one of the demo's rooms. */
+export function roomFrom(ctx: Ctx): string | null {
+  const id = ctx.body?.room_id;
+  return typeof id === "string" && ctx.db.rooms.some((r) => r.id === id) ? id : null;
+}
 
 export function newAssignment(
   scenario: DemoScenario,
@@ -1007,6 +1013,7 @@ route("POST", "/api/faculty/scenarios", async (ctx) => {
     rubric: body?.rubric ?? null,
     difficulty: "beginner",
     offering_id: typeof body?.offering_id === "string" && body.offering_id ? body.offering_id : null,
+    time_limit_minutes: typeof body?.time_limit_minutes === "number" ? body.time_limit_minutes : null,
   };
   db.scenarios.push(scenario);
   await addSkillTasks(ctx, scenario.id, body?.skills);
@@ -1020,7 +1027,7 @@ route("PATCH", "/api/faculty/scenarios/:id", (ctx) => {
   const scenario = db.scenarios.find((s) => s.id === params.id && s.kind !== "return_demo");
   if (!scenario) return notFound("Patient case not found");
   if (!canSeeScenario(ctx, scenario.id)) return forbidden();
-  for (const key of ["title", "description", "category", "learning_objectives", "patient_id", "patient_case", "rubric", "is_ai_generated", "offering_id"] as const) {
+  for (const key of ["title", "description", "category", "learning_objectives", "patient_id", "patient_case", "rubric", "is_ai_generated", "offering_id", "time_limit_minutes"] as const) {
     if (body && key in body) (scenario as unknown as Record<string, unknown>)[key] = body[key];
   }
   scenario.updated_at = new Date().toISOString();
@@ -1059,6 +1066,7 @@ route("POST", "/api/faculty/scenarios/:id/assign", (ctx) => {
   const created = ids
     .filter((id) => !db.assignments.some((a) => a.student_id === id && a.scenario_id === scenario.id))
     .map((id) => newAssignment(scenario, id, deadlineCheck.value as string, body?.required !== false, viewer.id, userById(db, id)?.team_id ?? null));
+  for (const a of created) a.room_id = roomFrom(ctx);
   db.assignments.unshift(...created);
   audit(db, viewer, "scenario.assign", "scenarios", { message: `Assigned “${scenario.title}” to ${created.length} student(s)` }, scenario.id);
   return { assignments: created.map((a) => assignmentRow(db, a)) };

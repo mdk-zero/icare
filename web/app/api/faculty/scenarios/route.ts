@@ -9,6 +9,9 @@ import { ofKind, scenarioKinds } from '@/app/lib/scenario-kind';
 import { ensureCategories } from '@/app/lib/scenario-categories';
 import { viewerDeanId } from '@/app/lib/dean-scope';
 import { addSkillTasks, parseSkillSelections } from '@/app/lib/skill-tasks';
+import { sanitizePatientCase } from '@/app/lib/ai/scenario';
+import { isMissingRoomColumns, ROOMS_NEED_MIGRATION } from '@/app/lib/activity-room';
+import { parseActivityTimeLimit } from '@/app/lib/activity-time';
 import {
   getFacultyStudentIdSet,
   scenarioVisibleToFaculty,
@@ -44,7 +47,7 @@ export async function GET() {
     let scenariosQuery = supabase
       .from('scenarios')
       .select(
-        'id, created_by, title, description, category, learning_objectives, is_ai_generated, created_at, updated_at, patient_id, patients(name), scenario_assignments(student_id, status, deadline), scenario_tasks(skill_id)',
+        'id, created_by, title, description, category, learning_objectives, is_ai_generated, created_at, updated_at, patient_id, patient_case, patients(name), scenario_assignments(student_id, status, deadline), scenario_tasks(skill_id)',
       )
       .order('created_at', { ascending: false })
       .limit(500);
@@ -123,7 +126,11 @@ export async function GET() {
         updated_at: s.updated_at,
         patient_id: s.patient_id,
         offering_id: offeringOf.get(s.id as string) ?? null,
-        patient_name: (s as unknown as { patients: { name: string } | null }).patients?.name ?? null,
+        // The patient written into the case (098), else the patient record it was built on.
+        patient_name:
+          ((s as unknown as { patient_case: { patient?: { name?: string } } | null }).patient_case?.patient?.name || null) ??
+          (s as unknown as { patients: { name: string } | null }).patients?.name ??
+          null,
         student_count: ownAssigned.length,
         // Lets the page count distinct students across scenarios; one student
         // on three scenarios is one student, not three.
@@ -168,6 +175,7 @@ export async function POST(request: NextRequest) {
     learning_objectives,
     is_ai_generated,
     skills,
+    time_limit_minutes,
   } = body as {
     title?: unknown;
     description?: unknown;
@@ -177,6 +185,7 @@ export async function POST(request: NextRequest) {
     learning_objectives?: unknown;
     is_ai_generated?: unknown;
     skills?: unknown;
+    time_limit_minutes?: unknown;
   };
 
   if (typeof title !== 'string' || title.trim().length === 0) {
@@ -188,24 +197,30 @@ export async function POST(request: NextRequest) {
     ? learning_objectives.filter((o): o is string => typeof o === 'string')
     : [];
 
-  // Every scenario is grounded on a real patient record, whether it was typed
-  // by hand or generated (with or without AI) — that's what lets students
-  // chart vitals and EHR data against it.
-  if (typeof patient_id !== 'string' || patient_id.trim().length === 0) {
-    return NextResponse.json({ error: 'Select a patient for this patient case' }, { status: 400 });
+  // The instructor writes the patient into the case (098): who they are and
+  // their state. A case can still be built on a patient record, for the cases
+  // made before 098, but the patient written into the case is what students see.
+  const sanitizedCase = sanitizePatientCase(patient_case);
+  const linkedPatientId = typeof patient_id === 'string' && patient_id.trim() ? patient_id.trim() : null;
+  if (!linkedPatientId && !sanitizedCase.patient?.name) {
+    return NextResponse.json({ error: "Enter the patient's name" }, { status: 400 });
   }
+
+  const timeLimit = parseActivityTimeLimit(time_limit_minutes);
+  if ('error' in timeLimit) return NextResponse.json({ error: timeLimit.error }, { status: 400 });
 
   try {
     const supabase = getSupabaseAdmin();
 
-    const linkedPatientId = patient_id.trim();
-    const { data: patient } = await supabase
-      .from('patients')
-      .select('id')
-      .eq('id', linkedPatientId)
-      .maybeSingle();
-    if (!patient || !canSeePatient(await getPatientCourseScope(supabase, session), linkedPatientId)) {
-      return NextResponse.json({ error: 'Patient not found' }, { status: 400 });
+    if (linkedPatientId) {
+      const { data: patient } = await supabase
+        .from('patients')
+        .select('id')
+        .eq('id', linkedPatientId)
+        .maybeSingle();
+      if (!patient || !canSeePatient(await getPatientCourseScope(supabase, session), linkedPatientId)) {
+        return NextResponse.json({ error: 'Patient not found' }, { status: 400 });
+      }
     }
 
     // A category typed on the form (or confirmed from a lesson) is created
@@ -239,13 +254,18 @@ export async function POST(request: NextRequest) {
         description: typeof description === 'string' ? description.trim() : '',
         difficulty: RETIRED_DIFFICULTY,
         category: resolved.names[0],
-        patient_case: patient_case && typeof patient_case === 'object' ? patient_case : {},
+        patient_case: sanitizedCase,
         learning_objectives: sanitizedLearningObjectives,
         is_ai_generated: typeof is_ai_generated === 'boolean' ? is_ai_generated : false,
+        // Left out when there is none, so a database without 098 still takes the case.
+        ...(timeLimit.value ? { time_limit_minutes: timeLimit.value } : {}),
       })
       .select()
       .single();
 
+    if (isMissingRoomColumns(error)) {
+      return NextResponse.json({ error: ROOMS_NEED_MIGRATION }, { status: 503 });
+    }
     if (error || !scenario) {
       console.error('Failed to create patient case', error);
       return NextResponse.json({ error: 'Unable to create patient case' }, { status: 500 });

@@ -2,37 +2,34 @@ import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { viewerDeanId } from '@/app/lib/dean-scope';
-import { ofKind, scenarioKinds } from '@/app/lib/scenario-kind';
+import { kindOf, scenarioKinds } from '@/app/lib/scenario-kind';
 import { fetchTaskCompletions } from '@/app/lib/scenario-tasks';
 import { isPerformed } from '@/app/lib/task-ratings';
+import { loadTimeLimits } from '@/app/lib/activity-room';
 
 /**
  * GET /api/student/ward
  *
- * The mobile Clinic tab in one round trip: the admin's floor plan (rooms with
- * their placement from migration 035), who is in every bed, and the student's
- * own scenario assignments with a task-completion count.
+ * The mobile Clinic tab in one round trip: the Dean's floor plan (rooms with
+ * their placement from migration 035, doors and fixtures from 062) and the
+ * student's own activities with a task-completion count.
  *
- * Students cannot read /api/admin/rooms (faculty+admin) and /api/patients does
- * not carry room_id or status, hence a purpose-built read. Like the faculty
- * chart route, a failed section degrades to an empty list rather than failing
- * the whole screen.
+ * Wards are rooms only (098): a room is where the student performs a patient
+ * case or Return Demonstration, set on each assignment. A room is marked when
+ * the student has unfinished work in it, and `activities` lists everything
+ * they have in a room. The patient census is no longer sent; `patients` stays
+ * an empty list for app builds that still read it.
  *
- * Scope: every admitted patient is listed so the ward reads spatially, but a
- * patient who is not part of a scenario assigned to this student carries name
- * and bed only — no diagnosis, no vitals. Charting stays gated server-side by
- * isPatientAssigned in /api/student/vitals and /api/student/ehr.
- *
- * The plan also carries each room's door wall and the fixtures between rooms
- * (corridors, the nurse station…), so the phone draws the same floor plan as
- * the Dean's Wards tab. Before migration 062 there are neither: doors read as
- * null and fixtures as an empty list.
+ * Students cannot read /api/admin/rooms (faculty+admin), hence a purpose-built
+ * read. A failed section degrades to an empty list rather than failing the
+ * whole screen.
  */
 
 interface ScenarioRow {
   id: string;
   title: string;
   patient_id: string | null;
+  patient_case: { patient?: { name?: string } } | null;
   description: string | null;
   category: string | null;
   learning_objectives: unknown;
@@ -48,12 +45,10 @@ export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
 
-    // 1. This student's assignments, and the scenarios behind them. Same chain
-    //    as getAssignedPatientIds, read here in full so the banner can show the
-    //    scenario brief without a second request.
+    // 1. This student's assignments, both kinds, and the scenarios behind them.
     const { data: assignmentRows, error: assignmentsError } = await supabase
       .from('scenario_assignments')
-      // '*' so a database without started_at (before 063) still answers.
+      // '*' so a database without started_at (063) or room_id (098) still answers.
       .select('*')
       .eq('student_id', session.uid)
       .order('assigned_at', { ascending: false });
@@ -63,119 +58,63 @@ export async function GET() {
       return NextResponse.json({ error: 'Unable to load the ward' }, { status: 500 });
     }
 
-    // Return Demonstrations (072) have no patient and their own screen.
-    const kinds = await scenarioKinds(supabase, [...new Set((assignmentRows ?? []).map((a) => a.scenario_id as string))]);
-    const assignments = ofKind(assignmentRows ?? [], kinds, 'patient_case', (a) => a.scenario_id as string);
-    const scenarioIds = [...new Set(assignments.map((a) => a.scenario_id))];
+    const allRows = assignmentRows ?? [];
+    const allScenarioIds = [...new Set(allRows.map((a) => a.scenario_id as string))];
+    const kinds = await scenarioKinds(supabase, allScenarioIds);
+    // The Clinic's lists are patient cases; Return Demonstrations have their own screen.
+    const assignments = allRows.filter((a) => kindOf(kinds, a.scenario_id as string) === 'patient_case');
+    const scenarioIds = [...new Set(assignments.map((a) => a.scenario_id as string))];
 
-    let scenariosById = new Map<string, ScenarioRow>();
-    if (scenarioIds.length > 0) {
-      const { data: scenarios } = await supabase
-        .from('scenarios')
-        .select('id, title, patient_id, description, category, learning_objectives')
-        .in('id', scenarioIds);
-      scenariosById = new Map((scenarios ?? []).map((s) => [s.id, s as ScenarioRow]));
-    }
-
-    const assignedPatientIds = new Set<string>();
-    for (const assignment of assignments) {
-      const patientId = scenariosById.get(assignment.scenario_id)?.patient_id;
-      if (patientId) assignedPatientIds.add(patientId);
-    }
-    const assignedIdList = [...assignedPatientIds];
-
-    // 2. The ward itself (their Dean's, 077) plus the per-assignment task
-    //    state and the assigned patients' latest vitals.
+    // 2. The ward (their Dean's, 077), the scenarios and the per-assignment task state.
     const deanId = await viewerDeanId(supabase, session);
     let roomsQuery = supabase.from('rooms').select('*').order('room_number');
-    let patientsQuery = supabase
-      .from('patients')
-      .select('id, name, age, gender, diagnosis, room_id, room_number, status')
-      .eq('status', 'admitted')
-      .limit(500);
     let fixturesQuery = supabase
       .from('ward_fixtures')
       .select('id, kind, label, plan_x, plan_y, plan_w, plan_h')
       .order('created_at');
     if (deanId) {
       roomsQuery = roomsQuery.eq('admin_id', deanId);
-      patientsQuery = patientsQuery.eq('admin_id', deanId);
       fixturesQuery = fixturesQuery.eq('admin_id', deanId);
     }
-    const [roomsRes, patientsRes, tasksRes, completionsRes, vitalsRes, fixturesRes] = await Promise.all([
+    const [roomsRes, scenariosRes, tasksRes, completionsRes, fixturesRes, timeLimits] = await Promise.all([
       roomsQuery,
-      patientsQuery,
-      scenarioIds.length > 0
+      allScenarioIds.length > 0
         ? supabase
-            .from('scenario_tasks')
-            .select('id, scenario_id, points')
-            .in('scenario_id', scenarioIds)
+            .from('scenarios')
+            .select('id, title, patient_id, patient_case, description, category, learning_objectives')
+            .in('id', allScenarioIds)
+        : Promise.resolve({ data: [], error: null }),
+      scenarioIds.length > 0
+        ? supabase.from('scenario_tasks').select('id, scenario_id, points').in('scenario_id', scenarioIds)
         : Promise.resolve({ data: [], error: null }),
       fetchTaskCompletions(
         supabase,
-        assignments.map((a) => a.id),
+        assignments.map((a) => a.id as string),
       ).then(({ rows, error }) => ({ data: rows, error })),
-      assignedIdList.length > 0
-        ? supabase
-            .from('vital_sign_readings')
-            .select(
-              'patient_id, recorded_at, heart_rate, bp_systolic, bp_diastolic, temperature_c, respiratory_rate, oxygen_saturation, is_anomaly, anomaly_reasons',
-            )
-            .in('patient_id', assignedIdList)
-            .order('recorded_at', { ascending: false })
-            .limit(200)
-        : Promise.resolve({ data: [], error: null }),
       fixturesQuery,
+      loadTimeLimits(supabase, allScenarioIds),
     ]);
     // Missing before 062; any other failure only costs the plan its fixtures.
     if (fixturesRes.error && !['42P01', 'PGRST205'].includes(fixturesRes.error.code ?? '')) {
       console.error('Failed to fetch ward fixtures', fixturesRes.error);
     }
-
     if (roomsRes.error) {
       console.error('Failed to fetch ward rooms', roomsRes.error);
       return NextResponse.json({ error: 'Unable to load the ward' }, { status: 500 });
     }
-    if (patientsRes.error) {
-      console.error('Failed to fetch ward patients', patientsRes.error);
-      return NextResponse.json({ error: 'Unable to load the ward' }, { status: 500 });
-    }
 
-    const patientRows = patientsRes.data ?? [];
+    const scenariosById = new Map(((scenariosRes.data ?? []) as ScenarioRow[]).map((s) => [s.id, s]));
+    const roomsById = new Map((roomsRes.data ?? []).map((r) => [r.id as string, r]));
+    const roomOf = (a: Record<string, unknown>) => {
+      const room = typeof a.room_id === 'string' ? roomsById.get(a.room_id) : undefined;
+      return room ? { id: room.id as string, name: room.name as string, room_number: (room.room_number as string) ?? null } : null;
+    };
 
-    // Newest reading per patient — the list is already newest-first.
-    const latestVitals = new Map<string, Record<string, unknown>>();
-    for (const reading of vitalsRes.data ?? []) {
-      if (!latestVitals.has(reading.patient_id)) latestVitals.set(reading.patient_id, reading);
-    }
-
-    const patients = patientRows.map((patient) => {
-      const isAssigned = assignedPatientIds.has(patient.id);
-      return {
-        id: patient.id,
-        name: patient.name,
-        age: patient.age,
-        gender: patient.gender,
-        room_id: patient.room_id,
-        room_number: patient.room_number,
-        is_assigned: isAssigned,
-        ...(isAssigned
-          ? {
-              diagnosis: patient.diagnosis,
-              latest_vitals: latestVitals.get(patient.id) ?? null,
-            }
-          : {}),
-      };
-    });
-
-    // A room's occupancy is its admitted patients, the same count capacity
-    // gates in app/lib/patient-rooms.ts.
-    const occupancy = new Map<string, number>();
-    const roomsWithAssignment = new Set<string>();
-    for (const patient of patientRows) {
-      if (!patient.room_id) continue;
-      occupancy.set(patient.room_id, (occupancy.get(patient.room_id) ?? 0) + 1);
-      if (assignedPatientIds.has(patient.id)) roomsWithAssignment.add(patient.room_id);
+    // A room is marked, and counts toward its plan, by the student's unfinished work in it.
+    const openByRoom = new Map<string, number>();
+    for (const a of allRows) {
+      if (a.status === 'completed' || typeof a.room_id !== 'string') continue;
+      openByRoom.set(a.room_id, (openByRoom.get(a.room_id) ?? 0) + 1);
     }
 
     const rooms = (roomsRes.data ?? []).map((room) => ({
@@ -189,8 +128,8 @@ export async function GET() {
       plan_w: room.plan_w,
       plan_h: room.plan_h,
       plan_door: room.plan_door ?? null,
-      occupied: occupancy.get(room.id) ?? 0,
-      has_assignment: roomsWithAssignment.has(room.id),
+      occupied: openByRoom.get(room.id) ?? 0,
+      has_assignment: openByRoom.has(room.id),
     }));
 
     const tasksByScenario = new Map<string, number>();
@@ -200,11 +139,10 @@ export async function GET() {
     const doneByAssignment = new Map<string, number>();
     // A task faculty rated "not performed" still has a row; it isn't done.
     for (const completion of (completionsRes.data ?? []).filter((c) => isPerformed(c))) {
-      doneByAssignment.set(
-        completion.assignment_id,
-        (doneByAssignment.get(completion.assignment_id) ?? 0) + 1,
-      );
+      doneByAssignment.set(completion.assignment_id, (doneByAssignment.get(completion.assignment_id) ?? 0) + 1);
     }
+
+    const patientName = (scenario: ScenarioRow | undefined) => scenario?.patient_case?.patient?.name || null;
 
     const formattedAssignments = assignments.map((assignment) => {
       const scenario = scenariosById.get(assignment.scenario_id);
@@ -216,6 +154,10 @@ export async function GET() {
         category: scenario?.category ?? null,
         learning_objectives: scenario?.learning_objectives ?? null,
         patient_id: scenario?.patient_id ?? null,
+        // The patient written into the case, the room and the time limit (098).
+        patient_name: patientName(scenario),
+        room: roomOf(assignment),
+        time_limit_minutes: timeLimits.get(assignment.scenario_id) ?? null,
         assigned_at: assignment.assigned_at,
         deadline: assignment.deadline,
         status: assignment.status,
@@ -230,11 +172,27 @@ export async function GET() {
       };
     });
 
+    // Everything the student has in a room, both kinds, for the room's screen.
+    const activities = allRows
+      .filter((a) => typeof a.room_id === 'string')
+      .map((a) => ({
+        id: a.id,
+        room_id: a.room_id as string,
+        kind: kindOf(kinds, a.scenario_id as string),
+        scenario_title: scenariosById.get(a.scenario_id)?.title ?? 'Untitled',
+        patient_name: patientName(scenariosById.get(a.scenario_id)),
+        deadline: a.deadline,
+        status: a.status,
+        time_limit_minutes: timeLimits.get(a.scenario_id) ?? null,
+        ...('started_at' in a ? { started_at: a.started_at } : {}),
+      }));
+
     return NextResponse.json({
       rooms,
       fixtures: fixturesRes.error ? [] : (fixturesRes.data ?? []),
-      patients,
+      patients: [],
       assignments: formattedAssignments,
+      activities,
     });
   } catch (err) {
     console.error('Fetch ward failed', err);

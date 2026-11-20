@@ -1,24 +1,15 @@
 import type { Metadata } from "next";
-import PatientsManager from "../../components/PatientsManager";
+import RoomsBoard from "../../components/RoomsBoard";
 
 export const metadata: Metadata = {
-  title: "Monitoring | iCARE++ Instructor",
+  title: "Wards | iCARE++ Instructor",
 };
 
 /**
- * The ward census as its own sidebar destination. Same manager as
- * /instructor/patients — check-in/check-out, room occupancy, and discharge
- * state are the monitoring surface, so this needed a page and a nav
- * entry, not a parallel implementation.
+ * Wards are rooms only (098): where students perform their patient cases and
+ * Return Demonstrations. The patient census that used to be here is hidden;
+ * the patients and their charts are kept in the database.
  */
 export default function FacultyMonitoringPage() {
-  return (
-    <PatientsManager
-      badgeLabel="Ward Monitoring"
-      title="Ward Management"
-      subtitle="Live ward census — room occupancy, check-ins and check-outs at a glance"
-      showFloorPlan
-      chartBase="/instructor/patients"
-    />
-  );
+  return <RoomsBoard />;
 }

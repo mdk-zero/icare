@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { ratingAsAnswer, type SkillAnswer } from './bkt';
+import { answerWeight, ratingAsAnswer, type SkillAnswer } from './bkt';
+import { wentOverTime } from './activity-time';
 import { readMatching } from './fetch-all';
 import { storedRating } from './task-ratings';
 import { isMissingSkillColumn, skillIdFromTitle } from './taylor-skills';
@@ -16,6 +17,10 @@ import { isMissingSkillColumn, skillIdFromTitle } from './taylor-skills';
  * Only a completed assignment counts. Until then a task graded by its sub-tasks
  * can hold a level worked out from the few rated so far, the rest counting as
  * zero (taskCredit), which would read as a wrong answer.
+ *
+ * A try finished past its time limit (098) still counts, but a right answer in
+ * it weighs less (answerWeight). It is finished when the student handed it in,
+ * or else when the instructor finished the grade.
  */
 
 interface AssignmentRow {
@@ -23,6 +28,19 @@ interface AssignmentRow {
   student_id: string;
   scenario_id: string;
   completed_at: string | null;
+  started_at?: string | null;
+  submitted_at?: string | null;
+}
+
+/** Each activity's time limit; none before 098. */
+async function timeLimitsOf(supabase: SupabaseClient, scenarioIds: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (scenarioIds.length === 0) return out;
+  const rows = await readMatching<{ id: string; time_limit_minutes: number | null }>(scenarioIds, (part, from, to) =>
+    supabase.from('scenarios').select('id, time_limit_minutes').in('id', part).order('id').range(from, to),
+  ).catch(() => []);
+  for (const r of rows) if (r.time_limit_minutes) out.set(r.id, r.time_limit_minutes);
+  return out;
 }
 
 interface TaskRow {
@@ -50,7 +68,7 @@ export async function loadChecklistAnswers(
       await readMatching<AssignmentRow>(studentIds, (part, from, to) =>
         supabase
           .from('scenario_assignments')
-          .select('id, student_id, scenario_id, completed_at')
+          .select('id, student_id, scenario_id, completed_at, started_at, submitted_at')
           .in('student_id', part)
           .eq('status', 'completed')
           .order('id')
@@ -59,8 +77,9 @@ export async function loadChecklistAnswers(
     ).filter((a) => a.completed_at);
     if (assignments.length === 0) return [];
 
-    const [tasks, completions] = await Promise.all([
-      readMatching<TaskRow>([...new Set(assignments.map((a) => a.scenario_id))], (part, from, to) =>
+    const scenarioIds = [...new Set(assignments.map((a) => a.scenario_id))];
+    const [tasks, completions, timeLimits] = await Promise.all([
+      readMatching<TaskRow>(scenarioIds, (part, from, to) =>
         supabase
           .from('scenario_tasks')
           .select('id, title, skill_id, sort_order')
@@ -76,6 +95,7 @@ export async function loadChecklistAnswers(
           .order('id')
           .range(from, to),
       ),
+      timeLimitsOf(supabase, scenarioIds),
     ]);
 
     const assignmentById = new Map(assignments.map((a) => [a.id, a]));
@@ -87,12 +107,18 @@ export async function loadChecklistAnswers(
         const correct = ratingAsAnswer(storedRating(c.rating));
         const skill = task && (task.skill_id ?? skillIdFromTitle(task.title));
         if (!assignment || !skill || correct === null) return [];
+        const overTime = wentOverTime(
+          timeLimits.get(assignment.scenario_id),
+          assignment.started_at,
+          assignment.submitted_at ?? assignment.completed_at,
+        );
         return [
           {
             student_id: assignment.student_id,
             skill_id: skill,
             at: assignment.completed_at as string,
             correct,
+            weight: answerWeight(correct, overTime),
             assignment: assignment.id,
             order: task.sort_order ?? 0,
           },

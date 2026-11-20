@@ -9,6 +9,8 @@ import {
   studentTaskSteps,
 } from '@/app/lib/scenario-tasks';
 import { isPerformed, scaledGrade, taskRawPoints, type StepGrades } from '@/app/lib/task-ratings';
+import { loadAssignmentRooms, loadTimeLimits } from '@/app/lib/activity-room';
+import { sanitizePatientCase } from '@/app/lib/ai/scenario';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -43,13 +45,17 @@ export async function GET(_request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const [tasksRes, completions] = await Promise.all([
+    const [tasksRes, completions, scenarioRes, timeLimits, rooms] = await Promise.all([
       supabase
         .from('scenario_tasks')
         .select('id, title, description, category, points, verification, system_trigger, sort_order')
         .eq('scenario_id', assignment.scenario_id)
         .order('sort_order', { ascending: true }),
       fetchTaskCompletions(supabase, [assignmentId]),
+      // The patient written into the case, its time limit and the room (098).
+      supabase.from('scenarios').select('patient_case').eq('id', assignment.scenario_id).maybeSingle(),
+      loadTimeLimits(supabase, [assignment.scenario_id as string]),
+      loadAssignmentRooms(supabase, [assignmentId]),
     ]);
 
     if (tasksRes.error || completions.error) {
@@ -97,8 +103,11 @@ export async function GET(_request: Request, { params }: RouteParams) {
       };
     });
 
+    const patientCase = sanitizePatientCase(scenarioRes.data?.patient_case);
     return NextResponse.json({
       tasks,
+      // Null for a Return Demonstration and an empty case.
+      patient_case: patientCase.patient || patientCase.chief_complaint || patientCase.diagnosis ? patientCase : null,
       assignment: {
         id: assignment.id,
         status: assignment.status,
@@ -108,6 +117,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
         time_taken: assignment.time_taken,
         // Undefined (omitted) before 063: the app then skips the start prompt.
         started_at: assignment.started_at,
+        time_limit_minutes: timeLimits.get(assignment.scenario_id as string) ?? null,
+        room: rooms.get(assignmentId) ?? null,
       },
     });
   } catch (err) {

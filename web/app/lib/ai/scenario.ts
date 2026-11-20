@@ -55,7 +55,16 @@ export async function fetchPatientContext(
   return data as unknown as PatientContext;
 }
 
+/** Who the patient is, written by the instructor into the case (098). */
+export interface CasePatient {
+  name: string;
+  age: number | null;
+  sex: string;
+}
+
 export interface PatientCase {
+  /** Absent on cases the AI wrote without a patient, and on old cases built on a patient record. */
+  patient?: CasePatient;
   chief_complaint: string;
   vitals: {
     heart_rate: number | null;
@@ -83,7 +92,18 @@ export function sanitizePatientCase(input: unknown): PatientCase {
   const rawVitals =
     raw.vitals && typeof raw.vitals === 'object' ? (raw.vitals as Record<string, unknown>) : {};
 
+  const rawPatient =
+    raw.patient && typeof raw.patient === 'object' ? (raw.patient as Record<string, unknown>) : null;
+  const patient = rawPatient
+    ? {
+        name: pickString(rawPatient.name).trim().slice(0, 120),
+        age: pickNumber(rawPatient.age),
+        sex: pickString(rawPatient.sex).trim().slice(0, 20),
+      }
+    : null;
+
   return {
+    ...(patient && (patient.name || patient.age !== null || patient.sex) ? { patient } : {}),
     chief_complaint: pickString(raw.chief_complaint),
     vitals: {
       heart_rate: pickNumber(rawVitals.heart_rate),

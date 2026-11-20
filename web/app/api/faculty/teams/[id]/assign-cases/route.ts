@@ -5,6 +5,7 @@ import { getFacultyStudentIdSet, scenarioInDeanScope, scenarioVisibleToFaculty }
 import { isMissingTeamTables, manageableTeam, TEAMS_NEED_MIGRATION } from '@/app/lib/teams';
 import { notifyCaseAssigned } from '@/app/lib/notify-case-assigned';
 import { isReturnDemo } from '@/app/lib/scenario-kind';
+import { isMissingRoomColumns, resolveRoom, ROOMS_NEED_MIGRATION } from '@/app/lib/activity-room';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -30,10 +31,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
-  const { scenario_id, deadline, required } = body as {
+  const { scenario_id, deadline, required, room_id } = body as {
     scenario_id?: unknown;
     deadline?: unknown;
     required?: unknown;
+    room_id?: unknown;
   };
 
   if (typeof scenario_id !== 'string' || scenario_id.length === 0) {
@@ -51,6 +53,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const team = await manageableTeam(supabase, session.role, session.uid, teamId);
     if (!team) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+
+    // The room the whole group performs it in (098).
+    const room = await resolveRoom(supabase, session, room_id);
+    if ('error' in room) return NextResponse.json({ error: room.error }, { status: 400 });
 
     const { data: memberRows, error: membersError } = await supabase
       .from('team_members')
@@ -123,8 +129,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         deadline: parsedDeadline.toISOString(),
         required: typeof required === 'boolean' ? required : true,
         status: 'pending' as const,
+        ...(room.value ? { room_id: room.value } : {}),
       })),
     ).select('id, student_id');
+    if (isMissingRoomColumns(insertError)) {
+      return NextResponse.json({ error: ROOMS_NEED_MIGRATION }, { status: 503 });
+    }
     if (insertError) {
       console.error('Failed to assign group case', insertError);
       return NextResponse.json({ error: 'Unable to assign the case' }, { status: 500 });
@@ -134,6 +144,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       { id: scenario.id as string, title: scenario.title as string, patient_id: (scenario.patient_id as string | null) ?? null },
       (inserted ?? []).map((a) => ({ id: a.id as string, student_id: a.student_id as string })),
       parsedDeadline,
+      room.name,
     );
     return NextResponse.json(
       {

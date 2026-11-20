@@ -137,10 +137,10 @@ export async function loadSkillMastery(
   ]);
 
   // student -> skill -> answers, oldest first
-  const sequences = new Map<string, Map<string, boolean[]>>();
-  for (const { student_id: student, skill_id: skill, correct } of oldestFirst([...quiz, ...checklist])) {
-    const perSkill = sequences.get(student) ?? new Map<string, boolean[]>();
-    perSkill.set(skill, [...(perSkill.get(skill) ?? []), correct]);
+  const sequences = new Map<string, Map<string, { correct: boolean; weight?: number }[]>>();
+  for (const { student_id: student, skill_id: skill, correct, weight } of oldestFirst([...quiz, ...checklist])) {
+    const perSkill = sequences.get(student) ?? new Map<string, { correct: boolean; weight?: number }[]>();
+    perSkill.set(skill, [...(perSkill.get(skill) ?? []), { correct, weight }]);
     sequences.set(student, perSkill);
   }
   if (sequences.size === 0) return out;
@@ -160,7 +160,7 @@ export async function loadSkillMastery(
             title: titles.get(skill) ?? `Skill ${skill}`,
             mastery: traceMastery(fit ?? DEFAULT_BKT, sequence),
             answers: sequence.length,
-            correct: sequence.filter(Boolean).length,
+            correct: sequence.filter((a) => a.correct).length,
             source: fit?.source ?? 'default',
           };
         })

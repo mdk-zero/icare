@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, RefreshControl } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, PrimaryButton, SkeletonBlock, EmptyState } from '@/components/ui';
@@ -11,8 +11,11 @@ import {
   fetchScenarioAssignments,
   fetchScenario,
   fetchScenarioTasks,
+  roomLabel,
   Scenario,
+  type CasePatient,
 } from '@/lib/api';
+import { CountdownCard } from '@/components/CountdownCard';
 import { performOn } from '@/lib/return-demos';
 import { ClinicalTaskList, ClinicalTaskListSkeleton } from '@/components/ClinicalTaskList';
 import { AssistanceButton } from '@/components/AssistanceButton';
@@ -27,24 +30,64 @@ function formatTime(seconds: number) {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
-function PatientCase({
-  patientCase,
-  styles,
-}: {
-  patientCase: Record<string, unknown>;
-  styles: ReturnType<typeof createStyles>;
-}) {
-  const entries = Object.entries(patientCase).filter(
-    ([, value]) => typeof value === 'string' || typeof value === 'number',
-  );
-  if (entries.length === 0) return null;
+const VITALS: { key: keyof CasePatient['vitals']; label: string; unit: string }[] = [
+  { key: 'blood_pressure', label: 'BP', unit: 'mmHg' },
+  { key: 'heart_rate', label: 'HR', unit: 'bpm' },
+  { key: 'temperature', label: 'Temp', unit: '°C' },
+  { key: 'respiratory_rate', label: 'RR', unit: '/min' },
+  { key: 'oxygen_saturation', label: 'SpO₂', unit: '%' },
+];
+
+/** The patient the instructor wrote into the case (098): who they are and the state they are in. */
+function PatientCard({ patientCase, styles }: { patientCase: CasePatient; styles: ReturnType<typeof createStyles> }) {
+  const p = patientCase.patient;
+  const who = [p?.age != null ? `${p.age} yrs` : null, p?.sex || null].filter(Boolean).join(' · ');
+  const vitals = VITALS.filter((v) => {
+    const value = patientCase.vitals?.[v.key];
+    return value !== null && value !== undefined && value !== '';
+  });
+  const rows = [
+    { label: 'Diagnosis', value: patientCase.diagnosis },
+    { label: 'Medical history', value: patientCase.medical_history },
+    { label: 'Physical findings', value: patientCase.physical_exam },
+  ].filter((r) => r.value?.trim());
   return (
     <Card style={styles.blockCard}>
-      <Text style={styles.blockLabel}>Patient Case</Text>
-      {entries.map(([key, value]) => (
-        <View key={key} style={styles.caseRow}>
-          <Text style={styles.caseKey}>{key.replaceAll('_', ' ')}</Text>
-          <Text style={styles.caseValue}>{String(value)}</Text>
+      <Text style={styles.blockLabel}>Your Patient</Text>
+      {p?.name ? (
+        <View style={styles.patientHead}>
+          <View style={styles.patientAvatar}>
+            <Text style={styles.patientInitials}>
+              {p.name
+                .split(/\s+/)
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((w) => w[0]?.toUpperCase())
+                .join('')}
+            </Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.patientName}>{p.name}</Text>
+            {who ? <Text style={styles.patientWho}>{who}</Text> : null}
+          </View>
+        </View>
+      ) : null}
+      {patientCase.chief_complaint?.trim() ? <Text style={styles.condition}>{patientCase.chief_complaint}</Text> : null}
+      {vitals.length > 0 && (
+        <View style={styles.vitals}>
+          {vitals.map((v) => (
+            <View key={v.key} style={styles.vital}>
+              <Text style={styles.vitalLabel}>{v.label}</Text>
+              <Text style={styles.vitalValue}>{String(patientCase.vitals[v.key])}</Text>
+              <Text style={styles.vitalUnit}>{v.unit}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+      {rows.map((r) => (
+        <View key={r.label} style={styles.caseRow}>
+          <Text style={styles.caseKey}>{r.label}</Text>
+          <Text style={styles.caseValue}>{r.value}</Text>
         </View>
       ))}
     </Card>
@@ -52,11 +95,10 @@ function PatientCase({
 }
 
 /**
- * Brief-only view of a scenario assignment. A scenario with a patient linked is
- * worked on the patient hub (app/clinic/patient/[id].tsx), where the checklist
- * and the hand-in sit together. This screen is where an assignment lands when
- * faculty never set scenarios.patient_id — the student can still read the
- * brief, follow the tasks and see their grades as the instructor saves them.
+ * A patient case as the student works it (098): the patient the instructor
+ * wrote into the case, the room it is performed in, the tasks and the clock,
+ * counting down when the case has a time limit. Grades appear as the
+ * instructor saves them.
  */
 export default function ScenarioBriefScreen() {
   const params = useLocalSearchParams<{ id: string; gate?: string; title?: string; due?: string; tasks?: string }>();
@@ -110,6 +152,9 @@ export default function ScenarioBriefScreen() {
   // Opens on the case's instructions until Start, then times the demonstration.
   const clock = useCaseClock(taskAssignment, isActive, assignmentId);
   const elapsed = clock.elapsed;
+  const timeLimit = taskAssignment?.time_limit_minutes ?? assignment?.time_limit_minutes ?? null;
+  const room = taskAssignment?.room ?? assignment?.room ?? null;
+  const patientCase = taskResult?.patient_case ?? null;
 
   // Grades land the moment the instructor saves them: while the screen is open
   // and the scenario isn't final, keep checking.
@@ -131,6 +176,9 @@ export default function ScenarioBriefScreen() {
     return (
       <CaseStartGate
         title={assignment?.scenario_title ?? params.title ?? 'Patient case'}
+        patientName={assignment?.patient_name}
+        room={room ? roomLabel(room) : null}
+        timeLimitMinutes={timeLimit}
         deadline={assignment?.deadline ?? (params.due || null)}
         taskCount={params.tasks ? Number(params.tasks) : null}
         starting={clock.starting}
@@ -188,6 +236,9 @@ export default function ScenarioBriefScreen() {
     return (
       <CaseStartGate
         title={assignment.scenario_title}
+        patientName={patientCase?.patient?.name ?? assignment.patient_name}
+        room={room ? roomLabel(room) : null}
+        timeLimitMinutes={timeLimit}
         deadline={assignment.deadline}
         taskCount={totalCount}
         starting={clock.starting}
@@ -207,6 +258,7 @@ export default function ScenarioBriefScreen() {
       <Text style={styles.title}>{assignment.scenario_title}</Text>
       <Text style={styles.subtitle}>
         {performOn(assignment.deadline)}
+        {room ? ` · ${roomLabel(room)}` : ''}
       </Text>
 
       {isCompleted ? (
@@ -255,15 +307,7 @@ export default function ScenarioBriefScreen() {
         </Card>
       )}
 
-      {elapsed !== null && (
-        <Card style={styles.reviewCard}>
-          <Ionicons name="timer-outline" size={20} color={Palette.primary} />
-          <View style={styles.reviewText}>
-            <Text style={[styles.reviewTitle, styles.clock]}>{formatTime(elapsed)}</Text>
-            <Text style={styles.reviewBody}>Running until your instructor grades the last task.</Text>
-          </View>
-        </Card>
-      )}
+      <CountdownCard elapsed={elapsed} timeLimitMinutes={timeLimit} />
 
       {/* Graded: just the result and the grades; the brief, the patient and the chart are for doing it. */}
       {!isCompleted && scenarioError && <EmptyState icon="cloud-offline-outline" message={scenarioError} />}
@@ -275,22 +319,7 @@ export default function ScenarioBriefScreen() {
         </Card>
       )}
 
-      {!isCompleted && scenario && <PatientCase patientCase={scenario.patient_case} styles={styles} />}
-
-      {!isCompleted && scenario?.patient_id && (
-        <Card style={styles.blockCard}>
-          <Text style={styles.blockLabel}>Assigned Patient</Text>
-          <View style={styles.patientLinkRow}>
-            <Pressable
-              style={({ pressed }) => [styles.patientLinkButton, pressed && styles.patientLinkPressed]}
-              onPress={() => router.push(`/clinic/patient/${scenario.patient_id}`)}
-            >
-              <Ionicons name="folder-open-outline" size={16} color={Palette.primary} />
-              <Text style={styles.patientLinkText}>Patient Chart</Text>
-            </Pressable>
-          </View>
-        </Card>
-      )}
+      {!isCompleted && patientCase && <PatientCard patientCase={patientCase} styles={styles} />}
 
       {/* The help flag belongs where the student is working, not buried in
           settings — this is the ERD's assistance request. */}
@@ -344,7 +373,6 @@ function createStyles(
   reviewText: { flex: 1 },
   reviewTitle: { fontSize: 15, fontWeight: '700', color: Palette.ink, marginBottom: 2 },
   reviewBody: { fontSize: 13, color: Palette.textSecondary, lineHeight: 19 },
-  clock: { fontSize: 20, fontVariant: ['tabular-nums'] },
   resultCard: { marginBottom: Spacing.lg },
   resultRow: { flexDirection: 'row', justifyContent: 'space-around' },
   resultStat: { alignItems: 'center' },
@@ -363,21 +391,32 @@ function createStyles(
   },
   caseKey: { fontSize: 13, color: Palette.textSecondary, textTransform: 'capitalize' },
   caseValue: { fontSize: 13, fontWeight: '600', color: Palette.ink, flexShrink: 1, textAlign: 'right' },
-  patientLinkRow: { flexDirection: 'row', gap: Spacing.md },
-  patientLinkButton: {
-    flex: 1,
-    flexDirection: 'row',
+  patientHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.md },
+  patientAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: Spacing.md,
+    backgroundColor: Palette.primary,
+  },
+  patientInitials: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  patientName: { fontSize: 17, fontWeight: '700', color: Palette.ink },
+  patientWho: { fontSize: 13, color: Palette.textSecondary, marginTop: 1 },
+  condition: { fontSize: 14, color: Palette.text, lineHeight: 21, marginBottom: Spacing.md },
+  vitals: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.sm },
+  vital: {
+    minWidth: 70,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Palette.border,
-    backgroundColor: Palette.primaryTint,
+    borderColor: Palette.borderLight,
+    backgroundColor: Palette.surfaceMuted,
   },
-  patientLinkPressed: { opacity: 0.7 },
-  patientLinkText: { fontSize: 13, fontWeight: '600', color: Palette.primary },
+  vitalLabel: { fontSize: 10, fontWeight: '700', color: Palette.textSecondary, letterSpacing: 0.5 },
+  vitalValue: { fontSize: 16, fontWeight: '700', color: Palette.ink, fontVariant: ['tabular-nums'] },
+  vitalUnit: { fontSize: 10, color: Palette.textMuted },
   objectiveRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: Spacing.sm },
   objectiveIcon: { marginTop: 2, marginRight: Spacing.sm },
   objectiveText: { flex: 1, fontSize: 13, color: Palette.text, lineHeight: 19 },
