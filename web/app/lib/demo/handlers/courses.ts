@@ -513,6 +513,56 @@ route("DELETE", "/api/admin/course-offerings/:id", (ctx) => {
   return { success: true, requirement_count: requirements.length, check_count: checks.length };
 });
 
+/**
+ * One instructor's roster for a course, for the Dean (their groups, whole
+ * sections where they have none, students added by hand); with ?q=, the
+ * students the Dean could add to it.
+ */
+route("GET", "/api/admin/course-offerings/:id/students", (ctx) => {
+  if (!deanOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const offering = ownOffering(ctx, ctx.params.id);
+  if (!offering) return notFound("Course assignment not found");
+  const roster = offeringRoster(db, offering);
+  const q = ctx.query.get("q");
+  if (q !== null) {
+    const term = q.trim().toLowerCase();
+    if (term.length < 2) return { students: [] };
+    return {
+      students: db.users
+        .filter((u) => u.role === "student" && `${u.name} ${u.email}`.toLowerCase().includes(term))
+        .sort(byName)
+        .slice(0, 15)
+        .map((u) => ({ id: u.id, name: u.name, email: u.email, section: sectionName(db, u.section_id), on_roster: roster.source.has(u.id) })),
+    };
+  }
+  return {
+    students: roster.students.map((s) => {
+      // "BSN 3101 · Group A": the section, then the group.
+      const [section, ...group] = (teamLabel(db, s.team_id) ?? sectionName(db, s.section_id) ?? "No section").split(" · ");
+      return { id: s.id, name: s.name, email: s.email, section, group: group.join(" · ") || "No group", source: roster.source.get(s.id) };
+    }),
+  };
+});
+
+route("POST", "/api/admin/course-offerings/:id/students", (ctx) => {
+  if (!deanOnly(ctx)) return forbidden();
+  const db = courseDb(ctx.db);
+  const offering = ownOffering(ctx, ctx.params.id);
+  if (!offering) return notFound("Course assignment not found");
+  const studentId: unknown = ctx.body?.student_id;
+  if (typeof studentId !== "string" || !studentId) return json({ error: "Choose a student" }, 400);
+  if (termStatus(termOf(db, offering)) === "ended") return json({ error: "This semester has ended, so its roster is locked" }, 400);
+  const student = db.users.find((u) => u.id === studentId && u.role === "student");
+  if (!student) return notFound("Student not found");
+  if (!db.offeringStudents.some((r) => r.offering_id === offering.id && r.student_id === student.id)) {
+    db.offeringStudents.push({ offering_id: offering.id, student_id: student.id });
+  }
+  const code = db.courses.find((c) => c.id === offering.course_id)?.code;
+  audit(db, ctx.viewer, "course.student.add", "course_offerings", { code, student_id: student.id, student: student.name }, offering.id);
+  return { success: true };
+});
+
 // ---------------------------------------------------------------------------
 // Instructor: their course assignments and checklists
 // ---------------------------------------------------------------------------
