@@ -156,10 +156,11 @@ route("DELETE", "/api/admin/rooms/:id/assignments", (ctx) => {
  * A patient's courses (069). Demos saved before every patient carried a
  * list share the ward out between the two courses, every third patient
  * in both, so a colleague who teaches only one course sees a smaller ward.
+ * Courses go by id, not code, so renaming a course doesn't move its patients.
  */
 function coursesOf(ctx: Ctx, p: DemoPatient): string[] {
   if (p.course_ids) return p.course_ids;
-  const all = [...ctx.db.courses].sort((a, b) => a.code.localeCompare(b.code)).map((c) => c.id);
+  const all = [...ctx.db.courses].sort((a, b) => a.id.localeCompare(b.id)).map((c) => c.id);
   if (all.length < 2) return all;
   const n = ctx.db.patients.indexOf(p);
   return n % 3 === 2 ? all.slice(0, 2) : [all[n % 2]];
