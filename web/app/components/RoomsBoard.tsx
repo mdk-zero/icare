@@ -2,11 +2,13 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBedPulse,
   faDoorOpen,
   faHandHoldingMedical,
+  faPenRuler,
   faStopwatch,
   faUserInjured,
   faUsers,
@@ -28,9 +30,14 @@ const dateLabel = (deadline: string | null | "mixed") =>
  * Wards as rooms only (098): where students perform. Each room lists the
  * patient cases and Return Demonstrations assigned to it, by group, with the
  * date of performance. Rooms are given out when an activity is assigned.
+ *
+ * `layoutHref` is for whoever keeps the rooms (a Dean or Program Chair): it
+ * links to where they arrange and edit them, and words the empty states for
+ * someone who doesn't assign the work. They see all their students' work.
  */
-export default function RoomsBoard() {
-  const { data, loading } = usePageData("rooms-board", async () => {
+export default function RoomsBoard({ layoutHref }: { layoutHref?: string } = {}) {
+  const router = useRouter();
+  const { data, loading } = usePageData(layoutHref ? "rooms-board:dean" : "rooms-board", async () => {
     const [board, plan] = await Promise.all([fetchRoomActivities(), fetchWardFixtures()]);
     return { board, fixtures: plan.fixtures };
   });
@@ -84,6 +91,16 @@ export default function RoomsBoard() {
         badge={{ icon: <FontAwesomeIcon icon={faBedPulse} className="h-3.5 w-3.5" />, label: "Wards" }}
         title="Wards"
         subtitle="The rooms where students perform, and what each group does in them"
+        action={
+          layoutHref
+            ? {
+                icon: <FontAwesomeIcon icon={faPenRuler} className="h-3.5 w-3.5" />,
+                onClick: () => router.push(layoutHref),
+                label: "Arrange the floor plan, add or edit rooms, and see the patient census",
+                text: "Rooms & layout",
+              }
+            : undefined
+        }
       />
 
       {loading && !data ? (
@@ -94,7 +111,17 @@ export default function RoomsBoard() {
         <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{data.board.error}</p>
       ) : rooms.length === 0 ? (
         <p className="rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
-          No rooms yet. Your Dean or Program Chair adds them.
+          {layoutHref ? (
+            <>
+              No rooms yet. Add them under{" "}
+              <Link href={layoutHref} className="font-semibold text-brand-700 hover:underline">
+                Rooms &amp; layout
+              </Link>
+              .
+            </>
+          ) : (
+            "No rooms yet. Your Dean or Program Chair adds them."
+          )}
         </p>
       ) : (
         <div className="space-y-5">
@@ -158,17 +185,23 @@ export default function RoomsBoard() {
             <div className="rounded-2xl border border-dashed border-gray-300 p-8 text-center">
               <FontAwesomeIcon icon={faDoorOpen} className="mb-2 h-6 w-6 text-gray-300" />
               <p className="text-sm font-medium text-gray-700">Nothing is assigned to a room yet</p>
-              <p className="mt-1 text-sm text-gray-500">
-                Pick a room when you assign a{" "}
-                <Link href="/instructor/scenarios" className="font-semibold text-brand-700 hover:underline">
-                  patient case
-                </Link>{" "}
-                or{" "}
-                <Link href="/instructor/return-demos" className="font-semibold text-brand-700 hover:underline">
-                  Return Demonstration
-                </Link>
-                .
-              </p>
+              {layoutHref ? (
+                <p className="mt-1 text-sm text-gray-500">
+                  Instructors pick a room when they assign a patient case or Return Demonstration.
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-gray-500">
+                  Pick a room when you assign a{" "}
+                  <Link href="/instructor/scenarios" className="font-semibold text-brand-700 hover:underline">
+                    patient case
+                  </Link>{" "}
+                  or{" "}
+                  <Link href="/instructor/return-demos" className="font-semibold text-brand-700 hover:underline">
+                    Return Demonstration
+                  </Link>
+                  .
+                </p>
+              )}
             </div>
           ) : (
             // One room gets the full width, its activities laid out as a grid.

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** Folded into Wards, which arranges and manages rooms; kept for bookmarks. */
+/** Folded into Wards → Rooms & layout, which arranges and manages rooms; kept for bookmarks. */
 export default function RoomsPage() {
-  redirect("/dean/wards");
+  redirect("/dean/wards/layout");
 }

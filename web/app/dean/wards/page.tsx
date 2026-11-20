@@ -1,23 +1,16 @@
 import type { Metadata } from "next";
-import PatientsManager from "../../components/PatientsManager";
+import RoomsBoard from "../../components/RoomsBoard";
 
 export const metadata: Metadata = {
   title: "Wards | iCARE++",
 };
 
 /**
- * The faculty Wards page, plus what only an admin can do: arrange the room
- * layout and manage the rooms themselves. Patients and Rooms used to be two
- * sidebar entries; both routes now redirect here.
+ * Wards as the instructors see them (098): each room and the patient cases
+ * and Return Demonstrations assigned to it, by group, for all the Dean's
+ * students. Arranging the floor plan, managing rooms and the patient census
+ * are a click away, under Rooms & layout.
  */
 export default function AdminWardsPage() {
-  return (
-    <PatientsManager
-      badgeLabel="Ward Management"
-      title="Wards"
-      subtitle="Live ward census — room occupancy, check-ins and check-outs at a glance"
-      showFloorPlan
-      manageRooms
-    />
-  );
+  return <RoomsBoard layoutHref="/dean/wards/layout" />;
 }
