@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { ownedIds, viewerDeanId } from '@/app/lib/dean-scope';
+import { GRID_COLS, GRID_ROWS } from '@/app/lib/floor-plan-grid';
 
 /**
  * Bulk-saves the floor plan. Each `positions` entry either places a room
@@ -52,8 +53,10 @@ interface Fixture {
   plan_h: number;
 }
 
+// The grid the plan is drawn on, not the DB's looser ceiling of 100 (035, 062):
+// anything past it is stored but never drawn on the web or in the student app.
 function inBounds(x: number, y: number, w: number, h: number): boolean {
-  return x >= 0 && y >= 0 && w >= 1 && h >= 1 && x + w <= 100 && y + h <= 100;
+  return x >= 0 && y >= 0 && w >= 1 && h >= 1 && x + w <= GRID_COLS && y + h <= GRID_ROWS;
 }
 
 function isDoorSide(raw: unknown): raw is DoorSide {

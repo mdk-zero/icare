@@ -8,6 +8,7 @@ import { userById } from "./scope";
 import { caseGroupsOf, myStudentIds } from "./faculty";
 import { PATIENT_PRESETS, presetVitals } from "../../patient-presets";
 import { cleanCondition } from "../../ai/patient-fill";
+import { GRID_COLS, GRID_ROWS } from "../../floor-plan-grid";
 
 /** The ward census, rooms and the floor plan, vitals and charts. */
 
@@ -77,9 +78,22 @@ route("GET", "/api/admin/rooms/fixtures", (ctx) => {
   return { fixtures: ctx.db.fixtures, enabled: true };
 });
 
+/** Same bound as the real route: inside the grid the plan is drawn on. */
+const onGrid = (x: unknown, y: unknown, w: unknown, h: unknown) =>
+  [x, y, w, h].every((v) => typeof v === "number" && Number.isInteger(v)) &&
+  (x as number) >= 0 && (y as number) >= 0 && (w as number) >= 1 && (h as number) >= 1 &&
+  (x as number) + (w as number) <= GRID_COLS && (y as number) + (h as number) <= GRID_ROWS;
+
 route("PUT", "/api/admin/rooms/layout", (ctx) => {
   if (ctx.role !== "admin") return forbidden();
   const { db, body } = ctx;
+  for (const p of Array.isArray(body?.positions) ? body.positions : []) {
+    const unplace = p.x == null && p.y == null && p.w == null && p.h == null;
+    if (!unplace && !onGrid(p.x, p.y, p.w, p.h)) return json({ error: "Placement is out of bounds" }, 400);
+  }
+  for (const f of Array.isArray(body?.fixtures) ? body.fixtures : []) {
+    if (!onGrid(f.plan_x, f.plan_y, f.plan_w, f.plan_h)) return json({ error: "Fixture is out of bounds" }, 400);
+  }
   let saved = 0;
   for (const p of Array.isArray(body?.positions) ? body.positions : []) {
     const room = db.rooms.find((r) => r.id === p.id);

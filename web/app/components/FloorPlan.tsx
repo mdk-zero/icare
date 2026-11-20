@@ -11,6 +11,7 @@ import {
   faRotateRight,
 } from "@fortawesome/free-solid-svg-icons";
 import { WARD_FIXTURE_KINDS } from "../lib/api";
+import { GRID_COLS, GRID_ROWS } from "../lib/floor-plan-grid";
 import type { DoorSide, Room, WardFixture, WardFixtureKind } from "../lib/api";
 import {
   FIXTURE_LABEL,
@@ -33,8 +34,7 @@ import {
  * onPlanChange.
  */
 
-export const GRID_COLS = 24;
-export const GRID_ROWS = 16;
+export { GRID_COLS, GRID_ROWS };
 
 /** Default footprint for a newly placed room. */
 const NEW_W = 4;
