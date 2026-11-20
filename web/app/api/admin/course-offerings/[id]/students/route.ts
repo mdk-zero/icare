@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import { termStatus } from '@/app/lib/course-progress';
-import { deanOwnershipLive } from '@/app/lib/dean-scope';
+import { deanOwnershipLive, deanFor } from '@/app/lib/dean-scope';
 import {
   badRequest,
   courseFailure,
@@ -50,7 +50,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const offering = await deanOffering(supabase, session.uid, id);
+    // A Program Chair works in their Dean's space (deanFor).
+    const deanId = await deanFor(supabase, session.uid);
+    const offering = await deanOffering(supabase, deanId, id);
     if (!offering) return notFound('Course assignment');
     const rosters = await loadOfferingRosters(supabase, [
       { id, faculty_id: offering.faculty_id, section_ids: offering.section_ids },
@@ -68,7 +70,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         .order('name')
         .limit(15);
       // Their own students once Dean ownership is live (077).
-      if (await deanOwnershipLive(supabase)) search = search.eq('admin_id', session.uid);
+      if (await deanOwnershipLive(supabase)) search = search.eq('admin_id', deanId);
       const found = (must(await search) ?? []) as unknown as { id: string; name: string | null; email: string; sections: { name?: string } | null }[];
       const onRoster = new Set(roster.map((s) => s.id));
       return NextResponse.json({
@@ -122,11 +124,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const offering = await loadDeanOffering(supabase, session.uid, id);
+    // A Program Chair works in their Dean's space (deanFor).
+    const deanId = await deanFor(supabase, session.uid);
+    const offering = await loadDeanOffering(supabase, deanId, id);
     if (!offering) return notFound('Course assignment');
     if (termStatus(offering.term) === 'ended') return badRequest('This semester has ended, so its roster is locked');
     let lookup = supabase.from('users').select('id, name').eq('id', studentId).eq('role', 'student');
-    if (await deanOwnershipLive(supabase)) lookup = lookup.eq('admin_id', session.uid);
+    if (await deanOwnershipLive(supabase)) lookup = lookup.eq('admin_id', deanId);
     const student = must(await lookup.maybeSingle()) as { id: string; name: string | null } | null;
     if (!student) return notFound('Student');
 

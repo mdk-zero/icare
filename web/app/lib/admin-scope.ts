@@ -2,7 +2,7 @@ import type { getSupabaseAdmin } from './supabase/server';
 import { changesScope, getFacultySectionIds, getFacultyStudentIds, ROSTER_TABLES } from './roster';
 import { TtlCache } from './ttl-cache';
 import { onTableWrite } from './table-writes';
-import { deanOwnershipLive } from './dean-scope';
+import { deanFor, deanOwnershipLive, deanTeamIds } from './dean-scope';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -20,8 +20,12 @@ type Supabase = ReturnType<typeof getSupabaseAdmin>;
  *
  * `null` means no limit: before 053 is applied there is no owner column, and
  * every admin keeps seeing everything, as before.
+ *
+ * A Program Chair gets their Dean's scope (see deanFor): the same people.
  */
 export interface AdminScope {
+  /** The Dean and their Program Chairs, who all run this space. */
+  leaderIds: string[];
   facultyIds: string[];
   sectionIds: string[];
   studentIds: string[];
@@ -39,8 +43,16 @@ onTableWrite(ROSTER_TABLES, (table, body) => {
 });
 
 export async function getAdminScope(supabase: Supabase, adminId: string): Promise<AdminScope | null> {
-  const scope = await adminScopes.fetch(adminId, () => loadAdminScope(supabase, adminId));
-  return scope && { facultyIds: [...scope.facultyIds], sectionIds: [...scope.sectionIds], studentIds: [...scope.studentIds] };
+  const deanId = await deanFor(supabase, adminId);
+  const scope = await adminScopes.fetch(deanId, () => loadAdminScope(supabase, deanId));
+  return (
+    scope && {
+      leaderIds: [...scope.leaderIds],
+      facultyIds: [...scope.facultyIds],
+      sectionIds: [...scope.sectionIds],
+      studentIds: [...scope.studentIds],
+    }
+  );
 }
 
 async function loadAdminScope(supabase: Supabase, adminId: string): Promise<AdminScope | null> {
@@ -58,15 +70,17 @@ async function loadAdminScope(supabase: Supabase, adminId: string): Promise<Admi
   const facultyIds = (faculty ?? []).map((f) => f.id as string);
 
   if (await deanOwnershipLive(supabase)) {
-    const [sections, students] = await Promise.all([
+    const [sections, students, leaderIds] = await Promise.all([
       supabase.from('sections').select('id').eq('admin_id', adminId),
       supabase.from('users').select('id').eq('role', 'student').eq('admin_id', adminId).limit(5000),
+      deanTeamIds(supabase, adminId),
     ]);
     if (sections.error || students.error) {
       console.error('Failed to read the dean sections and students', sections.error ?? students.error);
       throw new Error('Unable to read your sections');
     }
     return {
+      leaderIds,
       facultyIds,
       sectionIds: (sections.data ?? []).map((s) => s.id as string),
       studentIds: (students.data ?? []).map((u) => u.id as string),
@@ -113,7 +127,7 @@ async function loadAdminScope(supabase: Supabase, adminId: string): Promise<Admi
     ...new Set([...(inSections.data ?? []), ...(unsectioned.data ?? [])].map((u) => u.id as string)),
   ];
 
-  return { facultyIds, sectionIds, studentIds };
+  return { leaderIds: [adminId], facultyIds, sectionIds, studentIds };
 }
 
 /**
@@ -154,7 +168,7 @@ export function ownsFaculty(scope: AdminScope | null, facultyId: string): boolea
   return scope === null || scope.facultyIds.includes(facultyId);
 }
 
-/** The accounts an admin may see on the Users page: themselves, their faculty and their students. */
+/** The accounts an admin may see on the Users page: themselves, the Dean and Program Chairs they work with, their faculty and their students. */
 export function adminVisibleUserIds(scope: AdminScope, adminId: string): string[] {
-  return [adminId, ...scope.facultyIds, ...scope.studentIds];
+  return [...new Set([adminId, ...scope.leaderIds, ...scope.facultyIds, ...scope.studentIds])];
 }

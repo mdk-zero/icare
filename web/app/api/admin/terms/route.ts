@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { deanFor } from '@/app/lib/dean-scope';
 import { logAudit } from '@/app/lib/audit';
 import { badRequest, courseFailure, must, parseTerm, readJson, requireRole } from '@/app/lib/courses';
 import { sameSemesterTerm, termNameProblem } from '@/app/lib/course-rules';
@@ -21,7 +22,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const own = (must(await supabase.from('academic_terms').select('id, name').eq('admin_id', session.uid)) ?? []) as {
+    // A Program Chair works in their Dean's space (deanFor).
+    const deanId = await deanFor(supabase, session.uid);
+    const own = (must(await supabase.from('academic_terms').select('id, name').eq('admin_id', deanId)) ?? []) as {
       id: string;
       name: string;
     }[];
@@ -31,7 +34,7 @@ export async function POST(request: NextRequest) {
     }
     const { data: term, error } = await supabase
       .from('academic_terms')
-      .insert({ ...parsed.value, admin_id: session.uid })
+      .insert({ ...parsed.value, admin_id: deanId })
       .select('id, name, starts_on, ends_on')
       .single();
     if (error?.code === '23505') {

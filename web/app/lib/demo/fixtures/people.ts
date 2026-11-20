@@ -177,7 +177,7 @@ export function seedPeople(): { users: DemoUser[]; sections: DemoSection[]; team
     staff(INSTRUCTOR_ID, "Maria Santos", "maria.santos@demo.icare.ph", "faculty", "female", DEAN_ID),
     staff(INSTRUCTOR_2_ID, "Jose Reyes", "jose.reyes@demo.icare.ph", "faculty", "male", DEAN_ID),
     staff(INSTRUCTOR_3_ID, "Liza Fernandez", "liza.fernandez@demo.icare.ph", "faculty", "female", DEAN_ID),
-    // The Dean's Program Chairs. Their own instructors and students aren't in the demo.
+    // The Dean's Program Chairs. They work with the Dean's instructors and students (099).
     { ...staff(PROGRAM_CHAIR_ID, "Elena Bautista", "elena.bautista@demo.icare.ph", "admin", "female", DEAN_ID), admin_title: "program_chair" },
     { ...staff(PROGRAM_CHAIR_2_ID, "Carlo Mendoza", "carlo.mendoza@demo.icare.ph", "admin", "male", DEAN_ID), admin_title: "program_chair" },
   ];

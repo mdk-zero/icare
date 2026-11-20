@@ -780,14 +780,16 @@ export default function SuperAdminUsersClient() {
                   />
                 )}
                 <p className="mt-1.5 text-xs text-gray-500">
-                  Each Dean and Program Chair sees only their own instructors, students and records, even beside
-                  another of the same institution. Their instructors and students take this institution too.
+                  Each Dean sees only their own instructors, students and records, even beside another Dean of
+                  the same institution; their Program Chairs work with the same ones. Their instructors and
+                  students take this institution too.
                 </p>
               </div>
             )}
             {form.role === "faculty" && payload.owner_enabled && (
               <div>
-                <label className={LABEL} htmlFor="acct-owner">Assigned Dean or Program Chair</label>
+                <label className={LABEL} htmlFor="acct-owner">Assigned Dean</label>
+                {/* A Program Chair works with their Dean's instructors (099), so an instructor belongs to a Dean. */}
                 <select
                   id="acct-owner"
                   value={form.admin_id}
@@ -795,11 +797,9 @@ export default function SuperAdminUsersClient() {
                   className={INPUT}
                 >
                   <option value="">None</option>
-                  {admins.map((a) => (
+                  {deans.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {[a.name, kindOf(a) === "program_chair" ? "Program Chair" : null, a.institution_name]
-                        .filter(Boolean)
-                        .join(" · ")}
+                      {[a.name, a.institution_name].filter(Boolean).join(" · ")}
                     </option>
                   ))}
                 </select>

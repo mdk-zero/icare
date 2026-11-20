@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { handOverMaterials } from '@/app/lib/library';
 import { requireDean } from '@/app/lib/auth/dean';
 import { updateUser } from '@/app/lib/auth/session';
 import { parseSex } from '@/app/lib/auth/user';
@@ -93,6 +94,10 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         { status: 409 },
       );
     }
+
+    // What they wrote in the Library is the Dean's (099), but the row still
+    // names them as its author, and that row goes with the account.
+    await handOverMaterials(supabase, id, session.uid);
 
     const { error } = await supabase.from('users').delete().eq('id', id);
     if (error) {

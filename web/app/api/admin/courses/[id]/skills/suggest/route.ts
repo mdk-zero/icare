@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { deanFor } from '@/app/lib/dean-scope';
 import { courseFailure, must, notFound, requireRole, suggestCourseSkillsResponse } from '@/app/lib/courses';
 
 interface RouteParams {
@@ -19,12 +20,14 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+    // A Program Chair works in their Dean's space (deanFor).
+    const deanId = await deanFor(supabase, session.uid);
     const course = must(
       await supabase
         .from('courses')
         .select('code, title, description')
         .eq('id', id)
-        .eq('admin_id', session.uid)
+        .eq('admin_id', deanId)
         .maybeSingle(),
     );
     if (!course) return notFound('Course');

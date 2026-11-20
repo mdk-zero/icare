@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { deanFor } from '@/app/lib/dean-scope';
 import { logAudit } from '@/app/lib/audit';
 import {
   badRequest,
@@ -57,7 +58,9 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const course = await ownCourse(supabase, session.uid, id);
+    // A Program Chair works in their Dean's space (deanFor).
+    const deanId = await deanFor(supabase, session.uid);
+    const course = await ownCourse(supabase, deanId, id);
     if (!course) return notFound('Course');
     return NextResponse.json({ course, ...(await courseImpact(supabase, id)) });
   } catch (err) {
@@ -77,7 +80,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const current = await ownCourse(supabase, session.uid, id);
+    // A Program Chair works in their Dean's space (deanFor).
+    const deanId = await deanFor(supabase, session.uid);
+    const current = await ownCourse(supabase, deanId, id);
     if (!current) return notFound('Course');
 
     // A new code must be a curriculum course that still fits where this one
@@ -128,7 +133,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const course = await ownCourse(supabase, session.uid, id);
+    // A Program Chair works in their Dean's space (deanFor).
+    const deanId = await deanFor(supabase, session.uid);
+    const course = await ownCourse(supabase, deanId, id);
     if (!course) return notFound('Course');
     const impact = await courseImpact(supabase, id);
 

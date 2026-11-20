@@ -3,6 +3,7 @@ import { loadGrading, loadOfferingSections, must, type OwnOffering } from './cou
 import { loadOfferingProgress } from './course-requirements';
 import { classAverage } from './course-grading';
 import { isIsoDate, termsOverlap } from './course-progress';
+import { deanFor } from './dean-scope';
 
 type OfferingRow = {
   id: string;
@@ -47,7 +48,9 @@ export async function loadCoursePerformance(
 
   let rows: OfferingRow[];
   if (dean) {
-    const courseIds = ((must(await supabase.from('courses').select('id').eq('admin_id', session.uid)) ?? []) as { id: string }[]).map(
+    // A Program Chair's courses are their Dean's (deanFor).
+    const deanId = await deanFor(supabase, session.uid);
+    const courseIds = ((must(await supabase.from('courses').select('id').eq('admin_id', deanId)) ?? []) as { id: string }[]).map(
       (c) => c.id,
     );
     rows = courseIds.length

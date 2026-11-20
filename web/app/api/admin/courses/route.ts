@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { deanFor } from '@/app/lib/dean-scope';
 import { logAudit } from '@/app/lib/audit';
 import {
   badRequest,
@@ -29,17 +30,19 @@ export async function GET() {
 
   try {
     const supabase = getSupabaseAdmin();
+    // A Program Chair works in their Dean's space (deanFor).
+    const deanId = await deanFor(supabase, session.uid);
     const [terms, courses] = await Promise.all([
       supabase
         .from('academic_terms')
         .select('id, name, starts_on, ends_on')
-        .eq('admin_id', session.uid)
+        .eq('admin_id', deanId)
         .order('starts_on', { ascending: false })
         .then(must),
       supabase
         .from('courses')
         .select('id, code, title, description')
-        .eq('admin_id', session.uid)
+        .eq('admin_id', deanId)
         .order('code')
         .then(must),
     ]);
@@ -129,11 +132,13 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = getSupabaseAdmin();
+    // A Program Chair works in their Dean's space (deanFor).
+    const deanId = await deanFor(supabase, session.uid);
     const problem = courseCodeProblem(await loadCourseCatalog(supabase, session.uid), parsed.value.code);
     if (problem) return badRequest(problem);
     const { data: course, error } = await supabase
       .from('courses')
-      .insert({ ...parsed.value, admin_id: session.uid })
+      .insert({ ...parsed.value, admin_id: deanId })
       .select('id, code, title, description')
       .single();
     if (error?.code === '23505') {

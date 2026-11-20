@@ -1,6 +1,7 @@
 import type { SessionPayload } from './auth/session';
 import type { getSupabaseAdmin } from './supabase/server';
 import { getAdminScope } from './admin-scope';
+import { deanFor } from './dean-scope';
 import { bucketStart, deriveBucket, type AnalyticsBucket, type SummaryArgs } from './analytics';
 import {
   loadActivityItems,
@@ -66,7 +67,7 @@ export async function loadCourseScope(
   const offering =
     session.role === 'faculty'
       ? await loadOwnOffering(supabase, session.uid, id)
-      : await loadDeanTaughtOffering(supabase, session.uid, id);
+      : await loadDeanTaughtOffering(supabase, await deanFor(supabase, session.uid), id);
   if (!offering) return 'not_found';
 
   const [rosters, activities, deanScope] = await Promise.all([

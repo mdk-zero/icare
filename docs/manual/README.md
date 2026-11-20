@@ -21,7 +21,7 @@ In this guide:
 |---|---|---|---|
 | Admin | Runs accounts and the system; does no teaching | Admin portal on the web (labelled "System Administration") | [admin.md](admin.md) |
 | Dean | Heads a nursing program: instructors, students, courses, wards, analytics | Dean portal on the web | [dean.md](dean.md) |
-| Program Chair | Runs their own part of a program with the Dean's tools, under a Dean | Dean portal, titled "Program Chair Portal" | [program-chair.md](program-chair.md), then [dean.md](dean.md) |
+| Program Chair | Works beside their Dean, with the Dean's tools, people and records | Dean portal, titled "Program Chair Portal" | [program-chair.md](program-chair.md), then [dean.md](dean.md) |
 | Instructor | Clinical instructor: groups, Patient Cases, Return Demonstrations, Quizzes, Case Presentations, grading | Instructor portal on the web; the iCARE++ app for course checklists | [instructor.md](instructor.md) |
 | Student | Nursing student | iCARE++ app on an Android phone | [student.md](student.md) |
 

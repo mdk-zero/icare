@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { deanFor } from '@/app/lib/dean-scope';
 import { logAudit } from '@/app/lib/audit';
 import {
   badRequest,
@@ -46,7 +47,9 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const offering = await loadDeanOffering(supabase, session.uid, id);
+    // A Program Chair works in their Dean's space (deanFor).
+    const deanId = await deanFor(supabase, session.uid);
+    const offering = await loadDeanOffering(supabase, deanId, id);
     if (!offering) return notFound('Course assignment');
     return NextResponse.json({ offering, ...(await offeringImpact(supabase, id)) });
   } catch (err) {
@@ -71,10 +74,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const offering = await loadDeanOffering(supabase, session.uid, id);
+    // A Program Chair works in their Dean's space (deanFor).
+    const deanId = await deanFor(supabase, session.uid);
+    const offering = await loadDeanOffering(supabase, deanId, id);
     if (!offering) return notFound('Course assignment');
 
-    const target = await checkAssignmentTarget(supabase, session.uid, body.faculty_id, stringList(body.section_ids ?? []));
+    const target = await checkAssignmentTarget(supabase, deanId, body.faculty_id, stringList(body.section_ids ?? []));
     if (!target.ok) return badRequest(target.error);
     const { faculty, sections } = target.value;
 
@@ -149,7 +154,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const offering = await loadDeanOffering(supabase, session.uid, id);
+    // A Program Chair works in their Dean's space (deanFor).
+    const deanId = await deanFor(supabase, session.uid);
+    const offering = await loadDeanOffering(supabase, deanId, id);
     if (!offering) return notFound('Course assignment');
     const impact = await offeringImpact(supabase, id);
 

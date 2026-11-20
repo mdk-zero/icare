@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from './supabase/server';
-import { isMissingColumn } from './auth/live-user';
+import { deanFor } from './dean-scope';
 import type { SessionPayload } from './auth/jwt';
 import { isMissingCourseSchema, must, requireRole } from './courses';
 import { catalogOrDefault } from './course-rules';
@@ -46,24 +46,14 @@ export function curriculumFailure(err: unknown, message: string): NextResponse {
   return NextResponse.json({ error: message }, { status: 500 });
 }
 
-/** Whose curriculum the caller works on: their own, or for a Program Chair with a Dean, the Dean's. */
+/** Whose curriculum the caller works on: their Dean's (their own for a Dean). */
 export async function curriculumOwnerId(supabase: Supabase, session: SessionPayload): Promise<string> {
   return curriculumOwnerOf(supabase, session.uid);
 }
 
-/** Whose curriculum a Dean or Program Chair works on, by their user id. */
-async function curriculumOwnerOf(supabase: Supabase, userId: string): Promise<string> {
-  const { data, error } = await supabase
-    .from('users')
-    .select('admin_title, admin_id')
-    .eq('id', userId)
-    .maybeSingle();
-  if (error) {
-    // Before 080 there are no Program Chairs.
-    if (isMissingColumn(error)) return userId;
-    throw error;
-  }
-  return data?.admin_title === 'program_chair' && data.admin_id ? (data.admin_id as string) : userId;
+/** Whose curriculum a Dean or Program Chair works on, by their user id: their Dean's (see deanFor). */
+function curriculumOwnerOf(supabase: Supabase, userId: string): Promise<string> {
+  return deanFor(supabase, userId);
 }
 
 /** For route handlers: the caller and whose curriculum they reach, or the response to return instead. */

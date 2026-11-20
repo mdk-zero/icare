@@ -1,6 +1,6 @@
 # Program Chair guide
 
-This guide is for Program Chairs. A Program Chair runs their own part of a nursing program under a Dean, with the Dean's own tools. You use the Dean portal, so almost everything works exactly as the [Dean guide](dean.md) describes. This guide lists only what is different, then links to the Dean guide for every task you share.
+This guide is for Program Chairs. A Program Chair works beside a Dean, with the Dean's tools, instructors, students and records. You use the Dean portal, so almost everything works exactly as the [Dean guide](dean.md) describes. This guide lists only what is different, then links to the Dean guide for every task you share.
 
 In this guide:
 
@@ -74,16 +74,14 @@ You can still change your own photo, name, email and password in your settings. 
 
 ## Whose records you see
 
-Each Dean and each Program Chair sees only their own instructors, students, sections, rooms, patients, courses, semesters, Patient Cases, Quizzes and Library materials. A Program Chair who belongs to a Dean shares that Dean's curriculum.
+You see exactly what your Dean sees: the same instructors, students, sections, rooms, patients, courses, semesters, Patient Cases, Quizzes, Library materials and curriculum. What you add belongs to your Dean, so they see it too.
 
-- Your Dean sees only your counts: how many instructors and students you have, on their **Program Chairs** page.
-- Grade change requests from your instructors come to you. See [Approve or decline a grade change](dean.md#approve-or-decline-a-grade-change).
-- **Analytics** and **Reports** cover only your own people and rooms.
-- If you try to use a section or group that isn't yours, you see "That section belongs to another Dean or Program Chair" or "Some groups belong to another Dean or Program Chair".
-- Only an Admin can move your instructors or students to someone else.
+- Grade change requests and group-move notices from your Dean's instructors come to you and your Dean. Either of you can decide a request. See [Approve or decline a grade change](dean.md#approve-or-decline-a-grade-change).
+- **Analytics**, **Reports** and the **Activity Log** cover your Dean's whole program, including what you and your Dean did.
+- Another Dean's records stay out of reach: you see "That section belongs to another Dean or Program Chair" or "Some groups belong to another Dean or Program Chair".
 
 > [!NOTE]
-> You and your Dean don't see each other's instructors, students, wards or courses. If you need to share people, ask an Admin to move them.
+> Only the **Program Chairs** page is your Dean's alone.
 
 ## Tasks you share with the Dean
 

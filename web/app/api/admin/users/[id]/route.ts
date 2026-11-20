@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession, updateUser } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { deanFor } from '@/app/lib/dean-scope';
 import { adminVisibleUserIds, getAdminScope } from '@/app/lib/admin-scope';
 import { logAudit } from '@/app/lib/audit';
 import { applyRoleChangeReporting, parseSex } from '@/app/lib/auth/user';
@@ -64,6 +65,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+    // A Program Chair works in their Dean's space (deanFor).
+    const deanId = await deanFor(supabase, session.uid);
     // Only the admin's own accounts (migration 053).
     const scope = await getAdminScope(supabase, session.uid);
     if (scope && !adminVisibleUserIds(scope, session.uid).includes(id)) {
@@ -80,7 +83,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       previousRole = target.role as string;
     }
     // Someone this admin makes faculty or a student stays theirs (053, 077).
-    if (scope && (updates.role === 'faculty' || updates.role === 'student')) updates.admin_id = session.uid;
+    if (scope && (updates.role === 'faculty' || updates.role === 'student')) updates.admin_id = deanId;
     // A role change signs the account out everywhere, in the same write.
     const { data: user, error } = await updateUser(id, updates, {
       revoke: previousRole !== null && updates.role !== undefined && updates.role !== previousRole,
@@ -139,8 +142,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // An instructor's Library materials stay for their students, under the Dean.
-    const materials = user.role === 'faculty' ? await handOverMaterials(supabase, id, session.uid) : [];
+    // An instructor's Library materials stay for their students, under the Dean
+    // (the Dean itself, so a Program Chair's later removal can't take them along).
+    const materials = user.role === 'faculty' ? await handOverMaterials(supabase, id, await deanFor(supabase, session.uid)) : [];
 
     const { error } = await supabase.from('users').delete().eq('id', id);
     if (error) {

@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { requireSuperAdmin } from '@/app/lib/auth/super-admin';
 import { applyRoleChangeReporting, parseSex } from '@/app/lib/auth/user';
 import { logAudit } from '@/app/lib/audit';
+import { handOverMaterials } from '@/app/lib/library';
 import {
   countSuperAdmins,
   isAccountRole,
@@ -139,10 +140,17 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const { data: target } = await supabase.from('users').select('id, email, role').eq('id', id).maybeSingle();
+    // `*` because admin_id only exists once migration 053 is applied.
+    const { data: target } = await supabase.from('users').select('*').eq('id', id).maybeSingle();
     if (!target) return NextResponse.json({ error: 'User not found' }, { status: 404 });
     if (target.role === 'super_admin' && (await countSuperAdmins(supabase)) <= 1) {
       return NextResponse.json({ error: 'The last admin cannot be deleted' }, { status: 400 });
+    }
+    // An instructor's or Program Chair's Library materials go with the account
+    // (created_by cascades), so they pass to their Dean first, as the Dean's
+    // own delete does.
+    if ((target.role === 'faculty' || target.role === 'admin') && typeof target.admin_id === 'string') {
+      await handOverMaterials(supabase, id, target.admin_id);
     }
 
     const { error } = await supabase.from('users').delete().eq('id', id);

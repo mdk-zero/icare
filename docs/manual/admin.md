@@ -398,9 +398,9 @@ again, so tell them.
 ### Institutions
 
 An institution is a school or campus. Each Dean and Program Chair belongs to one, and their
-instructors and students take the same institution. Each Dean and Program Chair sees only their own
-instructors, students and records, even when another Dean or Program Chair belongs to the same
-institution.
+instructors and students take the same institution. Each Dean sees only their own
+instructors, students and records, even when another Dean belongs to the same institution. A
+Program Chair works with their Dean's.
 
 There is no page for institutions. You create one while you create or edit a Dean or a Program
 Chair.
@@ -503,7 +503,7 @@ To delete an account:
 
 ### Set up a Program Chair
 
-A Program Chair runs their own part of a program with the Dean's tools, under a Dean. A Dean can
+A Program Chair works beside a Dean, with the Dean's tools, instructors, students and records. A Dean can
 add their own Program Chairs (see [Add a Program Chair](dean.md#add-a-program-chair)). As an
 Admin, you can create one directly or turn an existing account into one.
 

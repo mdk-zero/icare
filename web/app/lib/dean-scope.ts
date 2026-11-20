@@ -1,5 +1,7 @@
 import type { getSupabaseAdmin } from './supabase/server';
 import { liveUserRow, type LiveUser } from './auth/live-user';
+import { TtlCache } from './ttl-cache';
+import { onTableWrite } from './table-writes';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -10,6 +12,10 @@ type Supabase = ReturnType<typeof getSupabaseAdmin>;
  * and so do instructors and students. Nobody sees another Dean's rows, even a
  * Dean at the same institution: a Dean sees their own, an instructor or a
  * student sees their Dean's. Super admins see everything.
+ *
+ * A Program Chair works in their Dean's space, the same as the Dean: the same
+ * instructors, students and records, and what they add is the Dean's (099).
+ * Use deanFor wherever an admin session's own id would name the owner.
  *
  * Before 077 there are no owner columns, and every helper here reads as "no
  * limit", so the app behaves as it did.
@@ -45,6 +51,53 @@ export async function deanOwnershipLive(supabase: Supabase): Promise<boolean> {
   return ownershipLive;
 }
 
+/** Per instance for 30 s; any write to users drops it, so a re-linked Program Chair moves at once here. */
+const deanOfAdmin = new TtlCache<string>(30_000, 2000);
+const deanTeams = new TtlCache<string[]>(30_000, 500);
+onTableWrite(['users'], () => {
+  deanOfAdmin.clear();
+  deanTeams.clear();
+});
+
+/**
+ * The Dean an admin account works for: a Dean's own id, or a Program Chair's
+ * Dean (users.admin_id, 087). A Program Chair no Dean is linked to yet keeps
+ * their own id, so they see only what they made, never anyone else's.
+ */
+export async function deanFor(supabase: Supabase, adminId: string): Promise<string> {
+  return deanOfAdmin.fetch(adminId, async () => {
+    const { data, error } = await supabase.from('users').select('admin_title, admin_id').eq('id', adminId).maybeSingle();
+    if (error) {
+      // Before 080 there are no Program Chairs, before 053 no owner column.
+      if (isMissingColumn(error)) return adminId;
+      console.error('Failed to read the Dean of an admin account', error);
+      throw new Error('Unable to read your Dean');
+    }
+    return data?.admin_title === 'program_chair' && data.admin_id ? (data.admin_id as string) : adminId;
+  });
+}
+
+/**
+ * Who runs a Dean's space: the Dean and their Program Chairs. Notices meant
+ * for "the Dean" (grade-edit requests, group moves) go to all of them, and
+ * any of them can act on one.
+ */
+export async function deanTeamIds(supabase: Supabase, deanId: string): Promise<string[]> {
+  return deanTeams.fetch(deanId, async () => {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('role', 'admin')
+      .eq('admin_title', 'program_chair')
+      .eq('admin_id', deanId);
+    if (error && !isMissingColumn(error)) {
+      console.error('Failed to read the Program Chairs of a Dean', error);
+      throw new Error('Unable to read your Program Chairs');
+    }
+    return [deanId, ...(data ?? []).map((u) => u.id as string)];
+  });
+}
+
 /**
  * The Dean whose data this session works in: a Dean's own id, or the Dean an
  * instructor or student belongs to (users.admin_id). NO_DEAN for someone who
@@ -57,7 +110,7 @@ export async function viewerDeanId(
 ): Promise<string | null> {
   if (session.role === 'super_admin') return null;
   if (!(await deanOwnershipLive(supabase))) return null;
-  if (session.role === 'admin') return session.uid;
+  if (session.role === 'admin') return deanFor(supabase, session.uid);
   // The row the session check has just read, so this costs no second lookup.
   let live: LiveUser | null;
   try {

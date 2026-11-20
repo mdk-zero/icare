@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { deanFor } from '@/app/lib/dean-scope';
 import { logAudit } from '@/app/lib/audit';
 import {
   badRequest,
@@ -51,7 +52,9 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const term = await ownTerm(supabase, session.uid, id);
+    // A Program Chair works in their Dean's space (deanFor).
+    const deanId = await deanFor(supabase, session.uid);
+    const term = await ownTerm(supabase, deanId, id);
     if (!term) return notFound('Semester');
     return NextResponse.json({ term, ...(await termImpact(supabase, id)) });
   } catch (err) {
@@ -76,13 +79,15 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const current = await ownTerm(supabase, session.uid, id);
+    // A Program Chair works in their Dean's space (deanFor).
+    const deanId = await deanFor(supabase, session.uid);
+    const current = await ownTerm(supabase, deanId, id);
     if (!current) return notFound('Semester');
 
     if (parsed.value.name !== current.name) {
       const nameProblem = termNameProblem(parsed.value.name);
       if (nameProblem) return badRequest(nameProblem);
-      const own = (must(await supabase.from('academic_terms').select('id, name').eq('admin_id', session.uid)) ?? []) as {
+      const own = (must(await supabase.from('academic_terms').select('id, name').eq('admin_id', deanId)) ?? []) as {
         id: string;
         name: string;
       }[];
@@ -133,7 +138,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const term = await ownTerm(supabase, session.uid, id);
+    // A Program Chair works in their Dean's space (deanFor).
+    const deanId = await deanFor(supabase, session.uid);
+    const term = await ownTerm(supabase, deanId, id);
     if (!term) return notFound('Semester');
     const impact = await termImpact(supabase, id);
 

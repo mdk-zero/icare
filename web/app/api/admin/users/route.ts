@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { deanFor } from '@/app/lib/dean-scope';
 import { sendStudentInvitationEmail } from '@/app/lib/auth/email';
 import { appDownloadUrl } from '@/app/lib/mobile-app';
 import { generateRandomPassword, hashPassword } from '@/app/lib/auth/password';
@@ -111,6 +112,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = getSupabaseAdmin();
+    // A Program Chair works in their Dean's space (deanFor).
+    const deanId = await deanFor(supabase, session.uid);
 
     const { data: existing } = await supabase
       .from('users')
@@ -155,7 +158,7 @@ export async function POST(request: NextRequest) {
         section_id: sectionId,
         // A faculty or student account an admin creates is theirs (053, 077).
         // A student in a section follows the section's Dean either way.
-        ...(scope && (role === 'faculty' || role === 'student') ? { admin_id: session.uid } : {}),
+        ...(scope && (role === 'faculty' || role === 'student') ? { admin_id: deanId } : {}),
       })
       .select('id, email, name, role, picture_url, sex, created_at, last_login_at, section_id, sections!section_id(name)')
       .single();

@@ -108,8 +108,8 @@ When you finish, select **Log out**. Everything you changed is reset.
 > [!NOTE]
 > Some actions don't work in the demo, such as changing your password or sending a message to the
 > iCARE++ team. They show "Not available in the demo". There is no Admin or Student demo. The
-> Program Chair demo uses the Dean's sample records; a real Program Chair sees only their own
-> ([Program Chair guide](program-chair.md)).
+> Program Chair demo uses the Dean's sample records, as a real Program Chair works with their
+> Dean's ([Program Chair guide](program-chair.md)).
 
 ## Sign in to the web portal for the first time
 

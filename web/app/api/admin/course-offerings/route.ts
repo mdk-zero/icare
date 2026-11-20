@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
+import { deanFor } from '@/app/lib/dean-scope';
 import { logAudit } from '@/app/lib/audit';
 import {
   badRequest,
@@ -37,14 +38,16 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = getSupabaseAdmin();
+    // A Program Chair works in their Dean's space (deanFor).
+    const deanId = await deanFor(supabase, session.uid);
     const [course, term] = await Promise.all([
-      supabase.from('courses').select('id, code, title').eq('id', courseId).eq('admin_id', session.uid).maybeSingle().then(must),
-      supabase.from('academic_terms').select('id, name').eq('id', termId).eq('admin_id', session.uid).maybeSingle().then(must),
+      supabase.from('courses').select('id, code, title').eq('id', courseId).eq('admin_id', deanId).maybeSingle().then(must),
+      supabase.from('academic_terms').select('id, name').eq('id', termId).eq('admin_id', deanId).maybeSingle().then(must),
     ]);
     if (!course) return badRequest('That course is not one of yours');
     if (!term) return badRequest('That semester is not one of yours');
 
-    const target = await checkAssignmentTarget(supabase, session.uid, body.faculty_id, sectionIds);
+    const target = await checkAssignmentTarget(supabase, deanId, body.faculty_id, sectionIds);
     if (!target.ok) return badRequest(target.error);
     const { faculty, sections } = target.value;
 

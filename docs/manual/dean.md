@@ -39,7 +39,7 @@ You work in the Dean portal at `https://www.i-care.dev`. Its sidebar has these l
 
 Your settings and your notifications aren't in the list: select your name at the foot of the sidebar for [your settings](#settings), and the bell beside the logo for [notifications](common-tasks.md#read-new-notifications).
 
-You see only your own instructors, students, sections, rooms, patients and courses. Each Program Chair has their own, which you see only as counts on the **Program Chairs** page.
+You see only your own instructors, students, sections, rooms, patients and courses. Your Program Chairs see and manage the same ones, and what they add is yours too.
 
 ## Set up a new term
 
@@ -55,7 +55,7 @@ Do these steps in this order at the start of a term. Each step needs the one bef
 | 6 | [Make groups and give each an instructor](#make-groups-and-give-each-an-instructor), or [assign groups to an instructor](#assign-groups-to-an-instructor) | **Students** > a section > **Edit groups**, or **Instructors** > **Assign Groups** | An instructor sees only the students in the groups they supervise. |
 | 7 | [Add rooms](#add-rooms-and-arrange-the-floor-plan) and [admit patients](#admit-a-patient) | **Wards** | Patient Cases take place on the ward. Admitting a patient needs a course (step 3). |
 | 8 | [Email the app link](#email-the-app-link-to-students) | **Students** > **Email to students** | For students who haven't signed in yet. |
-| 9 | Deans only: [add your Program Chairs](#add-a-program-chair) | **Program Chairs** > **Add Program Chair** | Each Program Chair then does steps 2 to 8 for their own people. They share your curriculum from step 1. |
+| 9 | Deans only: [add your Program Chairs](#add-a-program-chair) | **Program Chairs** > **Add Program Chair** | They work with you on steps 1 to 8, with the same people and records. |
 | 10 | [Work through Needs Your Attention](#work-through-needs-your-attention) | **Overview** | It lists what is still missing. |
 
 The risk check that marks students Low performing runs every night on its own. [Running it by hand](#run-the-risk-check) only matters once students have done some work.
@@ -478,11 +478,11 @@ To delete an instructor:
 
 ## Program Chairs
 
-Only Deans have this page. A Program Chair runs their own part of the program with their own instructors, students and wards. You see each one's counts here, but not their people or records.
+Only Deans have this page. A Program Chair works beside you with your instructors, students, wards and records, and gets your grade-change requests and group-move notices too.
 
-![The Program Chairs page with each Program Chair's instructors and students.](img/dean/08-program-chairs.png)
+![The Program Chairs page listing your Program Chairs.](img/dean/08-program-chairs.png)
 
-*Figure 8. The Program Chairs page, with the number of instructors and students each Program Chair has.*
+*Figure 8. The Program Chairs page, listing your Program Chairs.*
 
 The figures are **Program Chairs**, **Their Instructors** and **Their Students**. The table shows each Program Chair's **Instructors**, **Students**, **Added** and **Last Login**.
 
@@ -506,7 +506,7 @@ To add a Program Chair:
 
 **Who is notified:** The Program Chair gets the email "Welcome to iCARE++ – Your Account Has Been Created".
 
-**What happens next:** The Program Chair signs in and starts with an empty portal. They set up their own term; see [the Program Chair guide](program-chair.md).
+**What happens next:** The Program Chair signs in and sees your portal as you do; see [the Program Chair guide](program-chair.md).
 
 ### Edit or delete a Program Chair
 
@@ -524,7 +524,7 @@ To delete a Program Chair:
 **Result:** The page shows "*name*'s account was deleted".
 
 > [!NOTE]
-> A Program Chair who still has instructors, students or other records can't be deleted. The dialog then shows "*name* still has … Ask an Admin to move them before deleting this account." Ask an Admin through [Help & Support](common-tasks.md#send-a-message-to-the-icare-team) to move them first.
+> What a Program Chair added is yours, so it stays when you delete them. Only a Program Chair an Admin never linked to you can still hold records of their own; the dialog then shows "*name* still has … Ask an Admin to move them before deleting this account." Ask an Admin through [Help & Support](common-tasks.md#send-a-message-to-the-icare-team) to move them first.
 
 **Who is notified:** Nobody is notified.
 

@@ -123,11 +123,11 @@ export async function readAuditTrail(
 }
 
 /**
- * The actors on a dean's Activity Log: the dean and the instructors they own
- * (users.admin_id, migration 053). With no scope (053 not applied) every
+ * The actors on a dean's Activity Log: the dean, their Program Chairs and the
+ * instructors they own (users.admin_id, migration 053). With no scope (053 not applied) every
  * instructor counts, the way every dean sees every instructor elsewhere.
  */
 export function deanActorFilter(deanId: string, scope: AdminScope | null): string {
   if (!scope) return `actor_id.eq.${deanId},actor_role.eq.faculty`;
-  return `actor_id.in.(${[deanId, ...scope.facultyIds].join(',')})`;
+  return `actor_id.in.(${[...new Set([deanId, ...scope.leaderIds, ...scope.facultyIds])].join(',')})`;
 }
