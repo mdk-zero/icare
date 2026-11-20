@@ -425,8 +425,10 @@ route("PUT", "/api/faculty/students", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   const { db, body } = ctx;
   const student = userById(db, body?.id ?? body?.student_id);
-  if (!student || student.role !== "student") return notFound("Student not found");
-  if (!canSeeStudent(db, ctx.role, ctx.viewer.id, student.id)) return forbidden();
+  // As the server: an out-of-scope student reads as missing.
+  if (!student || student.role !== "student" || !canSeeStudent(db, ctx.role, ctx.viewer.id, student.id)) {
+    return notFound("Student not found");
+  }
   const name = typeof body?.name === "string" ? body.name.trim() : "";
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
   if (!name) return json({ error: "Student name is required" }, 400);
@@ -434,6 +436,13 @@ route("PUT", "/api/faculty/students", (ctx) => {
   if (!validEmail(email)) return json({ error: "Invalid email format" }, 400);
   if (db.users.some((u) => u.email === email && u.id !== student.id)) {
     return json({ error: "A user with this email already exists" }, 409);
+  }
+  if (
+    typeof body?.section_id === "string" &&
+    body.section_id !== student.section_id &&
+    !manageableSections(db, ctx.role, ctx.viewer.id).some((x) => x.id === body.section_id)
+  ) {
+    return json({ error: "You can only assign students to your own sections" }, 403);
   }
   student.name = name;
   student.email = email;
@@ -685,7 +694,15 @@ route("PUT", "/api/faculty/teams/members", (ctx) => {
     if (!teamId || !target) return json({ error: "Choose the group to move them to" }, 400);
     if (reason.length < 10) return json({ error: "Give a reason of at least 10 characters" }, 400);
     const from = db.teams.find((t) => t.id === student.team_id);
-    if (!from || from.faculty_id !== viewer.id) return json({ error: "That student is not in one of your groups" }, 403);
+    // As the server: a student in no group is simply placed, reason or not.
+    if (!from) {
+      if (target.faculty_id !== viewer.id) return json({ error: "You can only put students into groups you supervise" }, 403);
+      if (target.section_id !== student.section_id) return json({ error: "That student isn't in this group's section" }, 403);
+      student.team_id = target.id;
+      audit(db, viewer, "team.member_add", "team_members", { message: `Added ${student.name} to ${target.name}` }, student.id);
+      return { ok: true };
+    }
+    if (from.faculty_id !== viewer.id) return json({ error: "That student is not in one of your groups" }, 403);
     if (from.id === target.id) return json({ error: "They are already in that group" }, 409);
     if (target.faculty_id !== viewer.id) return json({ error: "You can only move students into groups you supervise" }, 403);
     if (target.section_id !== from.section_id) return json({ error: "The group is in a different section" }, 400);
@@ -711,6 +728,17 @@ route("PUT", "/api/faculty/teams/members", (ctx) => {
   if (ctx.role === "faculty") {
     const from = db.teams.find((t) => t.id === student.team_id);
     if (from && from.faculty_id !== viewer.id) return json({ error: "That student is in another instructor's group" }, 403);
+    // As the server: only a student in no group is placed without a reason, and no instructor takes one out.
+    if (from && from.id !== target?.id) {
+      return json(
+        {
+          error: target
+            ? "Say why this student is moving (at least 10 characters)"
+            : "Move them to another of your groups instead; only a Dean or Program Chair can take a student out of a group",
+        },
+        400,
+      );
+    }
     if (target && target.faculty_id !== viewer.id) return json({ error: "You can only move students into groups you supervise" }, 403);
     if (!manageableSections(db, ctx.role, viewer.id).some((x) => x.id === student.section_id)) {
       return json({ error: "Student not in your sections" }, 403);

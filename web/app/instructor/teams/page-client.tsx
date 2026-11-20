@@ -22,6 +22,7 @@ import {
   fetchFacultyStudents,
   fetchFacultyTeams,
   fetchMyCourses,
+  moveOwnGroupMember,
   moveStudentToTeam,
   type FacultyStudent,
   type TeamsOverview,
@@ -40,7 +41,8 @@ import SectionGroups from "../../dean/student-management/SectionGroups";
 import RegisterStudentModal from "../../components/enroll/RegisterStudentModal";
 import BulkEnrollModal from "../../components/enroll/BulkEnrollModal";
 import { AppLinkCard } from "../../components/AppLink";
-import { isStudentDrag, leftTarget, readStudentDrag, startStudentDrag } from "../../dean/student-management/drag";
+import { startStudentDrag } from "../../dean/student-management/drag";
+import MoveReasonModal from "./MoveReasonModal";
 import {
   RosterModeToggle,
   bucketByGroup,
@@ -155,7 +157,6 @@ export default function TeamsClient() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [registering, setRegistering] = useState(false);
   const [bulkEnrolling, setBulkEnrolling] = useState(false);
-  const [tableDropActive, setTableDropActive] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [anchorId, setAnchorId] = useState<string | null>(null);
   const [mlRun, setMlRun] = useState<MlRun | null>(null);
@@ -193,7 +194,8 @@ export default function TeamsClient() {
     };
   }, [overview, pendingMoves]);
 
-  const moveStudents = async (ids: string[], to: string | null, labels: { pending: string; done: string }) => {
+  /** Saves moves already shown on screen; a reason is the instructor's, for a student who was in a group. */
+  const saveMoves = async (ids: string[], to: string, labels: { pending: string; done: string }, reason?: string) => {
     setPendingMoves((prev) => {
       const next = new Map(prev);
       for (const id of ids) next.set(id, to);
@@ -203,7 +205,7 @@ export default function TeamsClient() {
     const progress = loadingToast(labels.pending);
     let failure: string | null = null;
     for (const id of ids) {
-      const result = await moveStudentToTeam(id, to);
+      const result = reason ? await moveOwnGroupMember(id, to, reason) : await moveStudentToTeam(id, to);
       if ("error" in result) failure = result.error;
     }
     await refreshTeams();
@@ -214,6 +216,27 @@ export default function TeamsClient() {
     });
     if (failure) progress.error(failure);
     else progress.success(labels.done);
+  };
+
+  // A student already in a group moves only with a reason, which the Dean is
+  // sent; one in no group is placed at once. Taking a student out of a group
+  // is the Dean's (the server refuses it).
+  const [askReason, setAskReason] = useState<{
+    ids: string[];
+    to: string;
+    labels: { pending: string; done: string };
+  } | null>(null);
+  const moveStudents = async (ids: string[], to: string | null, labels: { pending: string; done: string }) => {
+    if (to === null) {
+      toast("Only a Dean or Program Chair can take a student out of a group. Move them to another of your groups instead.", "error");
+      return;
+    }
+    const groupOf = new Map<string, string>();
+    for (const t of overview?.teams ?? []) for (const m of t.members) groupOf.set(m.id, t.id);
+    const inAnother = ids.filter((id) => groupOf.has(id) && groupOf.get(id) !== to);
+    const ungrouped = ids.filter((id) => !groupOf.has(id));
+    if (ungrouped.length > 0) await saveMoves(ungrouped, to, labels);
+    if (inAnother.length > 0) setAskReason({ ids: inAnother, to, labels });
   };
 
   const studentsOf = (ids: string[]): Member[] =>
@@ -539,6 +562,7 @@ export default function TeamsClient() {
                 pendingIds={pendingMoves}
                 onMove={moveStudents}
                 canAssignInstructor={false}
+                canRemoveMembers={false}
               />
               <h3 className="mb-2 mt-2 font-display text-base font-semibold text-gray-900">
                 {hasGroups ? "Not in a group" : "Students"}{" "}
@@ -560,37 +584,7 @@ export default function TeamsClient() {
             </div>
           )}
 
-          <div
-            onDragOver={(e) => {
-              if (!placing || !isStudentDrag(e)) return;
-              e.preventDefault();
-              e.dataTransfer.dropEffect = "move";
-              setTableDropActive(true);
-            }}
-            onDragLeave={(e) => {
-              if (leftTarget(e)) setTableDropActive(false);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              setTableDropActive(false);
-              const drag = readStudentDrag(e);
-              if (!drag?.fromGroupId) return;
-              void moveStudents(drag.studentIds, null, {
-                pending: `Taking ${drag.label} out of their group…`,
-                done: `${drag.label} ${drag.studentIds.length === 1 ? "is" : "are"} no longer in a group`,
-              });
-            }}
-            className={`relative overflow-hidden rounded-xl border bg-surface shadow-tile transition-all duration-150 ${
-              tableDropActive ? "border-brand-500 ring-2 ring-brand-500/40" : "border-hairline"
-            }`}
-          >
-            {tableDropActive && (
-              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-brand-50/85">
-                <span className="rounded-full bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm">
-                  Drop to take them out of their group
-                </span>
-              </div>
-            )}
+          <div className="relative overflow-hidden rounded-xl border border-hairline bg-surface shadow-tile transition-all duration-150">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="border-b border-gray-100 bg-subtle">
@@ -764,6 +758,18 @@ export default function TeamsClient() {
           onFinished={(created) => {
             if (created > 0) void refreshRoster();
             void refreshTeams();
+          }}
+        />
+      )}
+      {askReason && (
+        <MoveReasonModal
+          names={askReason.ids.map((id) => details.get(id)?.name ?? "Student")}
+          to={(overview?.teams ?? []).find((t) => t.id === askReason.to)?.name ?? "the group"}
+          onClose={() => setAskReason(null)}
+          onConfirm={(reason) => {
+            const { ids, to, labels } = askReason;
+            setAskReason(null);
+            void saveMoves(ids, to, labels, reason);
           }}
         />
       )}

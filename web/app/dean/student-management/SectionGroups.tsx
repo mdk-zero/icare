@@ -50,9 +50,12 @@ export default function SectionGroups({
   pendingIds,
   onMove,
   canAssignInstructor = true,
+  canRemoveMembers = true,
 }: {
   /** Only a dean picks who supervises a group; an instructor's groups are their own. */
   canAssignInstructor?: boolean;
+  /** Only a dean takes a student out of every group; an instructor moves them to another of theirs. */
+  canRemoveMembers?: boolean;
   sectionId: string;
   studentCount: number;
   overview: TeamsOverview | null;
@@ -354,7 +357,7 @@ export default function SectionGroups({
                             {g.id === group.id ? g.name : `Move to ${g.name}`}
                           </option>
                         ))}
-                        <option value="">Remove from group</option>
+                        {canRemoveMembers && <option value="">Remove from group</option>}
                       </select>
                     </li>
                   ))}

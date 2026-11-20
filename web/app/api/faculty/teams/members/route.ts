@@ -20,7 +20,8 @@ const MIN_REASON_LENGTH = 10;
  * An admin may do either freely. An instructor may put a student who is in
  * no group yet, in one of their sections, into a group they supervise. They
  * may move a student between two groups they supervise in the same section
- * only with a reason, which goes to the audit trail and to their dean.
+ * only with a reason, which goes to the audit trail and to their dean. An
+ * instructor can't take a student out of a group.
  */
 export async function PUT(request: NextRequest) {
   const session = await readSession();
@@ -39,8 +40,8 @@ export async function PUT(request: NextRequest) {
 
   const supabase = getSupabaseAdmin();
   // A move with a reason is the instructor's logged transfer between their
-  // groups. Without one, an instructor places students like a dean does,
-  // within their course sections and their own groups (checked below).
+  // groups. Without one, an instructor may only place a student who is in no
+  // group yet (checked below); a dean moves and removes students freely.
   if (session.role === 'faculty' && typeof body.reason === 'string') {
     return moveBetweenOwnGroups(supabase, session, request, studentId, teamId, body.reason.trim());
   }
@@ -54,12 +55,38 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Student not in your sections' }, { status: 403 });
   }
 
-  // A student in another instructor's group isn't theirs to move.
   if (session.role === 'faculty') {
-    const { data: membership } = await supabase.from('team_members').select('team_id').eq('student_id', studentId).maybeSingle();
-    if (membership && !(await manageableTeam(supabase, session.role, session.uid, membership.team_id as string))) {
+    const { data: membership, error: membershipError } = await supabase
+      .from('team_members')
+      .select('team_id')
+      .eq('student_id', studentId)
+      .maybeSingle();
+    if (membershipError) {
+      if (isMissingTeamTables(membershipError)) return NextResponse.json({ error: TEAMS_NEED_MIGRATION }, { status: 503 });
+      console.error('Failed to read team membership', membershipError);
+      return NextResponse.json({ error: 'Unable to move student' }, { status: 500 });
+    }
+    // A student in no group is placed as before, which the audit trail records.
+    if (!membership) {
+      return teamId ? placeInOwnGroup(supabase, session, request, studentId, teamId) : NextResponse.json({ ok: true });
+    }
+    // A student in another instructor's group isn't theirs to move.
+    if (!(await manageableTeam(supabase, session.role, session.uid, membership.team_id as string))) {
       return NextResponse.json({ error: "That student is in another instructor's group" }, { status: 403 });
     }
+    if (membership.team_id === teamId) return NextResponse.json({ ok: true });
+    // Undoing a grouping or moving between groups without a reason would leave
+    // no trace and no notice to the dean, so only the reasoned move is allowed.
+    if (!teamId) {
+      return NextResponse.json(
+        { error: 'Move them to another of your groups instead; only a Dean or Program Chair can take a student out of a group' },
+        { status: 400 },
+      );
+    }
+    return NextResponse.json(
+      { error: `Say why this student is moving (at least ${MIN_REASON_LENGTH} characters)` },
+      { status: 400 },
+    );
   }
 
   if (teamId) {

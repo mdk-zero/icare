@@ -228,8 +228,7 @@ add, rename and delete your own groups.
 
 ### Move students between groups
 
-Move a student from one of your groups to another, put a student in no group into a group, or
-take a student out of a group.
+Move a student from one of your groups to another, or put a student in no group into a group.
 
 **Before you start**
 
@@ -242,7 +241,8 @@ take a student out of a group.
 To move one student:
 
 1. On the student's group card, open the list beside the student's name.
-2. Choose **Move to <group>**, or **Remove from group**.
+2. Choose **Move to <group>**.
+3. Type why the student is moving (at least 10 characters), then select **Move to <group>**.
 
 **Result:** The message "Moved <student> to <group>" appears.
 
@@ -253,13 +253,12 @@ To put several students in no group into a group:
    counts them.
 2. Drag any of the selected rows onto a group card.
 
-To take a student out of a group, you can also drag their name from a group card onto the **Not
-in a group** table.
-
 You can use only groups you supervise. Students in another instructor's group are not shown.
 
 > [!NOTE]
-> No reason is asked for, and nobody is notified, when you move a student.
+> Moving a student who is already in a group asks for a reason. Your Dean or Program Chair is
+> notified with it, and the move is kept in the audit trail. Putting a student in no group into a
+> group asks for no reason. Only your Dean or Program Chair can take a student out of a group.
 
 ### Register a late student or enroll a class list
 
