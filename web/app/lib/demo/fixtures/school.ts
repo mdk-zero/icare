@@ -404,7 +404,9 @@ export function seedSchool(users: DemoUser[], teams: DemoTeam[]) {
       created_at: ago(60 - i * 2),
       updated_at: ago(30 - i),
       patient_id: patients[i].id,
+      // The patient written into the case, as migration 098 copied it from the record.
       patient_case: {
+        patient: { name: c.name, age: c.age, sex: c.gender === "F" ? "Female" : "Male" },
         vitals: c.vitals,
         diagnosis: c.diagnosis,
         medical_history: c.medical_history,
@@ -458,6 +460,8 @@ export function seedSchool(users: DemoUser[], teams: DemoTeam[]) {
     for (let block = 0; block < 5; block++) {
       const caseIndex = (g * 2 + block) % CASES.length;
       const scenario = scenarios[caseIndex];
+      // Performed in the room of the case's patient, as migration 098 filled it in.
+      const roomId = patients.find((p) => p.id === scenario.patient_id)?.room_id ?? null;
       const assignedAgo = BLOCK_START_DAYS_AGO[block];
       const deadline = block === 4 ? ahead(4, 17) : ago(assignedAgo - 6, 17);
       for (const student of studentsOf(team.id)) {
@@ -479,6 +483,7 @@ export function seedSchool(users: DemoUser[], teams: DemoTeam[]) {
           submitted_at: null,
           finalized_by: null,
           team_id: team.id,
+          room_id: roomId,
         };
         const weak = student.risk_level === "at_risk";
 
@@ -622,10 +627,15 @@ export function seedSchool(users: DemoUser[], teams: DemoTeam[]) {
           required: true,
         };
         const takes = block < 4 ? (weak && random() < 0.35 ? 0 : 1 + (random() < 0.3 ? 1 : 0)) : random() < 0.35 ? 1 : 0;
+        let firstDaysAgo = 0;
         for (let t = 0; t < takes; t++) {
           attemptN += 1;
           const correct = Math.max(1, Math.min(6, Math.round(6 * (skill + (t ? 0.08 : 0) + (random() - 0.5) * 0.3))));
-          const started = ago(assignedAgo - 1 - t - random() * 2, 19, Math.floor(random() * 50));
+          // A second try comes the evening after the first. The draw is still
+          // made, so every later random value stays the same.
+          const drawn = assignedAgo - 1 - t - random() * 2;
+          if (t === 0) firstDaysAgo = drawn;
+          const started = ago(t === 0 ? drawn : firstDaysAgo - 1, 19, Math.floor(random() * 50));
           const taken = 240 + Math.floor(random() * 520);
           attempts.push({
             id: demoId(KIND.attempt, attemptN),

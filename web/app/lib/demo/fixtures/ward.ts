@@ -91,7 +91,9 @@ export function seedWard(rooms: DemoRoom[], patients: DemoPatient[], users: Demo
           id: demoId(KIND.vitals, n),
           patient_id: p.id,
           recorded_by: students[(i * 3 + k) % students.length].id,
-          recorded_at: ago(2 - k * 0.8, 8 + k * 4),
+          // Two days ago after the last admission (09:00), yesterday afternoon,
+          // and a few hours ago: never before the patient came in, never ahead of now.
+          recorded_at: k === 2 ? ago(0.2) : ago(2 - k, 10 + k * 4),
           heart_rate: (p.vital_signs.heart_rate ?? 80) - drift * 3,
           bp_systolic: sys - drift * 2,
           bp_diastolic: dia,

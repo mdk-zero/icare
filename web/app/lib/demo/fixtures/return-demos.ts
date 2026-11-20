@@ -4,6 +4,7 @@ import { OFFERING_MAIN } from "./courses";
 import type {
   DemoAssignment,
   DemoCompletion,
+  DemoRoom,
   DemoScenario,
   DemoStep,
   DemoStepRating,
@@ -16,6 +17,7 @@ import returnDemoTasks from "./return-demo-tasks.json";
  * The demo instructor's Return Demonstrations (072), made for NCM 114L: the
  * vital signs one finalized for their first group a few days ago, a few
  * steps graded N/A, and the oxygen one due later this week, not started.
+ * Both are performed in Skills Laboratory A (098).
  */
 
 const CREDIT: Record<TaskRating, number> = { excellent: 1, satisfactory: 2 / 3, needs_practice: 1 / 3 };
@@ -36,6 +38,7 @@ export function seedReturnDemos(
     assignments: DemoAssignment[];
     completions: DemoCompletion[];
     stepRatings: DemoStepRating[];
+    rooms: DemoRoom[];
   },
   users: DemoUser[],
   teams: DemoTeam[],
@@ -43,6 +46,7 @@ export function seedReturnDemos(
   const team = teams.find((t) => t.faculty_id === INSTRUCTOR_ID);
   if (!team) return;
   const members = users.filter((u) => u.role === "student" && u.team_id === team.id);
+  const skillsLab = tables.rooms.find((r) => r.room_number === "101")?.id ?? null;
 
   RETURN_DEMO_SPECS.forEach((spec, d) => {
     const scenarioId = demoId(KIND.scenario, 900 + d);
@@ -109,6 +113,7 @@ export function seedReturnDemos(
         submitted_at: null,
         finalized_by: null,
         team_id: team.id,
+        room_id: skillsLab,
       };
       tables.assignments.push(assignment);
       if (d !== 0) return;

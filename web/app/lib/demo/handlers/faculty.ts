@@ -926,7 +926,8 @@ function scenarioOut(ctx: Ctx, s: DemoScenario) {
   const patient = ctx.db.patients.find((p) => p.id === s.patient_id);
   return {
     ...s,
-    patient_name: patient?.name ?? null,
+    // The patient written into the case (098), else the record it was built on.
+    patient_name: (s.patient_case as { patient?: { name?: string } }).patient?.name || patient?.name || null,
     student_count: assigned.length,
     student_ids: [...new Set(assigned.map((a) => a.student_id))],
     to_grade: assigned.filter((a) => a.status !== "completed").length,

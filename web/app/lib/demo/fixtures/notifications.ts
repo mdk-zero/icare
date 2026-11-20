@@ -91,10 +91,12 @@ export function seedNotifications(users: DemoUser[], assignments: DemoAssignment
     );
   }
 
+  // Last week's cases the Instructor has yet to grade: handed in, not finalized.
+  const waiting = assignments.filter((a) => a.assigned_by === INSTRUCTOR_ID && a.status === "in_progress" && a.submitted_at).length;
   out.push(
     note(DEAN_ID, "system", "Student moved between groups", "Maria Santos moved Rafael Tan from BSN 3101 · Group A to BSN 3101 · Group B. Reason: Balancing group sizes after the schedule change", 9, true, { kind: "group_move" }),
     note(INSTRUCTOR_ID, "at_risk_flag", "Low performance flagged", "The nightly risk check flagged Hannah Villareal as low performing.", 0.3, false),
-    note(INSTRUCTOR_ID, "assignment_created", "Patient cases waiting for review", "13 patient cases from last week are handed in and waiting for your grade.", 0.5, true),
+    note(INSTRUCTOR_ID, "assignment_created", "Patient cases waiting for review", `${waiting} patient case${waiting === 1 ? " from last week is" : "s from last week are"} handed in and waiting for your grade.`, 0.5, true),
     note(ADMIN_ID, "system", "Test run finished", "The nightly Playwright suite passed: 142 of 142 tests.", 0.4, false),
   );
   return out;

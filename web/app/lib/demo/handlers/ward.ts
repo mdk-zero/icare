@@ -5,6 +5,7 @@ import { newId } from "../store";
 import type { DemoPatient, DemoRoom } from "../fixtures/school";
 import { audit } from "./shared";
 import { userById } from "./scope";
+import { caseGroupsOf, myStudentIds } from "./faculty";
 import { PATIENT_PRESETS, presetVitals } from "../../patient-presets";
 import { cleanCondition } from "../../ai/patient-fill";
 
@@ -32,31 +33,26 @@ route("GET", "/api/admin/rooms", (ctx) => {
   return { rooms: ctx.db.rooms.slice().sort((a, b) => a.room_number.localeCompare(b.room_number)).map((r) => roomOut(ctx, r)) };
 });
 
-/** The Wards page (098): each room and the activities assigned in it, by group. */
+/**
+ * The Wards page (098): each room and the activities assigned in it, by
+ * group. An Instructor sees their own students' work, as the real route.
+ */
 route("GET", "/api/faculty/rooms/activities", (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   const { db } = ctx;
   const rooms = db.rooms.slice().sort((a, b) => a.room_number.localeCompare(b.room_number)).map((r) => roomOut(ctx, r));
+  const mine = ctx.role === "admin" ? null : myStudentIds(ctx);
   const byKey = new Map<string, typeof db.assignments>();
   for (const a of db.assignments) {
-    if (!a.room_id) continue;
+    if (!a.room_id || (mine && !mine.has(a.student_id))) continue;
     const key = `${a.room_id}|${a.scenario_id}`;
     byKey.set(key, [...(byKey.get(key) ?? []), a]);
   }
   const activities = [...byKey].map(([key, rows]) => {
     const [room_id, scenario_id] = key.split("|");
     const scenario = db.scenarios.find((s) => s.id === scenario_id);
-    const groups = new Map<string, { key: string; label: string; count: number; deadline: string | null | "mixed"; done: number }>();
-    for (const a of rows) {
-      const team = db.teams.find((t) => t.id === a.team_id);
-      const gk = team ? `team:${team.id}` : "none";
-      const g = groups.get(gk) ?? { key: gk, label: team?.name ?? "No group", count: 0, deadline: a.deadline, done: 0 };
-      g.count += 1;
-      if (g.deadline !== a.deadline) g.deadline = "mixed";
-      if (a.status === "completed") g.done += 1;
-      groups.set(gk, g);
-    }
-    const list = [...groups.values()];
+    // "BSN 3101 · Group A", keyed and sorted as lib/assigned-groups.ts.
+    const list = caseGroupsOf(ctx, rows);
     return {
       room_id,
       scenario_id,
