@@ -38,7 +38,7 @@ const NO_CHAIRS: ProgramChair[] = [];
 const INPUT =
   "w-full px-4 py-2.5 border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:border-brand-600";
 const COLUMN = "text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider";
-const COLUMNS = ["Program Chair", "Instructors", "Students", "Added", "Last Login"];
+const COLUMNS = ["Program Chair", "Added", "Last Login"];
 const CONNECTION_ERROR = "Something went wrong. Check your connection and try again.";
 
 function formatDate(value: string | null): string {
@@ -300,7 +300,7 @@ export default function ProgramChairsClient() {
                         </div>
                       </div>
                     </td>
-                    {[32, 32, 80, 96, 32].map((width, cell) => (
+                    {[80, 96, 32].map((width, cell) => (
                       <td key={cell} className="py-3 px-4">
                         <div className="h-4 rounded bg-gray-100" style={{ width }} />
                       </td>
@@ -338,8 +338,6 @@ export default function ProgramChairsClient() {
                         </div>
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-gray-800 font-medium">{chair.instructor_count}</td>
-                    <td className="py-3 px-4 text-gray-800 font-medium">{chair.student_count}</td>
                     <td className="py-3 px-4 text-gray-600 whitespace-nowrap">{formatDate(chair.created_at)}</td>
                     <td className="py-3 px-4 text-gray-600 whitespace-nowrap">{formatDate(chair.last_login_at)}</td>
                     {/* The menu portals out, but its clicks still bubble here through React. */}
