@@ -6,6 +6,9 @@ import { MAX_RUBRIC_LENGTH, TASK_RATINGS } from '@/app/lib/task-ratings';
 import { activityCourse, parseOfferingId } from '@/app/lib/activity-course';
 import { isReturnDemo } from '@/app/lib/scenario-kind';
 import { ownsRow, viewerDeanId } from '@/app/lib/dean-scope';
+import { sanitizePatientCase } from '@/app/lib/ai/scenario';
+import { isMissingRoomColumns, ROOMS_NEED_MIGRATION } from '@/app/lib/activity-room';
+import { parseActivityTimeLimit } from '@/app/lib/activity-time';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -37,6 +40,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     patient_id,
     learning_objectives,
     rubric,
+    time_limit_minutes,
   } = body as {
     title?: unknown;
     description?: unknown;
@@ -45,6 +49,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     patient_id?: unknown;
     learning_objectives?: unknown;
     rubric?: unknown;
+    time_limit_minutes?: unknown;
   };
 
   const updateData: Record<string, unknown> = {};
@@ -62,21 +67,21 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
 
   if (patient_case !== undefined) {
-    updateData.patient_case = patient_case && typeof patient_case === 'object' ? patient_case : {};
+    updateData.patient_case = sanitizePatientCase(patient_case);
   }
 
-  // patient_id can switch a scenario to a different patient, but — since every
-  // scenario must have one — never clear it; omit the field entirely to leave
-  // it unchanged.
+  // The patient is written into the case now (098); the old link to a patient
+  // record can be switched or cleared (null).
   if (patient_id !== undefined) {
-    if (typeof patient_id !== 'string' || patient_id.trim().length === 0) {
-      return NextResponse.json(
-        { error: 'A patient case always needs a patient — pick a different one instead of removing it' },
-        { status: 400 },
-      );
+    if (patient_id !== null && (typeof patient_id !== 'string' || patient_id.trim().length === 0)) {
+      return NextResponse.json({ error: 'patient_id must be a patient or null' }, { status: 400 });
     }
-    updateData.patient_id = patient_id.trim();
+    updateData.patient_id = patient_id === null ? null : patient_id.trim();
   }
+
+  const timeLimit = parseActivityTimeLimit(time_limit_minutes);
+  if ('error' in timeLimit) return NextResponse.json({ error: timeLimit.error }, { status: 400 });
+  if (timeLimit.value !== undefined) updateData.time_limit_minutes = timeLimit.value;
 
   if (learning_objectives !== undefined) {
     updateData.learning_objectives = Array.isArray(learning_objectives)
@@ -163,6 +168,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .select()
       .single();
 
+    if (isMissingRoomColumns(error)) {
+      return NextResponse.json({ error: ROOMS_NEED_MIGRATION }, { status: 503 });
+    }
     if (error?.code === '42703' || error?.code === 'PGRST204') {
       return NextResponse.json(
         { error: 'Custom rubrics need database migration 046 applied first.' },

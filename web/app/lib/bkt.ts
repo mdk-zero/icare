@@ -74,7 +74,25 @@ export interface SkillAnswer {
   skill_id: string;
   at: string;
   correct: boolean;
+  /** How much the answer moves P(known), 0 to 1; 1 when left out (answerWeight). */
+  weight?: number;
 }
+
+/**
+ * How much of a right answer counts when the Patient Case or Return
+ * Demonstration was finished past its time limit (098): it still shows the
+ * skill, but less of it than a try done in time. A wrong answer counts in full
+ * either way.
+ */
+export const OVER_TIME_WEIGHT = 0.5;
+
+/** The weight of an answer: OVER_TIME_WEIGHT for a right one done over time, else 1. */
+export function answerWeight(correct: boolean, overTime: boolean): number {
+  return correct && overTime ? OVER_TIME_WEIGHT : 1;
+}
+
+/** An answer as the trace reads it: right or wrong, and how much it counts. */
+export type TracedAnswer = boolean | { correct: boolean; weight?: number };
 
 /** One skill across the students who have answered on it. */
 export interface CohortSkillMastery {
@@ -151,17 +169,25 @@ export function predictCorrect(pKnown: number, params: BktParams): number {
   return pKnown * (1 - params.p_slip) + (1 - pKnown) * params.p_guess;
 }
 
-/** Bayes on the observed answer, then the chance of learning from it. */
-export function updateMastery(pKnown: number, correct: boolean, params: BktParams): number {
+/**
+ * Bayes on the observed answer, then the chance of learning from it. A weight
+ * under 1 moves P(known) only that share of the way (OVER_TIME_WEIGHT).
+ */
+export function updateMastery(pKnown: number, correct: boolean, params: BktParams, weight = 1): number {
   const posterior = correct
     ? (pKnown * (1 - params.p_slip)) / (pKnown * (1 - params.p_slip) + (1 - pKnown) * params.p_guess)
     : (pKnown * params.p_slip) / (pKnown * params.p_slip + (1 - pKnown) * (1 - params.p_guess));
-  return posterior + (1 - posterior) * params.p_learn;
+  const next = posterior + (1 - posterior) * params.p_learn;
+  return pKnown + Math.min(1, Math.max(0, weight)) * (next - pKnown);
 }
 
 /** P(known) after the answers, oldest first; p_init when there are none. */
-export function traceMastery(params: BktParams, answers: readonly boolean[]): number {
-  return answers.reduce((pKnown, correct) => updateMastery(pKnown, correct, params), params.p_init);
+export function traceMastery(params: BktParams, answers: readonly TracedAnswer[]): number {
+  return answers.reduce(
+    (pKnown, a) =>
+      typeof a === 'boolean' ? updateMastery(pKnown, a, params) : updateMastery(pKnown, a.correct, params, a.weight ?? 1),
+    params.p_init,
+  );
 }
 
 /**

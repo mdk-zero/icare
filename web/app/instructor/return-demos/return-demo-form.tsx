@@ -28,6 +28,7 @@ import { toast } from "../../components/Toast";
 import SkillPicker from "../scenarios/skill-picker";
 import SkillStepsPreview from "./skill-steps-preview";
 import FormsPicker from "./forms-picker";
+import { TimeLimitPicker } from "../scenarios/patient-fields";
 import { editedSkills } from "./edit-skills";
 import ChecklistPanel from "./checklist-panel";
 import { checklistRowsFromTasks, stepCount, type ChecklistRow } from "../../lib/checklist-import";
@@ -80,6 +81,8 @@ export default function ReturnDemoForm({ id }: { id?: string }) {
   const [removed, setRemoved] = useState<Set<string>>(() => new Set());
   /** Form keys, in the order shown to students. */
   const [forms, setForms] = useState<string[]>([]);
+  // How long the student has once they start (098).
+  const [timeLimit, setTimeLimit] = useState<number | null>(null);
   const [openSkill, setOpenSkill] = useState<string | null>(null);
   const [source, setSource] = useState<Source>("skills");
   const [checklist, setChecklist] = useState<ChecklistRow[]>([]);
@@ -102,6 +105,7 @@ export default function ReturnDemoForm({ id }: { id?: string }) {
       setDescription(demo.description);
       setChosenCourse(demo.offering_id ?? "");
       setForms(demo.forms ?? []);
+      setTimeLimit(demo.time_limit_minutes ?? null);
       // Tasks with no skill are an uploaded checklist's sections.
       if (demo.tasks.length > 0 && demo.tasks.every((t) => !t.skill_id)) {
         setSource("checklist");
@@ -139,7 +143,14 @@ export default function ReturnDemoForm({ id }: { id?: string }) {
   const save = async () => {
     setSaving(true);
     setError(null);
-    const base = { title: title.trim(), description: description.trim(), offering_id: offeringId || null, forms };
+    const base = {
+      title: title.trim(),
+      description: description.trim(),
+      offering_id: offeringId || null,
+      forms,
+      // Only when set or changed, so a database without 098 can still save other edits.
+      ...(timeLimit !== (existing?.time_limit_minutes ?? null) ? { time_limit_minutes: timeLimit } : {}),
+    };
     // An edit leaves an untouched checklist alone, so a graded one can still be renamed.
     const input =
       source === "skills"
@@ -360,6 +371,12 @@ export default function ReturnDemoForm({ id }: { id?: string }) {
         )}
 
         <FormsPicker value={forms} onChange={setForms} disabled={saving} />
+
+        <fieldset>
+          <legend className="mb-1.5 block text-sm font-bold text-gray-800">Time limit</legend>
+          <TimeLimitPicker value={timeLimit} onChange={setTimeLimit} disabled={saving} />
+          <p className="mt-1 text-xs text-gray-500">The room is picked when you assign it.</p>
+        </fieldset>
 
         {error && <p className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-sm text-red-700">{error}</p>}
 

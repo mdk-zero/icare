@@ -7,6 +7,7 @@ import { isMissingTeamTables } from '@/app/lib/teams';
 import { parseDeadline } from '@/app/lib/deadline-input';
 import { notifyCaseAssigned } from '@/app/lib/notify-case-assigned';
 import { isReturnDemo } from '@/app/lib/scenario-kind';
+import { isMissingRoomColumns, resolveRoom, ROOMS_NEED_MIGRATION } from '@/app/lib/activity-room';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -30,11 +31,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { student_ids, team_ids, deadline, required } = body as {
+  const { student_ids, team_ids, deadline, required, room_id } = body as {
     student_ids?: unknown;
     team_ids?: unknown;
     deadline?: unknown;
     required?: unknown;
+    room_id?: unknown;
   };
 
   // A group's case is given through /api/faculty/teams/[id]/assign-cases,
@@ -60,6 +62,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   try {
     const supabase = getSupabaseAdmin();
+
+    // The room they perform it in (098), one of the Dean's rooms.
+    const room = await resolveRoom(supabase, session, room_id);
+    if ('error' in room) return NextResponse.json({ error: room.error }, { status: 400 });
 
     // Verify the scenario exists.
     const { data: scenario } = await supabase
@@ -120,6 +126,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       deadline: parsedDeadline.toISOString(),
       required: typeof required === 'boolean' ? required : true,
       status: 'pending' as const,
+      ...(room.value ? { room_id: room.value } : {}),
     }));
 
     const { data: assignments, error } = await supabase
@@ -127,6 +134,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .insert(rows)
       .select('id, scenario_id, student_id, assigned_at, deadline, status, required, score, completed_at, time_taken');
 
+    if (isMissingRoomColumns(error)) {
+      return NextResponse.json({ error: ROOMS_NEED_MIGRATION }, { status: 503 });
+    }
     if (error) {
       console.error('Failed to assign patient case', error);
       return NextResponse.json({ error: 'Unable to assign patient case' }, { status: 500 });
@@ -137,6 +147,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       { id: scenario.id as string, title: scenario.title as string, patient_id: (scenario.patient_id as string | null) ?? null },
       (assignments ?? []).map((a) => ({ id: a.id as string, student_id: a.student_id as string })),
       parsedDeadline,
+      room.name,
     );
 
     return NextResponse.json({ assignments, skipped: skip.size }, { status: 201 });
@@ -156,16 +167,22 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   if (!['faculty', 'admin'].includes(session.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { id: scenarioId } = await params;
-  const body = (await request.json().catch(() => null)) as { student_ids?: unknown; deadline?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as
+    | { student_ids?: unknown; deadline?: unknown; room_id?: unknown }
+    | null;
   const ids = Array.isArray(body?.student_ids)
     ? [...new Set(body.student_ids.filter((s): s is string => typeof s === 'string'))]
     : [];
   if (ids.length === 0) return NextResponse.json({ error: 'Choose at least one student' }, { status: 400 });
-  const deadlineCheck = parseDeadline(body?.deadline);
-  if (!deadlineCheck.ok) return NextResponse.json({ error: deadlineCheck.error }, { status: 400 });
+  // The date, the room (098), or both; a room alone leaves the date as it is.
+  const roomOnly = body?.room_id !== undefined && body?.deadline === undefined;
+  const deadlineCheck = roomOnly ? null : parseDeadline(body?.deadline);
+  if (deadlineCheck && !deadlineCheck.ok) return NextResponse.json({ error: deadlineCheck.error }, { status: 400 });
 
   try {
     const supabase = getSupabaseAdmin();
+    const room = await resolveRoom(supabase, session, body?.room_id);
+    if ('error' in room) return NextResponse.json({ error: room.error }, { status: 400 });
     if (!(await scenarioInDeanScope(supabase, session, scenarioId))) {
       return NextResponse.json({ error: 'Patient case not found' }, { status: 404 });
     }
@@ -178,11 +195,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
     const { data, error } = await supabase
       .from('scenario_assignments')
-      .update({ deadline: new Date(deadlineCheck.value as string).toISOString() })
+      .update({
+        ...(deadlineCheck ? { deadline: new Date(deadlineCheck.value as string).toISOString() } : {}),
+        ...(room.value !== undefined ? { room_id: room.value } : {}),
+      })
       .eq('scenario_id', scenarioId)
       .in('student_id', ids)
       .neq('status', 'completed')
       .select('id');
+    if (isMissingRoomColumns(error)) {
+      return NextResponse.json({ error: ROOMS_NEED_MIGRATION }, { status: 503 });
+    }
     if (error) {
       console.error('Failed to move the date of performance', error);
       return NextResponse.json({ error: 'Unable to change the date' }, { status: 500 });

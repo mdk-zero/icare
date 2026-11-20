@@ -411,7 +411,7 @@ export default function FacultyScenariosClient() {
     setShowAssignModal(true);
   };
 
-  const handleAssignScenario = async (studentIds: string[], deadline: string) => {
+  const handleAssignScenario = async (studentIds: string[], deadline: string, roomId: string | null) => {
     if (!selectedScenario) return;
 
     const assignments = await assignScenarioToStudents(
@@ -421,6 +421,7 @@ export default function FacultyScenariosClient() {
       deadline,
       // An assigned patient case is always required.
       true,
+      roomId,
     );
 
     if (assignments.length > 0) {

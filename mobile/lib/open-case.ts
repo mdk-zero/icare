@@ -15,7 +15,7 @@ export interface CaseLink {
 }
 
 /**
- * Opens a patient case: on its patient when it has one, else on its brief.
+ * Opens a patient case on its own screen.
  * A case known not to have started carries what its Before you start screen
  * shows, so that screen appears at once instead of after a loading skeleton.
  */
@@ -36,6 +36,7 @@ export function openCase(router: Router, a: CaseLink) {
       ? // Can't tell yet whether it started: a short spinner, never the page skeleton.
         { gate: 'wait' }
       : {};
-  if (a.patient_id) router.push({ pathname: '/clinic/patient/[id]', params: { id: a.patient_id, case: '1', ...gate } });
-  else router.push({ pathname: '/clinic/assignment/[id]', params: { id: a.id, ...gate } });
+  // Every case opens on its own screen (098): the patient is written into the
+  // case, and the patient hub is hidden.
+  router.push({ pathname: '/clinic/assignment/[id]', params: { id: a.id, ...gate } });
 }

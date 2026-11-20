@@ -88,10 +88,9 @@ const navItems: NavItem[] = [
     icon: faBookOpen,
     section: "Teaching",
   },
-  // Monitoring is the single clinical destination: the room layout and census
-  // open a patient's chart, which carries their vitals, TPR/IVF, notes and
-  // note sign-off. Patients, Vitals Monitor and EHR Review were folded into it
-  // and their routes now redirect here.
+  // Wards are rooms only (098): where students perform their activities.
+  // Patients, Vitals Monitor and EHR Review redirect here; the patient census
+  // and charts are hidden, their data kept.
   {
     id: "wards",
     label: "Wards",

@@ -232,13 +232,32 @@ export interface WardAssignment {
   tasks_total: number;
   /** When the student pressed Start (null: not yet); absent before migration 063. */
   started_at?: string | null;
+  /** The patient written into the case, its room and time limit (098); absent from older servers. */
+  patient_name?: string | null;
+  room?: ActivityRoom | null;
+  time_limit_minutes?: number | null;
+}
+
+/** Something the student has in a room (098): a patient case or a Return Demonstration. */
+export interface RoomActivity {
+  id: string;
+  room_id: string;
+  kind: 'patient_case' | 'return_demo';
+  scenario_title: string;
+  patient_name: string | null;
+  deadline: string | null;
+  status: ScenarioAssignment['status'];
+  time_limit_minutes: number | null;
+  started_at?: string | null;
 }
 
 export interface WardResult {
   rooms: WardRoom[];
   fixtures: WardFixture[];
+  /** Empty from 098: the patient census is hidden. */
   patients: WardPatient[];
   assignments: WardAssignment[];
+  activities: RoomActivity[];
 }
 
 /** The whole Clinic tab in one cached read — plan, beds and assignments. */
@@ -252,6 +271,7 @@ export async function fetchWard(): Promise<CachedResult<WardResult>> {
       fixtures: result.data.fixtures ?? [],
       patients: result.data.patients ?? [],
       assignments: result.data.assignments ?? [],
+      activities: result.data.activities ?? [],
     },
   };
 }
@@ -418,6 +438,41 @@ export interface ScenarioAssignment {
   started_at?: string | null;
   /** A Patient Case, or a Return Demonstration (skill checklists, no patient); absent from older servers. */
   kind?: 'patient_case' | 'return_demo';
+  /** Where it is performed (098); null for none, absent from older servers. */
+  room?: ActivityRoom | null;
+  /** Minutes from Start (098); null for none. */
+  time_limit_minutes?: number | null;
+  /** The patient the instructor wrote into the case (098). */
+  patient_name?: string | null;
+}
+
+/** The room an activity is performed in (098). */
+export interface ActivityRoom {
+  id: string;
+  name: string;
+  room_number: string | null;
+}
+
+/** "Skills Lab · Room 101". */
+export function roomLabel(room: ActivityRoom): string {
+  return room.room_number ? `${room.name} · Room ${room.room_number}` : room.name;
+}
+
+/** The patient an instructor writes into a patient case (098): who they are and their state. */
+export interface CasePatient {
+  patient?: { name: string; age: number | null; sex: string };
+  chief_complaint: string;
+  vitals: {
+    heart_rate: number | null;
+    blood_pressure: string;
+    temperature: number | null;
+    respiratory_rate: number | null;
+    oxygen_saturation: number | null;
+  };
+  medical_history: string;
+  physical_exam: string;
+  diagnosis: string;
+  treatment_plan: string;
 }
 
 /** A Return Demonstration opens its own screen, not the ward. */
@@ -469,6 +524,8 @@ export interface ScenarioTask {
 
 export interface ScenarioTasksResult {
   tasks: ScenarioTask[];
+  /** The patient written into the case (098); null for a Return Demonstration or an empty case. */
+  patient_case?: CasePatient | null;
   assignment: {
     id: string;
     status: ScenarioAssignment['status'];
@@ -481,6 +538,9 @@ export interface ScenarioTasksResult {
      * server's database has no clock (before migration 063).
      */
     started_at?: string | null;
+    /** Minutes from Start (098); null for none, absent from older servers. */
+    time_limit_minutes?: number | null;
+    room?: ActivityRoom | null;
   };
 }
 

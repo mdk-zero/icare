@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { kindOf, scenarioKinds } from '@/app/lib/scenario-kind';
+import { loadAssignmentRooms, loadTimeLimits } from '@/app/lib/activity-room';
 
 export async function GET() {
   const session = await readSession();
@@ -38,9 +39,12 @@ export async function GET() {
 
     const scenarioIds = [...new Set(assignments.map((a) => a.scenario_id))];
     // Patient Case or Return Demonstration (072), so the app opens the right screen.
-    const [{ data: scenarios, error: scenariosError }, kinds] = await Promise.all([
-      supabase.from('scenarios').select('id, title, category, patient_id').in('id', scenarioIds),
+    // Its room and time limit (098), empty before it.
+    const [{ data: scenarios, error: scenariosError }, kinds, timeLimits, rooms] = await Promise.all([
+      supabase.from('scenarios').select('id, title, category, patient_id, patient_case').in('id', scenarioIds),
       scenarioKinds(supabase, scenarioIds),
+      loadTimeLimits(supabase, scenarioIds),
+      loadAssignmentRooms(supabase, assignments.map((a) => a.id as string)),
     ]);
 
     if (scenariosError) {
@@ -58,7 +62,12 @@ export async function GET() {
         scenario_id: a.scenario_id,
         scenario_title: scenario?.title ?? 'Unknown Patient Case',
         patient_id: scenario?.patient_id ?? null,
+        // The patient the instructor wrote into the case (098).
+        patient_name:
+          ((scenario?.patient_case as { patient?: { name?: string } } | null)?.patient?.name || null) ?? null,
         kind: kindOf(kinds, a.scenario_id),
+        room: rooms.get(a.id) ?? null,
+        time_limit_minutes: timeLimits.get(a.scenario_id) ?? null,
         student_id: a.student_id,
         student_name: session.email,
         team_name: teamName,

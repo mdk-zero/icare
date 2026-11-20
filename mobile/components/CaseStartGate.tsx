@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card, PrimaryButton } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
+import { timeLimitLabel } from '@/lib/time-limit';
 
 const STEPS = [
   'Wait until your instructor is with you and ready to watch.',
@@ -23,6 +24,7 @@ export function CaseStartGate({
   title,
   patientName,
   room,
+  timeLimitMinutes,
   deadline,
   taskCount,
   starting,
@@ -31,6 +33,8 @@ export function CaseStartGate({
   title: string;
   patientName?: string | null;
   room?: string | null;
+  /** Minutes they have once they press Start (098); null for none. */
+  timeLimitMinutes?: number | null;
   deadline?: string | null;
   /** Null when not known yet. */
   taskCount: number | null;
@@ -53,10 +57,19 @@ export function CaseStartGate({
         {patientName ? (
           <View style={styles.metaRow}>
             <Ionicons name="person-outline" size={14} color={Palette.textSecondary} />
-            <Text style={styles.metaText}>
-              {patientName}
-              {room ? ` · ${room}` : ''}
-            </Text>
+            <Text style={styles.metaText}>{patientName}</Text>
+          </View>
+        ) : null}
+        {room ? (
+          <View style={styles.metaRow}>
+            <Ionicons name="location-outline" size={14} color={Palette.textSecondary} />
+            <Text style={styles.metaText}>{room}</Text>
+          </View>
+        ) : null}
+        {timeLimitMinutes ? (
+          <View style={styles.metaRow}>
+            <Ionicons name="timer-outline" size={14} color={Palette.textSecondary} />
+            <Text style={styles.metaText}>{timeLimitLabel(timeLimitMinutes)} once you start</Text>
           </View>
         ) : null}
         {taskCount != null ? (

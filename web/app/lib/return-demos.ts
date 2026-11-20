@@ -1,6 +1,7 @@
 import type { Parsed } from './course-progress';
 import { parseFormKeys } from './return-demo-forms';
 import { parseChecklistRows, stepCount, type ChecklistRow } from './checklist-import';
+import { parseActivityTimeLimit } from './activity-time';
 import type { FacultyTeam, TeamsOverview } from './api';
 
 /**
@@ -52,6 +53,8 @@ export interface ReturnDemoInput {
   forms?: string[];
   /** An uploaded skills checklist, used in place of skills. */
   checklist?: ChecklistRow[];
+  /** Minutes the student has once they start (098); null for none. */
+  time_limit_minutes?: number | null;
 }
 
 /**
@@ -84,6 +87,9 @@ export function parseReturnDemoInput(body: unknown, opts: { partial?: boolean } 
     value.skills = skills;
   }
   if ('forms' in b) value.forms = parseFormKeys(b.forms);
+  const timeLimit = parseActivityTimeLimit(b.time_limit_minutes);
+  if ('error' in timeLimit) return { ok: false, error: timeLimit.error };
+  if (timeLimit.value !== undefined) value.time_limit_minutes = timeLimit.value;
   return { ok: true, value };
 }
 

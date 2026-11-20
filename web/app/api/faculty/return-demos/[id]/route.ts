@@ -8,6 +8,7 @@ import { addChecklistTasks } from '@/app/lib/checklist-import-server';
 import { getFacultyStudentIdSet } from '@/app/lib/scenario-visibility';
 import { parseReturnDemoInput, skillDiff } from '@/app/lib/return-demos';
 import { knownFormKeys } from '@/app/lib/return-demo-forms-server';
+import { isMissingRoomColumns, loadTimeLimits, ROOMS_NEED_MIGRATION } from '@/app/lib/activity-room';
 import {
   canEdit,
   FORMS_NEED_MIGRATION,
@@ -47,7 +48,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
     const tasks = await loadTasks(supabase, [id]);
     const taskIds = tasks.map((t) => t.id);
-    const [stepsRes, graded, assignmentsRes, mine, formKeys] = await Promise.all([
+    const [stepsRes, graded, assignmentsRes, mine, formKeys, timeLimits] = await Promise.all([
       taskIds.length
         ? supabase.from('scenario_task_steps').select('task_id, title, sort_order').in('task_id', taskIds).order('sort_order')
         : Promise.resolve({ data: [], error: null }),
@@ -55,6 +56,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       supabase.from('scenario_assignments').select('student_id, status').eq('scenario_id', id),
       session.role === 'admin' ? Promise.resolve(null) : getFacultyStudentIdSet(supabase, session.uid),
       loadFormKeys(supabase, id),
+      loadTimeLimits(supabase, [id]),
     ]);
     if (stepsRes.error || assignmentsRes.error) throw stepsRes.error ?? assignmentsRes.error;
 
@@ -64,9 +66,10 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     }
     const own = ((assignmentsRes.data ?? []) as { student_id: string; status: string }[]).filter((a) => mine === null || mine.has(a.student_id));
 
-    const result: ReturnDemoSummary & { tasks: ReturnDemoTask[]; forms: string[] } = {
+    const result: ReturnDemoSummary & { tasks: ReturnDemoTask[]; forms: string[]; time_limit_minutes: number | null } = {
       ...loaded.demo,
       forms: formKeys,
+      time_limit_minutes: timeLimits.get(id) ?? null,
       skills: tasks.map((t) => ({ id: t.skill_id ?? '', title: t.title })),
       student_count: new Set(own.map((a) => a.student_id)).size,
       graded_count: new Set(own.filter((a) => a.status === 'completed').map((a) => a.student_id)).size,
@@ -153,6 +156,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (input.forms !== undefined && (input.forms.length > 0 || (await loadFormKeys(supabase, id)).length > 0)) {
       update.form_keys = await knownFormKeys(supabase, input.forms);
     }
+    if (input.time_limit_minutes !== undefined) update.time_limit_minutes = input.time_limit_minutes;
     if (input.offering_id !== undefined) {
       const course = await activityCourse(supabase, 'scenarios', session, input.offering_id);
       if ('error' in course) return NextResponse.json({ error: course.error }, { status: 400 });
@@ -160,6 +164,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
     if (Object.keys(update).length > 0) {
       const { error } = await supabase.from('scenarios').update({ ...update, updated_at: new Date().toISOString() }).eq('id', id);
+      if (isMissingRoomColumns(error)) {
+        return NextResponse.json({ error: ROOMS_NEED_MIGRATION }, { status: 503 });
+      }
       if (error && 'form_keys' in update && isMissingForms(error)) {
         return NextResponse.json({ error: FORMS_NEED_MIGRATION }, { status: 503 });
       }

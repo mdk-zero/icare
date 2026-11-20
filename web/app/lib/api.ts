@@ -739,6 +739,35 @@ export interface WardFixture {
 }
 
 /** The plan's fixtures; `enabled` is false until migration 062 is applied. */
+/** A patient case or Return Demonstration given to students in one room (098). */
+export interface RoomActivity {
+  room_id: string;
+  scenario_id: string;
+  title: string;
+  kind: ScenarioKind;
+  /** The patient written into the case; null for a Return Demonstration. */
+  patient: { name: string; age: number | null; sex: string } | null;
+  time_limit_minutes: number | null;
+  /** The groups doing it there, each with their date of performance. */
+  groups: { key: string; label: string; count: number; deadline: string | null | 'mixed'; done: number }[];
+  students: number;
+  done: number;
+  next_date: string | null;
+}
+
+/** The Wards page: the Dean's rooms and what is assigned in each; `enabled` false before 098. */
+export async function fetchRoomActivities(): Promise<{ rooms: Room[]; activities: RoomActivity[]; enabled: boolean } | { error: string }> {
+  try {
+    const res = await apiFetch('/api/faculty/rooms/activities', { credentials: 'include' });
+    if (!res.ok) return { error: await errorOf(res, 'Unable to load the rooms') };
+    const json = (await res.json()) as { rooms?: Room[]; activities?: RoomActivity[]; enabled?: boolean };
+    return { rooms: json.rooms ?? [], activities: json.activities ?? [], enabled: json.enabled ?? false };
+  } catch (err) {
+    console.error('fetchRoomActivities() failed', err);
+    return { error: 'Unable to load the rooms' };
+  }
+}
+
 export async function fetchWardFixtures(): Promise<{ fixtures: WardFixture[]; enabled: boolean }> {
   try {
     const res = await apiFetch('/api/admin/rooms/fixtures', { credentials: 'include' });
@@ -1203,6 +1232,8 @@ export interface SimulationScenario {
   patient_name?: string | null;
   /** The course offering it was made for (migration 070); null for none. */
   offering_id?: string | null;
+  /** Minutes the student has once they start (098); null for none. */
+  time_limit_minutes?: number | null;
   learning_objectives: string[];
   is_ai_generated: boolean;
   student_count: number;
@@ -2372,6 +2403,8 @@ export interface ReturnDemoDetail extends ReturnDemoSummary {
   tasks: ReturnDemoTask[];
   /** The forms it includes (094), by key. */
   forms?: string[];
+  /** Minutes the student has once they start (098); null for none. */
+  time_limit_minutes?: number | null;
 }
 
 export interface ReturnDemoInput {
@@ -2383,6 +2416,8 @@ export interface ReturnDemoInput {
   forms?: string[];
   /** An uploaded skills checklist, sent in place of skills. */
   checklist?: ChecklistRow[];
+  /** Minutes the student has once they start (098); null for none. */
+  time_limit_minutes?: number | null;
 }
 
 /** An uploaded form, as listed for the instructor to add (095). */
@@ -2650,7 +2685,7 @@ export async function deleteReturnDemo(id: string): Promise<{ error?: string }> 
 
 export async function assignReturnDemo(
   id: string,
-  input: { team_ids: string[]; student_ids: string[]; deadline: string; required: boolean },
+  input: { team_ids: string[]; student_ids: string[]; deadline: string; required: boolean; room_id?: string | null },
 ): Promise<{ assigned?: number; skipped?: number; error?: string }> {
   try {
     const res = await apiFetch(`/api/faculty/return-demos/${id}/assign`, {
@@ -3362,13 +3397,14 @@ export async function assignScenarioToStudents(
   studentIds: string[],
   deadline: string,
   required: boolean,
+  roomId: string | null = null,
 ): Promise<ScenarioAssignment[]> {
   try {
     const res = await apiFetch(`/api/faculty/scenarios/${scenarioId}/assign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ student_ids: studentIds, deadline, required }),
+      body: JSON.stringify({ student_ids: studentIds, deadline, required, ...(roomId ? { room_id: roomId } : {}) }),
     });
     const json = (await res.json()) as { assignments?: ScenarioAssignment[]; error?: string };
     if (!res.ok || !json.assignments) {
@@ -3996,7 +4032,7 @@ export interface GroupCaseResult {
  */
 export async function assignGroupCase(
   teamId: string,
-  input: { scenario_id: string; deadline: string; required?: boolean },
+  input: { scenario_id: string; deadline: string; required?: boolean; room_id?: string | null },
 ): Promise<GroupCaseResult | { error: string }> {
   try {
     const res = await apiFetch(`/api/faculty/teams/${teamId}/assign-cases`, {

@@ -9,8 +9,11 @@ import { ReturnDemoForms } from '@/components/ReturnDemoForms';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useApiData, allCached } from '@/hooks/useApiData';
-import { fetchMySkillMastery, fetchScenarioAssignments, fetchScenarioTasks } from '@/lib/api';
+import { fetchMySkillMastery, fetchScenarioAssignments, fetchScenarioTasks, roomLabel } from '@/lib/api';
 import { TASK_RATING_BADGE, TASK_RATING_LABEL } from '@/lib/task-ratings';
+import { useCaseClock } from '@/hooks/useCaseClock';
+import { CountdownCard } from '@/components/CountdownCard';
+import { timeLimitLabel } from '@/lib/time-limit';
 
 /** How often an open Return Demonstration re-checks for the instructor's grades. */
 const GRADE_POLL_MS = 8000;
@@ -25,8 +28,10 @@ function splitSkillTitle(title: string): [string, string | null] {
 
 /**
  * A Return Demonstration: the Taylor's skills the student will demonstrate to
- * the instructor, each with its checklist steps to prepare from. There is no
- * patient, no start and no timer: the instructor grades it in person. Once
+ * the instructor, each with its checklist steps to prepare from, in the room
+ * it was assigned (098). There is no patient. The student prepares, then taps
+ * Start when the instructor is ready: the clock runs, counting down when it
+ * has a time limit, until the last skill is graded. Once
  * graded, each step shows its rating (N/A steps are left out of the score)
  * and each skill the instructor's note. Forms the instructor added, such as
  * the PhilPEN form, come first: filled in here and submitted. The skills'
@@ -49,6 +54,10 @@ export default function ReturnDemoScreen() {
   const taskResult = data?.[1] ?? null;
   const tasks = useMemo(() => taskResult?.tasks ?? [], [taskResult]);
   const completed = (taskResult?.assignment.status ?? assignment?.status) === 'completed';
+  // Start stamps the start; the clock runs until the last skill is graded (098).
+  const clock = useCaseClock(taskResult?.assignment ?? null, !completed, assignmentId);
+  const timeLimit = taskResult?.assignment.time_limit_minutes ?? assignment?.time_limit_minutes ?? null;
+  const room = taskResult?.assignment.room ?? assignment?.room ?? null;
   // Readiness: the student's own BKT estimates, read once; a failed read just hides the card.
   const mastery = useApiData(fetchMySkillMastery);
   const toReview = useMemo(() => {
@@ -116,6 +125,28 @@ export default function ReturnDemoScreen() {
         {performOn ? `Perform on ${performOn} · ` : ''}
         {tasks.length} skill{tasks.length === 1 ? '' : 's'} to demonstrate
       </Text>
+      {room ? (
+        <View style={styles.roomRow}>
+          <Ionicons name="location-outline" size={14} color={Palette.primary} />
+          <Text style={styles.roomText}>{roomLabel(room)}</Text>
+        </View>
+      ) : null}
+
+      {clock.needsStart ? (
+        <Card style={styles.startCard}>
+          <View style={styles.resultRow}>
+            <Ionicons name="timer-outline" size={18} color={Palette.primary} />
+            <Text style={styles.prepareText}>
+              {timeLimit
+                ? `When your instructor is ready to watch, tap Start. You have ${timeLimitLabel(timeLimit)} from then.`
+                : 'When your instructor is ready to watch, tap Start. The timer runs until every skill is graded.'}
+            </Text>
+          </View>
+          <PrimaryButton title="Start" onPress={clock.start} loading={clock.starting} />
+        </Card>
+      ) : (
+        <CountdownCard elapsed={clock.elapsed} timeLimitMinutes={timeLimit} />
+      )}
 
       {/* Its forms (094), such as the PhilPEN form: filled in first, before the skills. */}
       <ReturnDemoForms assignmentId={assignmentId} />
@@ -302,6 +333,9 @@ function createStyles(Palette: ReturnType<typeof useTheme>['Palette'], Type: Ret
     skillCard: { marginBottom: Spacing.lg },
     sectionTitle: { ...Type.sectionTitle, marginBottom: Spacing.sm },
     skillsCard: { marginBottom: Spacing.lg, gap: Spacing.sm },
+    startCard: { marginBottom: Spacing.lg, gap: Spacing.md },
+    roomRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: -Spacing.sm, marginBottom: Spacing.lg },
+    roomText: { fontSize: 14, fontWeight: '600', color: Palette.primary },
     resultRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.xs },
     summaryRow: {
       flexDirection: 'row',
