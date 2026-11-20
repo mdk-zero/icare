@@ -99,7 +99,7 @@ async function facultyLoad(supabase: Supabase, facultyIds: readonly string[]): P
   }
 
   const members = await readMatching<{ team_id: string; student_id: string }>([...teamOwner.keys()], (part, from, to) =>
-    supabase.from('team_members').select('id, team_id, student_id').in('team_id', part).order('id').range(from, to),
+    supabase.from('team_members').select('team_id, student_id').in('team_id', part).order('team_id').order('student_id').range(from, to),
   );
   const roster = new Map<string, Set<string>>(ids.map((id) => [id, new Set<string>()]));
   for (const m of members) {

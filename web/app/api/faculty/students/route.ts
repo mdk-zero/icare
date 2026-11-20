@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
-import { canSeeStudent, getScopedStudentIds } from '@/app/lib/admin-scope';
+import { canSeeStudent, getAdminScope, getScopedStudentIds } from '@/app/lib/admin-scope';
 import { readSession } from '@/app/lib/auth/session';
 import { sendStudentInvitationEmail } from '@/app/lib/auth/email';
 import { appDownloadUrl } from '@/app/lib/mobile-app';
@@ -28,7 +28,8 @@ function withSectionName<T extends { sections?: unknown }>(row: T) {
 
 /**
  * Resolves and validates the target section for create/update. Faculty may
- * only place students into sections they handle; admin may use any section.
+ * only place students into sections they handle; a Dean or Program Chair only
+ * into their own (since 077 each Dean's sections are kept apart).
  */
 async function resolveSection(
   supabase: ReturnType<typeof getSupabaseAdmin>,
@@ -49,6 +50,12 @@ async function resolveSection(
     const facultySections = await manageableSectionIds(supabase, session.role, session.uid);
     if (!facultySections.includes(sectionId)) {
       return { error: 'You can only assign students to your own sections', status: 403 };
+    }
+  } else if (session.role === 'admin') {
+    // A null scope means no limit, before 053/077 are applied.
+    const scope = await getAdminScope(supabase, session.uid);
+    if (scope && !scope.sectionIds.includes(sectionId)) {
+      return { error: 'That section belongs to another Dean or Program Chair', status: 403 };
     }
   }
   return {};
@@ -355,6 +362,17 @@ export async function PUT(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
 
+    // Only a student in the caller's own roster may be edited: this route must
+    // never reach a staff account, and a missing and an out-of-scope id read alike.
+    const { data: target } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', id)
+      .maybeSingle();
+    if (!target || target.role !== 'student' || !(await canSeeStudent(supabase, session, id))) {
+      return NextResponse.json({ error: 'Student not found' }, { status: 404 });
+    }
+
     const updates: Record<string, unknown> = { name: trimmedName, email: normalizedEmail };
 
     const parsedSex = parseSex(sex);
@@ -393,6 +411,7 @@ export async function PUT(request: NextRequest) {
       .from('users')
       .update(updates)
       .eq('id', id)
+      .eq('role', 'student')
       .select('id, email, name, role, picture_url, sex, section_id, sections!section_id(id, name)')
       .single();
 
