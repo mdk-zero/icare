@@ -311,7 +311,8 @@ check('junk is refused', !baseMatches(undefined, ghosted, reqs) && !baseMatches(
 console.log('demo fixtures');
 const demo = seed();
 const demoSplits = demo.offerings.filter((o) => o.grading);
-eq('three demo courses have a split', demoSplits.length, 3);
+eq('every demo course has a split', demoSplits.length, demo.offerings.filter((o) => demo.requirements.some((r) => r.offering_id === o.id)).length);
+check('the demo has split courses to check', demoSplits.length >= 2);
 for (const o of demoSplits) {
   const items = demo.requirements.filter((r) => r.offering_id === o.id);
   const parsedDemo = parseGrading(o.grading, items);
@@ -331,21 +332,12 @@ check(
   '…and holds only skill items',
   skillCheckOffs.every((c) => c.items.length > 0 && c.items.every((id) => demo.requirements.find((r) => r.id === id)?.kind === 'skill')),
 );
-// The ended term is a finished semester: every student's grade is complete, not "so far".
+// The ended term holds no course: its sections were second-year then, under
+// other names, and a course is given only to its own year (course-rules.ts).
 const today = new Date().toISOString().slice(0, 10);
-const ended = demo.offerings.find((o) => demo.terms.find((t) => t.id === o.term_id)!.ends_on < today && o.grading);
-check('the ended demo course has a split', !!ended);
-if (ended) {
-  const teamIds = new Set(demo.teams.filter((t) => t.faculty_id === ended.faculty_id && ended.section_ids.includes(t.section_id)).map((t) => t.id));
-  const roster = demo.users.filter((u) => u.role === 'student' && u.team_id && teamIds.has(u.team_id)).map((u) => u.id);
-  const items = demo.requirements.filter((r) => r.offering_id === ended.id);
-  const term = demo.terms.find((t) => t.id === ended.term_id)!;
-  const progress = evaluate(items, [], term, roster, { ...NO_FACTS, scores: demo.requirementScores });
-  const { invalid, grades } = computeGrades(ended.grading ?? null, items, progress);
-  check('the ended demo course has students', roster.length > 0);
-  eq('every student in the ended demo course has a complete grade', invalid || roster.filter((id) => grades[id]?.grade === null || grades[id]?.scored_weight !== 100).length, 0);
-  check('the ended demo course grades spread out', new Set(roster.map((id) => Math.round(grades[id]?.grade ?? 0))).size > 3);
-}
+const endedTerms = new Set(demo.terms.filter((t) => t.ends_on < today).map((t) => t.id));
+check('the demo has an ended term', endedTerms.size > 0);
+check('no demo course runs in the ended term', !demo.offerings.some((o) => endedTerms.has(o.term_id)));
 
 async function fallbackChecks() {
   console.log('pre-067 fallback');
