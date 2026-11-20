@@ -542,7 +542,12 @@ route("PATCH", "/api/admin/grade-edit-requests/:id", (ctx) => {
     body: accepted
       ? `${viewer.name} approved changing ${current.student_name}'s grade on "${current.scenario_title}". Open it in Review Submissions and click Edit.`
       : `${viewer.name} declined changing ${current.student_name}'s grade on "${current.scenario_title}".`,
-    data: { ...resolved, kind: "grade_edit_decision" },
+    data: {
+      ...resolved,
+      kind: "grade_edit_decision",
+      // The case, so the notification's page can open its Review Submissions.
+      scenario_id: db.assignments.find((a) => a.id === current.assignment_id)?.scenario_id ?? null,
+    },
     read_at: null,
     created_at: new Date().toISOString(),
   });

@@ -8,6 +8,6 @@ export const metadata: Metadata = {
 /** The faculty feed, pointed at what reaches an admin: grade change requests. */
 export default function AdminNotificationsPage() {
   return (
-    <FacultyNotificationsClient emptyHint="When your instructors ask to change a saved grade, the request lands here." />
+    <FacultyNotificationsClient portal="dean" emptyHint="When your instructors ask to change a saved grade, the request lands here." />
   );
 }

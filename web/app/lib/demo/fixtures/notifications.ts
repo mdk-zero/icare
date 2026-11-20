@@ -1,5 +1,6 @@
 import { ADMIN_ID, DEAN_ID, INSTRUCTOR_2_ID, INSTRUCTOR_ID, KIND, ago, demoId, type DemoUser } from "./people";
 import type { DemoAssignment, DemoScenario } from "./school";
+import { OFFERING_MAIN } from "./courses";
 
 export interface DemoNotification {
   id: string;
@@ -37,6 +38,8 @@ const WELCOME = "Everything here is sample data. Explore freely — it resets wh
 export function seedNotifications(users: DemoUser[], assignments: DemoAssignment[], scenarios: DemoScenario[]): DemoNotification[] {
   n = 0;
   const name = (id: string) => users.find((u) => u.id === id)?.name ?? "a student";
+  // The student a notification is about, so its page can open their profile.
+  const studentId = (fullName: string) => users.find((u) => u.role === "student" && u.name === fullName)?.id ?? null;
   const title = (a: DemoAssignment) => scenarios.find((s) => s.id === a.scenario_id)?.title ?? "a patient case";
   const graded = assignments.filter((a) => a.status === "completed");
   const joses = graded.find((a) => a.assigned_by === INSTRUCTOR_2_ID);
@@ -87,6 +90,7 @@ export function seedNotifications(users: DemoUser[], assignments: DemoAssignment
       note(INSTRUCTOR_ID, "system", "Grade change approved", `Ramon Castillo approved changing ${data.student_name}'s grade on "${data.scenario_title}". Open it in Review Submissions and click Edit.`, 1.2, false, {
         ...data,
         kind: "grade_edit_decision",
+        scenario_id: marias.scenario_id,
       }),
     );
   }
@@ -94,9 +98,24 @@ export function seedNotifications(users: DemoUser[], assignments: DemoAssignment
   // Last week's cases the Instructor has yet to grade: handed in, not finalized.
   const waiting = assignments.filter((a) => a.assigned_by === INSTRUCTOR_ID && a.status === "in_progress" && a.submitted_at).length;
   out.push(
-    note(DEAN_ID, "system", "Student moved between groups", "Maria Santos moved Rafael Tan from BSN 3101 · Group A to BSN 3101 · Group B. Reason: Balancing group sizes after the schedule change", 9, true, { kind: "group_move" }),
-    note(INSTRUCTOR_ID, "at_risk_flag", "Low performance flagged", "The nightly risk check flagged Hannah Villareal as low performing.", 0.3, false),
+    note(DEAN_ID, "system", "Student moved between groups", "Maria Santos moved Rafael Tan from BSN 3101 · Group A to BSN 3101 · Group B. Reason: Balancing group sizes after the schedule change", 9, true, {
+      kind: "team_member_move",
+      student_id: studentId("Rafael Tan"),
+    }),
+    note(INSTRUCTOR_ID, "at_risk_flag", "Low performance flagged", "The nightly risk check flagged Hannah Villareal as low performing.", 0.3, false, {
+      kind: "at_risk_flag",
+      student_id: studentId("Hannah Villareal"),
+    }),
     note(INSTRUCTOR_ID, "assignment_created", "Patient cases waiting for review", `${waiting} patient case${waiting === 1 ? " from last week is" : "s from last week are"} handed in and waiting for your grade.`, 0.5, true),
+    note(
+      INSTRUCTOR_ID,
+      "assignment_created",
+      "New course assignment",
+      "You were assigned NCM 114L Care of Older Person for BSN 3101 and BSN 3102. Set up its requirements checklist.",
+      58,
+      true,
+      { kind: "course", offeringId: OFFERING_MAIN },
+    ),
     note(ADMIN_ID, "system", "Test run finished", "The nightly Playwright suite passed: 142 of 142 tests.", 0.4, false),
   );
   return out;

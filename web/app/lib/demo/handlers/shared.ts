@@ -64,6 +64,12 @@ route("GET", "/api/notifications", ({ db, viewer }) => {
   return { notifications: mine, unread: mine.filter((n) => !n.read_at).length };
 });
 
+route("GET", "/api/notifications/:id", ({ db, viewer, params }) => {
+  const n = notificationsFor(db, viewer.id).find((x) => x.id === params.id);
+  if (!n) return json({ error: "Notification not found" }, 404);
+  return { notification: { id: n.id, type: n.type, title: n.title, body: n.body, data: n.data, read_at: n.read_at, created_at: n.created_at } };
+});
+
 route("PATCH", "/api/notifications", ({ db, viewer, body }) => {
   const now = new Date().toISOString();
   for (const n of notificationsFor(db, viewer.id)) {

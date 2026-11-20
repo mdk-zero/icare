@@ -18,8 +18,9 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import PageHeader from "../../components/PageHeader";
-import AccessRequestActions, { useOpenAccessRequest } from "../../components/AccessRequestActions";
+import AccessRequestActions from "../../components/AccessRequestActions";
 import GradeEditRequestActions from "../../components/GradeEditRequestActions";
+import { notificationLink, type NotificationPortal } from "../../lib/notification-links";
 
 type Filter = "all" | "unread" | "alert" | "warning";
 
@@ -58,9 +59,16 @@ const ANNOUNCEMENT_META = {
   chip: "bg-teal-500/10 text-teal-600 dark:text-teal-300",
 };
 
+/**
+ * The notifications feed of a web portal. Each card opens the notification's
+ * own page (NotificationDetail); its buttons still act on their own.
+ */
 export default function FacultyNotificationsClient({
+  portal = "instructor",
   emptyHint = "New submissions, deadlines, and alerts from your students will land here as they happen.",
 }: {
+  /** Whose pages the cards and their buttons open. */
+  portal?: NotificationPortal;
   emptyHint?: string;
 } = {}) {
   // Shared live store: inserts arrive over SSE and read state stays in step
@@ -73,7 +81,6 @@ export default function FacultyNotificationsClient({
     markRead,
     markAllRead,
   } = useNotifications();
-  const openAccessRequest = useOpenAccessRequest();
 
   const [filter, setFilter] = useState<Filter>("all");
 
@@ -189,23 +196,14 @@ export default function FacultyNotificationsClient({
                       : (TYPE_META[notification.type] ?? TYPE_META.info);
                     const unread = !notification.is_read;
                     const delay = (gi * 6 + Math.min(i, 8)) * 35;
-                    // A pending account request opens its create form when the
-                    // card is clicked, as Accept does; its own buttons still act alone.
-                    const pendingRequest =
-                      notification.access_request?.status === "pending" ? notification.access_request : null;
+                    const link = notificationLink(notification.data, portal);
+                    // The title's link covers the card, so the whole card opens the
+                    // notification's page; the buttons sit above it and act alone.
                     return (
                       <div
                         key={notification.id}
                         style={{ animationDelay: `${delay}ms` }}
-                        onClick={
-                          pendingRequest
-                            ? (e) => {
-                                if ((e.target as HTMLElement).closest("button, a")) return;
-                                openAccessRequest(notification.id, pendingRequest);
-                              }
-                            : undefined
-                        }
-                        className={`animate-rise rounded-2xl border p-4 shadow-tile transition-all hover:shadow-tile-hover ${pendingRequest ? "cursor-pointer " : ""}${
+                        className={`relative animate-rise rounded-2xl border p-4 shadow-tile transition-all hover:border-brand-500/40 hover:shadow-tile-hover ${
                           unread
                             ? "border-brand-500/30 bg-brand-500/[0.045]"
                             : "border-hairline bg-surface"
@@ -227,7 +225,12 @@ export default function FacultyNotificationsClient({
                                     : "font-medium text-foreground/70"
                                 }`}
                               >
-                                {notification.title}
+                                <Link
+                                  href={`/${portal}/notifications/${notification.id}`}
+                                  className="outline-none after:absolute after:inset-0 after:rounded-2xl focus-visible:after:ring-2 focus-visible:after:ring-brand-600/40"
+                                >
+                                  {notification.title}
+                                </Link>
                               </h3>
                               {unread && (
                                 <span
@@ -236,11 +239,12 @@ export default function FacultyNotificationsClient({
                                 />
                               )}
                             </div>
-                            <p className="mt-0.5 whitespace-pre-line text-sm leading-relaxed text-foreground/60">
+                            {/* A summary here; the whole message is on its page. */}
+                            <p className="mt-0.5 line-clamp-3 whitespace-pre-line text-sm leading-relaxed text-foreground/60">
                               {notification.message}
                             </p>
                             {notification.access_request && (
-                              <div className="mt-2.5">
+                              <div className="relative z-[1] mt-2.5">
                                 <AccessRequestActions
                                   notificationId={notification.id}
                                   request={notification.access_request}
@@ -248,19 +252,19 @@ export default function FacultyNotificationsClient({
                               </div>
                             )}
                             {notification.grade_edit_request && (
-                              <div className="mt-2.5">
+                              <div className="relative z-[1] mt-2.5">
                                 <GradeEditRequestActions request={notification.grade_edit_request} />
                               </div>
                             )}
-                            {notification.href && (
+                            {link && (
                               <Link
-                                href={notification.href}
+                                href={link.href}
                                 onClick={() => {
                                   if (unread) void markRead(notification.id);
                                 }}
-                                className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-700"
+                                className="relative z-[1] mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-700"
                               >
-                                Open Request
+                                {link.label}
                                 <FontAwesomeIcon icon={faChevronRight} className="h-3 w-3" />
                               </Link>
                             )}
@@ -271,7 +275,7 @@ export default function FacultyNotificationsClient({
                               {unread && (
                                 <button
                                   onClick={() => markRead(notification.id)}
-                                  className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-subtle px-2.5 py-1 text-xs font-medium text-foreground/60 transition-colors hover:border-brand-500/40 hover:bg-surface hover:text-brand-700 dark:hover:text-brand-300"
+                                  className="relative z-[1] inline-flex items-center gap-1.5 rounded-full border border-hairline bg-subtle px-2.5 py-1 text-xs font-medium text-foreground/60 transition-colors hover:border-brand-500/40 hover:bg-surface hover:text-brand-700 dark:hover:text-brand-300"
                                 >
                                   <FontAwesomeIcon icon={faCheck} className="h-3 w-3" />
                                   Mark read

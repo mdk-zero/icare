@@ -66,6 +66,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (failed?.error) throw failed.error;
 
     const accepted = status === 'accepted';
+    // The case, so the notification's page can open its Review Submissions.
+    const { data: assignment } = await supabase
+      .from('scenario_assignments')
+      .select('scenario_id')
+      .eq('id', current.assignment_id)
+      .maybeSingle();
     const { error: notifyError } = await insertNotifications(supabase, {
       user_id: current.faculty_id,
       type: accepted ? 'performance_validated' : 'system',
@@ -77,6 +83,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         kind: GRADE_EDIT_DECISION,
         request_id: id,
         assignment_id: current.assignment_id,
+        scenario_id: (assignment?.scenario_id as string | undefined) ?? null,
         status,
       },
     });

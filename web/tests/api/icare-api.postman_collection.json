@@ -589,6 +589,39 @@
           }
         },
         {
+          "name": "Notification page",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 401 without a session\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/notifications/00000000-0000-4000-8000-000000000000",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "00000000-0000-4000-8000-000000000000"
+              ]
+            },
+            "description": "Signed out, one notification's page data is refused."
+          }
+        },
+        {
           "name": "Profile",
           "protocolProfileBehavior": {
             "disableCookies": true

@@ -1341,10 +1341,10 @@ export interface FacultyNotification {
   access_request?: AccessRequestInfo;
   /** Set on an admin's copy of a faculty request to change a saved grade. */
   grade_edit_request?: GradeEditRequestInfo;
-  /** Where clicking it goes: a support request opens on Support Requests. */
-  href?: string;
   /** An Admin's announcement to everyone, some roles, or chosen people. */
   announcement?: boolean;
+  /** What the notification is about, for the page it links to (lib/notification-links). */
+  data?: Record<string, unknown>;
 }
 
 export interface GradeEditRequestInfo {
@@ -2980,10 +2980,7 @@ export function toFacultyNotification(n: ServerNotification): FacultyNotificatio
     access_request: toAccessRequest(n.data),
     grade_edit_request: toGradeEditRequest(n.data),
     announcement: n.data?.kind === 'announcement' || undefined,
-    href:
-      n.data?.kind === 'support_request' && typeof n.data.request_id === 'string'
-        ? `/admin/support?request=${encodeURIComponent(n.data.request_id)}`
-        : undefined,
+    data: n.data ?? undefined,
   };
 }
 
@@ -3091,6 +3088,19 @@ export async function resolveAccessRequest(
   } catch (err) {
     console.error('resolveAccessRequest() failed', err);
     return { ok: false, error: 'Connection error' };
+  }
+}
+
+/** One of the caller's notifications, for its own page when the live feed doesn't hold it. */
+export async function fetchNotification(id: string): Promise<FacultyNotification | null> {
+  try {
+    const res = await apiFetch(`/api/notifications/${encodeURIComponent(id)}`, { credentials: 'include' });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { notification?: ServerNotification };
+    return json.notification ? toFacultyNotification(json.notification) : null;
+  } catch (err) {
+    console.error('fetchNotification() failed', err);
+    return null;
   }
 }
 
