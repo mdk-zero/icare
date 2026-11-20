@@ -18,7 +18,6 @@ export default function FacultyMonitoringPage() {
       title="Ward Management"
       subtitle="Live ward census — room occupancy, check-ins and check-outs at a glance"
       showFloorPlan
-      chartBase="/instructor/patients"
     />
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faUsers,
@@ -22,7 +21,6 @@ import {
   faBuilding,
   faRightFromBracket,
   faRightToBracket,
-  faFolderOpen,
   faMap,
   faTableCellsLarge,
   faPenRuler,
@@ -382,11 +380,6 @@ interface PatientsManagerProps {
   /** Renders the ward floor plan (admin-arranged) above the census. */
   showFloorPlan?: boolean;
   /**
-   * Portal root for a patient's chart ("/instructor/patients"), appended with the
-   * patient id. Each portal passes its own: the shells bounce the other role.
-   */
-  chartBase?: string;
-  /**
    * Admin only: rearrange the room layout, add/edit/delete rooms, and roster
    * students to a room. The room APIs refuse anyone else, so this is only a
    * question of which controls to show.
@@ -400,7 +393,6 @@ export default function PatientsManager({
   title = "Patient Records",
   subtitle = "Browse patients by their assigned room, then open a room's census",
   showFloorPlan = false,
-  chartBase,
   manageRooms = false,
 }: PatientsManagerProps = {}) {
   const [search, setSearch] = useState("");
@@ -1302,15 +1294,6 @@ export default function PatientsManager({
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
-                            {chartBase && (
-                              <Link
-                                href={`${chartBase}/${patient.id}`}
-                                className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-600/5 rounded-lg transition-colors"
-                                title="Open patient chart"
-                              >
-                                <FontAwesomeIcon icon={faFolderOpen} className="w-4 h-4" />
-                              </Link>
-                            )}
                             {isDischarged(patient) ? (
                               <button
                                 onClick={() => openCheckInModal(patient)}

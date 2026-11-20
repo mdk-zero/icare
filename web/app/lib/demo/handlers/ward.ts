@@ -371,45 +371,6 @@ function vitalOut(ctx: Ctx, v: (typeof ctx.db.vitals)[number]) {
   };
 }
 
-route("GET", "/api/faculty/patients/:id", (ctx) => {
-  if (!staffOnly(ctx)) return forbidden();
-  const { db } = ctx;
-  const patient = db.patients.find((p) => p.id === ctx.params.id);
-  if (!patient || !canSee(ctx, patient)) return notFound("Patient not found");
-  return {
-    patient: patientOut(ctx, patient),
-    vitals: db.vitals
-      .filter((v) => v.patient_id === patient.id)
-      .sort((a, b) => b.recorded_at.localeCompare(a.recorded_at))
-      .map((v) => vitalOut(ctx, v)),
-    tpr: [],
-    ivf: [],
-    notes: [],
-    events: [
-      ...db.audit
-        .filter((r) => r.entity_id === patient.id)
-        .map((r) => ({
-          id: r.id,
-          action: r.action,
-          created_at: r.created_at,
-          actor_name: userById(db, r.actor_id)?.name ?? "System",
-          details: r.details,
-        })),
-      {
-        id: `admit-${patient.id}`,
-        action: "patient.check_in",
-        created_at: patient.admission_date,
-        actor_name: userById(db, patient.created_by)?.name ?? "System",
-        details: {},
-      },
-    ].sort((a, b) => b.created_at.localeCompare(a.created_at)),
-    discharge_summaries:
-      patient.status === "discharged"
-        ? db.dischargeSummaries.filter((d) => d.patient_id === patient.id).sort((a, b) => b.discharged_at.localeCompare(a.discharged_at))
-        : [],
-  };
-});
-
 route("POST", "/api/faculty/patients/discharge-summary", async (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   const summary = ctx.db.dischargeSummaries.find((d) => d.id === ctx.body?.summary_id);

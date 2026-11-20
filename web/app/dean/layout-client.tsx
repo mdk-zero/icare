@@ -47,8 +47,7 @@ const navItems: NavItem[] = [
   { id: "program-chairs", label: "Program Chairs", href: PROGRAM_CHAIRS_HREF, icon: faSitemap, section: "Management" },
   { id: "curriculum", label: "Curriculum", href: "/dean/curriculum", icon: faDiagramProject, section: "Management" },
   { id: "courses", label: "Courses", href: "/dean/courses", icon: faBookMedical, section: "Management" },
-  // Patients and Rooms folded into one page, as on the faculty side. The
-  // patient chart keeps its /dean/patients/[id] route, so it counts here too.
+  // Patients and Rooms folded into one page, as on the faculty side.
   { id: "wards", label: "Wards", href: "/dean/wards", icon: faBedPulse, section: "Management" },
   { id: "analytics", label: "Analytics", href: "/dean/analytics", icon: faChartBar, section: "Data" },
   { id: "reports", label: "Reports", href: "/dean/reports", icon: faFileLines, section: "Data" },
@@ -58,7 +57,6 @@ const navItems: NavItem[] = [
 
 function isActive(item: NavItem, pathname: string) {
   if (item.href === "/dean") return pathname === "/dean";
-  if (item.id === "wards" && pathname.startsWith("/dean/patients")) return true;
   return pathname.startsWith(item.href);
 }
 

@@ -18,7 +18,6 @@ export default function AdminWardsPage() {
       subtitle="Live ward census — room occupancy, check-ins and check-outs at a glance"
       showFloorPlan
       manageRooms
-      chartBase="/dean/patients"
     />
   );
 }

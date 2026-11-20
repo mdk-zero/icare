@@ -1029,25 +1029,6 @@ export async function fetchFacultyEhrRecords(
   }
 }
 
-export async function reviewProgressNote(noteId: string): Promise<{ success?: boolean; error?: string }> {
-  try {
-    const res = await apiFetch('/api/faculty/ehr', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ note_id: noteId }),
-    });
-    if (!res.ok) {
-      const json = (await res.json()) as { error?: string };
-      return { error: json.error || 'Unable to review note' };
-    }
-    return { success: true };
-  } catch (err) {
-    console.error('reviewProgressNote() failed', err);
-    return { error: 'Unable to review note. Please try again.' };
-  }
-}
-
 // Competency validation (faculty records competency_scores — the ML label source)
 export interface CompetencyArea {
   id: string;
@@ -2891,95 +2872,6 @@ export async function deleteFacultyPatient(
   } catch (err) {
     console.error('deleteFacultyPatient() failed', err);
     return { error: 'Unable to delete patient. Please try again.' };
-  }
-}
-
-/** One admission-lifecycle entry on a patient's timeline, from the audit trail. */
-export interface PatientEvent {
-  id: string;
-  action: string;
-  created_at: string;
-  actor_name: string;
-  details: Record<string, unknown>;
-}
-
-/** One AI-drafted follow-up action on a discharge summary. */
-export interface FollowUpRecommendation {
-  title: string;
-  detail: string;
-}
-
-/** A completed stay, materialised at check-out (migration 037). */
-export interface DischargeSummary {
-  id: string;
-  patient_id: string;
-  admitted_at: string | null;
-  discharged_at: string;
-  diagnosis: string;
-  room_label: string;
-  vitals_digest: {
-    readings?: number;
-    flagged?: number;
-    critical?: number;
-    stats?: Record<string, { min: number; max: number; avg: number; n: number }>;
-    findings?: { message: string; severity: string; recommendation?: string }[];
-  };
-  ehr_digest: {
-    tpr?: number;
-    ivf?: number;
-    ivf_ongoing?: number;
-    notes?: number;
-    notes_reviewed?: number;
-  };
-  follow_up: FollowUpRecommendation[];
-  ai_model: string | null;
-  ai_generated_at: string | null;
-  created_at: string;
-}
-
-/** Drafts follow-up recommendations into an existing summary. */
-export async function generateFollowUps(
-  summaryId: string,
-): Promise<{ summary?: DischargeSummary; error?: string }> {
-  try {
-    const res = await apiFetch('/api/faculty/patients/discharge-summary', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ summary_id: summaryId }),
-    });
-    const json = (await res.json()) as { summary?: DischargeSummary; error?: string };
-    if (!res.ok) return { error: json.error || 'Unable to generate recommendations' };
-    return { summary: json.summary };
-  } catch (err) {
-    console.error('generateFollowUps() failed', err);
-    return { error: 'Unable to generate recommendations. Please try again.' };
-  }
-}
-
-/** A patient's whole chart, as served by /api/faculty/patients/[id]. */
-export interface PatientChart {
-  patient: FacultyPatient & { medical_history?: string | null };
-  vitals: VitalReading[];
-  tpr: EhrRecord[];
-  ivf: EhrRecord[];
-  notes: EhrRecord[];
-  events: PatientEvent[];
-  /** Completed stays; empty unless the patient is currently discharged. */
-  discharge_summaries: DischargeSummary[];
-}
-
-export async function fetchFacultyPatientDetail(patientId: string): Promise<PatientChart | null> {
-  try {
-    const res = await apiFetch(`/api/faculty/patients/${patientId}`, { credentials: 'include' });
-    if (!res.ok) {
-      if (res.status !== 404) console.error('fetchFacultyPatientDetail() failed', res.status);
-      return null;
-    }
-    return (await res.json()) as PatientChart;
-  } catch (err) {
-    console.error('fetchFacultyPatientDetail() failed', err);
-    return null;
   }
 }
 
