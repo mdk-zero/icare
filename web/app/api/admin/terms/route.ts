@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
-import { badRequest, courseFailure, parseTerm, readJson, requireRole } from '@/app/lib/courses';
+import { badRequest, courseFailure, must, parseTerm, readJson, requireRole } from '@/app/lib/courses';
+import { sameSemesterTerm, termNameProblem } from '@/app/lib/course-rules';
 
-/** POST { name, starts_on, ends_on }: add an academic term. The list itself comes with GET /api/admin/courses. */
+/**
+ * POST { name, starts_on, ends_on }: add an academic term. The list itself comes with GET /api/admin/courses.
+ * The name must say the semester and academic year, and a Dean has one term for each (course-rules.ts).
+ */
 export async function POST(request: NextRequest) {
   const { session, response } = await requireRole('admin');
   if (response) return response;
@@ -12,9 +16,19 @@ export async function POST(request: NextRequest) {
   if (!body) return badRequest('Invalid JSON body');
   const parsed = parseTerm(body);
   if (!parsed.ok) return badRequest(parsed.error);
+  const nameProblem = termNameProblem(parsed.value.name);
+  if (nameProblem) return badRequest(nameProblem);
 
   try {
     const supabase = getSupabaseAdmin();
+    const own = (must(await supabase.from('academic_terms').select('id, name').eq('admin_id', session.uid)) ?? []) as {
+      id: string;
+      name: string;
+    }[];
+    const twin = sameSemesterTerm(own, parsed.value.name);
+    if (twin) {
+      return NextResponse.json({ error: `You already have this semester, as "${twin.name}". Use that one.` }, { status: 409 });
+    }
     const { data: term, error } = await supabase
       .from('academic_terms')
       .insert({ ...parsed.value, admin_id: session.uid })

@@ -14,15 +14,29 @@ import {
   setOfferingSections,
   stringList,
 } from '@/app/lib/courses';
+import { loadCourseCatalog } from '@/app/lib/curriculum-server';
+import { addedSectionsProblem, catalogCourse, fitsSection } from '@/app/lib/course-rules';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
+type Supabase = ReturnType<typeof getSupabaseAdmin>;
+
+/** The curriculum the course's Dean works to, and which sections it lets this course have. */
+async function courseRules(supabase: Supabase, courseId: string, code: string) {
+  const course = (await supabase.from('courses').select('admin_id').eq('id', courseId).maybeSingle()).data;
+  const deanId = (course?.admin_id as string | null) ?? null;
+  const catalog = deanId ? await loadCourseCatalog(supabase, deanId) : null;
+  const known = catalog ? catalogCourse(catalog, code) : null;
+  return { catalog, year: known?.year ?? null, fits: (name: string) => !known || fitsSection(known, name) };
+}
+
 /**
- * GET → { sections: [{ id, name, on_course, groups }] }
+ * GET → { sections: [{ id, name, on_course, groups, fits }], course_year }
  * The sections the instructor can teach this course in (instructorSectionChoices),
- * marking the ones it is in now and their own groups in each.
+ * marking the ones it is in now and their own groups in each. Sections of
+ * another year than the course's are left out (course-rules.ts).
  */
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   const { session, response } = await requireRole('faculty');
@@ -33,7 +47,9 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     const supabase = getSupabaseAdmin();
     const offering = await loadOwnOffering(supabase, session.uid, id);
     if (!offering) return notFound('Course');
-    return NextResponse.json({ sections: await instructorSectionChoices(supabase, offering) });
+    const { fits, year } = await courseRules(supabase, offering.course.id, offering.course.code);
+    const sections = await instructorSectionChoices(supabase, offering, fits);
+    return NextResponse.json({ sections: sections.map((s) => ({ ...s, fits: fits(s.name) })), course_year: year });
   } catch (err) {
     return courseFailure(err, 'Unable to load the sections');
   }
@@ -60,7 +76,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (!offering) return notFound('Course');
     if (termStatus(offering.term) === 'ended') return badRequest('This semester has ended, so its roster is locked');
 
-    const choices = await instructorSectionChoices(supabase, offering);
+    const all = await instructorSectionChoices(supabase, offering);
+    const { catalog, fits } = await courseRules(supabase, offering.course.id, offering.course.code);
+    const added = all.filter((s) => sectionIds.includes(s.id) && !offering.section_ids.includes(s.id));
+    const problem = catalog ? addedSectionsProblem(catalog, offering.course.code, added.map((s) => s.name)) : null;
+    if (problem) return badRequest(problem);
+    const choices = all.filter((s) => s.on_course || fits(s.name));
     const byId = new Map(choices.map((s) => [s.id, s]));
     if (sectionIds.some((s) => !byId.has(s))) return badRequest('One of those sections is not open to you');
 

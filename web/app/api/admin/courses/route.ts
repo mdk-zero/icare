@@ -12,14 +12,16 @@ import {
   readJson,
   requireRole,
 } from '@/app/lib/courses';
-import { loadActiveCatalog } from '@/app/lib/curriculum-server';
+import { loadActiveCatalog, loadCourseCatalog } from '@/app/lib/curriculum-server';
+import { courseCodeProblem } from '@/app/lib/course-rules';
 
 /**
  * GET: everything the Dean's Courses page shows, in one call — their terms,
  * their courses with skills, every assignment of those courses with its
  * instructor, sections and student count, and the lab courses of the curriculum
  * in use for Assign Course to offer.
- * POST { code, title, description? }: add a course.
+ * POST { code, title, description? }: add a course. It must be one of the lab
+ * courses of the curriculum in use (course-rules.ts).
  */
 export async function GET() {
   const { session, response } = await requireRole('admin');
@@ -127,6 +129,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = getSupabaseAdmin();
+    const problem = courseCodeProblem(await loadCourseCatalog(supabase, session.uid), parsed.value.code);
+    if (problem) return badRequest(problem);
     const { data: course, error } = await supabase
       .from('courses')
       .insert({ ...parsed.value, admin_id: session.uid })

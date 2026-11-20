@@ -44,7 +44,7 @@ The app header is the dark teal band at the top of every tab. It shows the iCARE
 A few things work the same on every screen:
 
 - Pull a screen down to load the latest data.
-- Lists that open and close have an arrow at the right of their heading. The arrow points right while the list is closed and down while it is open. Tap the heading to open or close it.
+- Lists that open and close have an arrow at the right of their heading. In most lists the arrow points right while the list is closed and down while it is open. In the Clinic tab it is a small round button that points down while the list is closed and up while it is open. Tap the heading to open or close it.
 - To go back, use your phone's Back button or the back arrow at the top left of the screen.
 
 ## Home
@@ -80,8 +80,16 @@ The Clinic tab has, from top to bottom:
 
 - **Room Layout**: the ward's floor plan.
 - **Pending Tasks**: the Patient Cases and Case Presentations you still have to do. This list starts open.
-- **Graded Patient Cases**: your finished Patient Cases. It appears once one is graded.
-- **Hospital Cases**: your Case Presentations (see [Case Presentations](#case-presentations)).
+- **Graded Patient Cases**: your finished Patient Cases. It appears once one is graded, and starts closed.
+- **Hospital Cases**: your Case Presentations (see [Case Presentations](#case-presentations)). It starts closed.
+
+Each of the three headings is a card with an icon, the list's name, a number and a line about what is inside, so a closed list still tells you something:
+
+- **Pending Tasks** says "Next:" and the title of the first item, or "You're all caught up". The number is red while work is left.
+- **Graded Patient Cases** says "Latest:" and your most recent graded case with its grade.
+- **Hospital Cases** says how many Case Presentations are left to hand in, for example "1 to hand in", or "All handed in".
+
+Tap a heading to open or close its list. The lists scroll with the page, so **Pending Tasks** moves up and away as you scroll; no heading stays at the top of the screen.
 
 ### Find your patient on the ward
 
@@ -240,7 +248,7 @@ To get ready:
 
 ### Fill in a form
 
-Some Return Demonstrations come with a form, such as the PhilPEN Form, that you fill in on the app before you demonstrate. Your instructor sees your answers written on the form.
+Some Return Demonstrations come with a form that you fill in on the app before you demonstrate. It may be the PhilPEN Form or a form your instructor uploaded as a PDF. A form can have more than one page. Your instructor sees your answers written on the form.
 
 **Before you start**
 
@@ -249,11 +257,12 @@ Some Return Demonstrations come with a form, such as the PhilPEN Form, that you 
 To fill in a form:
 
 1. Open the Return Demonstration (see [Get ready for a Return Demonstration](#get-ready-for-a-return-demonstration)). The form's card shows its name, a badge (**Not started**, **Draft** or **Submitted**), a short description and how many questions you have answered, for example "0 of 24 answered".
-2. Optional: Tap **Look over** to see the printed form. Tap **Start filling in** there to go on.
-3. Tap **Start** (or **Continue** for a draft). The form opens full screen, in numbered sections. For the PhilPEN Form these are Client, Measurements, History, Blood pressure (1st encounter), Lifestyle, and Risk and management. Required questions are marked with a red *.
+2. Optional: Tap **Look over** to see the printed form. For a form with several pages, every page is shown one under the other. Tap **Start filling in** there to go on.
+3. Tap **Start** (or **Continue** for a draft). The form opens full screen, in numbered sections. For the PhilPEN Form these are Client, Measurements, History, Blood pressure (1st encounter), Lifestyle, and Risk and management. A form your instructor uploaded has the sections they set up. Required questions are marked with a red *.
 4. Answer the questions.
 5. Optional: Tap **Save draft** to save your answers and carry on later.
 6. Tap **Submit**. If a required question is empty, a message names it, for example "Fill in … before submitting the PhilPEN Form."
+7. A box asks "Submit the PhilPEN Form?" (with the form's own name) and says how many questions you have answered, for example "24 of 24 answered", and that you can still edit them until your Return Demonstration is graded. Tap **Submit**, or **Keep editing** to go back to the form.
 
 **Result:** The message "Submitted. Your instructor can see your answers on the form now." appears, and the badge reads **Submitted**. If you close the form with changes you haven't saved, they are kept as a draft: "Draft saved. Continue any time before your instructor grades it."
 
@@ -357,7 +366,7 @@ To find a quiz:
 1. Tap **Quizzes** (the clipboard with a question mark). The **Quizzes** screen opens with two tabs, **On going** and **Completed**, each with a count.
 
 > [!NOTE]
-> "On going" lists the quizzes you haven't submitted yet. **Completed** lists the ones you have, with your grade and flashcards.
+> "On going" lists the quizzes you haven't submitted yet. **Completed** lists the ones you have, with your grade. Open one to study its flashcards.
 
 2. On the **On going** tab, find the quiz. Each row shows the title, the number of questions, the time limit (or "Untimed") and who set it. Tags show **Required**, the due date (for example "Due Nov 20") or "Not started", and the quiz's category.
 
@@ -394,7 +403,7 @@ To take a quiz:
 > Tapping **Start quiz** starts your try at once; there's no second question. After that the only way out is to submit. Leaving the app twice submits the quiz with the answers you have so far.
 
 3. Tap **Start quiz**. The quiz opens full screen. A bar at the top shows the title and "Strict mode", and a timer shows how long is left on a timed quiz.
-4. Read the question and tap your answer. For a question with a box instead of choices, type your answer in the **Type your answer** box.
+4. Read the question and tap your answer. For a question with a box instead of choices, type your answer in the **Type your answer** box. An essay question says "Essay", how many points it is worth and "your instructor grades it". Write your answer in the **Write your answer** box. It can be up to 5000 characters, and a counter under the box shows how many you have used.
 
    <img src="img/student/09-quiz-question.png" alt="A quiz question in strict mode with Previous, Skip and Next." width="300">
 
@@ -407,7 +416,7 @@ To take a quiz:
 6. On the last question, tap **Submit**. A confirmation box titled "Submit Quiz" asks "Submit all 10 answers?", or tells you how many questions are unanswered and asks "Submit anyway?"
 7. Tap **Submit**.
 
-**Result:** Your answers are graded at once and your result opens (see [See your result and missed questions](#see-your-result-and-missed-questions)).
+**Result:** Your answers are graded at once and your result opens (see [See your result and missed questions](#see-your-result-and-missed-questions)). Essay answers are not graded at once: your instructor grades them later.
 
 While you take the quiz:
 
@@ -426,12 +435,14 @@ To read your result:
 
 1. Read the result. A dial shows "Passed" or "Not passed", your score and how many you got right, for example "8 of 10 correct". Below it are **Time Spent**, **Score**, **Min. Passing Score**, **Date Finished** and **Attempt**, for example "1 of 1".
 
+   If the quiz has an essay that your instructor hasn't graded yet, there is no dial and no score. The screen says "Waiting for your instructor" and how many of the other questions you got right, and that you will get a notification. See [Wait for an essay grade](#wait-for-an-essay-grade).
+
    <img src="img/student/10-quiz-result.png" alt="The quiz result with the pass dial, score and Review Missed Questions." width="300">
 
    *Figure 10. A quiz result with the pass dial, the details and Review Missed Questions.*
 
    A note may explain how the quiz ended, for example "Submitted automatically because you left the app 2 times during the quiz."
-2. Tap **Review Missed Questions** (the number in brackets counts them). Under **Missed questions**, each question shows a **Skipped** tag if you skipped it, your answer marked ✗, the right answer marked ✓, and an explanation.
+2. Tap **Review Missed Questions** (the number in brackets counts them). Essay questions are not listed, because they are not right or wrong. Under **Missed questions**, each question shows a **Skipped** tag if you skipped it, your answer marked ✗, the right answer marked ✓, and an explanation.
 3. Scroll down to **Reflect on your results** and write your reflection now (see [Reflect on your results](#reflect-on-your-results)).
 
 > [!IMPORTANT]
@@ -440,6 +451,19 @@ To read your result:
 4. Tap **Return**. The quiz's details open again.
 
 **Result:** You know your score and what you got wrong.
+
+### Wait for an essay grade
+
+Your instructor reads and grades essay answers. Until they do, your quiz has no score.
+
+To see whether an essay is graded:
+
+1. Tap **Quizzes**, then the **Completed** tab. A quiz with an essay still to grade shows the tag "Essay being graded" and an hourglass where the grade ring would be.
+2. Tap the quiz. Its details say "Being graded" in place of "Passed" or "Keep practicing", and "Your instructor is still grading your essay. Your grade will include it once it is graded."
+
+**Result:** When your instructor has graded the essay, you get the notification "Your essay is graded", which gives your new score. Tap it to open the quiz's details, where the grade ring now shows your grade. With an essay, the **Score** on the result is a percentage, not a count of questions.
+
+**Who is notified:** You, when the essay is graded.
 
 ### Reflect on your results
 
@@ -488,7 +512,7 @@ Flashcards turn a quiz you have taken into question-and-answer cards.
 To study with flashcards:
 
 1. Open a quiz on the **Completed** tab of Quizzes.
-2. Tap **Study flashcards**. The first card shows "Question", with "Card 1 of 10" above it.
+2. Tap **Study flashcards**, the button above **Take it again** or **Take review quiz**. The first card shows "Question", with "Card 1 of 10" above it.
 3. Read the question, then tap the card to see the answer and its explanation.
 4. Tap **Got it** if you knew it, or **Still learning** if you didn't. The next card appears.
 5. At the end, "Round complete" shows how many you got. Tap **Review the 3 still learning** (the number varies) to go over the ones you missed, **Restart all 10 cards**, or **Back to the quiz**.
@@ -558,7 +582,7 @@ The **Performance** screen shows:
 
 - **Overall Score** and **Quizzes Taken**: the average of all your graded quiz tries, and how many tries you have made.
 - **By Skill Area**: a bar for each skill area your quizzes have covered. The scores are worked out when you submit a quiz. Until then it reads "No skill area scores yet — they appear as your instructor validates your work."
-- **Skill Mastery (BKT)**: how likely it is that you know each skill. It is updated after every quiz answer and every finished Patient Case or Return Demonstration, and lists your weakest skills first, the same order a review quiz follows. 95% counts as mastered. Tap **Show 6 more** (the number varies) to see the rest.
+- **Skill Mastery**: how likely it is that you know each skill. It is updated after every quiz answer and every finished Patient Case or Return Demonstration, and lists your weakest skills first, the same order a review quiz follows. 95% counts as mastered. Tap **Show 6 more** (the number varies) to see the rest.
 - **Quiz History**: each quiz with your latest score. Tap a quiz you have taken more than once to see each try.
 
 <img src="img/student/14-performance.png" alt="The Performance screen with Overall Score, skill areas and skill mastery." width="300">
@@ -570,7 +594,7 @@ The **Performance** screen shows:
 
 ## Notifications
 
-Notifications tell you about new work, uploads, grades for Case Presentations, Library materials and messages from the iCARE++ team.
+Notifications tell you about new work, uploads, grades for Case Presentations and quiz essays, Library materials and messages from the iCARE++ team.
 
 To read your notifications, tap **Notifications** (the bell) in the app header. The **Notifications** screen opens. At the top it counts your unread notifications, for example "3 unread messages", with **Mark all read**. When everything is read, it shows "Live" while new notifications arrive as they're sent.
 
@@ -585,6 +609,7 @@ Each notification shows a type badge, such as **Assignment**, **Validated**, **S
 | "New patient case assigned" | Your instructor assigns you a Patient Case | The Patient Case |
 | "New Return Demonstration" | Your instructor assigns you a Return Demonstration | The Return Demonstration |
 | "New quiz available" or "New quiz assigned" | Your instructor publishes a quiz for your section, or assigns one to you | The quiz's details |
+| "Your essay is graded" | Your instructor has graded the essay in a quiz you took | The quiz's details |
 | "New case presentation assigned" | Your instructor assigns your group a Case Presentation | The Case Presentation |
 | "Group slides uploaded" or "Group slides updated" | Your group leader uploads or replaces the slides | The Case Presentation |
 | "Case presentation graded" | Your instructor grades your group | The Case Presentation |

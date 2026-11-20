@@ -36,6 +36,7 @@ import {
   type Semester,
 } from "../../lib/bsn-curriculum";
 import { COURSE_LIMITS, formatTermDates, termsOverlap } from "../../lib/course-progress";
+import { semesterNumber } from "../../lib/course-rules";
 import { EcgLoader } from "../../components/EcgLoader";
 import { loadingToast } from "../../components/Toast";
 
@@ -255,12 +256,12 @@ export function CoursePicker({
   taken?: (code: string) => boolean;
   /** Lab courses already added that aren't in the curriculum list, so they can be picked too. */
   existing?: { code: string; title: string }[];
-  /** Only the curriculum's courses for this semester; all of them for Midterm or when left out. */
+  /** Only the curriculum's courses for this semester (course-rules.ts); all of them when left out. */
   semester?: Semester;
   /** The Dean's curriculum in use (091); the built-in NCM lab courses without one. */
   catalog?: readonly CurriculumCourse[];
 }) {
-  const semesterNo = semester === "first" ? 1 : semester === "second" ? 2 : null;
+  const semesterNo = semester ? semesterNumber(semester) : null;
   // The one already chosen stays listed, or a course opened from the list would look unpicked.
   const others = (existing ?? []).filter(
     (c) => !catalog.some((x) => sameCode(x.code, c.code)) && (isLabCourse(c.code) || sameCode(c.code, value)),
@@ -706,7 +707,7 @@ export function AssignmentModal({
               <label htmlFor="assign-course" className={labelClass}>
                 Course <span className="text-rose-500">*</span>
               </label>
-              <CoursePicker id="assign-course" value={code} onChange={setCode} disabled={saving} catalog={catalog} />
+              <CoursePicker id="assign-course" value={code} onChange={setCode} disabled={saving} semester={semester} catalog={catalog} />
               {code && !course && (
                 <p className="mt-1.5 text-xs text-gray-500">Not in your courses yet: it&apos;s added when you assign.</p>
               )}

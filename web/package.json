@@ -18,6 +18,7 @@
     "check:return-demos": "tsx scripts/check-return-demos.ts",
     "check:focus": "tsx scripts/check-skill-focus.ts",
     "check:curriculum": "tsx scripts/check-curriculum.ts",
+    "check:course-rules": "tsx scripts/check-course-rules.ts",
     "check:db-caches": "tsx scripts/check-db-caches.ts",
     "db:seed:basic-cases": "tsx scripts/seed-basic-cases.ts",
     "db:seed:scenario-quizzes": "tsx scripts/seed-scenario-quizzes.ts",

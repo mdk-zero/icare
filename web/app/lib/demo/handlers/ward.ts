@@ -5,6 +5,8 @@ import { newId } from "../store";
 import type { DemoPatient, DemoRoom } from "../fixtures/school";
 import { audit } from "./shared";
 import { userById } from "./scope";
+import { PATIENT_PRESETS, presetVitals } from "../../patient-presets";
+import { cleanCondition } from "../../ai/patient-fill";
 
 /** The ward census, rooms and the floor plan, vitals and charts. */
 
@@ -413,45 +415,6 @@ function vitalOut(ctx: Ctx, v: (typeof ctx.db.vitals)[number]) {
   };
 }
 
-route("GET", "/api/faculty/patients/:id", (ctx) => {
-  if (!staffOnly(ctx)) return forbidden();
-  const { db } = ctx;
-  const patient = db.patients.find((p) => p.id === ctx.params.id);
-  if (!patient || !canSee(ctx, patient)) return notFound("Patient not found");
-  return {
-    patient: patientOut(ctx, patient),
-    vitals: db.vitals
-      .filter((v) => v.patient_id === patient.id)
-      .sort((a, b) => b.recorded_at.localeCompare(a.recorded_at))
-      .map((v) => vitalOut(ctx, v)),
-    tpr: [],
-    ivf: [],
-    notes: [],
-    events: [
-      ...db.audit
-        .filter((r) => r.entity_id === patient.id)
-        .map((r) => ({
-          id: r.id,
-          action: r.action,
-          created_at: r.created_at,
-          actor_name: userById(db, r.actor_id)?.name ?? "System",
-          details: r.details,
-        })),
-      {
-        id: `admit-${patient.id}`,
-        action: "patient.check_in",
-        created_at: patient.admission_date,
-        actor_name: userById(db, patient.created_by)?.name ?? "System",
-        details: {},
-      },
-    ].sort((a, b) => b.created_at.localeCompare(a.created_at)),
-    discharge_summaries:
-      patient.status === "discharged"
-        ? db.dischargeSummaries.filter((d) => d.patient_id === patient.id).sort((a, b) => b.discharged_at.localeCompare(a.discharged_at))
-        : [],
-  };
-});
-
 route("POST", "/api/faculty/patients/discharge-summary", async (ctx) => {
   if (!staffOnly(ctx)) return forbidden();
   const summary = ctx.db.dischargeSummaries.find((d) => d.id === ctx.body?.summary_id);
@@ -465,6 +428,46 @@ route("POST", "/api/faculty/patients/discharge-summary", async (ctx) => {
   summary.ai_model = "demo";
   summary.ai_generated_at = new Date().toISOString();
   return { summary };
+});
+
+/**
+ * "Fill with AI" without the AI: the closest condition preset, or a mildly
+ * unwell adult for a condition the presets don't cover.
+ */
+route("POST", "/api/faculty/patients/ai-fill", async (ctx) => {
+  if (!staffOnly(ctx)) return forbidden();
+  const condition = cleanCondition(ctx.body?.condition);
+  if (condition.length < 2) return json({ error: "Name a condition first" }, 400);
+  await sleep(1400);
+
+  const wanted = condition.toLowerCase();
+  const plain = (label: string) => label.toLowerCase().replace(/\s*\(.*\)$/, "");
+  const preset =
+    PATIENT_PRESETS.find((p) => p.label.toLowerCase() === wanted) ??
+    PATIENT_PRESETS.find((p) => wanted.includes(plain(p.label)) || plain(p.label).includes(wanted));
+  const vitals = preset
+    ? presetVitals(preset)
+    : { heart_rate: 92, blood_pressure: "128/82", temperature: 37.6, respiratory_rate: 20, oxygen_saturation: 97 };
+
+  const body = ctx.body ?? {};
+  const maternal = preset?.group === "Mother & Child";
+  const gender = body.gender === "M" || body.gender === "F" ? body.gender : maternal || Math.random() < 0.5 ? "F" : "M";
+  const age =
+    Number.isInteger(body.age) && body.age >= 0 && body.age <= 110
+      ? body.age
+      : maternal
+        ? 22 + Math.floor(Math.random() * 13)
+        : 30 + Math.floor(Math.random() * 40);
+
+  return {
+    fill: {
+      age,
+      gender,
+      diagnosis: preset?.diagnosis ?? `${condition.charAt(0).toUpperCase()}${condition.slice(1)}, for evaluation`,
+      vital_signs: vitals,
+      labs: preset ? { ...preset.labs } : { "White Blood Cells": 10.2, Hemoglobin: 13.1, "Platelet Count": 240 },
+    },
+  };
 });
 
 route("GET", "/api/faculty/vitals", (ctx) => {

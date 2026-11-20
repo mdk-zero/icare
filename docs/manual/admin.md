@@ -836,7 +836,8 @@ next one.
 
 > [!NOTE]
 > If the analytics data hasn't been refreshed for 48 hours, the check refreshes it, so running a
-> check can change the figures on the Analytics pages. "Email delivery" passes once an email
+> check can change the figures on the Analytics pages. If a refresh is already running, the check
+> leaves it to finish and says so. "Email delivery" passes once an email
 > service is set up, which doesn't prove that emails arrive.
 
 **Who is notified:** Nobody is notified.
@@ -851,13 +852,19 @@ To run the load benchmark:
 1. In the **Load benchmark** section, choose the settings:
    - **Endpoints to test**: any of **Baseline (no database)**, **Sign-in check**, **Database
      read** and **Data warehouse query**. All are selected at first.
-   - **Concurrent users**: any of 1, 5, 10, 25 and 50. All are selected at first.
+   - **Concurrent users**: any of 1, 5, 10, 25, 50, 100 and 200. The first five are selected at
+     first. 100 and 200 start unselected, because each sends that many requests at the same
+     moment.
    - **Requests per concurrency level**: 10, 20, 50 or 100. It starts on 20.
-2. Read the line under the settings. It says how many requests the run will send.
+2. Read the line under the settings. It says how many requests the run will send. When you
+   select a level above 160 users, an amber line adds that the site lets one browser keep 160
+   requests open at once, so the rest wait in your browser first and that level's times include
+   the wait.
 
 > [!IMPORTANT]
 > The benchmark sends real requests, and each counts toward the database's usage. The data
-> warehouse query is the heaviest. If you select **Stop Load Benchmark** during a run, the run is
+> warehouse query is the heaviest. The 100 and 200 levels slow the live site for everyone while
+> they run, so use them when few people are signed in. If you select **Stop Load Benchmark** during a run, the run is
 > discarded.
 
 3. Select **Run Load Benchmark**. A progress bar shows how far the run has got. The requests come
@@ -930,9 +937,9 @@ evaluated.
 ## Turn the student web app on or off
 
 Students use the iCARE++ app on Android phones. The student web app is the same app opened in a
-web browser, at `https://www.i-care.dev/student`. It is a backup only, and it stays off. Turn it on
-only once the school has decided to offer it, which needs the panel's approval to deploy it on the
-web. It isn't how iPhone users get iCARE++: there is no iPhone version yet.
+web browser, at `https://www.i-care.dev/student`. The panel has approved students using it. It is
+a second way in, not the main one, and it stays off until you turn it on. Turn it on when the
+school wants students to use it. It isn't the iPhone version: there is no iPhone app yet.
 
 **Before you start**
 

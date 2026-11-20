@@ -69,11 +69,11 @@ lists the other names, so you can match what you see to what you read.
 |---|---|---|
 | "Activity Log", "Audit Trail" | "Activity Log" is the sidebar link for Deans, Program Chairs and Admins; the page it opens is titled "Audit Trail". The Instructor sidebar says "Audit Trail". | The read-only record of actions taken in iCARE++ |
 | "System Administration" | Under the logo in the Admin's sidebar | The Admin portal |
-| "Wards", "Ward Management", "Ward Monitoring", "Monitoring" | Sidebar link, page titles and labels, and the back link from a patient chart | The same Wards page |
+| "Wards", "Ward Management", "Ward Monitoring", "Monitoring" | Sidebar link, page titles and labels | The same Wards page |
 | "Review Submissions", "Grade Return Demonstrations" | Page titles in the Instructor portal | The grading pages for Patient Cases and Return Demonstrations |
 | "Criteria", "Criteria for Assessment" | A course's tab, in the Instructor portal | The same tab |
 | "Low Performing", "Low performing", "AT RISK", "at risk", "at-risk" | Badges, filters, tiles, student profiles, and the Admin's ML models section | Low performing |
-| "Safe", "SAFE", "On Track" | Students pages and student profiles | Not Low performing |
+| "Safe", "SAFE", "On Track", "Thriving" | Students pages and student profiles ("Thriving" on the Instructor's) | Not Low performing |
 | "assessments" | Some messages and search boxes | Quizzes |
 | "Students & Groups" | One message on the Case Presentations page | The **Students** page |
 | "Hospital Cases", "Case Presentation" | The app's Clinic tab and its screens | Case Presentations |

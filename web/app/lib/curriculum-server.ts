@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from './supabase/server';
 import { isMissingColumn } from './auth/live-user';
 import type { SessionPayload } from './auth/jwt';
 import { isMissingCourseSchema, must, requireRole } from './courses';
+import { catalogOrDefault } from './course-rules';
 import {
   EMPTY_ANALYSIS,
   catalogOf,
@@ -47,17 +48,22 @@ export function curriculumFailure(err: unknown, message: string): NextResponse {
 
 /** Whose curriculum the caller works on: their own, or for a Program Chair with a Dean, the Dean's. */
 export async function curriculumOwnerId(supabase: Supabase, session: SessionPayload): Promise<string> {
+  return curriculumOwnerOf(supabase, session.uid);
+}
+
+/** Whose curriculum a Dean or Program Chair works on, by their user id. */
+async function curriculumOwnerOf(supabase: Supabase, userId: string): Promise<string> {
   const { data, error } = await supabase
     .from('users')
     .select('admin_title, admin_id')
-    .eq('id', session.uid)
+    .eq('id', userId)
     .maybeSingle();
   if (error) {
     // Before 080 there are no Program Chairs.
-    if (isMissingColumn(error)) return session.uid;
+    if (isMissingColumn(error)) return userId;
     throw error;
   }
-  return data?.admin_title === 'program_chair' && data.admin_id ? (data.admin_id as string) : session.uid;
+  return data?.admin_title === 'program_chair' && data.admin_id ? (data.admin_id as string) : userId;
 }
 
 /** For route handlers: the caller and whose curriculum they reach, or the response to return instead. */
@@ -206,8 +212,21 @@ export async function removeCurriculumFile(supabase: Supabase, path: string | nu
  * around it.
  */
 export async function loadActiveCatalog(supabase: Supabase, session: SessionPayload): Promise<CatalogCourse[] | null> {
+  return loadActiveCatalogOf(supabase, session.uid);
+}
+
+/**
+ * The courses a Dean's courses are held to (course-rules.ts): the lab courses of
+ * the curriculum they work on, or the built-in list when none is in use. Takes
+ * the course's Dean, so an instructor's request is checked against it too.
+ */
+export async function loadCourseCatalog(supabase: Supabase, deanId: string): Promise<readonly CatalogCourse[]> {
+  return catalogOrDefault(await loadActiveCatalogOf(supabase, deanId));
+}
+
+async function loadActiveCatalogOf(supabase: Supabase, userId: string): Promise<CatalogCourse[] | null> {
   try {
-    const ownerId = await curriculumOwnerId(supabase, session);
+    const ownerId = await curriculumOwnerOf(supabase, userId);
     const active = must(
       await supabase.from('curricula').select('id').eq('admin_id', ownerId).eq('is_active', true).maybeSingle(),
     ) as { id: string } | null;

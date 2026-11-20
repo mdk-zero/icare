@@ -37,6 +37,18 @@ import {
 } from "../../course-grading";
 import { seedCourses, type DemoCourseTables, type DemoOffering, type DemoRequirement } from "../fixtures/courses";
 import { demoCatalog } from "../fixtures/curriculum";
+import {
+  addedSectionsProblem,
+  catalogCourse,
+  catalogOrDefault,
+  courseCodeProblem,
+  fitsSection,
+  offeringProblem,
+  sameSemesterTerm,
+  termNameProblem,
+  termProblem,
+} from "../../course-rules";
+import { sameCode } from "../../bsn-curriculum";
 import { audit } from "./shared";
 import { byName, sectionName, teamLabel } from "./scope";
 import { taskCredit } from "../../task-ratings";
@@ -50,6 +62,9 @@ type Ctx = DemoContext;
 
 const forbidden = () => json({ error: "Forbidden" }, 403);
 const deanOnly = (ctx: Ctx) => ctx.role === "admin";
+
+/** What a Dean's courses are held to (course-rules.ts): their curriculum in use, or the built-in list. */
+const catalogFor = (db: DemoDb, deanId: string) => catalogOrDefault(demoCatalog(db.curricula, deanId));
 
 /** A demo started before courses existed has a saved store without these tables. */
 export function courseDb(db: DemoDb): DemoDb {
@@ -186,6 +201,8 @@ route("POST", "/api/admin/courses", (ctx) => {
   if (ownCourses(ctx).some((c) => c.code.toLowerCase() === code.toLowerCase())) {
     return json({ error: `You already have a course with code ${code}` }, 409);
   }
+  const notInCurriculum = courseCodeProblem(catalogFor(db, ctx.viewer.id), code);
+  if (notInCurriculum) return json({ error: notInCurriculum }, 400);
   const course = { id: newId(), admin_id: ctx.viewer.id, code, title, description, created_at: new Date().toISOString() };
   db.courses.push(course);
   audit(db, ctx.viewer, "course.create", "courses", { code, title }, course.id);
@@ -217,6 +234,24 @@ route("PATCH", "/api/admin/courses/:id", (ctx) => {
   const { code, title, description } = parsed.value;
   if (ownCourses(ctx).some((c) => c.id !== course.id && c.code.toLowerCase() === code.toLowerCase())) {
     return json({ error: `You already have a course with code ${code}` }, 409);
+  }
+  if (!sameCode(course.code, code)) {
+    const catalog = catalogFor(db, ctx.viewer.id);
+    const problem =
+      courseCodeProblem(catalog, code) ??
+      db.offerings
+        .filter((o) => o.course_id === course.id)
+        .map((o) =>
+          offeringProblem({
+            catalog,
+            code,
+            termName: termOf(db, o)?.name ?? "",
+            sectionNames: o.section_ids.map((id) => sectionName(db, id) ?? ""),
+          }),
+        )
+        .find((p) => p !== null) ??
+      null;
+    if (problem) return json({ error: problem }, 400);
   }
   audit(db, ctx.viewer, "course.update", "courses", { from: { code: course.code, title: course.title }, to: { code, title } }, course.id);
   Object.assign(course, { code, title, description });
@@ -296,9 +331,13 @@ route("POST", "/api/admin/terms", (ctx) => {
   const parsed = parseTerm(ctx.body ?? {});
   if (!parsed.ok) return json({ error: parsed.error }, 400);
   const { name } = parsed.value;
+  const nameProblem = termNameProblem(name);
+  if (nameProblem) return json({ error: nameProblem }, 400);
   if (ownTerms(ctx).some((t) => t.name.toLowerCase() === name.toLowerCase())) {
     return json({ error: `You already have a semester named "${name}"` }, 409);
   }
+  const twin = sameSemesterTerm(ownTerms(ctx), name);
+  if (twin) return json({ error: `You already have this semester, as "${twin.name}". Use that one.` }, 409);
   const term = { id: newId(), admin_id: ctx.viewer.id, ...parsed.value, created_at: new Date().toISOString() };
   db.terms.push(term);
   audit(db, ctx.viewer, "term.create", "academic_terms", { ...parsed.value }, term.id);
@@ -329,6 +368,19 @@ route("PATCH", "/api/admin/terms/:id", (ctx) => {
   if (!parsed.ok) return json({ error: parsed.error }, 400);
   if (ownTerms(ctx).some((t) => t.id !== term.id && t.name.toLowerCase() === parsed.value.name.toLowerCase())) {
     return json({ error: `You already have a semester named "${parsed.value.name}"` }, 409);
+  }
+  if (parsed.value.name !== term.name) {
+    const nameProblem = termNameProblem(parsed.value.name);
+    if (nameProblem) return json({ error: nameProblem }, 400);
+    const twin = sameSemesterTerm(ownTerms(ctx), parsed.value.name, term.id);
+    if (twin) return json({ error: `You already have this semester, as "${twin.name}".` }, 409);
+    const catalog = catalogFor(db, ctx.viewer.id);
+    const clash = db.offerings
+      .filter((o) => o.term_id === term.id)
+      .map((o) => catalogCourse(catalog, db.courses.find((c) => c.id === o.course_id)?.code ?? ""))
+      .map((c) => (c ? termProblem(c, parsed.value.name) : null))
+      .find((p) => p !== null);
+    if (clash) return json({ error: clash }, 400);
   }
   audit(db, ctx.viewer, "term.update", "academic_terms", { from: { name: term.name }, to: parsed.value }, term.id);
   Object.assign(term, parsed.value);
@@ -390,6 +442,13 @@ route("POST", "/api/admin/course-offerings", (ctx) => {
   if (!term) return json({ error: "That semester is not one of yours" }, 400);
   const problem = checkTarget(ctx, body?.faculty_id, body?.section_ids ?? []);
   if (problem) return json({ error: problem }, 400);
+  const misfit = offeringProblem({
+    catalog: catalogFor(db, ctx.viewer.id),
+    code: course.code,
+    termName: term.name,
+    sectionNames: ((body?.section_ids ?? []) as string[]).map((id) => sectionName(db, id) ?? ""),
+  });
+  if (misfit) return json({ error: misfit }, 400);
   if (db.offerings.some((o) => o.course_id === course.id && o.term_id === term.id && o.faculty_id === body.faculty_id)) {
     const name = db.users.find((u) => u.id === body.faculty_id)?.name ?? "That instructor";
     return json({ error: `${name} already teaches ${course.code} in ${term.name}. Edit that assignment's sections instead.` }, 409);
@@ -423,6 +482,12 @@ route("PATCH", "/api/admin/course-offerings/:id", (ctx) => {
   if (!offering) return notFound("Course assignment not found");
   const problem = checkTarget(ctx, ctx.body?.faculty_id, ctx.body?.section_ids ?? []);
   if (problem) return json({ error: problem }, 400);
+  const misfit = addedSectionsProblem(
+    catalogFor(db, ctx.viewer.id),
+    db.courses.find((c) => c.id === offering.course_id)?.code ?? "",
+    ((ctx.body?.section_ids ?? []) as string[]).filter((id) => !offering.section_ids.includes(id)).map((id) => sectionName(db, id) ?? ""),
+  );
+  if (misfit) return json({ error: misfit }, 400);
   const reassigned = ctx.body.faculty_id !== offering.faculty_id;
   if (
     reassigned &&
@@ -926,9 +991,22 @@ route("GET", "/api/faculty/courses/:id/roster", (ctx) => {
   return { students: students.sort((a, b) => order(a).localeCompare(order(b), undefined, { numeric: true })) };
 });
 
-/** The sections an instructor can teach a course in: the whole (demo) school, as the Dean sees it. */
+/** The course as its Dean's curriculum has it, when it does (course-rules.ts). */
+function curriculumCourseOf(db: DemoDb, o: DemoOffering) {
+  const course = db.courses.find((c) => c.id === o.course_id);
+  return course?.admin_id ? catalogCourse(catalogFor(db, course.admin_id), course.code) : null;
+}
+
+/**
+ * The sections an instructor can teach a course in: the whole (demo) school,
+ * as the Dean sees it, of the course's year level. One already on the course
+ * stays, so it can come off.
+ */
 function sectionChoices(db: DemoDb, o: DemoOffering, viewerId: string) {
+  const known = curriculumCourseOf(db, o);
+  const fits = (name: string) => !known || fitsSection(known, name);
   return [...db.sections]
+    .filter((s) => o.section_ids.includes(s.id) || fits(s.name))
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
     .map((s) => ({
       id: s.id,
@@ -938,6 +1016,7 @@ function sectionChoices(db: DemoDb, o: DemoOffering, viewerId: string) {
         .filter((t) => t.section_id === s.id && t.faculty_id === viewerId)
         .map((t) => t.name)
         .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
+      fits: fits(s.name),
     }));
 }
 
@@ -946,7 +1025,7 @@ route("GET", "/api/faculty/courses/:id/sections", (ctx) => {
   const db = courseDb(ctx.db);
   const o = ownFacultyOffering(ctx, ctx.params.id);
   if (!o) return notFound("Course not found");
-  return { sections: sectionChoices(db, o, ctx.viewer.id) };
+  return { sections: sectionChoices(db, o, ctx.viewer.id), course_year: curriculumCourseOf(db, o)?.year ?? null };
 });
 
 route("PUT", "/api/faculty/courses/:id/sections", (ctx) => {
@@ -957,7 +1036,17 @@ route("PUT", "/api/faculty/courses/:id/sections", (ctx) => {
   const ids: unknown = ctx.body?.section_ids;
   if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string")) return json({ error: "Invalid sections" }, 400);
   if (termStatus(termOf(db, o)) === "ended") return json({ error: "This semester has ended, so its roster is locked" }, 400);
-  if (ids.some((id) => !db.sections.some((s) => s.id === id))) return json({ error: "One of those sections is not open to you" }, 400);
+  const known = curriculumCourseOf(db, o);
+  const misfit = known
+    ? addedSectionsProblem(
+        [known],
+        known.code,
+        ids.filter((id) => !o.section_ids.includes(id as string)).map((id) => sectionName(db, id as string) ?? ""),
+      )
+    : null;
+  if (misfit) return json({ error: misfit }, 400);
+  const open = new Set(sectionChoices(db, o, ctx.viewer.id).map((s) => s.id));
+  if (ids.some((id) => !open.has(id as string))) return json({ error: "One of those sections is not open to you" }, 400);
   o.section_ids = [...new Set<string>(ids)];
   audit(db, ctx.viewer, "course.sections.update", "course_offerings", { sections: o.section_ids.map((id) => sectionName(db, id)) }, o.id);
   return { success: true, student_count: offeringRoster(db, o).students.length };

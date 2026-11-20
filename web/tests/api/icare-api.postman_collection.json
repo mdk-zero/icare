@@ -509,6 +509,54 @@
           }
         },
         {
+          "name": "Patients: AI fill",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"returns 401 without a session\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/faculty/patients/ai-fill",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "faculty",
+                "patients",
+                "ai-fill"
+              ]
+            },
+            "description": "Signed out, the AI fill must refuse before spending an AI call.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"condition\": \"Dengue fever\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
           "name": "Notifications",
           "protocolProfileBehavior": {
             "disableCookies": true

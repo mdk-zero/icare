@@ -39,6 +39,7 @@ import {
   startingTerm,
 } from "../modals";
 import { NO_DATA, NO_INSTRUCTORS, loadDeanCourses, pickerCatalog } from "../load";
+import { offeringProblem, semesterLabel, semesterNumber } from "../../../lib/course-rules";
 
 /**
  * Add Course, as one top-to-bottom sheet: the term, the course and who
@@ -78,16 +79,18 @@ export default function AssignCourseClient() {
     term && course
       ? offerings.find((o) => o.course_id === course.id && o.term_id === term.id && o.faculty_id === facultyId)
       : undefined;
+  // A course from a link ("Assign for this term") may not run in this semester.
+  const misfit = code ? offeringProblem({ catalog, code, termName: name }) : null;
+  const offered = catalog.filter((c) => c.semester === semesterNumber(semester));
   const termDone = Boolean(term) || datesValid;
-  const ready = termDone && Boolean(code) && Boolean(facultyId) && !clash;
+  const ready = termDone && Boolean(code) && Boolean(facultyId) && !clash && !misfit;
 
   const pickTerm = (next: { semester: Semester; year: number }) => {
     setPicked(next);
     setDates(null);
     // The course list follows the semester: a course from the other one is cleared.
     const inCurriculum = catalog.find((c) => sameCode(c.code, code));
-    const semesterNo = next.semester === "first" ? 1 : next.semester === "second" ? 2 : null;
-    if (inCurriculum && semesterNo !== null && inCurriculum.semester !== semesterNo) setCode("");
+    if (inCurriculum && inCurriculum.semester !== semesterNumber(next.semester)) setCode("");
   };
 
   const assign = async () => {
@@ -186,11 +189,9 @@ export default function AssignCourseClient() {
                 done={Boolean(code)}
                 tag={<span className="text-xs font-medium text-red-600">Required</span>}
                 hint={
-                  semester === "midterm"
-                    ? ownCatalog
-                      ? "The laboratory courses of your curriculum."
-                      : "The NCM laboratory courses of the BSN curriculum."
-                    : `The ${ownCatalog ? "laboratory courses of your curriculum" : "NCM laboratory courses"} taught in the ${semester === "first" ? "first" : "second"} semester.`
+                  offered.length === 0
+                    ? `Your curriculum has no laboratory courses in ${semesterLabel(semesterNumber(semester))}.`
+                    : `The ${ownCatalog ? "laboratory courses of your curriculum" : "NCM laboratory courses"} taught in the ${semesterLabel(semesterNumber(semester)).toLowerCase()}. A course is given only in the semester its curriculum puts it in.`
                 }
               >
                 <label htmlFor="assign-course" className="sr-only">
@@ -201,10 +202,10 @@ export default function AssignCourseClient() {
                   value={code}
                   onChange={setCode}
                   disabled={saving}
-                  existing={courses}
                   semester={semester}
                   catalog={catalog}
                 />
+                {misfit && <p className="mt-2 text-xs text-amber-700">{misfit}</p>}
                 {code && !course && (
                   <div className="mt-3 space-y-2">
                     <p className="text-xs text-gray-500">Not in your courses yet: it&apos;s added when you assign.</p>

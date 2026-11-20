@@ -213,7 +213,8 @@ To install the app:
 > There's no iPhone version yet.
 
 If you open the download link on an iPhone, it says "iCARE++ is for Android phones". Ask your
-instructor what to do in the meantime.
+instructor what to do in the meantime. If your school has turned on a browser version of the app,
+the link opens that instead, and your instructor will tell you how to sign in.
 
 ### Keep the app up to date
 

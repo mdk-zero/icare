@@ -14,6 +14,7 @@ import type { SkillMasteryHistory } from './mastery-history';
 import type { FormRow, ReturnDemoForm } from './return-demo-forms';
 import type { CatalogCourse, CurriculumAnalysis, CurriculumCourseInput, CurriculumCourseRow } from './curriculum';
 import type { ScenarioKind } from './scenario-kind';
+import type { PatientFill } from './ai/patient-fill';
 import type { WorkKind } from './work-kinds';
 import type { CohortMastery, SkillMastery } from './bkt';
 
@@ -1054,25 +1055,6 @@ export async function fetchFacultyEhrRecords(
   } catch (err) {
     console.error('fetchFacultyEhrRecords() failed', err);
     return [];
-  }
-}
-
-export async function reviewProgressNote(noteId: string): Promise<{ success?: boolean; error?: string }> {
-  try {
-    const res = await apiFetch('/api/faculty/ehr', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ note_id: noteId }),
-    });
-    if (!res.ok) {
-      const json = (await res.json()) as { error?: string };
-      return { error: json.error || 'Unable to review note' };
-    }
-    return { success: true };
-  } catch (err) {
-    console.error('reviewProgressNote() failed', err);
-    return { error: 'Unable to review note. Please try again.' };
   }
 }
 
@@ -2804,6 +2786,34 @@ export async function createFacultyPatient(
   }
 }
 
+/**
+ * Asks the AI to draft a simulated patient's chart for a condition. Age and
+ * sex the instructor already chose are passed so the draft keeps them.
+ */
+export async function aiFillPatient(
+  request: { condition: string; age?: number; gender?: 'M' | 'F' },
+  signal?: AbortSignal,
+): Promise<{ fill?: PatientFill; error?: string }> {
+  try {
+    const res = await apiFetch('/api/faculty/patients/ai-fill', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(request),
+      signal,
+    });
+    const json = (await res.json()) as { fill?: PatientFill; error?: string };
+    if (!res.ok || !json.fill) {
+      return { error: json.error || 'Unable to fill the chart with AI' };
+    }
+    return { fill: json.fill };
+  } catch (err) {
+    if (signal?.aborted) return { error: 'Cancelled' };
+    console.error('aiFillPatient() failed', err);
+    return { error: 'Unable to fill the chart with AI. Please try again.' };
+  }
+}
+
 export async function updateFacultyPatient(
   id: string,
   patient: Partial<FacultyPatient>,
@@ -2897,95 +2907,6 @@ export async function deleteFacultyPatient(
   } catch (err) {
     console.error('deleteFacultyPatient() failed', err);
     return { error: 'Unable to delete patient. Please try again.' };
-  }
-}
-
-/** One admission-lifecycle entry on a patient's timeline, from the audit trail. */
-export interface PatientEvent {
-  id: string;
-  action: string;
-  created_at: string;
-  actor_name: string;
-  details: Record<string, unknown>;
-}
-
-/** One AI-drafted follow-up action on a discharge summary. */
-export interface FollowUpRecommendation {
-  title: string;
-  detail: string;
-}
-
-/** A completed stay, materialised at check-out (migration 037). */
-export interface DischargeSummary {
-  id: string;
-  patient_id: string;
-  admitted_at: string | null;
-  discharged_at: string;
-  diagnosis: string;
-  room_label: string;
-  vitals_digest: {
-    readings?: number;
-    flagged?: number;
-    critical?: number;
-    stats?: Record<string, { min: number; max: number; avg: number; n: number }>;
-    findings?: { message: string; severity: string; recommendation?: string }[];
-  };
-  ehr_digest: {
-    tpr?: number;
-    ivf?: number;
-    ivf_ongoing?: number;
-    notes?: number;
-    notes_reviewed?: number;
-  };
-  follow_up: FollowUpRecommendation[];
-  ai_model: string | null;
-  ai_generated_at: string | null;
-  created_at: string;
-}
-
-/** Drafts follow-up recommendations into an existing summary. */
-export async function generateFollowUps(
-  summaryId: string,
-): Promise<{ summary?: DischargeSummary; error?: string }> {
-  try {
-    const res = await apiFetch('/api/faculty/patients/discharge-summary', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ summary_id: summaryId }),
-    });
-    const json = (await res.json()) as { summary?: DischargeSummary; error?: string };
-    if (!res.ok) return { error: json.error || 'Unable to generate recommendations' };
-    return { summary: json.summary };
-  } catch (err) {
-    console.error('generateFollowUps() failed', err);
-    return { error: 'Unable to generate recommendations. Please try again.' };
-  }
-}
-
-/** A patient's whole chart, as served by /api/faculty/patients/[id]. */
-export interface PatientChart {
-  patient: FacultyPatient & { medical_history?: string | null };
-  vitals: VitalReading[];
-  tpr: EhrRecord[];
-  ivf: EhrRecord[];
-  notes: EhrRecord[];
-  events: PatientEvent[];
-  /** Completed stays; empty unless the patient is currently discharged. */
-  discharge_summaries: DischargeSummary[];
-}
-
-export async function fetchFacultyPatientDetail(patientId: string): Promise<PatientChart | null> {
-  try {
-    const res = await apiFetch(`/api/faculty/patients/${patientId}`, { credentials: 'include' });
-    if (!res.ok) {
-      if (res.status !== 404) console.error('fetchFacultyPatientDetail() failed', res.status);
-      return null;
-    }
-    return (await res.json()) as PatientChart;
-  } catch (err) {
-    console.error('fetchFacultyPatientDetail() failed', err);
-    return null;
   }
 }
 
@@ -4996,10 +4917,14 @@ export interface CourseSectionChoice {
   on_course: boolean;
   /** The instructor's own groups there; none means the whole section joins the roster. */
   groups: string[];
+  /** Of the course's year level; false only for one already on the course from before the rule. */
+  fits?: boolean;
 }
 
 export const fetchCourseSectionChoices = (offeringId: string) =>
-  courseRequest<{ sections: CourseSectionChoice[] }>(`/api/faculty/courses/${offeringId}/sections`);
+  courseRequest<{ sections: CourseSectionChoice[]; course_year?: number | null }>(
+    `/api/faculty/courses/${offeringId}/sections`,
+  );
 
 export const saveCourseSections = (offeringId: string, sectionIds: string[]) =>
   courseRequest<{ success: true; student_count: number }>(`/api/faculty/courses/${offeringId}/sections`, {

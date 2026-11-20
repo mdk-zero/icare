@@ -13,7 +13,7 @@ import { RETURN_DEMO_SPECS } from "./return-demos-data";
 import returnDemoTasks from "./return-demo-tasks.json";
 
 /**
- * The demo instructor's Return Demonstrations (072), made for NCM 101: the
+ * The demo instructor's Return Demonstrations (072), made for NCM 114L: the
  * vital signs one finalized for their first group a few days ago, a few
  * steps graded N/A, and the oxygen one due later this week, not started.
  */

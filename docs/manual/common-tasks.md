@@ -83,6 +83,10 @@ To move to another page on a phone:
 **Result:** The page opens and the sidebar closes. To close the sidebar without choosing a page,
 select **Close navigation** (X), select the dark area beside it, or press **Esc**.
 
+> [!NOTE]
+> You can add the portal to your phone's home screen from the browser's menu. It shows the
+> iCARE++ icon under the short name "iCARE++" and opens the portal in your browser.
+
 ### Messages that appear in the corner
 
 Short messages appear in the top-right corner of the screen to tell you what happened:
@@ -515,7 +519,20 @@ report is added to the **Recent** card, which shows the reports you made on any 
 report again with the latest records, select **Generate this PDF again** (the download arrow) on
 its row in **Recent**.
 
-To download without previewing, select **PDF** on the row. The **Suggested** cards at the top of
+To download without previewing, select **PDF** on the row.
+
+Every report is a PDF on US Letter pages. The first page has a letterhead and tiles with the main
+figures. Each later page has a running header, and every page is numbered "Page 1 of 4". What
+comes next depends on the report:
+
+- **Student, Section and Group reports** (Instructors) start with who needs attention, then
+  list the work and scores. Scores are shaded by the same bands in every report, with the pass
+  mark at 75%.
+- **Patient Case and Quiz reports** (Instructors) show how the class did, then list the
+  students.
+- **Dean and Program Chair reports** show outcomes and the grading backlog. The **Users** report
+  lists the accounts that need a look first: people who never signed in, then those who haven't
+  signed in for the longest time. The **Suggested** cards at the top of
 the page offer reports that may need your attention.
 
 ## Help and Support

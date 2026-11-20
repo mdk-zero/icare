@@ -1,7 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
-import { badRequest, countInstructorEntries, courseFailure, must, notFound, parseCourse, readJson, requireRole } from '@/app/lib/courses';
+import {
+  badRequest,
+  countInstructorEntries,
+  courseFailure,
+  loadAssignmentsOf,
+  must,
+  notFound,
+  parseCourse,
+  readJson,
+  requireRole,
+} from '@/app/lib/courses';
+import { loadCourseCatalog } from '@/app/lib/curriculum-server';
+import { courseCodeProblem, offeringProblem } from '@/app/lib/course-rules';
+import { sameCode } from '@/app/lib/bsn-curriculum';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -66,6 +79,19 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const supabase = getSupabaseAdmin();
     const current = await ownCourse(supabase, session.uid, id);
     if (!current) return notFound('Course');
+
+    // A new code must be a curriculum course that still fits where this one
+    // is already given. Editing only the title or description is always fine.
+    if (!sameCode(current.code as string, parsed.value.code)) {
+      const catalog = await loadCourseCatalog(supabase, session.uid);
+      const problem =
+        courseCodeProblem(catalog, parsed.value.code) ??
+        (await loadAssignmentsOf(supabase, { course_id: id }))
+          .map((a) => offeringProblem({ catalog, code: parsed.value.code, termName: a.termName, sectionNames: a.sectionNames }))
+          .find((p) => p !== null) ??
+        null;
+      if (problem) return badRequest(problem);
+    }
 
     const { data: course, error } = await supabase
       .from('courses')

@@ -39,10 +39,10 @@ sidebar from top to bottom.
 | Teaching | **Students** | Find students, make and change groups, register late students, email the app link, and score students for Low performing. |
 | Teaching | **Patient Cases** | Build a case around a ward patient, assign it with a date of performance, and grade each student's checklist. |
 | Teaching | **Return Demonstrations** | Build a skill checklist with no patient, assign it, and grade it step by step. |
-| Teaching | **Quizzes** | Create quizzes, write or generate questions, assign them with a deadline, and read the results. |
+| Teaching | **Quizzes** | Create quizzes, write or generate questions, assign them with a deadline, read the results, and grade essay answers. |
 | Teaching | **Library** | Publish study materials for each Taylor's skill to the student app, and read the skill checklists. |
 | Clinical | **Case Presentations** | Have groups report a patient from hospital duty with slides, and grade each group on a rubric. |
-| Clinical | **Wards** | Read the ward census, check patients in and out, and open a patient's chart. |
+| Clinical | **Wards** | Read the ward census and check patients in and out. |
 | Data | **Analytics** | Follow class and group performance, the leaderboard and skill mastery. |
 | Data | **Reports** | Preview and download PDF reports per section, student, group, Patient Case, Return Demonstration or Quiz. |
 | Administration | **Audit Trail** | Read your own action history. |
@@ -154,7 +154,7 @@ notification "<student> needs assistance".
 ## Students and groups
 
 The **Students** page holds everyone on your roster, course by course and section by section. It
-opens with four tiles (**Total Students**, **Safe**, **Low Performing** and **Not in a group**),
+opens with four tiles (**Total Students**, **Thriving**, **At Risk** and **Not in a group**),
 the **iCARE++ mobile app** card with the download link, and a card for each of your courses.
 
 ![The Students page with figures, the app link card and a card per course.](img/instructor/02-students.png)
@@ -163,7 +163,7 @@ the **iCARE++ mobile app** card with the download link, and a card for each of y
 
 ### Find a student
 
-Open a student's profile to see their scores, Patient Cases, skills and requirements.
+Open a student's profile to see their grades, finished work and skills.
 
 **Before you start**
 
@@ -177,13 +177,13 @@ To find a student:
 3. Select a section card (**View roster**). The roster opens, with the students under a heading
    for each group.
 4. Optional: In the search box, enter part of the student's name or email. To see only some
-   students, choose **Low Performing** or **Safe** in the filter list.
+   students, choose **At risk** or **Thriving** in the filter list.
 5. Select the student's row, or **View profile** at the end of the row. The student's profile
    opens.
 
 **Result:** The profile opens. To go back, select **Back to Students**.
 
-The **Status** column reads "Low Performing", "Safe" or "Not scored yet". To go back up a level,
+The **Status** column reads "At risk", "Thriving" or "Not scored yet". To go back up a level,
 select **<course code> sections** or **All courses**.
 
 ### Create groups
@@ -354,9 +354,9 @@ To score your students:
 2. In the page header, select **Assess** (tooltip "Run ML Jobs — score your students for risk").
    The button shows a percentage while it works.
 
-**Result:** The message "Scored N of your students (N low performing)." appears. The **Low
-Performing** and **Safe** labels on the Students page, the student profiles and the **Overview**
-update. Your Dean or Program Chair sees the same results.
+**Result:** The message "Scored N of your students (N low performing)." appears. The **At risk**
+and **Thriving** labels on the Students page and the student profiles, and the Low performing
+counts on the **Overview**, update. Your Dean or Program Chair sees the same results.
 
 **Who is notified:** Nobody is notified.
 
@@ -365,37 +365,44 @@ run the same check for all their students ([Run the risk check](dean.md#run-the-
 
 ### Read a student profile
 
-A student's profile brings together their scores, work, skills, reflections and requirements.
+A student's profile brings together their grades, finished work, skills and the prediction for
+how they are heading. You read it here; you don't grade from it.
 
-![A student profile with the Low Performance Prediction card and the tab tiles.](img/instructor/04-student-profile.png)
+![A student profile with four figures, four tab tiles and the Performance Prediction card.](img/instructor/04-student-profile.png)
 
-*Figure 4. A student profile, with the prediction card and the tiles that open each part.*
+*Figure 4. A student profile, with the figures and tab tiles on the left and the Performance
+Prediction card on the right.*
 
 To read a student's profile, open it from the roster ([Find a student](#find-a-student)) or from
 **Needs your attention** on the **Overview**. The profile shows:
 
-- **Tiles** for **Avg Score**, **Quizzes**, **Last Active** and **Risk Status**.
-- The **Low Performance Prediction** card: the **Classification** ("AT RISK" or "SAFE", see
-  [Names you will see on screen](README.md#names-you-will-see-on-screen)), the **Risk
-  Probability** and the **Top Contributing Factors**.
-- Five tiles that each open a part of the profile:
-  - **Performance**: every quiz the student took, with each attempt.
-  - **Patient Cases**: the student's Patient Cases, with the same grading sheet as
-    [Grade a Patient Case](#grade-a-patient-case). Use the **Assigned**, **Completed** and
-    **All** tabs.
-  - **Skill Areas**: scores per skill area, skill mastery and their trend.
-  - **Reflections**: what the student wrote after Patient Cases and Quizzes, their goals and the
-    feedback they read.
-  - **Requirements**: one block for each of your courses that covers this student, with what
-    they have met. It fills in from graded work, like the course's
-    [Progress tab](#track-progress).
+- Four figures under the student's name: **Average grade**, **Quizzes**, **Last active** and
+  **Performance**. **Performance** reads "Thriving", "At risk" or "Not scored yet".
+- Four tiles that each open a list below them. The tile shows how many items the list holds:
+  - **Quizzes**: every quiz the student took, with each try. The list opens first.
+  - **Patient Cases**: the cases they have completed. Select **View** to read the graded
+    checklist in a window. You can't change anything there.
+  - **Return Demonstrations**: the same, for the ones they have completed.
+  - **Case Presentations**: the presentations they belong to, with the status and the grade. Select
+    one to open it.
+- The **Performance Prediction** card. Its **Classification** reads "At risk" or "Thriving"
+  (see [Names you will see on screen](README.md#names-you-will-see-on-screen)). It also shows the
+  **Risk Probability** and the **Top Contributing Factors**. Under them are:
+  - **Where they're heading**: a line of the student's recent quiz and Patient Case grades, with
+    where it leads if the pace continues. It needs at least three graded items on different days.
+  - **Skill Mastery**: how many skills the student has mastered.
+  - The student's score for each skill area, with **Needs improvement** at the top when any is low.
+  - **Skill mastery** by chapter, with the **Average mastery** over time. **Show all N chapters**
+    opens the rest.
 
 > [!NOTE]
-> Some text on the profile points to controls you don't have. When a student isn't scored yet,
-> the card says to "run it from Admin > Analytics": as an Instructor, use **Assess** on the
-> Students page instead ([Score students for risk](#score-students-for-risk)). The **Skill Areas**
-> part says you can "record one by hand below", but there is no control for it: skill area scores
-> come from graded work.
+> When a student isn't scored yet, the card says to "run it from Admin > Analytics": as an
+> Instructor, use **Assess** on the Students page instead
+> ([Score students for risk](#score-students-for-risk)). Skill area scores come from graded
+> work.
+
+To grade or change a Patient Case or Return Demonstration, use **Review** on its card
+([Grade a Patient Case](#grade-a-patient-case)). The window opened by **View** says the same.
 
 ### Get an AI summary of a student
 
@@ -600,7 +607,8 @@ To create a Patient Case:
    *Figure 8. The Create Patient Case page with a course, a patient and a room chosen.*
 
    To add a new patient instead, select **Add patient**. The **Add Patient** dialog is the same
-   one the Dean uses ([Admit a patient](dean.md#admit-a-patient)).
+   one the Dean uses ([Admit a patient](dean.md#admit-a-patient)). To have the chart drafted for
+   you, see [Draft a patient with AI](#draft-a-patient-with-ai).
 4. Under **Room**, confirm the room. It defaults to where the patient already is. Full rooms can't
    take another patient.
 5. Under **Case details**, enter the **Title**. Optional: enter a **Description** and the
@@ -774,7 +782,7 @@ you haven't saved, select **Discard**.
 - The grade is the share of checklist points earned, scaled to 37.5–100%.
 - The grade in words: 83% and up "Excellent", 50–82% "Satisfactory", under 50% "Needs Practice".
 
-You can also grade from a student's profile, under **Patient Cases**
+A student's profile shows a finished Patient Case but doesn't grade it
 ([Read a student profile](#read-a-student-profile)).
 
 ### Ask to change a saved grade
@@ -858,7 +866,9 @@ To create a Return Demonstration:
      it in**. Edit the steps with **Add step** and **Add section**, then select **Use this
      checklist**.
 6. Optional: Under **Forms**, select the box of a form students fill in on the app before the
-   skills, such as the **PhilPEN Form**. Forms aren't scored; you read the answers while grading.
+   skills, such as the **PhilPEN Form**. **View form** shows the form before you add it. To use
+   your own PDF form, see [Upload your own form](#upload-your-own-form). Forms aren't scored; you
+   read the answers while grading.
 7. Select **Create**.
 
 **Result:** The message "Return Demonstration created" appears.
@@ -870,6 +880,50 @@ To create a Return Demonstration:
 
 If a scanned file has no readable steps, the page reads "No numbered steps were found in that
 file. It may be a scanned image. Type the steps in below."
+
+### Upload your own form
+
+Add a PDF form of your own, such as a school assessment sheet. The students fill it in on the app
+before the skills, like the **PhilPEN Form**. iCARE++ reads the form's fields from the PDF, and you
+check them before you save.
+
+**Before you start**
+
+- You have the form as a PDF file.
+- You are on the **New Return Demonstration** page, or editing one that no student has yet.
+
+To upload a form:
+
+1. Under **Forms**, select **Upload a form (PDF)** and choose the file. The button reads "Reading
+   the form… this takes up to a minute".
+2. The **Check the form** dialog opens. It says how many fields were found and how many are
+   placed on the page. The form's pages are on the left, and its fields are on the right.
+3. Check the **Form title** and the optional **Description**.
+4. Under each section, read the fields. For each field you can:
+   - change its label, or its type (**Short text**, **Long text**, **Number**, **Date**, **Blood
+     pressure**, **One choice** or **Checkboxes**);
+   - tick **Required**;
+   - remove it, if students shouldn't fill it in;
+   - edit the options of a choice, or select **+ Add option**.
+5. Select **Add field** to add a field to a section, or **Add section** to add a part.
+6. Optional: To show where an answer is written on the page, select **Place** on the field, then
+   select the spot on the page. The button reads "Placed" once it has a spot. Answers without a
+   place show in a list beside the form.
+7. Select **Save form**.
+
+**Result:** The message "Form saved and added" appears. The form joins the **Forms** list, ticked
+for this Return Demonstration. Later Return Demonstrations can use it too.
+
+> [!NOTE]
+> If the PDF is a scan, the dialog warns that the fields were read from the picture and have no
+> place on the page yet. Use **Place** on each field, or leave them: the answers still show in the
+> list beside the form.
+
+To remove a form you uploaded, select the bin beside it under **Forms**. The question "Remove
+"<title>" from your forms?" appears. Confirm it, and the message "Form removed" appears. A form
+that a Return Demonstration already uses can't be removed. You can't remove the built-in forms.
+
+**Who is notified:** Nobody is notified.
 
 ### Assign and grade a Return Demonstration
 
@@ -927,17 +981,22 @@ notification says "Open it in Review Submissions"; for a Return Demonstration, o
 
 When a Return Demonstration has forms, the grading sheet shows a strip such as "1 form · all
 handed in" or "0 of 1 handed in". Select **View submitted forms** to open the **Submitted forms**
-dialog and read the student's answers on the form. Forms aren't scored.
+dialog and read the student's answers written on the form's pages, and again as a list. A form
+with more than one page shows every page. Forms aren't scored.
 
 ## Quizzes
 
 The **Quizzes** page groups your quizzes by course, numbered "Quiz #N". The tiles count **Total
 Quizzes**, **Published** (visible to students) and **Draft** (hidden from students). Each card
 has a status line, such as "Not assigned yet · hidden from students" or "Assigned to N groups",
-and these controls:
+and when it was created. At the foot of each card:
 
-- **Assign** and, once assigned, a button with the number of groups.
-- **Edit details** or **View**, **Delete** (yours only), **Results** and **Questions**.
+- The main button is **Questions** until students have the quiz, and **Results** after that.
+- Once the quiz is assigned, a button with the number of groups opens who has it and their
+  deadlines.
+- **Actions** opens **Assign**, **Questions** or **Results** (whichever the main button isn't),
+  **Edit details** or **View**, and **Delete** (yours only). **Edit details** is greyed out once
+  the quiz is assigned; its tooltip says to make a new quiz.
 
 **The quiz grade.** A student's grade is the average of their graded tries. A quiz allows one try
 unless you allow more. The pass mark is 75%. After the last try, the student gets a review quiz
@@ -990,7 +1049,8 @@ Scoring Criteria and the questions.*
 
 To build the question bank:
 
-1. In the sidebar, select **Quizzes**. On the quiz's card, select **Questions**. The editor opens.
+1. In the sidebar, select **Quizzes**. On the quiz's card, select **Questions**, or **Actions**
+   then **Questions** once the quiz is assigned. The editor opens.
 2. Read the status line at the top. It reads "Ready for students", or "N issues to fix" with the
    list of what to fix before students can take the quiz.
 3. Optional: To change the course, time limit, attempts or sections, select **Edit details**,
@@ -998,13 +1058,20 @@ To build the question bank:
 4. Under **Scoring Criteria**, review the chapters and skills the quiz covers. Each criterion sets
    the minimum number of its questions every attempt includes, and its weight.
 5. Under each criterion, select **Add a question to <criterion>**. Choose **Multiple choice**,
-   **True / False** or **Identification**, write the question and its answer, and set its
-   **Points**.
+   **True / False**, **Identification** or **Essay**, and write the question. For the first three,
+   also write the answer. An **Essay** has no answer to write: the student types a reply and you
+   grade it. A new essay is worth 10 **Points**; change it if you wish. Every other question is
+   worth 1 point.
 6. Edit or delete the AI's draft questions as needed. Questions with no criterion are never
    given to students, so give each one a criterion.
 7. Select **Save quiz**.
 
 **Result:** The message "Quiz saved" appears.
+
+> [!NOTE]
+> The AI writes only **Multiple choice** and **Identification** questions, so add essay questions
+> yourself. A quiz with an essay can't be marked by iCARE++ alone: [Grade essays](#grade-essays)
+> once students hand it in.
 
 ### Assign a Quiz
 
@@ -1017,7 +1084,8 @@ Assigning a quiz gives it to students with a deadline. It also makes the quiz vi
 To assign a Quiz:
 
 1. In the sidebar, select **Quizzes**.
-2. On the quiz's card, select **Assign**. The **Assign "<title>"** dialog opens.
+2. On the quiz's card, select **Actions**, then **Assign**. The **Assign "<title>"** dialog
+   opens.
 3. Set the **Deadline**.
 4. Optional: In **Attempts for these students**, enter how many graded tries these students get.
    Leave it blank to use the quiz's own number.
@@ -1056,11 +1124,52 @@ To change a quiz deadline:
 
 ### Read the results
 
-To read a quiz's results, on its card select **Results**. The **Quiz Results** page shows the
+To read a quiz's results, on its card select **Results**. (Before the quiz is assigned, use
+**Actions**, then **Results**.) The **Quiz Results** page shows the
 tiles **Completed**, **Not Started** and **Average Score** ("Average of graded tries per
 student"), then a table with each student's **Status**, **Grade**, **Attempts**, when they
 **Submitted** and how long they took. Markers flag review quizzes and late tries. Filter by
 status, section, group or score, or select **Export report** for a PDF.
+
+### Grade essays
+
+A quiz with **Essay** questions needs your grade for those answers. The other questions are marked
+by iCARE++ when the student hands in. A try with an ungraded essay isn't counted in the student's
+grade, mastery or prediction until you grade it. A blank essay is graded 0 straight away.
+
+**Before you start**
+
+- A student has handed in a try of the quiz that has an essay. On the **Quiz Results** page an
+  amber banner reads "N tries have an essay to grade."
+
+To grade essays:
+
+1. On the **Quiz Results** page, select **Grade next** on the banner. Or, on a student's row under
+   **Grade**, select **Grade essay** (or **Grade essays**). The **Grade essays** dialog opens with
+   the student's name.
+2. Read each try, newest first. A try with more than one shows "Try N". Its tag reads "To grade", or
+   "Graded" with the score.
+3. For each essay, read the question and what the student wrote. In the **Points** box, enter a
+   whole number from 0 up to the essay's points, shown as "/ 10".
+4. Optional: In the **Feedback for the student (optional)** box, write feedback.
+5. Select **Save grades** at the foot of the try.
+
+**Result:** The message "Graded. Score: N%" appears, and the student's grade on the results page
+updates. If another essay in that try still has no points, the message reads "Grades saved. An essay
+on this try is still ungraded." and the try stays **To grade**.
+
+You can open the dialog again later, with **Essays** under a student's grade, to change a grade.
+Unlike a Patient Case grade, you don't need approval to change it. Each **Save grades** scores the
+try again.
+
+**Who is notified:** The student gets "Your essay is graded", with their new score. You get no
+notification when a student hands in an essay, and essays waiting don't show on the **Overview**.
+Check the **Quiz Results** page of a quiz that has essays.
+
+> [!NOTE]
+> The editor and the results banner say an ungraded essay "counts as 0". That is true of the
+> try's own score only. The student's **Grade** for the quiz leaves the try out until you grade
+> it. In the app the student sees "Waiting for your instructor" instead of a score.
 
 ## Case Presentations
 
@@ -1228,7 +1337,45 @@ To read the ward census:
 4. Select a room to see its patients, with their diagnosis and vital signs.
 
 To add a patient to the ward, select **Admit Patient**. The dialog is the same as the Dean's
-([Admit a patient](dean.md#admit-a-patient)).
+([Admit a patient](dean.md#admit-a-patient)). To have the chart drafted for you, see
+[Draft a patient with AI](#draft-a-patient-with-ai).
+
+### Draft a patient with AI
+
+In the **Add Patient** dialog, the AI can write a simulated patient's chart from a condition.
+The dialog opens from **Admit Patient** on the **Wards** page, and from **Add patient** when you
+[create a Patient Case](#create-a-patient-case).
+
+**Before you start**
+
+- You know the condition you want the case to be about, such as pneumonia.
+
+To draft a patient with AI:
+
+1. Open the **Add Patient** dialog.
+2. Under **Condition**, open the list and choose a common condition. To use any other illness,
+   choose **Other (type a condition)…** and type it in the box that appears, for example
+   "Leptospirosis".
+3. Optional: Enter a name, age or sex yourself. The AI keeps what you typed and drafts the rest.
+4. Select **Fill with AI**. The button reads "Filling…" while it writes.
+5. Read every field: the name, age, sex, diagnosis, vital signs and labs. Change what is wrong.
+   The labs can't be edited here; to change them, select **Fill with AI** again.
+6. Choose the **Course**, the **Room** and the **Admission Date**. The AI doesn't set these.
+7. Select **Admit Patient**.
+
+**Result:** The message "Patient created successfully" appears, and the patient can be used for a
+Patient Case. After step 4, the line under the **Condition** list reads "Filled by AI for
+"<condition>". Check every field before admitting."
+
+> [!NOTE]
+> Choosing a common condition from the list fills the diagnosis, vital signs and labs at once,
+> without the AI. **Fill with AI** then adds a name, age and sex that fit it. If the AI can't
+> write the chart, a red message appears under the list and the standard values of a listed
+> condition stay, so you can still admit the patient. Only the condition and a made-up age and
+> sex are sent to the AI, never a student's record. The patient is simulated. Check what the AI
+> wrote before you use it.
+
+**Who is notified:** Nobody is notified.
 
 ### Check a patient in or out
 
@@ -1239,15 +1386,6 @@ To check a patient out, in the room's list select **Check out patient** on their
 To check a patient back in, select **Check in patient** on their row. In the **Check In Patient**
 dialog, choose a **Room** and select **Check In**. The admission date restarts at check-in. The
 message "<patient> checked in" appears.
-
-### Open a patient chart
-
-To open a patient's chart, select **Open patient chart** on their row. The **Patient Chart** page
-shows the patient's facts, **Vital Signs**, **Discharge Summary**, **Clinical Record**,
-**Laboratory** and **Admission History**.
-
-> [!NOTE]
-> The chart also shows older tabs left from a retired feature. Ignore them.
 
 ## Analytics
 
@@ -1263,7 +1401,7 @@ It shows:
 - **Performance by Activity**, the average for each kind of work.
 - **Top Performing Students**. **View full leaderboard →** opens the **Student Leaderboard**,
   every student ranked by their average grade.
-- **Classroom Performance Overview**, **Performance per Skill Area** and **Skill Mastery (BKT)**.
+- **Classroom Performance Overview**, **Performance per Skill Area** and **Skill Mastery**, which lists your students' weakest skills first.
 
 To narrow the figures by course, section or date range, see
 [Filter the figures](common-tasks.md#filter-the-figures). For a written summary, select **AI
@@ -1278,10 +1416,16 @@ The **Reports** page (labelled "Report Center") makes PDF reports. The report ty
 
 | Type | What it includes |
 |---|---|
-| Section | The whole section, per group, or per student |
-| Patient Case | The whole class, per student, or per group |
-| Return Demonstration | The checklist steps with the grade beside each, per student, or per group |
-| Quiz | The whole class, per student with every answer, or per group |
+| Section | The whole section, per group, or per student (averages, course grades, quizzes and skill areas) |
+| Patient Case | The whole class, per student, or per group with a column for each member |
+| Return Demonstration | The checklist steps with the grade beside each, per student, or per group with a column for each member |
+| Quiz | How the whole class did, per student with every question and the answer given, or per group with a column for each member |
+
+Every report is on US Letter paper, with the iCARE++ letterhead, a running header and page
+numbers, and opens with tiles of its main figures. A Student report adds a "Needs attention" line
+and groups the student's work by course. Section and Group reports list the students with the
+lowest averages first, and mark those below the 75% pass mark. In a Section report, the Low
+performing column is a prediction, not a grade.
 
 To preview and download a report, see
 [Preview and download a report](common-tasks.md#preview-and-download-a-report).

@@ -340,12 +340,12 @@ The risk check scores each student for the chance of being Low performing, and u
 To run the risk check:
 
 1. In the sidebar, select **Students**.
-2. In the page header, select **Run ML Jobs** (the brain icon). The button shows a percentage, and its progress line reads "Step 1 of 2 · Scoring students for risk", then "Step 2 of 2 · Refitting skill mastery (BKT)". The first step can take up to a minute to start.
+2. In the page header, select **Run ML Jobs** (the brain icon). The button shows a percentage, and its progress line reads "Step 1 of 2 · Scoring students for risk", then "Step 2 of 2 · Updating skill mastery". The first step can take up to a minute to start.
 
 **Result:** A message reports how many students were scored and how many are Low performing. The **Status** of each student and the **Safe** and **Low Performing** figures update. The run scores every student in iCARE++, but you still see only your own.
 
 > [!NOTE]
-> The button has no text; its name shows when you hold the pointer over it: "Run ML Jobs — score every student for risk and refit skill mastery (BKT)". The result message ends "Run Refresh Warehouse on Analytics…", but **Analytics** has no such button: it catches up on its own within about 5 minutes. A student profile with no score says the jobs run "from the Analytics page"; they run from here, on **Students**.
+> The button has no text; its name shows when you hold the pointer over it: "Run ML Jobs — score every student for risk and update skill mastery". The result message ends "Run Refresh Warehouse on Analytics…", but **Analytics** has no such button: it catches up on its own within about 5 minutes. A student profile with no score says the jobs run "from the Analytics page"; they run from here, on **Students**.
 
 **Who is notified:** Nobody is notified. Instructors see the new results on their own pages.
 
@@ -772,7 +772,7 @@ To add a room and place it:
 
 ### Admit a patient
 
-Admit a simulated patient to a room. The patient's chart fills itself from the condition you pick.
+Admit a simulated patient to a room. Pick a condition, and **Fill with AI** drafts the patient's chart for you to check.
 
 **Before you start**
 
@@ -789,15 +789,20 @@ To admit a patient:
 
 ![The Add Patient dialog with condition, course, patient details and vital signs.](img/dean/14-admit-patient.png)
 
-*Figure 14. The Add Patient dialog, with a condition, a course, the patient's details and vital signs.*
+*Figure 14. The Add Patient dialog, with the Condition list and Fill with AI at the top, then a course, the patient's details and vital signs.*
 
-3. Under **Condition**, choose the patient's condition. The rest of the chart fills in from it.
-4. Choose at least one of your courses. The instructors of these courses can see the patient.
-5. Check the patient's name (or select **Random name**), gender, age and room. Full rooms can't be selected.
-6. Check the diagnosis, the admission date, the vital signs and the labs, and change them if you need to.
-7. Select **Admit Patient**.
+3. Under **Condition**, choose the patient's condition from the list of common ones, such as those under **Respiratory** or **Heart & Blood Pressure**. The diagnosis, vital signs and labs fill in at once with typical values, and a line under the list reads "Filled from "*condition*"." If the condition isn't in the list, choose **Other (type a condition)…** and type the illness in the box that opens, for example "Leptospirosis".
+4. Optional: Select **Fill with AI**. The button reads "Filling…" for a few seconds, and the form is locked while it works. The AI drafts the patient's name, age, sex, diagnosis, vital signs and labs for that condition. A name, age or sex you typed or chose yourself is kept, and the AI works around it. The button is greyed out until you have chosen or typed a condition. With **Other**, pressing **Enter** in the box does the same.
+5. Read the line under the condition. It reads "Filled by AI for "*condition*". Check every field before admitting." Check every field the AI filled. It is a draft, and you can change all of it except the labs.
+6. Choose at least one of your courses. The instructors of these courses can see the patient.
+7. Check the patient's name (or select **Random name**), gender, age and room. Full rooms can't be selected.
+8. Check the diagnosis, the admission date and the vital signs, and change them if you need to. The labs are shown under **Labs**, marked "typical for this condition" or "suggested by AI". You can't edit them here.
+9. Select **Admit Patient**.
 
 **Result:** The message "Patient created successfully" appears. The patient shows in their room on both layouts.
+
+> [!NOTE]
+> If the AI can't draft the chart, a red message appears under the condition, for example "Unable to fill the chart with AI." When you picked a condition from the list, its typical diagnosis, vital signs and labs stay in the form, so you can still admit the patient. If the message says the AI couldn't make a patient from the condition, name it differently and try again. Only the condition and a made-up age and sex are sent to the AI, never a student's record.
 
 > [!NOTE]
 > On a ward with no patients yet, **Card Layout** shows "No patients found" with a developer command under it. Ignore the command and use **Admit Patient**.
@@ -831,13 +836,6 @@ On the same row, **Edit patient** changes the patient's details, and **Delete pa
 
 **Who is notified:** Nobody is notified.
 
-### Open a patient chart
-
-To open a patient's chart, select the patient's room, then select **Open patient chart** on their row. The chart shows the patient's admission details, vital signs history, clinical record, laboratory results and admission history.
-
-> [!NOTE]
-> The chart also shows some older tabs left from a retired feature. Ignore them.
-
 ## Analytics
 
 The **Analytics** page (titled "Analytics Dashboard") shows figures on your own students, instructors and rooms. Its figures refresh themselves at most every 5 minutes.
@@ -857,7 +855,7 @@ The panels are:
 | **Active Rooms** | Rooms in use. |
 | **Top Students** | Your students with the highest average grade. **View full leaderboard →** ranks every student in the current filters. |
 | **Performance per Course** | The average grade for each course, against the target. With one course chosen, it becomes **Course Grade**. |
-| **Skill Mastery (BKT)** | How well your students know each skill. |
+| **Skill Mastery** | How well your students know each skill, weakest first. |
 | **Performance by Activity** | Average grades for each kind of graded work, and the overall average. |
 | **Room Utilization** | How full the busiest rooms are. |
 | **Section Engagement** | Students, active students and graded work for each section. |
@@ -877,6 +875,13 @@ The **Reports** page makes PDF reports on your instructors, rooms and users. Sug
 | **Rooms** | **Full**, **Has space**, **Inactive / maintenance** | **Fullest**, **Room no.** | **All rooms** |
 | **Users** | **Never signed in**, **No sign-in 30d+**, and the **Role** list | **A–Z**, **Newest** | **All users** |
 | **Dean summary** | none | none | The whole report |
+
+Each report is on US Letter paper, with the iCARE++ letterhead, a running header and page numbers. It starts with tiles, then tables that put what needs a look first:
+
+- **Instructor** reports show who has work awaiting grade (with how long the oldest has waited), and the groups each instructor supervises. The all-instructors report lists the instructors with the most awaiting grade first, and shades those without a group.
+- **Rooms** reports show how many places are occupied, and shade full and inactive rooms.
+- **Users** reports list the accounts that need a look first: those that never signed in, then those with no sign-in for over 30 days.
+- The **Dean summary** shows the overall average, how many students are below 75%, the work awaiting grade and the oldest wait, and how many students are on no instructor's roster. It then gives averages by kind of work and by section, each instructor's workload and the rooms.
 
 To make a report:
 
