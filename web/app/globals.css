@@ -437,6 +437,24 @@
   color-scheme: dark;
 }
 
+/*
+ * Tailwind v4's preflight gives buttons the default arrow, so anything that
+ * acts on a click gets the pointer back here. It sits in the base layer so a
+ * `cursor-*` utility (`disabled:cursor-not-allowed`, `cursor-grab`) still wins.
+ * Clickable rows and other non-button elements carry `cursor-pointer` themselves.
+ */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  select:not(:disabled),
+  input:is([type="checkbox"], [type="radio"], [type="file"]):not(:disabled),
+  input[type="file"]:not(:disabled)::file-selector-button,
+  label:has(input:is([type="checkbox"], [type="radio"], [type="file"]):not(:disabled)) {
+    cursor: pointer;
+  }
+}
+
 body {
   background: var(--color-background);
   color: var(--color-foreground);

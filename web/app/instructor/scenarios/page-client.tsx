@@ -1267,7 +1267,7 @@ export default function FacultyScenariosClient() {
                       <label
                         key={i}
                         style={{ ...hueStyle(draft.chapter ?? draft.topic), animationDelay: `${Math.min(i, 12) * 40}ms` }}
-                        className={`relative flex flex-col gap-2 pl-5 pr-4 py-4 rounded-xl border cursor-pointer overflow-hidden transition-all animate-rise ${
+                        className={`relative flex flex-col gap-2 pl-5 pr-4 py-4 rounded-xl border overflow-hidden transition-all animate-rise ${
                           checked
                             ? "border-[color-mix(in_srgb,var(--hue)_55%,transparent)] bg-[color-mix(in_srgb,var(--hue)_5%,transparent)]"
                             : "border-hairline bg-surface opacity-70 hover:opacity-100"

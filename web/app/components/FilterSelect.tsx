@@ -3,7 +3,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronDown } from "@fortawesome/free-solid-svg-icons";
 
 const filterSelectClassName =
-  "cursor-pointer appearance-none pl-4 pr-9 py-2.5 bg-surface border border-gray-400 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 transition-all";
+  "appearance-none pl-4 pr-9 py-2.5 bg-surface border border-gray-400 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 transition-all";
 
 /** A native `<select>` with its own chevron, pulled in a bit from the edge
  * rather than the browser's default arrow flush against the border. */

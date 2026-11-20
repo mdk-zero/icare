@@ -144,9 +144,9 @@ function EmailAppLinkModal({
 
   const option = (value: "new" | "all", label: string, count: number) => (
     <label
-      className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition-colors ${
+      className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition-colors ${
         who === value ? "border-brand-600 bg-brand-600/5" : "border-gray-200 hover:border-brand-300"
-      } ${count === 0 ? "cursor-not-allowed opacity-50" : ""}`}
+      } ${count === 0 ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
     >
       <input
         type="radio"

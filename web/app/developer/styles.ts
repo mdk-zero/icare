@@ -87,7 +87,7 @@ select.dc-field { cursor: pointer; }
   font-family: var(--font-mono), monospace; font-size: 12px;
   max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.dc-grid tbody tr { cursor: pointer; }
+.dc-grid:not([aria-hidden="true"]) tbody tr:not([aria-hidden="true"]) { cursor: pointer; }
 .dc-grid tbody tr:hover td { background: #131f23; }
 .dc-null { color: #4e6469; font-style: italic; }
 

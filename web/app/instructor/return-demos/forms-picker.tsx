@@ -106,7 +106,7 @@ export default function FormsPicker({
           const upload = custom.find((f) => f.key === form.key);
           return (
             <li key={form.key} className="flex items-center gap-2 border-t border-hairline px-3 py-2 first:border-t-0 hover:bg-subtle">
-              <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+              <label className="flex min-w-0 flex-1 items-center gap-2">
                 <input
                   type="checkbox"
                   checked={on}

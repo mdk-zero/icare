@@ -127,7 +127,7 @@ export default function DemoPicker({ onClose }: { onClose: () => void }) {
             onClick={onClose}
             disabled={starting !== null}
             aria-label="Close"
-            className="-mr-1 -mt-1 flex h-8 w-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-lg text-white/45 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40"
+            className="-mr-1 -mt-1 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-white/45 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40"
           >
             <FontAwesomeIcon icon={faXmark} className="h-4 w-4" />
           </button>

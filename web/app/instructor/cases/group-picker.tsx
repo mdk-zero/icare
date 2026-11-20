@@ -121,7 +121,7 @@ export default function CaseGroupPicker({
               const leader = value[g.id] ?? "";
               return (
                 <div key={g.id} className={`px-4 py-2.5 ${on && !isGiven ? "bg-brand-600/5" : ""}`}>
-                  <label className="flex cursor-pointer items-center gap-3">
+                  <label className="flex items-center gap-3">
                     <input
                       type="checkbox"
                       checked={on}

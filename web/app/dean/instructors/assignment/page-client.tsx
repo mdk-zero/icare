@@ -343,7 +343,7 @@ export default function AssignSectionsClient() {
                     return (
                       <label
                         key={section.id}
-                        className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
                           selectedSections.includes(section.id)
                             ? "border-brand-600 bg-brand-600/5"
                             : "border-gray-200 hover:border-gray-300"

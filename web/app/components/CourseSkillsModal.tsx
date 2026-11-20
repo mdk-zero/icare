@@ -269,7 +269,7 @@ export default function CourseSkillsModal({
                     <ul className="mb-1 ml-5 border-l border-hairline pl-2">
                       {skills.map((s) => (
                         <li key={s.id}>
-                          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg px-2 py-1.5 hover:bg-subtle">
+                          <label className="flex items-start gap-2.5 rounded-lg px-2 py-1.5 hover:bg-subtle">
                             <input
                               type="checkbox"
                               checked={selected.has(s.id)}

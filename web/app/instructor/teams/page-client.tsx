@@ -650,7 +650,7 @@ export default function TeamsClient() {
                               else if (!window.getSelection()?.toString()) openProfile(student.id);
                             }}
                             className={`transition-colors ${
-                              placing ? "cursor-grab-outlined select-none" : editing ? "cursor-default select-none" : "cursor-pointer"
+                              placing ? "cursor-grab-outlined select-none" : `cursor-pointer${editing ? " select-none" : ""}`
                             } ${
                               pendingMoves.has(student.id)
                                 ? "pointer-events-none animate-pulse opacity-50 grayscale"

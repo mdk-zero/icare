@@ -661,7 +661,7 @@ export default function ProgressTab({
                           <span
                             title={`${s.done} of ${s.total} items completed`}
                             aria-label={`${s.done} of ${s.total} items completed`}
-                            className={`ml-auto shrink-0 cursor-pointer rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                            className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                               s.total > 0 && s.done === s.total
                                 ? "bg-emerald-50 text-emerald-700"
                                 : "bg-gray-100 text-gray-600"
@@ -693,7 +693,7 @@ export default function ProgressTab({
                               onClick={() => act(offeringId, s, r, name, item)}
                               className={`rounded-full transition-transform ${
                                 actionable
-                                  ? "cursor-pointer hover:scale-110"
+                                  ? "hover:scale-110"
                                   : "cursor-default"
                               } ${busy === key ? "animate-pulse" : ""}`}
                             >

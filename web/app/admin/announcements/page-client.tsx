@@ -260,7 +260,7 @@ function PeoplePicker({
                 return (
                   <li key={a.id}>
                     <label
-                      className={`flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-gray-50 ${on ? "bg-brand-600/[0.04]" : ""}`}
+                      className={`flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-gray-50 ${on ? "bg-brand-600/[0.04]" : ""}`}
                     >
                       <input
                         type="checkbox"
@@ -602,7 +602,7 @@ export default function AnnouncementsClient({ contactEmail }: { contactEmail: st
               />
             </div>
 
-            <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-hairline p-3">
+            <label className="flex items-start gap-2.5 rounded-lg border border-hairline p-3">
               <input
                 type="checkbox"
                 checked={withEmail}

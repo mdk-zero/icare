@@ -171,7 +171,7 @@ export default function AudiencePicker({
 
   return (
     <div className="overflow-hidden rounded-xl border border-hairline">
-      <label className="flex cursor-pointer items-center gap-3 border-b border-hairline bg-subtle px-4 py-2.5">
+      <label className="flex items-center gap-3 border-b border-hairline bg-subtle px-4 py-2.5">
         <input
           type="checkbox"
           checked={everyone}
@@ -189,7 +189,7 @@ export default function AudiencePicker({
           const total = new Set(block.units.flatMap((u) => u.students.map((s) => s.id))).size;
           return (
             <div key={block.id}>
-              <label className="flex cursor-pointer items-center gap-3 px-4 py-2.5 hover:bg-subtle">
+              <label className="flex items-center gap-3 px-4 py-2.5 hover:bg-subtle">
                 <input
                   type="checkbox"
                   checked={on === keys.length}
@@ -207,7 +207,7 @@ export default function AudiencePicker({
                 </span>
               </label>
               {block.units.map((unit) => (
-                <label key={unit.key} className="flex cursor-pointer items-center gap-3 py-2 pl-11 pr-4 hover:bg-subtle">
+                <label key={unit.key} className="flex items-center gap-3 py-2 pl-11 pr-4 hover:bg-subtle">
                   <input
                     type="checkbox"
                     checked={isOn(unit.key)}
@@ -232,7 +232,7 @@ export default function AudiencePicker({
           );
         })}
         {added && (
-          <label className="flex cursor-pointer items-start gap-3 px-4 py-2.5 hover:bg-subtle">
+          <label className="flex items-start gap-3 px-4 py-2.5 hover:bg-subtle">
             <input
               type="checkbox"
               checked={isOn(added.key)}
