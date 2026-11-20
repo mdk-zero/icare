@@ -14,6 +14,7 @@ import type { SkillMasteryHistory } from './mastery-history';
 import type { FormRow, ReturnDemoForm } from './return-demo-forms';
 import type { CatalogCourse, CurriculumAnalysis, CurriculumCourseInput, CurriculumCourseRow } from './curriculum';
 import type { ScenarioKind } from './scenario-kind';
+import type { PatientFill } from './ai/patient-fill';
 import type { WorkKind } from './work-kinds';
 import type { CohortMastery, SkillMastery } from './bkt';
 
@@ -2766,6 +2767,34 @@ export async function createFacultyPatient(
   } catch (err) {
     console.error('createFacultyPatient() failed', err);
     return { error: 'Unable to create patient. Please try again.' };
+  }
+}
+
+/**
+ * Asks the AI to draft a simulated patient's chart for a condition. Age and
+ * sex the instructor already chose are passed so the draft keeps them.
+ */
+export async function aiFillPatient(
+  request: { condition: string; age?: number; gender?: 'M' | 'F' },
+  signal?: AbortSignal,
+): Promise<{ fill?: PatientFill; error?: string }> {
+  try {
+    const res = await apiFetch('/api/faculty/patients/ai-fill', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(request),
+      signal,
+    });
+    const json = (await res.json()) as { fill?: PatientFill; error?: string };
+    if (!res.ok || !json.fill) {
+      return { error: json.error || 'Unable to fill the chart with AI' };
+    }
+    return { fill: json.fill };
+  } catch (err) {
+    if (signal?.aborted) return { error: 'Cancelled' };
+    console.error('aiFillPatient() failed', err);
+    return { error: 'Unable to fill the chart with AI. Please try again.' };
   }
 }
 
