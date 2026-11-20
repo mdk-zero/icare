@@ -1,7 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
-import { badRequest, courseFailure, must, notFound, parseTerm, readJson, requireRole } from '@/app/lib/courses';
+import {
+  badRequest,
+  courseFailure,
+  loadAssignmentsOf,
+  must,
+  notFound,
+  parseTerm,
+  readJson,
+  requireRole,
+} from '@/app/lib/courses';
+import { loadCourseCatalog } from '@/app/lib/curriculum-server';
+import { catalogCourse, sameSemesterTerm, termNameProblem, termProblem } from '@/app/lib/course-rules';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -48,7 +59,11 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   }
 }
 
-/** Changing the dates re-judges every checklist in the term straight away: progress is computed on read. */
+/**
+ * Changing the dates re-judges every checklist in the term straight away: progress is computed on read.
+ * A new name must say the semester, not repeat another term's semester, and still fit the courses
+ * given in it (course-rules.ts). Keeping the name, as a date change does, is always fine.
+ */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const { session, response } = await requireRole('admin');
   if (response) return response;
@@ -63,6 +78,25 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const supabase = getSupabaseAdmin();
     const current = await ownTerm(supabase, session.uid, id);
     if (!current) return notFound('Semester');
+
+    if (parsed.value.name !== current.name) {
+      const nameProblem = termNameProblem(parsed.value.name);
+      if (nameProblem) return badRequest(nameProblem);
+      const own = (must(await supabase.from('academic_terms').select('id, name').eq('admin_id', session.uid)) ?? []) as {
+        id: string;
+        name: string;
+      }[];
+      const twin = sameSemesterTerm(own, parsed.value.name, id);
+      if (twin) {
+        return NextResponse.json({ error: `You already have this semester, as "${twin.name}".` }, { status: 409 });
+      }
+      const catalog = await loadCourseCatalog(supabase, session.uid);
+      const clash = (await loadAssignmentsOf(supabase, { term_id: id }))
+        .map((a) => catalogCourse(catalog, a.code))
+        .map((course) => (course ? termProblem(course, parsed.value.name) : null))
+        .find((p) => p !== null);
+      if (clash) return badRequest(clash);
+    }
 
     const { data: term, error } = await supabase
       .from('academic_terms')

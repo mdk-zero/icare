@@ -4881,10 +4881,14 @@ export interface CourseSectionChoice {
   on_course: boolean;
   /** The instructor's own groups there; none means the whole section joins the roster. */
   groups: string[];
+  /** Of the course's year level; false only for one already on the course from before the rule. */
+  fits?: boolean;
 }
 
 export const fetchCourseSectionChoices = (offeringId: string) =>
-  courseRequest<{ sections: CourseSectionChoice[] }>(`/api/faculty/courses/${offeringId}/sections`);
+  courseRequest<{ sections: CourseSectionChoice[]; course_year?: number | null }>(
+    `/api/faculty/courses/${offeringId}/sections`,
+  );
 
 export const saveCourseSections = (offeringId: string, sectionIds: string[]) =>
   courseRequest<{ success: true; student_count: number }>(`/api/faculty/courses/${offeringId}/sections`, {

@@ -13,13 +13,16 @@ import {
   stringList,
   wholeSectionWarnings,
 } from '@/app/lib/courses';
+import { loadCourseCatalog } from '@/app/lib/curriculum-server';
+import { offeringProblem } from '@/app/lib/course-rules';
 
 /**
  * POST { course_id, term_id, faculty_id, section_ids? }: assign one of the
  * Dean's courses to one of their instructors in a term. Sections are
  * optional: without them the instructor adds the sections they teach it in.
  * Answers with a note for each section where the instructor supervises no
- * group, since the whole section is on the roster there.
+ * group, since the whole section is on the roster there. The course must fit
+ * the curriculum: its semester, and its year for any sections (course-rules.ts).
  */
 export async function POST(request: NextRequest) {
   const { session, response } = await requireRole('admin');
@@ -44,6 +47,14 @@ export async function POST(request: NextRequest) {
     const target = await checkAssignmentTarget(supabase, session.uid, body.faculty_id, sectionIds);
     if (!target.ok) return badRequest(target.error);
     const { faculty, sections } = target.value;
+
+    const problem = offeringProblem({
+      catalog: await loadCourseCatalog(supabase, session.uid),
+      code: course.code as string,
+      termName: term.name as string,
+      sectionNames: sections.map((s) => s.name),
+    });
+    if (problem) return badRequest(problem);
 
     const { data: offering, error } = await supabase
       .from('course_offerings')

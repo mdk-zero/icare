@@ -8,6 +8,7 @@ import {
   courseFailure,
   loadDeanOffering,
   loadOfferingRosters,
+  loadOfferingSections,
   must,
   notFound,
   notifyCourseAssigned,
@@ -17,6 +18,8 @@ import {
   stringList,
   wholeSectionWarnings,
 } from '@/app/lib/courses';
+import { loadCourseCatalog } from '@/app/lib/curriculum-server';
+import { addedSectionsProblem } from '@/app/lib/course-rules';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -56,6 +59,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
  * Dean's instructors, or change its sections (none is fine: the instructor
  * adds their own). The checklist stays with the assignment. The course and
  * term are fixed; to change those, remove the assignment and make a new one.
+ * A section added here must be of the course's year (course-rules.ts).
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const { session, response } = await requireRole('admin');
@@ -73,6 +77,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const target = await checkAssignmentTarget(supabase, session.uid, body.faculty_id, stringList(body.section_ids ?? []));
     if (!target.ok) return badRequest(target.error);
     const { faculty, sections } = target.value;
+
+    const before = new Set((await loadOfferingSections(supabase, [id])).get(id) ?? []);
+    const problem = addedSectionsProblem(
+      await loadCourseCatalog(supabase, session.uid),
+      offering.course.code,
+      sections.filter((s) => !before.has(s.id)).map((s) => s.name),
+    );
+    if (problem) return badRequest(problem);
 
     const reassigned = faculty.id !== offering.faculty_id;
     if (reassigned) {

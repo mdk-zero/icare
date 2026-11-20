@@ -653,6 +653,38 @@ export async function loadDeanOffering(supabase: Supabase, adminId: string, id: 
   };
 }
 
+/**
+ * Every assignment of one course, or in one term, with the course code, the
+ * term's name and its sections' names: what an edit to that course or term is
+ * checked against (course-rules.ts).
+ */
+export async function loadAssignmentsOf(
+  supabase: Supabase,
+  by: { course_id: string } | { term_id: string },
+): Promise<{ code: string; termName: string; sectionNames: string[] }[]> {
+  const [column, value] = 'course_id' in by ? ['course_id', by.course_id] : ['term_id', by.term_id];
+  const offerings = (must(await supabase.from('course_offerings').select('id, course_id, term_id').eq(column, value)) ??
+    []) as { id: string; course_id: string; term_id: string }[];
+  if (offerings.length === 0) return [];
+  const sectionsByOffering = await loadOfferingSections(
+    supabase,
+    offerings.map((o) => o.id),
+  );
+  const [courses, terms, sections] = await Promise.all([
+    supabase.from('courses').select('id, code').in('id', [...new Set(offerings.map((o) => o.course_id))]).then(must),
+    supabase.from('academic_terms').select('id, name').in('id', [...new Set(offerings.map((o) => o.term_id))]).then(must),
+    loadSectionNames(supabase, [...new Set([...sectionsByOffering.values()].flat())]),
+  ]);
+  const code = new Map(((courses ?? []) as { id: string; code: string }[]).map((c) => [c.id, c.code]));
+  const termName = new Map(((terms ?? []) as { id: string; name: string }[]).map((t) => [t.id, t.name]));
+  const sectionName = new Map(sections.map((s) => [s.id, s.name]));
+  return offerings.map((o) => ({
+    code: code.get(o.course_id) ?? '',
+    termName: termName.get(o.term_id) ?? '',
+    sectionNames: (sectionsByOffering.get(o.id) ?? []).map((id) => sectionName.get(id) ?? ''),
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // Course assignments (instructor)
 // ---------------------------------------------------------------------------
@@ -725,7 +757,12 @@ export interface SectionChoice {
  * Dean could have assigned it to (the Dean's sections), the sections of the
  * groups the instructor supervises, and the sections it is in already.
  */
-export async function instructorSectionChoices(supabase: Supabase, offering: OwnOffering): Promise<SectionChoice[]> {
+export async function instructorSectionChoices(
+  supabase: Supabase,
+  offering: OwnOffering,
+  /** Leaves out sections the course can't be given to; ones already on it stay, so they can come off. */
+  fits: (sectionName: string) => boolean = () => true,
+): Promise<SectionChoice[]> {
   const [course, me, teamsRes] = await Promise.all([
     supabase.from('courses').select('admin_id').eq('id', offering.course.id).maybeSingle().then(must),
     supabase.from('users').select('admin_id').eq('id', offering.faculty_id).maybeSingle().then(must),
@@ -739,14 +776,16 @@ export async function instructorSectionChoices(supabase: Supabase, offering: Own
   const deanSections = deanId ? await manageableSectionIds(supabase, 'admin', deanId) : [];
   const ids = [...new Set([...deanSections, ...teams.map((t) => t.section_id), ...offering.section_ids])];
   const current = new Set(offering.section_ids);
-  return (await loadSectionNames(supabase, ids)).map((s) => ({
-    ...s,
-    on_course: current.has(s.id),
-    groups: teams
-      .filter((t) => t.section_id === s.id)
-      .map((t) => t.name)
-      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
-  }));
+  return (await loadSectionNames(supabase, ids))
+    .filter((s) => current.has(s.id) || fits(s.name))
+    .map((s) => ({
+      ...s,
+      on_course: current.has(s.id),
+      groups: teams
+        .filter((t) => t.section_id === s.id)
+        .map((t) => t.name)
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
+    }));
 }
 
 /**

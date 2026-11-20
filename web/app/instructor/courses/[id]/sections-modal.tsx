@@ -6,12 +6,14 @@ import { faLayerGroup, faTriangleExclamation, faXmark } from "@fortawesome/free-
 import { EcgLoader } from "../../../components/EcgLoader";
 import { loadingToast } from "../../../components/Toast";
 import { fetchCourseSectionChoices, saveCourseSections, type CourseSectionChoice } from "../../../lib/api";
+import { yearLabel } from "../../../lib/course-rules";
 
 /**
  * The sections the instructor teaches this course in. A Dean can assign a
  * course with none, leaving the instructor to add their own here. Students
  * come from the checked sections: the members of the instructor's groups
- * there, or the whole section where they supervise no group.
+ * there, or the whole section where they supervise no group. Only sections of
+ * the course's year level are offered (course-rules.ts).
  */
 export default function SectionsModal({
   offeringId,
@@ -25,6 +27,7 @@ export default function SectionsModal({
   onSaved: () => void;
 }) {
   const [choices, setChoices] = useState<CourseSectionChoice[] | null>(null);
+  const [courseYear, setCourseYear] = useState<number | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -45,6 +48,7 @@ export default function SectionsModal({
           a.name.localeCompare(b.name, undefined, { numeric: true }),
       );
       setChoices(sorted);
+      setCourseYear(result.data.course_year ?? null);
       setPicked(sorted.filter((s) => s.on_course).map((s) => s.id));
     });
     return () => {
@@ -115,10 +119,15 @@ export default function SectionsModal({
             </p>
           ) : choices !== null && choices.length === 0 ? (
             <p className="p-6 text-center text-sm text-gray-500">
-              There are no sections to choose from yet. Ask your Dean or Program Chair to add them.
+              {`There are no ${courseYear ? `${yearLabel(courseYear)} ` : ""}sections to choose from yet. Ask your Dean or Program Chair to add them.`}
             </p>
           ) : (
             <ul className="space-y-0.5">
+              {courseYear && (
+                <li className="px-3 pb-1.5 pt-1 text-xs text-gray-500">
+                  {`${courseCode} is a ${yearLabel(courseYear)} course, so only ${yearLabel(courseYear)} sections are listed.`}
+                </li>
+              )}
               {(choices ?? []).map((s) => (
                 <li key={s.id}>
                   <label className="flex cursor-pointer items-start gap-2.5 rounded-lg px-3 py-2.5 hover:bg-subtle">
@@ -136,6 +145,11 @@ export default function SectionsModal({
                           ? `Your groups: ${s.groups.join(", ")}`
                           : "No group of yours here, so the whole section joins your roster"}
                       </span>
+                      {s.fits === false && (
+                        <span className="block text-xs text-amber-700">
+                          {`Not a ${courseYear ? yearLabel(courseYear) : "matching"} section. You can take it off, but not add it back.`}
+                        </span>
+                      )}
                     </span>
                   </label>
                 </li>
