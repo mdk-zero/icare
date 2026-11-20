@@ -28,7 +28,7 @@ In this guide:
 
 | Part | Runs on | What it does | Set up in |
 |---|---|---|---|
-| Database and files | Supabase | Postgres holds the app's tables and the `dw` data warehouse behind the analytics. Storage holds uploaded files. | [Supabase](#supabase) |
+| Database and files | Supabase, in the Singapore region | Postgres holds the app's tables and the `dw` data warehouse behind the analytics. Storage holds uploaded files. | [Supabase](#supabase) |
 | Web portal and API | Vercel, region `sin1` (set in `web/vercel.json`) | The `web/` Next.js app: the Admin, Dean and Instructor portals, and the `/api` routes that both the portals and the mobile app call. | [Web portal on Vercel](#web-portal-on-vercel) |
 | ML service | Render, as a Docker service in region `singapore` (set in `render.yaml`) | The `ml/` FastAPI service: the nightly Low performing prediction, skill mastery estimates and model retraining. | [ML service on Render](#ml-service-on-render) |
 | Mobile app | Expo EAS | Android builds (an APK) and over-the-air updates. | [Mobile app with Expo EAS](#mobile-app-with-expo-eas) |
@@ -81,9 +81,10 @@ region each host offers. Changing either file is a code change, so commit it.
    `service_role` key (for `SUPABASE_SERVICE_ROLE_KEY`). The service role key gets past every
    row-level security rule, so it goes only on servers and in ignored `.env` files.
 4. Optional: Go to **Database** > **Extensions** and turn on `pg_cron` before you apply the
-   migrations. Migration 014 then schedules a nightly data warehouse refresh at 02:15, database
-   time. Without `pg_cron` nothing breaks: the analytics routes refresh the warehouse
-   themselves when it is more than 5 minutes old.
+   migrations. Migration 096 then schedules a data warehouse refresh every 5 minutes (it replaces
+   the nightly job that migration 014 set up). If you turn `pg_cron` on after applying 096, run
+   096 again. Without `pg_cron` nothing breaks: the analytics routes refresh the warehouse in
+   the background when it is more than 5 minutes old, one refresh at a time.
 
 ### Apply the database schema and migrations
 
@@ -153,7 +154,7 @@ This table lists the ones whose absence users notice.
 | Groups within a section | 048 | Groups can't be made. The request fails with a message naming 048. |
 | An Instructor for each group | 051 | Groups have no Instructor. Assigning one fails with a message naming 051. |
 | The Admin role, request timings and test history | 054 | There is no Admin role at all. Admin pages that read timings or test runs say "Migration 054 isn't applied yet". |
-| Signing out old sessions after a password reset or role change; shared sign-in limits | 059 | Old sessions keep working until they expire (7 days). Sign-in attempt limits count per server instead of across all of them. |
+| Signing out old sessions after a password reset or role change; shared sign-in limits | 059 | Old sessions keep working until they expire (7 days). Sign-in attempt limits count per server instead of across all of them. With it, the limits are 10 attempts per account and 300 per address in 15 minutes. |
 | Push notifications on phones | 072 | Phones show notifications only while the app is open. |
 | One web session and one phone session per account | 079 | Several sign-ins to one account stay live at once. |
 | AI token counts and costs | 076 | The AI usage card on the Admin Dashboard says "Migration 076 isn't applied yet". |
@@ -167,6 +168,9 @@ This table lists the ones whose absence users notice.
 | Students' permission to use AI | 092 | No student has said yes, so AI study tips, AI feedback and AI summaries of a student stay off, and the app never asks. |
 | Case Presentations by group | 093 | "Case presentations by group are not set up yet (migration 093 has not been applied)." |
 | Forms on a Return Demonstration | 094 | "Forms on a Return Demonstration need database migration 094." |
+| Forms an Instructor uploads for a Return Demonstration | 095 | "Uploading your own forms needs database migration 095." |
+| One warehouse refresh at a time, and the 5-minute schedule | 096 | Several servers can refresh the analytics data at once, and under load a refresh can fail and leave it stale. |
+| Essay questions in Quizzes | 097 | Essay questions can't be saved or answered. The app doesn't say which migration is missing. |
 
 ### Storage buckets
 
@@ -636,9 +640,8 @@ App Store review.
 ### The student web app
 
 The student web app is the same app built for browsers and served by the web portal at
-`/student`. It is a backup only. It stays off, and it goes live only if the panel approves
-deploying on the web instead of the App Store. Until then it is not a way for students to get
-iCARE++.
+`/student`. The panel has approved students using it. It is a second way in, not the main one:
+it stays off until an Admin turns it on, and it is not the iPhone version.
 
 To publish a new version of it:
 
@@ -657,8 +660,7 @@ To publish a new version of it:
 **Result:** The portal's next deployment serves the new files at `/student`. Unlike an update,
 it reaches every student at once. Open tabs offer a reload when a newer version is live.
 
-To switch it on, an Admin uses **Student Web App** in the Admin portal, and only after the panel
-approves (see [Turn the student web app on or off](admin.md#turn-the-student-web-app-on-or-off)).
+To switch it on, an Admin uses **Student Web App** in the Admin portal (see [Turn the student web app on or off](admin.md#turn-the-student-web-app-on-or-off)).
 The change takes effect within about 15 seconds and needs no migration. While it is on:
 
 - Students sign in at `https://www.i-care.dev/student` with their usual account. Staff are
@@ -686,7 +688,10 @@ The test account names use the database's role names: `SUPER_ADMIN` is an Admin,
 and `FACULTY` an Instructor. Use accounts made for testing, whose passwords are already set. The
 suites create, edit and delete no app data, but each sign-in signs out any other web session of
 that account, so don't use a test account by hand while a suite runs. `web/tests/README.md`
-explains the suites.
+explains the suites. It also covers the load tests: Apache JMeter plans in `web/tests/load/`,
+run with `npm run test:load:live` and a `JMETER_HOME` variable that points at your JMeter
+install. They send read-only requests as the test accounts, and the larger steps slow the live
+site, so run them when few people are using it.
 
 CI doesn't compile the ML service; `./check.sh` does.
 
