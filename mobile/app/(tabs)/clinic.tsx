@@ -25,7 +25,7 @@ import {
 import { useApiData } from "@/hooks/useApiData";
 import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 import { FloorPlan, FloorPlanSkeleton } from "@/components/FloorPlan";
-import { gradedLabel, performOn } from "@/lib/return-demos";
+import { AWAITING_GRADE_LABEL, gradedLabel, isAwaitingGrade, performOn } from "@/lib/return-demos";
 import {
   fetchWard,
   fetchMyCases,
@@ -59,6 +59,7 @@ function AssignmentBanner({
     [Palette, Accent, Shadow, Type],
   );
   const progress = assignment.tasks_total > 0 ? assignment.tasks_done / assignment.tasks_total : 0;
+  const waiting = isAwaitingGrade(assignment);
 
   return (
     <Pressable
@@ -97,7 +98,7 @@ function AssignmentBanner({
         </View>
       ) : null}
 
-      {assignment.tasks_total > 0 ? (
+      {assignment.tasks_total > 0 && !waiting ? (
         <View style={styles.progressWrap}>
           <View style={[styles.progressTrack, { backgroundColor: Palette.borderLight }]}>
             <View
@@ -117,22 +118,31 @@ function AssignmentBanner({
         <View
           style={[
             styles.pill,
-            { backgroundColor: assignment.required ? Accent.red.bg : Accent.slate.bg },
+            {
+              backgroundColor: waiting
+                ? Accent.blue.bg
+                : assignment.required
+                  ? Accent.red.bg
+                  : Accent.slate.bg,
+            },
           ]}
         >
           <Text
             style={[
               styles.pillText,
-              { color: assignment.required ? Accent.red.fg : Accent.slate.fg },
+              { color: waiting ? Accent.blue.fg : assignment.required ? Accent.red.fg : Accent.slate.fg },
+              waiting && { textTransform: "none" },
             ]}
           >
-            {assignment.required ? "Required" : "Optional"}
+            {waiting ? AWAITING_GRADE_LABEL : assignment.required ? "Required" : "Optional"}
           </Text>
         </View>
-        <View style={styles.dueRow}>
-          <Ionicons name="calendar-outline" size={12} color={Palette.textMuted} />
-          <Text style={styles.dueText}>{performOn(assignment.deadline)}</Text>
-        </View>
+        {waiting ? null : (
+          <View style={styles.dueRow}>
+            <Ionicons name="calendar-outline" size={12} color={Palette.textMuted} />
+            <Text style={styles.dueText}>{performOn(assignment.deadline)}</Text>
+          </View>
+        )}
       </View>
     </Pressable>
   );
@@ -285,7 +295,10 @@ export default function ClinicScreen() {
   );
   const offPlan = onPlan.length > 0 ? rooms.filter((r) => !onPlan.includes(r)) : rooms;
 
-  const openAssignments = assignments.filter((a) => a.status !== "completed");
+  // Handed in and waiting for the Instructor's grade: nothing left to perform, so
+  // it is not pending and not the "Next:" case; it shows after the open ones.
+  const openAssignments = assignments.filter((a) => a.status !== "completed" && !isAwaitingGrade(a));
+  const waitingAssignments = assignments.filter(isAwaitingGrade);
   // Newest graded first; the list comes newest-assigned first.
   const completedAssignments = assignments
     .filter((a) => a.status === "completed")
@@ -293,7 +306,7 @@ export default function ClinicScreen() {
   // The room to ring on the plan: where the soonest unfinished activity is performed.
   const myRoomId =
     (data?.activities ?? [])
-      .filter((a) => a.status !== "completed")
+      .filter((a) => a.status !== "completed" && !isAwaitingGrade(a))
       .sort((a, b) => (a.deadline ?? "~").localeCompare(b.deadline ?? "~"))[0]?.room_id ?? null;
 
   const caseList = cases.data ?? [];
@@ -314,7 +327,13 @@ export default function ClinicScreen() {
       tone: "alert",
       icon: pendingCount > 0 ? "time-outline" : "checkmark-done-outline",
       accent: pendingCount > 0 ? "amber" : "green",
-      summary: pending ? undefined : nextUp ? `Next: ${nextUp}` : "You're all caught up",
+      summary: pending
+        ? undefined
+        : nextUp
+          ? `Next: ${nextUp}`
+          : waitingAssignments.length > 0
+            ? `${waitingAssignments.length} waiting for grade`
+            : "You're all caught up",
     },
     completed: {
       title: "Graded Patient Cases",
@@ -434,8 +453,15 @@ export default function ClinicScreen() {
                   onPress={() => openAssignment(assignment)}
                 />
               ))}
+              {waitingAssignments.map((assignment) => (
+                <AssignmentBanner
+                  key={assignment.id}
+                  assignment={assignment}
+                  onPress={() => openAssignment(assignment)}
+                />
+              ))}
               {pendingCases.map(caseCard)}
-              {!pending && pendingCount === 0 ? (
+              {!pending && pendingCount === 0 && waitingAssignments.length === 0 ? (
                 <EmptyState icon="checkmark-done-outline" message="You're all caught up. Nothing to do right now." />
               ) : null}
             </View>

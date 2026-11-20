@@ -80,6 +80,9 @@ export async function GET() {
         time_taken: a.time_taken,
         // When the student pressed Start (null: not yet); absent before 063.
         ...('started_at' in a ? { started_at: a.started_at } : {}),
+        // When the student handed it in (null: not yet). With status still
+        // in_progress it is waiting for the Instructor's grade.
+        ...('submitted_at' in a ? { submitted_at: a.submitted_at } : {}),
       };
     });
 

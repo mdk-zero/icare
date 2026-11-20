@@ -249,6 +249,8 @@ export interface RoomActivity {
   status: ScenarioAssignment['status'];
   time_limit_minutes: number | null;
   started_at?: string | null;
+  /** When it was handed in; absent from older servers. */
+  submitted_at?: string | null;
 }
 
 export interface WardResult {
@@ -436,6 +438,8 @@ export interface ScenarioAssignment {
   team_name?: string | null;
   /** When the student pressed Start (null: not yet); absent before migration 063. */
   started_at?: string | null;
+  /** When the student handed it in (null: not yet); absent from older servers. See `isAwaitingGrade`. */
+  submitted_at?: string | null;
   /** A Patient Case, or a Return Demonstration (skill checklists, no patient); absent from older servers. */
   kind?: 'patient_case' | 'return_demo';
   /** Where it is performed (098); null for none, absent from older servers. */

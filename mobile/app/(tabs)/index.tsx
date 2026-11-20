@@ -15,7 +15,7 @@ import { useAvatarImage } from "@/hooks/useAvatar";
 import { useApiData, allCached } from "@/hooks/useApiData";
 import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 import { useWallClock } from "@/components/navigation/AppTabs";
-import { performOn } from "@/lib/return-demos";
+import { AWAITING_GRADE_LABEL, isAwaitingGrade, performOn } from "@/lib/return-demos";
 import { CourseRequirements } from "@/components/CourseRequirements";
 import {
   fetchScenarioAssignments,
@@ -149,8 +149,19 @@ function statusColors(Accent: ReturnType<typeof useTheme>["Accent"]): Record<str
   };
 }
 
-/** Patient cases and Return Demonstrations are performed on their date, not due by it. */
+/**
+ * Patient cases and Return Demonstrations are performed on their date, not due by it.
+ * One already handed in shows when it was handed in, since there is nothing left to perform.
+ */
 function formatDeadline(assignment: ScenarioAssignment): string {
+  if (isAwaitingGrade(assignment) && assignment.submitted_at) {
+    const day = new Date(assignment.submitted_at).toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+    return `Handed in ${day}`;
+  }
   return performOn(assignment.deadline);
 }
 
@@ -203,7 +214,10 @@ export default function DashboardScreen() {
   // with placeholders until the first load lands.
   const pending = loading && !data;
 
-  const openTasks = assignments.filter((a) => a.status !== "completed");
+  // Handed in and waiting for the Instructor's grade: nothing left to perform, so
+  // it is not next up and does not count as pending.
+  const openTasks = assignments.filter((a) => a.status !== "completed" && !isAwaitingGrade(a));
+  const waitingTasks = assignments.filter(isAwaitingGrade);
   const nextTask = openTasks[0] ?? null;
   const laterTasks = nextTask ? openTasks.slice(1, 4) : [];
   const scoredAttempts = (progress?.attempts ?? []).filter((a) => a.score !== null);
@@ -247,6 +261,53 @@ export default function DashboardScreen() {
       href: "/clinic",
     },
   ];
+
+  const renderTask = (task: ScenarioAssignment, index: number) => (
+      <Pressable
+        key={task.id}
+        style={({ pressed }) => [
+          styles.taskItem,
+          index > 0 && styles.taskItemBorder,
+          pressed && styles.pressedDim,
+        ]}
+        onPress={() => openAssignment(task)}
+      >
+        <View
+          style={[
+            styles.taskStatusBar,
+            {
+              backgroundColor: isAwaitingGrade(task)
+                ? Accent.blue.fg
+                : (STATUS_COLORS[task.status] ?? Palette.textFaint),
+            },
+          ]}
+        />
+        <View style={styles.taskContent}>
+          <Text style={styles.taskTitle} numberOfLines={1}>
+            {task.scenario_title}
+          </Text>
+          <View style={styles.taskMeta}>
+            <FontAwesome6 name="clock" size={10} color={Palette.textMuted} />
+            <Text style={styles.taskDue} numberOfLines={1}>
+              {formatDeadline(task)}
+            </Text>
+          </View>
+          {/* On their own line, so a long date never pushes them past the edge. */}
+          {(isReturnDemo(task) || task.required || isAwaitingGrade(task)) && (
+            <View style={styles.taskTags}>
+              {isAwaitingGrade(task) && (
+                <Text style={[styles.taskTag, styles.taskKind]}>{AWAITING_GRADE_LABEL}</Text>
+              )}
+              {isReturnDemo(task) && (
+                <Text style={[styles.taskTag, styles.taskKind]}>Return Demo</Text>
+              )}
+              {task.required && <Text style={[styles.taskTag, styles.taskRequired]}>Required</Text>}
+            </View>
+          )}
+        </View>
+        <FontAwesome6 name="chevron-right" size={13} color={Palette.textFaint} />
+      </Pressable>
+  );
 
   return (
     <ScrollView
@@ -387,85 +448,62 @@ export default function DashboardScreen() {
         ))}
       </Animated.View>
 
-      {/* Patient Cases */}
-      <Animated.View entering={FadeInDown.duration(220).delay(160)} style={styles.section}>
-        <SectionHeader
-          title={nextTask || pending ? "Up Later" : "Assigned Patient Cases"}
-          subtitle={pending ? " " : `${openTasks.length} pending`}
-          actionLabel="See all"
-          onAction={() => router.push("/clinic")}
-        />
-        <View style={styles.taskList}>
-          {pending ? (
-            [0, 1, 2].map((index) => (
-              <View key={index} style={[styles.taskItem, index > 0 && styles.taskItemBorder]}>
-                <View style={[styles.taskStatusBar, { backgroundColor: Palette.borderLight }]} />
-                <View style={styles.taskContent}>
-                  <SkeletonBlock width={["75%", "60%", "70%"][index] as `${number}%`} height={14} />
-                  <SkeletonBlock width={110} height={10} style={{ marginTop: 7 }} />
-                </View>
-                <FontAwesome6 name="chevron-right" size={13} color={Palette.textFaint} />
-              </View>
-            ))
-          ) : openTasks.length === 0 ? (
-            <View style={styles.emptyTasksWrap}>
-              <View style={styles.emptyTasksIcon}>
-                <FontAwesome6 name="clipboard-list" size={18} color={Teal.primary} />
-              </View>
-              <Text style={styles.emptyTasks}>
-                No patient cases assigned yet — your instructor will assign them here.
-              </Text>
-            </View>
-          ) : nextTask && laterTasks.length === 0 ? (
-            <View style={styles.emptyTasksWrap}>
-              <View style={styles.emptyTasksIcon}>
-                <FontAwesome6 name="check" size={16} solid color={Accent.green.fg} />
-              </View>
-              <Text style={styles.emptyTasks}>That&apos;s everything — just the one above.</Text>
-            </View>
-          ) : (
-            (nextTask ? laterTasks : openTasks.slice(0, 3)).map((task, index) => (
-              <Pressable
-                key={task.id}
-                style={({ pressed }) => [
-                  styles.taskItem,
-                  index > 0 && styles.taskItemBorder,
-                  pressed && styles.pressedDim,
-                ]}
-                onPress={() => openAssignment(task)}
-              >
-                <View
-                  style={[
-                    styles.taskStatusBar,
-                    { backgroundColor: STATUS_COLORS[task.status] ?? Palette.textFaint },
-                  ]}
-                />
-                <View style={styles.taskContent}>
-                  <Text style={styles.taskTitle} numberOfLines={1}>
-                    {task.scenario_title}
-                  </Text>
-                  <View style={styles.taskMeta}>
-                    <FontAwesome6 name="clock" size={10} color={Palette.textMuted} />
-                    <Text style={styles.taskDue} numberOfLines={1}>
-                      {formatDeadline(task)}
-                    </Text>
+      {/* Patient Cases; when only handed-in ones remain, the section below stands alone. */}
+      {(pending || openTasks.length > 0 || waitingTasks.length === 0) && (
+        <Animated.View entering={FadeInDown.duration(220).delay(160)} style={styles.section}>
+          <SectionHeader
+            title={nextTask || pending ? "Up Later" : "Assigned Patient Cases"}
+            subtitle={pending ? " " : `${openTasks.length} pending`}
+            actionLabel="See all"
+            onAction={() => router.push("/clinic")}
+          />
+          <View style={styles.taskList}>
+            {pending ? (
+              [0, 1, 2].map((index) => (
+                <View key={index} style={[styles.taskItem, index > 0 && styles.taskItemBorder]}>
+                  <View style={[styles.taskStatusBar, { backgroundColor: Palette.borderLight }]} />
+                  <View style={styles.taskContent}>
+                    <SkeletonBlock width={["75%", "60%", "70%"][index] as `${number}%`} height={14} />
+                    <SkeletonBlock width={110} height={10} style={{ marginTop: 7 }} />
                   </View>
-                  {/* On their own line, so a long date never pushes them past the edge. */}
-                  {(isReturnDemo(task) || task.required) && (
-                    <View style={styles.taskTags}>
-                      {isReturnDemo(task) && (
-                        <Text style={[styles.taskTag, styles.taskKind]}>Return Demo</Text>
-                      )}
-                      {task.required && <Text style={[styles.taskTag, styles.taskRequired]}>Required</Text>}
-                    </View>
-                  )}
+                  <FontAwesome6 name="chevron-right" size={13} color={Palette.textFaint} />
                 </View>
-                <FontAwesome6 name="chevron-right" size={13} color={Palette.textFaint} />
-              </Pressable>
-            ))
-          )}
-        </View>
-      </Animated.View>
+              ))
+            ) : openTasks.length === 0 && waitingTasks.length === 0 ? (
+              <View style={styles.emptyTasksWrap}>
+                <View style={styles.emptyTasksIcon}>
+                  <FontAwesome6 name="clipboard-list" size={18} color={Teal.primary} />
+                </View>
+                <Text style={styles.emptyTasks}>
+                  No patient cases assigned yet — your instructor will assign them here.
+                </Text>
+              </View>
+            ) : nextTask && laterTasks.length === 0 ? (
+              <View style={styles.emptyTasksWrap}>
+                <View style={styles.emptyTasksIcon}>
+                  <FontAwesome6 name="check" size={16} solid color={Accent.green.fg} />
+                </View>
+                <Text style={styles.emptyTasks}>That&apos;s everything — just the one above.</Text>
+              </View>
+            ) : (
+              (nextTask ? laterTasks : openTasks.slice(0, 3)).map(renderTask)
+            )}
+          </View>
+        </Animated.View>
+      )}
+
+      {/* Handed in: nothing left to perform, the Instructor's grade is next. */}
+      {!pending && waitingTasks.length > 0 && (
+        <Animated.View entering={FadeInDown.duration(220).delay(200)} style={styles.section}>
+          <SectionHeader
+            title="Waiting for Grade"
+            subtitle={`${waitingTasks.length} handed in`}
+            actionLabel="See all"
+            onAction={() => router.push("/clinic")}
+          />
+          <View style={styles.taskList}>{waitingTasks.slice(0, 3).map(renderTask)}</View>
+        </Animated.View>
+      )}
 
       {/* Course Requirements: what's still missing in each course this term */}
       {courses.data && (

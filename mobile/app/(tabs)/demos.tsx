@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ScreenHeader, SkeletonBlock, EmptyState, Badge } from '@/components/ui';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchScenarioAssignments, isReturnDemo, type ScenarioAssignment } from '@/lib/api';
-import { returnDemoStatus } from '@/lib/return-demos';
+import { isAwaitingGrade, returnDemoStatus } from '@/lib/return-demos';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -35,16 +35,21 @@ export default function ReturnDemosScreen() {
   );
 
   const demos = (data ?? []).filter(isReturnDemo);
-  // Still to perform, soonest first; then graded ones, newest first.
+  // Still to perform, soonest first; then handed in and waiting for a grade; then graded, newest first.
   const upcoming = demos
-    .filter((d) => d.status !== 'completed')
+    .filter((d) => d.status !== 'completed' && !isAwaitingGrade(d))
     .sort((a, b) => (a.deadline ?? '').localeCompare(b.deadline ?? ''));
+  const waiting = demos
+    .filter(isAwaitingGrade)
+    .sort((a, b) => (b.submitted_at ?? '').localeCompare(a.submitted_at ?? ''));
   const graded = demos
     .filter((d) => d.status === 'completed')
     .sort((a, b) => (b.completed_at ?? '').localeCompare(a.completed_at ?? ''));
 
   const card = (d: ScenarioAssignment) => {
     const status = returnDemoStatus(d);
+    // Handed in: nothing left to perform or prepare.
+    const open = d.status !== 'completed' && !isAwaitingGrade(d);
     return (
       <Pressable
         key={d.id}
@@ -62,11 +67,11 @@ export default function ReturnDemosScreen() {
           </Text>
           <View style={styles.meta}>
             <Badge label={status.label} variant={status.variant} size="sm" />
-            {d.deadline && d.status !== 'completed' ? (
+            {d.deadline && open ? (
               <Text style={Type.caption}>Perform on {dayLabel(d.deadline)}</Text>
             ) : null}
           </View>
-          {d.status !== 'completed' ? <Text style={styles.hint}>Open to see the checklist</Text> : null}
+          {open ? <Text style={styles.hint}>Open to see the checklist</Text> : null}
         </View>
         <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
       </Pressable>
@@ -86,7 +91,7 @@ export default function ReturnDemosScreen() {
         title="Return Demos"
         subtitle={
           demos.length
-            ? `${upcoming.length} to perform · ${graded.length} graded`
+            ? `${upcoming.length} to perform${waiting.length ? ` · ${waiting.length} waiting for grade` : ''} · ${graded.length} graded`
             : 'Skills you demonstrate to your instructor'
         }
         icon="hand-left-outline"
@@ -113,6 +118,12 @@ export default function ReturnDemosScreen() {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>To perform</Text>
               {upcoming.map(card)}
+            </View>
+          ) : null}
+          {waiting.length > 0 ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Waiting for grade</Text>
+              {waiting.map(card)}
             </View>
           ) : null}
           {graded.length > 0 ? (

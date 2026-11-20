@@ -8,7 +8,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useApiData } from '@/hooks/useApiData';
 import { fetchWard, type RoomActivity } from '@/lib/api';
 import { openCase } from '@/lib/open-case';
-import { performOn } from '@/lib/return-demos';
+import { isAwaitingGrade, performOn } from '@/lib/return-demos';
 import { timeLimitLabel } from '@/lib/time-limit';
 
 /**
@@ -58,12 +58,13 @@ export default function RoomScreen() {
     );
   }
 
-  // Unfinished first, soonest first; graded ones after.
+  // To perform first, soonest first; then the handed-in ones waiting for a grade; graded ones last.
+  const rank = (a: RoomActivity) => (a.status === 'completed' ? 2 : isAwaitingGrade(a) ? 1 : 0);
   const activities = (data?.activities ?? [])
     .filter((a) => a.room_id === roomId)
     .sort(
       (a, b) =>
-        Number(a.status === 'completed') - Number(b.status === 'completed') ||
+        rank(a) - rank(b) ||
         (a.deadline ?? '~').localeCompare(b.deadline ?? '~'),
     );
 
@@ -106,6 +107,7 @@ export default function RoomScreen() {
       {activities.map((a) => {
         const demo = a.kind === 'return_demo';
         const done = a.status === 'completed';
+        const waiting = isAwaitingGrade(a);
         const tone = demo ? Accent.amber : Accent.teal;
         return (
           <Pressable
@@ -113,7 +115,7 @@ export default function RoomScreen() {
             style={({ pressed }) => [styles.card, done && styles.cardDone, pressed && styles.pressed]}
             onPress={() => open(a)}
             accessibilityRole="button"
-            accessibilityLabel={`${demo ? 'Return Demonstration' : 'Patient case'}: ${a.scenario_title}${done ? ', graded' : ''}`}
+            accessibilityLabel={`${demo ? 'Return Demonstration' : 'Patient case'}: ${a.scenario_title}${done ? ', graded' : waiting ? ', handed in, waiting for grade' : ''}`}
           >
             <View style={[styles.cardIcon, { backgroundColor: tone.bg }]}>
               <Ionicons name={demo ? 'hand-left-outline' : 'pulse'} size={18} color={tone.fg} />
@@ -134,6 +136,7 @@ export default function RoomScreen() {
               </Text>
             </View>
             {done ? <Badge label="Graded" variant="success" /> : null}
+            {waiting ? <Badge label="Handed in" variant="info" /> : null}
             <Ionicons name="chevron-forward" size={17} color={Palette.textFaint} />
           </Pressable>
         );

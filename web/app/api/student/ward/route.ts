@@ -185,6 +185,7 @@ export async function GET() {
         status: a.status,
         time_limit_minutes: timeLimits.get(a.scenario_id) ?? null,
         ...('started_at' in a ? { started_at: a.started_at } : {}),
+        ...('submitted_at' in a ? { submitted_at: a.submitted_at } : {}),
       }));
 
     return NextResponse.json({
