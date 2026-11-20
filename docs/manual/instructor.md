@@ -42,7 +42,7 @@ sidebar from top to bottom.
 | Teaching | **Quizzes** | Create quizzes, write or generate questions, assign them with a deadline, read the results, and grade essay answers. |
 | Teaching | **Library** | Publish study materials for each Taylor's skill to the student app, and read the skill checklists. |
 | Clinical | **Case Presentations** | Have groups report a patient from hospital duty with slides, and grade each group on a rubric. |
-| Clinical | **Wards** | Read the ward census, check patients in and out, and open a patient's chart. |
+| Clinical | **Wards** | Read the ward census and check patients in and out. |
 | Data | **Analytics** | Follow class and group performance, the leaderboard and skill mastery. |
 | Data | **Reports** | Preview and download PDF reports per section, student, group, Patient Case, Return Demonstration or Quiz. |
 | Administration | **Audit Trail** | Read your own action history. |
@@ -1386,15 +1386,6 @@ To check a patient out, in the room's list select **Check out patient** on their
 To check a patient back in, select **Check in patient** on their row. In the **Check In Patient**
 dialog, choose a **Room** and select **Check In**. The admission date restarts at check-in. The
 message "<patient> checked in" appears.
-
-### Open a patient chart
-
-To open a patient's chart, select **Open patient chart** on their row. The **Patient Chart** page
-shows the patient's facts, **Vital Signs**, **Discharge Summary**, **Clinical Record**,
-**Laboratory** and **Admission History**.
-
-> [!NOTE]
-> The chart also shows older tabs left from a retired feature. Ignore them.
 
 ## Analytics
 

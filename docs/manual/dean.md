@@ -836,13 +836,6 @@ On the same row, **Edit patient** changes the patient's details, and **Delete pa
 
 **Who is notified:** Nobody is notified.
 
-### Open a patient chart
-
-To open a patient's chart, select the patient's room, then select **Open patient chart** on their row. The chart shows the patient's admission details, vital signs history, clinical record, laboratory results and admission history.
-
-> [!NOTE]
-> The chart also shows some older tabs left from a retired feature. Ignore them.
-
 ## Analytics
 
 The **Analytics** page (titled "Analytics Dashboard") shows figures on your own students, instructors and rooms. Its figures refresh themselves at most every 5 minutes.
