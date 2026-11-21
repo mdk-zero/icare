@@ -347,6 +347,13 @@ export interface SeedOptions {
   instructorId: string;
   /** Return Demonstrations, one per block from the first. */
   returnDemos?: string[];
+  /**
+   * Each group's own Patient Cases (one a block, in block order) and Return
+   * Demonstrations, keyed "BSN 3101 · Group 1". With it no two groups share a
+   * case, and every group sits its section's quiz of each block, the same for
+   * all. Without it, a section's groups rotate through its cases (groupWork).
+   */
+  groupWork?: Record<string, { cases: string[]; returnDemos?: string[] }>;
   /** Also clear these students' untouched assignments on the Dean's other work. */
   clearUntouched?: boolean;
   /** Report the plan and write nothing. */
@@ -501,7 +508,14 @@ export async function seedHistory(profiles: Profile[], sectionWork: Record<strin
   if (unknown.length > 0) throw new Error(`Profiles name competencies that do not exist:\n  ${unknown.join('\n  ')}`);
 
   const catalog = Object.values(sectionWork).flat();
-  const catalogScenarioTitles = [...new Set([...catalog.map((i) => i.scenario), ...returnDemos])];
+  const groupPlans = Object.values(options.groupWork ?? {});
+  const catalogScenarioTitles = [
+    ...new Set([
+      ...catalog.map((i) => i.scenario),
+      ...returnDemos,
+      ...groupPlans.flatMap((w) => [...w.cases, ...(w.returnDemos ?? [])]),
+    ]),
+  ];
   const catalogQuizTitles = [...new Set(catalog.map((i) => i.quiz))];
   const absent = [
     ...catalogScenarioTitles.filter((t) => !scenarioByTitle.has(t)),
@@ -516,11 +530,11 @@ export async function seedHistory(profiles: Profile[], sectionWork: Record<strin
   const sortedGroups = [...(groupsRes.data ?? [])].sort((a, b) =>
     (a.name as string).localeCompare(b.name as string, undefined, { numeric: true }),
   );
-  const groupOf = new Map<string, { teamId: string; supervisor: string | null; ordinal: number }>();
+  const groupOf = new Map<string, { teamId: string; name: string; supervisor: string | null; ordinal: number }>();
   for (const g of sortedGroups) {
     const ordinal = sortedGroups.filter((o) => o.section_id === g.section_id).indexOf(g);
     for (const m of (g.team_members ?? []) as { student_id: string }[]) {
-      groupOf.set(m.student_id, { teamId: g.id as string, supervisor: (g.faculty_id as string | null) ?? null, ordinal });
+      groupOf.set(m.student_id, { teamId: g.id as string, name: g.name as string, supervisor: (g.faculty_id as string | null) ?? null, ordinal });
     }
   }
 
@@ -544,8 +558,8 @@ export async function seedHistory(profiles: Profile[], sectionWork: Record<strin
       continue;
     }
     const sectionName = (student as unknown as { sections: { name: string } | null }).sections?.name ?? '';
-    const ownWork = sectionWork[sectionName];
-    if (!ownWork) {
+    const sectionItems = sectionWork[sectionName];
+    if (!sectionItems) {
       refused.push(`${profile.email}: section "${sectionName}" has no work defined`);
       continue;
     }
@@ -554,15 +568,22 @@ export async function seedHistory(profiles: Profile[], sectionWork: Record<strin
       refused.push(`${profile.email}: their group has another supervisor`);
       continue;
     }
-    const work = group ? groupWork(ownWork, group.ordinal) : ownWork;
+    const groupKey = group ? `${sectionName} · ${group.name}` : null;
+    const own = groupKey ? options.groupWork?.[groupKey] : undefined;
+    if (options.groupWork && (!own || own.cases.length !== sectionItems.length)) {
+      refused.push(`${profile.email}: ${groupKey ?? 'no group'} needs a case for each of the section's ${sectionItems.length} blocks`);
+      continue;
+    }
+    const work = own || !group ? sectionItems : groupWork(sectionItems, group.ordinal);
     const blocks = termBlocks(work.length, now);
     const didCount = Math.max(1, Math.round(profile.engagement * work.length));
     // Each group has its own lab day, Tuesday to Friday.
     const labDay = 2 + (hash(sectionName) % 2) + 2 * ((group?.ordinal ?? 0) % 2);
-    const cases = work.map((item, block) =>
-      planCase(profile, didCount, { title: item.scenario, scenarioId: scenarioByTitle.get(item.scenario)!, block, opens: blocks[block], days: CASE_DAYS, labDay }, now),
+    const caseTitles = own ? own.cases : work.map((item) => item.scenario);
+    const cases = caseTitles.map((title, block) =>
+      planCase(profile, didCount, { title, scenarioId: scenarioByTitle.get(title)!, block, opens: blocks[block], days: CASE_DAYS, labDay }, now),
     );
-    const demos = returnDemos.slice(0, blocks.length).map((title, block) =>
+    const demos = (own?.returnDemos ?? returnDemos).slice(0, blocks.length).map((title, block) =>
       planCase(profile, didCount, { title, scenarioId: scenarioByTitle.get(title)!, block, opens: blocks[block] + DEMO_OPENS_AFTER_DAYS * DAY_MS, days: DEMO_DAYS, labDay }, now),
     );
     const quizzes = work.map((item, block) =>
