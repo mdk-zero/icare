@@ -26,6 +26,12 @@ interface PageHeaderProps {
      * never shifts the layout — a run's progress bar, say.
      */
     below?: ReactNode;
+    /**
+     * A line or two beside the button, on wide screens only, so it never
+     * crowds the title: what already happens without pressing it, say. Put the
+     * same words in `label` for everyone else.
+     */
+    note?: ReactNode;
   };
 }
 
@@ -108,25 +114,32 @@ export default function PageHeader({ badge, title, truncateTitle, subtitle, acti
               sidebar, where it was small and easy to miss. */}
           <LiveClock variant="full" className="animate-rise hidden sm:block" style={step(3)} />
           {action && (
-            <div className="relative flex shrink-0">
-              <button
-                onClick={action.onClick}
-                disabled={action.disabled}
-                aria-label={action.label}
-                title={action.label}
-                style={step(3)}
-                className={`animate-rise group inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-600 text-sm font-semibold text-white transition-colors duration-150 hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:opacity-45 disabled:hover:bg-brand-600 ${
-                  action.text ? "w-10 px-0 sm:w-auto sm:px-4" : "w-10"
-                }`}
-              >
-                <span className="transition-transform duration-150 group-hover:scale-110 group-disabled:scale-100">
-                  {action.icon}
-                </span>
-                {action.text && <span className="hidden sm:inline">{action.text}</span>}
-              </button>
-              {action.below && (
-                <div className="absolute inset-x-0 top-full mt-1.5">{action.below}</div>
+            <div className="flex items-center gap-3">
+              {action.note && (
+                <div className="animate-rise hidden text-right xl:block" style={step(3)}>
+                  {action.note}
+                </div>
               )}
+              <div className="relative flex shrink-0">
+                <button
+                  onClick={action.onClick}
+                  disabled={action.disabled}
+                  aria-label={action.label}
+                  title={action.label}
+                  style={step(3)}
+                  className={`animate-rise group inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-600 text-sm font-semibold text-white transition-colors duration-150 hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:opacity-45 disabled:hover:bg-brand-600 ${
+                    action.text ? "w-10 px-0 sm:w-auto sm:px-4" : "w-10"
+                  }`}
+                >
+                  <span className="transition-transform duration-150 group-hover:scale-110 group-disabled:scale-100">
+                    {action.icon}
+                  </span>
+                  {action.text && <span className="hidden sm:inline">{action.text}</span>}
+                </button>
+                {action.below && (
+                  <div className="absolute inset-x-0 top-full mt-1.5">{action.below}</div>
+                )}
+              </div>
             </div>
           )}
         </div>

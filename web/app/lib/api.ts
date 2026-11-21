@@ -1213,6 +1213,11 @@ export interface FacultyStudent {
   created_at?: string;
   /** Latest ML classification; null when the model has never scored them. */
   risk_level?: 'safe' | 'at_risk' | null;
+  /**
+   * When that classification was made. Each graded quiz or patient case
+   * re-scores the student on its own, and the nightly run scores everyone.
+   */
+  assessed_at?: string | null;
   /** ISO timestamp of their most recent recorded activity, or null. */
   last_activity?: string | null;
   /** Their last sign-in (on the app, for a student); null if they never have. */

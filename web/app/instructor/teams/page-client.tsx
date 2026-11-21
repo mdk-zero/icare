@@ -16,6 +16,7 @@ import {
   faUserPlus,
   faFolderOpen,
   faBookOpen,
+  faArrowsRotate,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   runFacultyMlJob,
@@ -51,6 +52,7 @@ import {
 } from "../../dean/student-management/roster-view";
 import { rememberStudentsView, studentsHref } from "../../lib/students-view";
 import TruncatedText from "../../components/TruncatedText";
+import { timeAgo } from "../_overview/format";
 
 /** Long enough to read a sentence with numbers in it. */
 const ML_TOAST_MS = 8000;
@@ -68,6 +70,28 @@ function formatLastActive(value: string | null | undefined): string {
   if (days === 1) return "Yesterday";
   if (days < 7) return `${days} days ago`;
   return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+/** "4m ago", or "just now" when it reads mid-sentence. */
+const assessedAgo = (iso: string) => timeAgo(iso).replace(/^Just now$/, "just now");
+
+/**
+ * Beside Assess: the scoring keeps up without it. Each graded quiz or patient
+ * case re-scores that student (refreshStudentInBackground), and the nightly
+ * run scores everyone, so the newest time is usually minutes or hours old.
+ */
+function AutoAssessNote({ lastAssessed }: { lastAssessed: string | null }) {
+  return (
+    <div className="text-xs leading-snug">
+      <p className="flex items-center justify-end gap-1.5 font-medium text-gray-700">
+        <FontAwesomeIcon icon={faArrowsRotate} className="h-3 w-3 text-brand-600" />
+        Students are assessed automatically
+      </p>
+      <p className="text-gray-500">
+        After each graded quiz or patient case · {lastAssessed ? `last run ${assessedAgo(lastAssessed)}` : "none yet"}
+      </p>
+    </div>
+  );
 }
 
 /** A card that opens the next level: a course, or a section in it. */
@@ -360,6 +384,10 @@ export default function TeamsClient() {
   };
 
   const allStudents = shownOverview?.students ?? [];
+  const lastAssessed = (roster ?? []).reduce<string | null>(
+    (latest, s) => (s.assessed_at && (!latest || s.assessed_at > latest) ? s.assessed_at : latest),
+    null,
+  );
   const loading = (loadingCourses && !courses) || (loadingTeams && !overview);
 
   // The app link goes to the students in view, at whichever level is open,
@@ -382,8 +410,9 @@ export default function TeamsClient() {
           disabled: runningMl || allStudents.length === 0,
           label: mlRun
             ? mlRunLabel(mlRun)
-            : "Run ML Jobs — score your students for risk",
+            : "Assess all your students for risk now. Each one is also assessed automatically after every graded quiz or patient case, and all of them again each night.",
           below: mlRun && <MlRunProgress run={mlRun} />,
+          note: <AutoAssessNote lastAssessed={lastAssessed} />,
         }}
       />
 
@@ -701,6 +730,16 @@ export default function TeamsClient() {
                               <>
                                 <td className="px-4 py-4 sm:px-6">
                                   <span
+                                    title={
+                                      info?.assessed_at
+                                        ? `Last assessed ${new Date(info.assessed_at).toLocaleString("en-US", {
+                                            month: "short",
+                                            day: "numeric",
+                                            hour: "numeric",
+                                            minute: "2-digit",
+                                          })}. Re-assessed automatically after each graded quiz or patient case.`
+                                        : "Assessed automatically after their first graded quiz or patient case"
+                                    }
                                     className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
                                       !risk
                                         ? "bg-gray-100 text-gray-500"
@@ -711,6 +750,9 @@ export default function TeamsClient() {
                                   >
                                     {!risk ? "Not scored yet" : risk === "at_risk" ? "At risk" : "Thriving"}
                                   </span>
+                                  {risk && info?.assessed_at && (
+                                    <p className="mt-1 text-xs text-gray-400">Assessed {assessedAgo(info.assessed_at)}</p>
+                                  )}
                                 </td>
                                 <td className="px-4 py-4 text-sm text-gray-500 sm:px-6">{formatLastActive(info?.last_activity)}</td>
                               </>

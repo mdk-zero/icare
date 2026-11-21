@@ -97,6 +97,7 @@ export async function GET() {
 
     // risk_level and last_activity are what the roster and dashboard badge
     // students with; without them every row reads "no prediction" and blank.
+    // assessed_at shows the instructor the scoring keeping up on its own.
     const ids = (students ?? []).map((s) => s.id);
     const [risks, activity] = await Promise.all([
       getLatestRiskByStudent(supabase, ids),
@@ -107,6 +108,7 @@ export async function GET() {
       students: (students ?? []).map((student) => ({
         ...withSectionName(student),
         risk_level: risks.get(student.id)?.risk ?? null,
+        assessed_at: risks.get(student.id)?.predicted_at ?? null,
         last_activity: activity.get(student.id) ?? null,
       })),
     });

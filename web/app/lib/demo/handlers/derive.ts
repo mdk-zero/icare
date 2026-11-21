@@ -145,6 +145,7 @@ export function studentRow(db: DemoDb, s: DemoUser) {
     section_id: s.section_id,
     section: sectionName(db, s.section_id),
     risk_level: hasWork(db, s.id) ? s.risk_level : null,
+    assessed_at: hasWork(db, s.id) ? assessedAt(db, s.id) : null,
     last_activity: lastActivity(db, s.id),
     last_login_at: s.last_sign_in_at,
   };
@@ -168,6 +169,20 @@ export function lastActivity(db: DemoDb, studentId: string): string | null {
   for (const a of db.attempts) if (a.student_id === studentId) keep(a.submitted_at ?? a.started_at);
   for (const a of db.assignments) if (a.student_id === studentId) keep(a.submitted_at);
   return last;
+}
+
+/**
+ * When the student was last scored for risk: the nightly run, or the re-score
+ * that follows a graded hand-in, whichever came later — as the real one is.
+ */
+function assessedAt(db: DemoDb, studentId: string): string {
+  let at = scoredAt();
+  const keep = (when: string | null | undefined) => {
+    if (when && when > at) at = when;
+  };
+  for (const a of db.attempts) if (a.student_id === studentId && a.status === "submitted") keep(a.submitted_at);
+  for (const a of db.assignments) if (a.student_id === studentId) keep(a.submitted_at);
+  return at;
 }
 
 export function submittedAttempts(db: DemoDb, studentId: string) {
