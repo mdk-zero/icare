@@ -48,7 +48,7 @@ function scorePhrase(requirement: CourseRequirement, item: ItemProgress): string
 /** What a cell says when hovered or read aloud. */
 export function statusText(requirement: CourseRequirement, item: ItemProgress | undefined): string {
   if (!item) return "Not started";
-  if (item.assigned === false) return "Not assigned to this student, so it doesn't count toward their grade";
+  if (item.assigned === false) return "Not given to this student, such as another group's case, so it doesn't count toward their grade";
   const parts: string[] = [];
   if (item.done) parts.push(`Met on ${when(item.done_at)}`);
   else if (requirement.kind === "count") parts.push(`${item.current} of ${item.target} so far`);
@@ -80,7 +80,7 @@ export function ItemStatus({ requirement, item }: { requirement: CourseRequireme
   // Not given to this student: N/A, not a missing grade.
   if (item?.assigned === false) {
     return (
-      <span className="inline-flex h-7 items-center justify-center px-1 text-[11px] font-semibold text-gray-400" aria-label="Not assigned">
+      <span className="inline-flex h-7 items-center justify-center px-1 text-[11px] font-semibold text-gray-400" aria-label="Not given to this student">
         N/A
       </span>
     );

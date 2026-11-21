@@ -87,6 +87,13 @@ export interface StudentGrade {
   scored_weight: number;
   parts: Record<string, number | null>;
   components: Record<string, number | null>;
+  /**
+   * Automatic split only: each part's share of the items given to this
+   * student, which is what their grade is averaged over. The split's own
+   * weights are shares of every item in the course, and where each group
+   * has its own Patient Cases those are other students' too.
+   */
+  weights?: Record<string, number>;
 }
 
 export interface GradeResult {
@@ -396,12 +403,19 @@ function autoGrades(
     const scores = ids.map(score);
     const scored = scores.filter((s) => s !== null).length;
     // Out of the items given to them: N/A ones aren't work still to do.
-    const theirs = ids.filter((id) => row[id]?.assigned !== false).length;
+    const given = (id: string) => row[id]?.assigned !== false;
+    const theirs = ids.filter(given).length;
+    const weights: Record<string, number> = {};
+    for (const p of split.parts) {
+      const own = p.items.filter((id) => byId.has(id) && given(id)).length;
+      weights[p.id] = theirs ? Math.round((own / theirs) * 10000) / 100 : 0;
+    }
     grades[studentId] = {
       grade: mean(scores),
       scored_weight: theirs ? Math.round((scored / theirs) * 10000) / 100 : 0,
       parts,
       components: {},
+      weights,
     };
   }
   return { invalid: false, grades };
@@ -411,7 +425,7 @@ function autoGrades(
 export interface CriterionStanding {
   id: string;
   name: string;
-  /** Percent of the final grade; for an automatic split, the part's share of the items. */
+  /** Percent of the final grade; for an automatic split, the part's share of the student's own items. */
   weight: number;
   items: number;
   /** Items the student has a score on. */
@@ -453,7 +467,7 @@ export function studentStanding(
       return {
         id: p.id,
         name: p.name,
-        weight: p.weight,
+        weight: grade?.weights?.[p.id] ?? p.weight,
         items: items.length,
         scored: items.filter((r) => itemScore(r, row?.[r.id]) !== null).length,
         score: grade?.parts[p.id] ?? null,

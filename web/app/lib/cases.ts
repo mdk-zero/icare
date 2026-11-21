@@ -31,6 +31,56 @@ export interface CaseGroupInput {
   leader_id: string;
 }
 
+/**
+ * Gives students who are now in a group that group's presentations: their own
+ * case_submissions row for each, carrying the group's status, hand-in and
+ * grade, so every member of a group has the group's grade and no one who
+ * joined late is left out. A presentation a student already has stays as it
+ * is, since that record (and any grade on it) came from a group they were in.
+ *
+ * Called wherever a student joins a group, and when a group is graded. Never
+ * fails the caller: a miss is logged, and grading the group fills it in.
+ */
+export async function joinGroupPresentations(supabase: Supabase, teamId: string, studentIds: string[]): Promise<void> {
+  if (studentIds.length === 0) return;
+  const { data, error } = await supabase
+    .from('case_presentation_groups')
+    .select('id, presentation_id, status, submitted_at, score, remarks, graded_by, graded_at')
+    .eq('team_id', teamId);
+  if (error) {
+    if (!isMissingCaseTables(error)) console.error('Failed to read the group’s case presentations', error);
+    return;
+  }
+  const groups = (data ?? []) as {
+    id: string;
+    presentation_id: string;
+    status: string;
+    submitted_at: string | null;
+    score: number | null;
+    remarks: string | null;
+    graded_by: string | null;
+    graded_at: string | null;
+  }[];
+  if (groups.length === 0) return;
+  const rows = groups.flatMap((g) =>
+    studentIds.map((student_id) => ({
+      presentation_id: g.presentation_id,
+      student_id,
+      group_id: g.id,
+      status: g.status,
+      submitted_at: g.submitted_at,
+      score: g.status === 'graded' ? g.score : null,
+      remarks: g.status === 'graded' ? g.remarks : null,
+      graded_by: g.status === 'graded' ? g.graded_by : null,
+      graded_at: g.status === 'graded' ? g.graded_at : null,
+    })),
+  );
+  const { error: insertError } = await supabase
+    .from('case_submissions')
+    .upsert(rows, { onConflict: 'presentation_id,student_id', ignoreDuplicates: true });
+  if (insertError) console.error('Failed to give new members their group’s case presentations', insertError);
+}
+
 /** Reads `[{ team_id, leader_id }]` from a request body; null when it isn't that shape. */
 export function parseCaseGroups(value: unknown): CaseGroupInput[] | null {
   if (!Array.isArray(value)) return null;
@@ -63,8 +113,8 @@ export async function loadTeams(
  * Gives a presentation to groups (093). Each group gets one row with its
  * leader, and each member their own case_submissions row pointing at it, so
  * the group's grade reaches every member's record. Groups that already have
- * it are left alone. Members are fixed when it is given: someone who joins
- * the group later is not added.
+ * it are left alone. Someone who joins a group later gets it then
+ * (joinGroupPresentations).
  */
 export async function assignCaseGroups(
   supabase: Supabase,

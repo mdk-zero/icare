@@ -14,7 +14,7 @@ export default function GradeBreakdown({ split, grade }: { split: GradingSplit; 
           <div key={p.id}>
             <div className="flex items-baseline justify-between gap-3">
               <dt className="font-semibold text-gray-800">
-                {p.name} <span className="text-xs font-normal text-gray-500">{p.weight}%</span>
+                {p.name} <span className="text-xs font-normal text-gray-500">{grade.weights?.[p.id] ?? p.weight}%</span>
               </dt>
               <dd className="font-semibold tabular-nums text-gray-900">{score(grade.parts[p.id])}</dd>
             </div>

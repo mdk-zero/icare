@@ -955,7 +955,10 @@ export interface StudentRequirement {
   status: string | null;
 }
 
-/** A student's checklist for one course, in topic order, without items whose activity was deleted. */
+/**
+ * A student's checklist for one course, in topic order, without items whose
+ * activity was deleted or was never given to them.
+ */
 export function studentChecklist(
   requirements: readonly (RequirementRow & { label: string })[],
   row: Record<string, ItemProgress> | undefined,
@@ -965,6 +968,8 @@ export function studentChecklist(
   return sorted.flatMap((req, i) => {
     if (isRemovedActivity(req)) return [];
     const item = row?.[req.id];
+    // Given to other students (another group's case, say), not to this one.
+    if (item?.assigned === false) return [];
     const done = !!item?.done;
     return [
       {

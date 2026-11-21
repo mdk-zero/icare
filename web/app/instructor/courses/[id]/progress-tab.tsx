@@ -448,6 +448,23 @@ export default function ProgressTab({
             : "No students in this view."}
         </p>
       )}
+      {students.length > 0 && (
+        // The two blanks a cell can hold mean different things, so say which is which.
+        <p className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-7 text-center text-sm text-gray-300" aria-hidden>
+              —
+            </span>
+            Given to the student, not graded yet
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-7 text-center text-[11px] font-semibold text-gray-400" aria-hidden>
+              N/A
+            </span>
+            Not given to the student, such as another group&rsquo;s case, so it doesn&rsquo;t count toward their grade
+          </span>
+        </p>
+      )}
       <div className="space-y-5">
         {rosterSections.map((section) => {
           const list = section.students;
@@ -455,11 +472,23 @@ export default function ProgressTab({
           const roster = progress.students.filter(
             (x) => (x.section_id || "none") === section.id,
           );
+          // The section's own columns: each group has its own Patient Cases,
+          // Return Demonstrations and Case Presentations, so one given only to
+          // another section's groups isn't shown here. An activity given to no
+          // one yet stays in every section, where it can still be found.
+          const shown = (r: CourseRequirement) =>
+            givenIn(roster, r.id) > 0 || givenIn(progress.students, r.id) === 0;
+          const topics = sections
+            .map((g) => ({ ...g, items: g.items.filter((it) => shown(it.requirement)) }))
+            .filter((g) => g.items.length > 0);
+          const sectionCols = topics.flatMap((g, k) =>
+            g.items.map((it, j) => ({ ...it, topic: g.topic, divider: k > 0 && j === 0 })),
+          );
           return (
             <StickySectionGrid
               key={section.id}
               label={`Section ${section.name}`}
-              width={`${17 + cols.reduce((w, c) => w + colWidth(c.name), 0) + (split ? GRADE_WIDTH : 0)}rem`}
+              width={`${17 + sectionCols.reduce((w, c) => w + colWidth(c.name), 0) + (split ? GRADE_WIDTH : 0)}rem`}
               heading={
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <h3 className="font-display text-base font-semibold text-gray-900">
@@ -473,7 +502,7 @@ export default function ProgressTab({
               colgroup={
                 <colgroup>
                   <col style={{ width: "17rem" }} />
-                  {cols.map(({ requirement: r, name }) => (
+                  {sectionCols.map(({ requirement: r, name }) => (
                     <col key={r.id} style={{ width: `${colWidth(name)}rem` }} />
                   ))}
                   {split && <col style={{ width: `${GRADE_WIDTH}rem` }} />}
@@ -497,7 +526,7 @@ export default function ProgressTab({
                         </span>
                       </span>
                     </th>
-                    {sections.map((g, k) => (
+                    {topics.map((g, k) => (
                       <th
                         key={g.topic.key}
                         colSpan={g.items.length}
@@ -526,7 +555,7 @@ export default function ProgressTab({
                     )}
                   </tr>
                   <tr>
-                    {cols.map(({ requirement: r, name, divider }) => {
+                    {sectionCols.map(({ requirement: r, name, divider }) => {
                       const on = r.id === focus;
                       return (
                         <th
@@ -598,7 +627,7 @@ export default function ProgressTab({
                         }}
                       >
                         <th
-                          colSpan={cols.length + (split ? 2 : 1)}
+                          colSpan={sectionCols.length + (split ? 2 : 1)}
                           scope="colgroup"
                           className="border-b border-hairline bg-subtle/60 px-0 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500"
                         >
@@ -671,7 +700,7 @@ export default function ProgressTab({
                           </span>
                         </div>
                       </td>
-                      {cols.map(({ requirement: r, name, divider }) => {
+                      {sectionCols.map(({ requirement: r, name, divider }) => {
                         const item = progress.progress[s.id]?.[r.id];
                         // With automatic grading (070) a score only comes from grading the
                         // activity itself, so nothing is entered here.

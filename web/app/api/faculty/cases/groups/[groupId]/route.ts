@@ -3,6 +3,7 @@ import { readSession } from '@/app/lib/auth/session';
 import { getSupabaseAdmin } from '@/app/lib/supabase/server';
 import { logAudit } from '@/app/lib/audit';
 import {
+  joinGroupPresentations,
   loadCaseGroups,
   scopedCaseStudents,
   signedCaseFile,
@@ -193,8 +194,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     if (finalize === true) {
+      // Whoever is in the group now is graded with it, however late they joined.
+      const teamId = loaded.row.team_id;
+      if (teamId) {
+        const { data: current } = await supabase.from('team_members').select('student_id').eq('team_id', teamId);
+        const listed = new Set(group.members.map((m) => m.student_id));
+        const joined = ((current ?? []) as { student_id: string }[]).map((m) => m.student_id).filter((id) => !listed.has(id));
+        await joinGroupPresentations(supabase, teamId, joined);
+      }
+
       // Every member's own record carries the group's grade.
-      const { error: mirrorError } = await supabase
+      const { data: mirrored, error: mirrorError } = await supabase
         .from('case_submissions')
         .update({
           status: 'graded',
@@ -203,17 +213,19 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           graded_at: now,
           remarks: (update.remarks as string | undefined) ?? group.remarks,
         })
-        .eq('group_id', groupId);
+        .eq('group_id', groupId)
+        .select('id, student_id');
       if (mirrorError) throw mirrorError;
+      const graded = (mirrored ?? []) as { id: string; student_id: string }[];
 
       const { error: notifyError } = await insertNotifications(
         supabase,
-        group.members.map((m) => ({
+        graded.map((m) => ({
           user_id: m.student_id,
           type: 'performance_validated',
           title: 'Case presentation graded',
           body: `${group.name}'s case presentation "${presentation.title}" was graded: ${scoreDescriptor(score)} (${score}%).`,
-          data: { case_submission_id: m.submission_id, case_presentation_id: presentation.id },
+          data: { case_submission_id: m.id, case_presentation_id: presentation.id },
         })),
       );
       if (notifyError) console.error('Failed to notify the group of its case grade', notifyError);
@@ -226,7 +238,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           entityId: groupId,
           details: {
             presentation_id: presentation.id,
-            members: group.members.map((m) => m.student_id),
+            members: graded.map((m) => m.student_id),
             score,
             ratings: Object.fromEntries(levels),
           },

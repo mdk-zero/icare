@@ -9,6 +9,7 @@ import {
   TEAMS_NEED_MIGRATION,
 } from '@/app/lib/teams';
 import { nextGroupName } from '@/app/lib/group-label';
+import { joinGroupPresentations } from '@/app/lib/cases';
 
 /**
  * POST { section_id, count }: split the section's students into `count`
@@ -106,6 +107,10 @@ export async function POST(request: NextRequest) {
   if (insertError) {
     console.error('Failed to add team members', insertError);
     return NextResponse.json({ error: 'Unable to split teams' }, { status: 500 });
+  }
+  for (const target of targets) {
+    const ids = rows.filter((r) => r.team_id === target.id).map((r) => r.student_id);
+    await joinGroupPresentations(supabase, target.id, ids);
   }
   const extra = teams.slice(count).map((t) => t.id);
   if (extra.length > 0) {

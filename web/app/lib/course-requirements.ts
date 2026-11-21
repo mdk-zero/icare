@@ -454,8 +454,15 @@ export async function loadStudentCourses(supabase: Supabase, studentId: string):
   const courses = await Promise.all(
     offerings.map(async (o): Promise<StudentCourse> => {
       const own = labelled.filter((r) => r.offering_id === o.id);
-      const facts = await loadProgressFacts(supabase, own, o.term, [studentId]);
+      const [facts, assignees] = await Promise.all([
+        loadProgressFacts(supabase, own, o.term, [studentId]),
+        loadActivityAssignees(supabase, own, [studentId]),
+      ]);
       const row = evaluate(own, skills.get(o.course.id) ?? [], o.term, [studentId], facts)[studentId];
+      // Another group's Patient Case or Case Presentation isn't theirs to do.
+      for (const [requirementId, given] of assignees) {
+        if (row?.[requirementId]) row[requirementId].assigned = given.has(studentId);
+      }
       return {
         id: o.id,
         course: { code: o.course.code, title: o.course.title },

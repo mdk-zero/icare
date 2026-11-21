@@ -10,6 +10,7 @@ import { parseSex } from '@/app/lib/auth/user';
 import { getLatestRiskByStudent, getLastActivityByStudent } from '@/app/lib/faculty-dashboard';
 import { logAudit } from '@/app/lib/audit';
 import { isMissingTeamTables, manageableTeam, TEAMS_NEED_MIGRATION } from '@/app/lib/teams';
+import { joinGroupPresentations } from '@/app/lib/cases';
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -262,6 +263,7 @@ export async function POST(request: NextRequest) {
         const message = isMissingTeamTables(memberError) ? TEAMS_NEED_MIGRATION : 'Unable to add the student to the group';
         return NextResponse.json({ error: message }, { status: isMissingTeamTables(memberError) ? 503 : 500 });
       }
+      await joinGroupPresentations(supabase, team.id, [student.id]);
     }
 
     await logAudit(

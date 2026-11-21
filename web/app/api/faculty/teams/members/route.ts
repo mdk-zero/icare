@@ -7,6 +7,7 @@ import { MAX_REASON_LENGTH } from '@/app/lib/grade-edit-requests';
 import { isMissingTeamTables, manageableSectionIds, manageableTeam, TEAMS_NEED_MIGRATION } from '@/app/lib/teams';
 import { deanFor, deanOwnershipLive, deanTeamIds } from '@/app/lib/dean-scope';
 import { insertNotifications } from '@/app/lib/notify';
+import { joinGroupPresentations } from '@/app/lib/cases';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -109,6 +110,7 @@ export async function PUT(request: NextRequest) {
       console.error('Failed to add team member', error);
       return NextResponse.json({ error: 'Unable to move student' }, { status: 500 });
     }
+    await joinGroupPresentations(supabase, teamId, [studentId]);
   }
   return NextResponse.json({ ok: true });
 }
@@ -176,6 +178,7 @@ async function moveBetweenOwnGroups(
     console.error('Failed to move team member', error);
     return NextResponse.json({ error: 'Unable to move student' }, { status: 500 });
   }
+  await joinGroupPresentations(supabase, teamId, [studentId]);
 
   const [{ data: me }, { data: student }, { data: section }] = await Promise.all([
     supabase.from('users').select('name, admin_id').eq('id', session.uid).single(),
@@ -264,6 +267,7 @@ async function placeInOwnGroup(
     console.error('Failed to add team member', error);
     return NextResponse.json({ error: 'Unable to add the student to the group' }, { status: 500 });
   }
+  await joinGroupPresentations(supabase, teamId, [studentId]);
 
   const { data: section } = await supabase.from('sections').select('name').eq('id', team.section_id).maybeSingle();
   const where = section?.name ? `${section.name} · ` : '';
