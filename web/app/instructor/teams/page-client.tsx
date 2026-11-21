@@ -505,10 +505,12 @@ export default function TeamsClient() {
               <FontAwesomeIcon icon={faArrowLeft} className="h-3.5 w-3.5" />
               All courses
             </button>
-            <h2 className="flex min-w-0 flex-1 items-baseline gap-2 font-display text-lg font-bold text-gray-900">
-              <span className="shrink-0">{course.course.code}</span>
-              <TruncatedText text={course.course.title} className="font-normal text-gray-500" />
-            </h2>
+            <TruncatedText
+              as="h2"
+              text={course.course.code}
+              tip={course.course.title}
+              className="cursor-default font-display text-lg font-bold text-gray-900"
+            />
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {course.sections
