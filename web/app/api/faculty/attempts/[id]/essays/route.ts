@@ -13,6 +13,10 @@ import {
   type EssayAnswerRow,
 } from '@/app/lib/essay-grading';
 
+// The student is re-scored after the response goes out (refreshStudentInBackground),
+// which can mean waking the ML service; the default 10s budget cuts that off.
+export const maxDuration = 60;
+
 interface RouteParams {
   params: Promise<{ id: string }>;
 }

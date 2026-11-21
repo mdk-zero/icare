@@ -29,9 +29,12 @@ const RUN_TIMEOUT_MS = 120_000;
 
 /**
  * Per job, for one student. Render's free plan sleeps the service, and waking
- * it takes up to a minute before the job itself starts.
+ * it takes up to a minute before the job itself starts. The routes that call
+ * refreshStudentInBackground set maxDuration = 60, and `after()` lives only
+ * that long, so this stops a little short of it: a run that can't make it
+ * logs a failure instead of being cut off without a trace.
  */
-const BACKGROUND_TIMEOUT_MS = 110_000;
+const BACKGROUND_TIMEOUT_MS = 55_000;
 
 /**
  * One line of a run as the browser reads it: steps done while the job works,
@@ -185,6 +188,10 @@ async function* serviceEvents(
  * Never delays or fails the request that called it. A run that can't start or
  * times out — the service unconfigured, asleep too long, or deployed before
  * this — is logged, and the nightly run catches the student up.
+ *
+ * A route that calls this must export `maxDuration = 60`. Without it the
+ * platform's 10s default ends the run while the service is still waking: until
+ * 2026-11-21 not one of these re-scores had reached performance_predictions.
  */
 export function refreshStudentInBackground(studentId: string): void {
   const serviceUrl = process.env.ML_SERVICE_URL;
