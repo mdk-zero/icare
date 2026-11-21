@@ -34,7 +34,11 @@ import FilterSelect from "../../components/FilterSelect";
 import Avatar from "../../components/Avatar";
 import { EcgLoader } from "../../components/EcgLoader";
 import { SkeletonSectionGrid } from "../../components/skeletons";
-import MlRunProgress, { mlRunFraction, mlRunLabel, type MlRun } from "../../components/MlRunProgress";
+import MlRunProgress, {
+  mlRunFraction,
+  mlRunLabel,
+  type MlRun,
+} from "../../components/MlRunProgress";
 import { loadingToast, toast } from "../../components/Toast";
 import { usePageData } from "../../lib/use-page-data";
 import { termStatus } from "../../lib/course-progress";
@@ -57,9 +61,9 @@ import { timeAgo } from "../_overview/format";
 /** Long enough to read a sentence with numbers in it. */
 const ML_TOAST_MS = 8000;
 
-
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
-const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, undefined, { numeric: true });
+const byName = (a: { name: string }, b: { name: string }) =>
+  a.name.localeCompare(b.name, undefined, { numeric: true });
 
 type Member = TeamsOverview["students"][number];
 
@@ -88,7 +92,7 @@ function AutoAssessNote({ lastAssessed }: { lastAssessed: string | null }) {
         Students are assessed automatically
       </p>
       <p className="text-gray-500">
-        After each graded quiz or patient case · {lastAssessed ? `last run ${assessedAgo(lastAssessed)}` : "none yet"}
+        {lastAssessed ? `last run ${assessedAgo(lastAssessed)}` : "none yet"}
       </p>
     </div>
   );
@@ -142,7 +146,10 @@ function DrillCard({
         )}
         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-400 transition-colors group-hover:text-brand-600">
           {action}
-          <FontAwesomeIcon icon={faChevronRight} className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+          <FontAwesomeIcon
+            icon={faChevronRight}
+            className="h-3 w-3 transition-transform group-hover:translate-x-0.5"
+          />
         </span>
       </div>
       <button
@@ -162,9 +169,18 @@ function DrillCard({
  */
 export default function TeamsClient() {
   const router = useRouter();
-  const { data: courses, loading: loadingCourses } = usePageData("faculty:students:courses", fetchMyCourses);
-  const { data: overview, loading: loadingTeams, refresh: refreshTeams } = usePageData("faculty:teams", fetchFacultyTeams);
-  const { data: roster, refresh: refreshRoster } = usePageData("faculty:students", () => fetchFacultyStudents());
+  const { data: courses, loading: loadingCourses } = usePageData(
+    "faculty:students:courses",
+    fetchMyCourses,
+  );
+  const {
+    data: overview,
+    loading: loadingTeams,
+    refresh: refreshTeams,
+  } = usePageData("faculty:teams", fetchFacultyTeams);
+  const { data: roster, refresh: refreshRoster } = usePageData("faculty:students", () =>
+    fetchFacultyStudents(),
+  );
 
   // The open course, section and mode live in the URL, so Back from a
   // student's profile returns to the same roster.
@@ -172,10 +188,16 @@ export default function TeamsClient() {
   const courseId = params.get("course");
   const sectionId = params.get("section");
   const editing = params.get("view") === "groups";
-  const showRoster = (view: { course: string | null; section?: string | null; editing?: boolean }) =>
-    window.history.replaceState(null, "", studentsHref("instructor", view));
+  const showRoster = (view: {
+    course: string | null;
+    section?: string | null;
+    editing?: boolean;
+  }) => window.history.replaceState(null, "", studentsHref("instructor", view));
   useEffect(() => {
-    rememberStudentsView("instructor", studentsHref("instructor", { course: courseId, section: sectionId, editing }));
+    rememberStudentsView(
+      "instructor",
+      studentsHref("instructor", { course: courseId, section: sectionId, editing }),
+    );
   }, [courseId, sectionId, editing]);
   const [query, setQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -190,18 +212,24 @@ export default function TeamsClient() {
   const offerings = useMemo(
     () =>
       [...(courses?.data?.offerings ?? [])].sort(
-        (a, b) => Number(termStatus(a.term) === "ended") - Number(termStatus(b.term) === "ended") || a.course.code.localeCompare(b.course.code),
+        (a, b) =>
+          Number(termStatus(a.term) === "ended") - Number(termStatus(b.term) === "ended") ||
+          a.course.code.localeCompare(b.course.code),
       ),
     [courses],
   );
-  const details = useMemo(() => new Map<string, FacultyStudent>((roster ?? []).map((s) => [s.id, s])), [roster]);
+  const details = useMemo(
+    () => new Map<string, FacultyStudent>((roster ?? []).map((s) => [s.id, s])),
+    [roster],
+  );
 
   // Moves shown at once, before the server confirms them (as on the dean's page).
   const [pendingMoves, setPendingMoves] = useState<Map<string, string | null>>(new Map());
   const shownOverview = useMemo<TeamsOverview | null>(() => {
     if (!overview || pendingMoves.size === 0) return overview ?? null;
     const people = new Map<string, TeamsOverview["teams"][number]["members"][number]>();
-    for (const s of overview.students) people.set(s.id, { id: s.id, name: s.name, picture_url: s.picture_url, sex: s.sex });
+    for (const s of overview.students)
+      people.set(s.id, { id: s.id, name: s.name, picture_url: s.picture_url, sex: s.sex });
     for (const t of overview.teams) for (const m of t.members) people.set(m.id, m);
     const incoming = (teamId: string) =>
       [...pendingMoves]
@@ -214,12 +242,19 @@ export default function TeamsClient() {
         ...t,
         members: [...t.members.filter((m) => !pendingMoves.has(m.id)), ...incoming(t.id)],
       })),
-      students: overview.students.map((s) => (pendingMoves.has(s.id) ? { ...s, team_id: pendingMoves.get(s.id) ?? null } : s)),
+      students: overview.students.map((s) =>
+        pendingMoves.has(s.id) ? { ...s, team_id: pendingMoves.get(s.id) ?? null } : s,
+      ),
     };
   }, [overview, pendingMoves]);
 
   /** Saves moves already shown on screen; a reason is the instructor's, for a student who was in a group. */
-  const saveMoves = async (ids: string[], to: string, labels: { pending: string; done: string }, reason?: string) => {
+  const saveMoves = async (
+    ids: string[],
+    to: string,
+    labels: { pending: string; done: string },
+    reason?: string,
+  ) => {
     setPendingMoves((prev) => {
       const next = new Map(prev);
       for (const id of ids) next.set(id, to);
@@ -229,7 +264,9 @@ export default function TeamsClient() {
     const progress = loadingToast(labels.pending);
     let failure: string | null = null;
     for (const id of ids) {
-      const result = reason ? await moveOwnGroupMember(id, to, reason) : await moveStudentToTeam(id, to);
+      const result = reason
+        ? await moveOwnGroupMember(id, to, reason)
+        : await moveStudentToTeam(id, to);
       if ("error" in result) failure = result.error;
     }
     await refreshTeams();
@@ -250,9 +287,16 @@ export default function TeamsClient() {
     to: string;
     labels: { pending: string; done: string };
   } | null>(null);
-  const moveStudents = async (ids: string[], to: string | null, labels: { pending: string; done: string }) => {
+  const moveStudents = async (
+    ids: string[],
+    to: string | null,
+    labels: { pending: string; done: string },
+  ) => {
     if (to === null) {
-      toast("Only a Dean or Program Chair can take a student out of a group. Move them to another of your groups instead.", "error");
+      toast(
+        "Only a Dean or Program Chair can take a student out of a group. Move them to another of your groups instead.",
+        "error",
+      );
       return;
     }
     const groupOf = new Map<string, string>();
@@ -268,7 +312,11 @@ export default function TeamsClient() {
   const isAtRisk = (id: string) => details.get(id)?.risk_level === "at_risk";
   const matchesFilter = (id: string) => {
     const risk = details.get(id)?.risk_level;
-    return filterStatus === "all" || (filterStatus === "at-risk" && risk === "at_risk") || (filterStatus === "safe" && risk === "safe");
+    return (
+      filterStatus === "all" ||
+      (filterStatus === "at-risk" && risk === "at_risk") ||
+      (filterStatus === "safe" && risk === "safe")
+    );
   };
 
   const course = offerings.find((o) => o.id === courseId) ?? null;
@@ -284,11 +332,20 @@ export default function TeamsClient() {
   const placing = editing && hasGroups;
   // New students go into one of the instructor's own groups here (the
   // students API needs one), so they land on their roster.
-  const enrollGroups = sectionGroups.map((t) => ({ id: t.id, name: t.name, size: t.members.length }));
-  const enrollBlocked = enrollGroups.length === 0 ? "Make a group in this section first; new students join one of your groups." : undefined;
+  const enrollGroups = sectionGroups.map((t) => ({
+    id: t.id,
+    name: t.name,
+    size: t.members.length,
+  }));
+  const enrollBlocked =
+    enrollGroups.length === 0
+      ? "Make a group in this section first; new students join one of your groups."
+      : undefined;
   const shows = (s: Member) =>
     matchesFilter(s.id) &&
-    (!q || s.name.toLowerCase().includes(q) || (details.get(s.id)?.email ?? "").toLowerCase().includes(q));
+    (!q ||
+      s.name.toLowerCase().includes(q) ||
+      (details.get(s.id)?.email ?? "").toLowerCase().includes(q));
   // Editing, the table is the section's students in no group; otherwise it is
   // all of them, under a heading per group. Either way, as searched and filtered.
   const tableStudents = sectionStudents.filter((s) => (!editing || !s.team_id) && shows(s));
@@ -344,7 +401,8 @@ export default function TeamsClient() {
     return () => document.removeEventListener("keydown", onKey);
   }, [selectedIds]);
   const selectedStudents = tableStudents.filter((s) => selectedIds.has(s.id));
-  const allVisibleSelected = tableStudents.length > 0 && selectedStudents.length === tableStudents.length;
+  const allVisibleSelected =
+    tableStudents.length > 0 && selectedStudents.length === tableStudents.length;
   const toggleStudent = (id: string) =>
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -363,14 +421,18 @@ export default function TeamsClient() {
 
   const handleRunMl = async () => {
     setMlRun({ job: "predict", fraction: 0 });
-    const predictions = await runFacultyMlJob("predict", (fraction) => setMlRun({ job: "predict", fraction }));
+    const predictions = await runFacultyMlJob("predict", (fraction) =>
+      setMlRun({ job: "predict", fraction }),
+    );
     if (predictions.error) {
       toast(predictions.error, "error", ML_TOAST_MS);
       setMlRun(null);
       return;
     }
     setMlRun({ job: "recommend", fraction: 0 });
-    const recommendations = await runFacultyMlJob("recommend", (fraction) => setMlRun({ job: "recommend", fraction }));
+    const recommendations = await runFacultyMlJob("recommend", (fraction) =>
+      setMlRun({ job: "recommend", fraction }),
+    );
     if (recommendations.error) {
       toast(recommendations.error, "error", ML_TOAST_MS);
       setMlRun(null);
@@ -392,15 +454,24 @@ export default function TeamsClient() {
 
   // The app link goes to the students in view, at whichever level is open,
   // as far as the roster (the server's own scope) has them.
-  const linkStudents = (section ? sectionStudents : course ? studentsOf(course.sections.map((s) => s.id)) : allStudents)
+  const linkStudents = (
+    section ? sectionStudents : course ? studentsOf(course.sections.map((s) => s.id)) : allStudents
+  )
     .filter((s) => details.has(s.id))
     .map((s) => ({ id: s.id, name: s.name, signedIn: Boolean(details.get(s.id)?.last_login_at) }));
-  const linkScope = section ? `in ${section.name}` : course ? `in ${course.course.code}` : "on your roster";
+  const linkScope = section
+    ? `in ${section.name}`
+    : course
+      ? `in ${course.course.code}`
+      : "on your roster";
 
   return (
     <div>
       <PageHeader
-        badge={{ icon: <FontAwesomeIcon icon={faPeopleGroup} className="h-3.5 w-3.5" />, label: "Teaching" }}
+        badge={{
+          icon: <FontAwesomeIcon icon={faPeopleGroup} className="h-3.5 w-3.5" />,
+          label: "Teaching",
+        }}
         title="Students"
         subtitle="Enroll and group the students in your courses, section by section."
         action={{
@@ -417,7 +488,12 @@ export default function TeamsClient() {
       />
 
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile icon={faUsers} value={allStudents.length} label="Total Students" caption={plural(offerings.length, "course")} />
+        <StatTile
+          icon={faUsers}
+          value={allStudents.length}
+          label="Total Students"
+          caption={plural(offerings.length, "course")}
+        />
         <StatTile
           icon={faCircleCheck}
           value={allStudents.filter((s) => details.get(s.id)?.risk_level === "safe").length}
@@ -446,10 +522,19 @@ export default function TeamsClient() {
 
       <div className="mb-4 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
-          <FontAwesomeIcon icon={faSearch} className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <FontAwesomeIcon
+            icon={faSearch}
+            className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+          />
           <input
             type="text"
-            placeholder={section ? `Search students in ${section.name}…` : course ? "Search sections…" : "Search courses…"}
+            placeholder={
+              section
+                ? `Search students in ${section.name}…`
+                : course
+                  ? "Search sections…"
+                  : "Search courses…"
+            }
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="w-full rounded-xl border border-gray-200 bg-surface py-2.5 pl-11 pr-4 text-gray-700 transition-all placeholder:text-gray-400 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/40"
@@ -490,7 +575,9 @@ export default function TeamsClient() {
             <div className="col-span-full rounded-xl border border-dashed border-gray-300 bg-surface p-12 text-center">
               <FontAwesomeIcon icon={faBookOpen} className="h-8 w-8 text-gray-300" />
               <p className="mt-3 font-semibold text-gray-700">No courses yet</p>
-              <p className="mt-1 text-sm text-gray-500">When your Dean or Program Chair assigns you a course, its sections show up here.</p>
+              <p className="mt-1 text-sm text-gray-500">
+                When your Dean or Program Chair assigns you a course, its sections show up here.
+              </p>
             </div>
           )}
         </div>
@@ -518,7 +605,9 @@ export default function TeamsClient() {
               .sort(byName)
               .map((s) => {
                 const people = studentsOf([s.id]);
-                const groups = (shownOverview?.teams ?? []).filter((t) => t.section_id === s.id).length;
+                const groups = (shownOverview?.teams ?? []).filter(
+                  (t) => t.section_id === s.id,
+                ).length;
                 return (
                   <DrillCard
                     key={s.id}
@@ -550,7 +639,9 @@ export default function TeamsClient() {
               <FontAwesomeIcon icon={faArrowLeft} className="h-3.5 w-3.5" />
               {course.course.code} sections
             </button>
-            <h2 className="font-display truncate text-lg font-bold text-gray-900">{section.name}</h2>
+            <h2 className="font-display truncate text-lg font-bold text-gray-900">
+              {section.name}
+            </h2>
             <span className="rounded-full border border-brand-600/20 bg-brand-600/10 px-2.5 py-1 text-xs font-medium text-brand-700">
               {plural(sectionStudents.length, "student")}
             </span>
@@ -604,14 +695,20 @@ export default function TeamsClient() {
 
           {selectedStudents.length > 0 && (
             <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-brand-600/20 bg-brand-600/5 px-4 py-3">
-              <p className="text-sm font-medium text-gray-700">{plural(selectedStudents.length, "student")} selected</p>
+              <p className="text-sm font-medium text-gray-700">
+                {plural(selectedStudents.length, "student")} selected
+              </p>
               <button
                 onClick={() => setSelectedIds(new Set())}
                 className="text-sm font-medium text-gray-500 transition-colors hover:text-gray-800"
               >
                 Clear
               </button>
-              {placing && <p className="text-sm text-gray-500">Drag any of them onto a group to add them all.</p>}
+              {placing && (
+                <p className="text-sm text-gray-500">
+                  Drag any of them onto a group to add them all.
+                </p>
+              )}
             </div>
           )}
 
@@ -627,7 +724,8 @@ export default function TeamsClient() {
                           type="checkbox"
                           checked={allVisibleSelected}
                           ref={(el) => {
-                            if (el) el.indeterminate = selectedStudents.length > 0 && !allVisibleSelected;
+                            if (el)
+                              el.indeterminate = selectedStudents.length > 0 && !allVisibleSelected;
                           }}
                           onChange={toggleAllVisible}
                           disabled={tableStudents.length === 0}
@@ -636,14 +734,16 @@ export default function TeamsClient() {
                         />
                       </th>
                     )}
-                    {(placing ? ["Name", "Enrolled"] : ["Student", "Status", "Last Active"]).map((h) => (
-                      <th
-                        key={h}
-                        className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 sm:px-6"
-                      >
-                        {h}
-                      </th>
-                    ))}
+                    {(placing ? ["Name", "Enrolled"] : ["Student", "Status", "Last Active"]).map(
+                      (h) => (
+                        <th
+                          key={h}
+                          className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 sm:px-6"
+                        >
+                          {h}
+                        </th>
+                      ),
+                    )}
                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-500 sm:px-6">
                       View details
                     </th>
@@ -652,7 +752,9 @@ export default function TeamsClient() {
                 <tbody className="divide-y divide-hairline">
                   {tableBuckets.map((bucket) => (
                     <Fragment key={bucket.group?.id ?? "none"}>
-                      {showGroupHeadings && <GroupHeadingRow bucket={bucket} colSpan={4} showInstructor={false} />}
+                      {showGroupHeadings && (
+                        <GroupHeadingRow bucket={bucket} colSpan={4} showInstructor={false} />
+                      )}
                       {bucket.rows.map((student) => {
                         const info = details.get(student.id);
                         const risk = info?.risk_level ?? null;
@@ -680,7 +782,9 @@ export default function TeamsClient() {
                               else if (!window.getSelection()?.toString()) openProfile(student.id);
                             }}
                             className={`transition-colors ${
-                              placing ? "cursor-grab-outlined select-none" : `cursor-pointer${editing ? " select-none" : ""}`
+                              placing
+                                ? "cursor-grab-outlined select-none"
+                                : `cursor-pointer${editing ? " select-none" : ""}`
                             } ${
                               pendingMoves.has(student.id)
                                 ? "pointer-events-none animate-pulse opacity-50 grayscale"
@@ -690,7 +794,10 @@ export default function TeamsClient() {
                             }`}
                           >
                             {editing && (
-                              <td className="px-4 py-4 sm:pl-6 sm:pr-0" onClick={(e) => e.stopPropagation()}>
+                              <td
+                                className="px-4 py-4 sm:pl-6 sm:pr-0"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <input
                                   type="checkbox"
                                   checked={selectedIds.has(student.id)}
@@ -711,8 +818,12 @@ export default function TeamsClient() {
                                   tone={risk === "at_risk" ? "risk" : "brand"}
                                 />
                                 <div className="min-w-0">
-                                  <p className="truncate font-semibold text-gray-800">{student.name}</p>
-                                  <p className="truncate text-sm text-gray-500">{info?.email ?? ""}</p>
+                                  <p className="truncate font-semibold text-gray-800">
+                                    {student.name}
+                                  </p>
+                                  <p className="truncate text-sm text-gray-500">
+                                    {info?.email ?? ""}
+                                  </p>
                                 </div>
                               </div>
                             </td>
@@ -734,7 +845,9 @@ export default function TeamsClient() {
                                   <span
                                     title={
                                       info?.assessed_at
-                                        ? `Last assessed ${new Date(info.assessed_at).toLocaleString("en-US", {
+                                        ? `Last assessed ${new Date(
+                                            info.assessed_at,
+                                          ).toLocaleString("en-US", {
                                             month: "short",
                                             day: "numeric",
                                             hour: "numeric",
@@ -750,13 +863,21 @@ export default function TeamsClient() {
                                           : "bg-emerald-50 text-emerald-600"
                                     }`}
                                   >
-                                    {!risk ? "Not scored yet" : risk === "at_risk" ? "At risk" : "Thriving"}
+                                    {!risk
+                                      ? "Not scored yet"
+                                      : risk === "at_risk"
+                                        ? "At risk"
+                                        : "Thriving"}
                                   </span>
                                   {risk && info?.assessed_at && (
-                                    <p className="mt-1 text-xs text-gray-400">Assessed {assessedAgo(info.assessed_at)}</p>
+                                    <p className="mt-1 text-xs text-gray-400">
+                                      Assessed {assessedAgo(info.assessed_at)}
+                                    </p>
                                   )}
                                 </td>
-                                <td className="px-4 py-4 text-sm text-gray-500 sm:px-6">{formatLastActive(info?.last_activity)}</td>
+                                <td className="px-4 py-4 text-sm text-gray-500 sm:px-6">
+                                  {formatLastActive(info?.last_activity)}
+                                </td>
                               </>
                             )}
                             <td className="px-4 py-4 sm:px-6" onClick={(e) => e.stopPropagation()}>
@@ -776,7 +897,10 @@ export default function TeamsClient() {
                   ))}
                   {tableStudents.length === 0 && (
                     <tr>
-                      <td colSpan={!editing ? 4 : placing ? 4 : 5} className="py-12 text-center text-gray-400">
+                      <td
+                        colSpan={!editing ? 4 : placing ? 4 : 5}
+                        className="py-12 text-center text-gray-400"
+                      >
                         {q || filterStatus !== "all"
                           ? "No students match"
                           : placing
