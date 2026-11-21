@@ -17,6 +17,7 @@ import {
   termBounds,
   termStatus,
   termsOverlap,
+  type ItemProgress,
   type ProgressFacts,
   type RequirementInput,
   type RequirementNames,
@@ -951,6 +952,25 @@ function demoFacts(db: DemoDb, studentIds: string[], requirementIds: string[]): 
   return { cases, attempts, quizSkills: {}, presentations, checks, scores };
 }
 
+/**
+ * Who each activity item was given to, as loadActivityAssignees() reads it:
+ * an item a student was never given is N/A for them (another group's case).
+ */
+function markAssigned(db: DemoDb, items: DemoRequirement[], progress: Record<string, Record<string, ItemProgress>>) {
+  const given = new Map<string, Set<string>>();
+  const add = (activityId: string, studentId: string) => given.set(activityId, (given.get(activityId) ?? new Set()).add(studentId));
+  for (const a of db.assignments) add(a.scenario_id, a.student_id);
+  for (const a of db.quizAssignments) add(a.assessment_id, a.student_id);
+  for (const c of db.caseSubmissions) add(c.presentation_id, c.student_id);
+  for (const r of items) {
+    const activityId = r.scenario_id ?? r.assessment_id ?? r.presentation_id;
+    if (!activityId) continue;
+    for (const [studentId, row] of Object.entries(progress)) {
+      if (row[r.id]) row[r.id].assigned = !!given.get(activityId)?.has(studentId);
+    }
+  }
+}
+
 async function demoProgress(db: DemoDb, o: DemoOffering, onlyStudentId?: string) {
   const items = checklist(db, o.id);
   const full = offeringRoster(db, o);
@@ -959,6 +979,7 @@ async function demoProgress(db: DemoDb, o: DemoOffering, onlyStudentId?: string)
   const term = termOf(db, o);
   const skills = db.courseSkills.filter((s) => s.course_id === o.course_id).map((s) => s.skill_id);
   const progress = evaluate(items, skills, term, ids, demoFacts(db, ids, items.map((r) => r.id)));
+  markAssigned(db, items, progress);
   return {
     requirements: await labelled(db, items),
     students: roster.map((s) => ({
@@ -991,7 +1012,9 @@ export function demoStudentStandings(source: DemoDb, studentId: string) {
       const term = termOf(db, o);
       const course = courseOf(db, o);
       const skills = db.courseSkills.filter((s) => s.course_id === o.course_id).map((s) => s.skill_id);
-      const row = evaluate(items, skills, term, [studentId], demoFacts(db, [studentId], items.map((r) => r.id)))[studentId];
+      const progress = evaluate(items, skills, term, [studentId], demoFacts(db, [studentId], items.map((r) => r.id)));
+      markAssigned(db, items, progress);
+      const row = progress[studentId];
       return {
         id: o.id,
         course: { code: course.code, title: course.title },

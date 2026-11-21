@@ -18,6 +18,7 @@ import {
   type DemoTeam,
   type DemoUser,
 } from "./people";
+import { OFFERING_COLLEAGUE, OFFERING_OXYGENATION } from "./courses";
 
 /** Case presentations reported by groups, and the Library's materials. */
 
@@ -94,6 +95,8 @@ export interface DemoMaterial {
 }
 
 export function seedTeaching(users: DemoUser[], teams: DemoTeam[]) {
+  // One presentation per group, each its own: no two groups report the same
+  // case. Made for NCM 112L by the group's own instructor.
   const presentations: DemoCasePresentation[] = [
     {
       id: demoId(KIND.casePresentation, 1),
@@ -102,37 +105,67 @@ export function seedTeaching(users: DemoUser[], teams: DemoTeam[]) {
         "Choose one patient you cared for during your first ward week. Present them with initials only — no names, birthdays or hospital numbers. Cover the profile, your assessment findings, two prioritised nursing diagnoses and the care you gave.",
       deadline: ago(9, 23, 59),
       section_ids: [SECTION_A],
-      team_ids: [TEAM_A1, TEAM_A2],
+      team_ids: [TEAM_A1],
       created_by: INSTRUCTOR_ID,
       created_at: ago(24),
       updated_at: ago(24),
+      offering_id: OFFERING_OXYGENATION,
     },
     {
       id: demoId(KIND.casePresentation, 2),
-      title: "Case Presentation 2: Fluid balance",
+      title: "Case Presentation 2: A patient with an infection",
+      instructions:
+        "Present a patient admitted for an infection you helped care for. Use initials only. Show how their temperature, pulse and white cell count changed with treatment, and the infection-control measures you followed.",
+      deadline: ago(2, 23, 59),
+      section_ids: [SECTION_A],
+      team_ids: [TEAM_A2],
+      created_by: INSTRUCTOR_ID,
+      created_at: ago(16),
+      updated_at: ago(16),
+      offering_id: OFFERING_OXYGENATION,
+    },
+    {
+      id: demoId(KIND.casePresentation, 3),
+      title: "Case Presentation 3: Fluid balance",
       instructions:
         "Present a patient on IV therapy. Include the IV fluid, rate and site, every site check you documented, and how the patient's vital signs responded.",
       deadline: ahead(5, 23, 59),
-      section_ids: [SECTION_A, SECTION_B],
-      team_ids: [TEAM_A1, TEAM_A2, TEAM_B1, TEAM_B2],
+      section_ids: [SECTION_B],
+      team_ids: [TEAM_B1],
       created_by: INSTRUCTOR_ID,
       created_at: ago(3),
       updated_at: ago(3),
+      offering_id: OFFERING_OXYGENATION,
+    },
+    {
+      id: demoId(KIND.casePresentation, 4),
+      title: "Case Presentation: A patient on oxygen therapy",
+      instructions:
+        "Present a patient you cared for who needed oxygen. Use initials only. Include the delivery device and flow, their oxygen saturation and respirations before and after, and your nursing diagnoses.",
+      deadline: ahead(2, 23, 59),
+      section_ids: [SECTION_B],
+      team_ids: [TEAM_B2],
+      created_by: INSTRUCTOR_2_ID,
+      created_at: ago(12),
+      updated_at: ago(12),
+      offering_id: OFFERING_COLLEAGUE,
     },
   ];
 
-  // Who reports what: the first presentation is done (one group graded, one
-  // waiting); the second is under way.
-  const PLAN: Record<string, Record<string, { status: DemoCaseGroup["status"]; levels?: CaseLevel[]; file?: string }>> = {
+  // Where each group stands on its own presentation: one graded, two waiting
+  // for a grade, one not handed in yet.
+  const PLAN: Record<string, Record<string, { status: DemoCaseGroup["status"]; levels?: CaseLevel[]; file?: string; handedInAgo?: number }>> = {
     [presentations[0].id]: {
-      [TEAM_A1]: { status: "graded", levels: [4, 3, 3, 4, 3, 3], file: "Group A - Case Presentation (Pneumonia).pptx" },
-      [TEAM_A2]: { status: "submitted", file: "Group B - Acute Gastroenteritis Case.pdf" },
+      [TEAM_A1]: { status: "graded", levels: [4, 3, 3, 4, 3, 3], file: "Group A - Case Presentation (Pneumonia).pptx", handedInAgo: 10 },
     },
     [presentations[1].id]: {
-      [TEAM_A1]: { status: "submitted", file: "Group A - Fluid Balance Case.pptx" },
-      [TEAM_A2]: { status: "not_started" },
+      [TEAM_A2]: { status: "submitted", file: "Group B - Acute Gastroenteritis Case.pdf", handedInAgo: 3 },
+    },
+    [presentations[2].id]: {
       [TEAM_B1]: { status: "not_started" },
-      [TEAM_B2]: { status: "submitted", file: "Group B - IV Therapy Case.pdf" },
+    },
+    [presentations[3].id]: {
+      [TEAM_B2]: { status: "submitted", file: "Group B - Oxygen Therapy Case.pdf", handedInAgo: 1 },
     },
   };
   const SECTION_NAME: Record<string, string> = { [SECTION_A]: "BSN 3101", [SECTION_B]: "BSN 3102" };
@@ -150,9 +183,8 @@ export function seedTeaching(users: DemoUser[], teams: DemoTeam[]) {
       if (members.length === 0) continue;
       n += 1;
       const leader = members[0];
-      const first = p === presentations[0];
       const handedIn = plan.status === "submitted" || plan.status === "graded";
-      const submittedAt = handedIn ? (first ? ago(10 - (n % 2) * 0.5, 21) : ago(1 + (n % 2), 20)) : null;
+      const submittedAt = handedIn ? ago(plan.handedInAgo ?? 1, 21) : null;
       const ratings = (plan.levels ?? []).map((level, k) => ({
         criterion: CASE_CRITERIA[k].key,
         level,
@@ -179,7 +211,7 @@ export function seedTeaching(users: DemoUser[], teams: DemoTeam[]) {
         submitted_at: submittedAt,
         score,
         remarks,
-        graded_by: plan.status === "graded" ? INSTRUCTOR_ID : null,
+        graded_by: plan.status === "graded" ? (team.faculty_id ?? INSTRUCTOR_ID) : null,
         graded_at: plan.status === "graded" ? ago(7, 15) : null,
         ratings,
       };

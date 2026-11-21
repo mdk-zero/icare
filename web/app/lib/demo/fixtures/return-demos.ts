@@ -1,6 +1,6 @@
 import type { ChecklistRating, TaskRating } from "../../task-ratings";
-import { ago, ahead, demoId, INSTRUCTOR_ID, KIND, type DemoTeam, type DemoUser } from "./people";
-import { OFFERING_MAIN } from "./courses";
+import { ago, ahead, demoId, INSTRUCTOR_ID, KIND, TEAM_A1, TEAM_A2, TEAM_B1, TEAM_B2, type DemoTeam, type DemoUser } from "./people";
+import { OFFERING_COLLEAGUE, OFFERING_MAIN, OFFERING_OXYGENATION } from "./courses";
 import type {
   DemoAssignment,
   DemoCompletion,
@@ -14,11 +14,18 @@ import { RETURN_DEMO_SPECS } from "./return-demos-data";
 import returnDemoTasks from "./return-demo-tasks.json";
 
 /**
- * The demo instructor's Return Demonstrations (072), made for NCM 114L: the
- * vital signs one finalized for their first group a few days ago, a few
- * steps graded N/A, and the oxygen one due later this week, not started.
- * Both are performed in Skills Laboratory A (098).
+ * The demo's Return Demonstrations (072), one per group, each in its group's
+ * course, since no two groups share an activity: two finalized a few days
+ * ago (the vital signs one with a few steps graded N/A and the PhilPEN form),
+ * two due later this week, not started. All are performed in Skills
+ * Laboratory A (098).
  */
+const PLAN: { team: string; offering: string; graded: boolean; createdAgo: number }[] = [
+  { team: TEAM_A1, offering: OFFERING_MAIN, graded: true, createdAgo: 12 },
+  { team: TEAM_B1, offering: OFFERING_OXYGENATION, graded: false, createdAgo: 2 },
+  { team: TEAM_A2, offering: OFFERING_MAIN, graded: true, createdAgo: 11 },
+  { team: TEAM_B2, offering: OFFERING_COLLEAGUE, graded: false, createdAgo: 3 },
+];
 
 const CREDIT: Record<TaskRating, number> = { excellent: 1, satisfactory: 2 / 3, needs_practice: 1 / 3 };
 
@@ -43,17 +50,19 @@ export function seedReturnDemos(
   users: DemoUser[],
   teams: DemoTeam[],
 ): void {
-  const team = teams.find((t) => t.faculty_id === INSTRUCTOR_ID);
-  if (!team) return;
-  const members = users.filter((u) => u.role === "student" && u.team_id === team.id);
   const skillsLab = tables.rooms.find((r) => r.room_number === "101")?.id ?? null;
 
   RETURN_DEMO_SPECS.forEach((spec, d) => {
+    const plan = PLAN[d];
+    const team = teams.find((t) => t.id === plan?.team);
+    if (!plan || !team) return;
+    const supervisor = team.faculty_id ?? INSTRUCTOR_ID;
+    const members = users.filter((u) => u.role === "student" && u.team_id === team.id);
     const scenarioId = demoId(KIND.scenario, 900 + d);
-    const created = ago(d === 0 ? 12 : 2, 9);
+    const created = ago(plan.createdAgo, 9);
     tables.scenarios.push({
       id: scenarioId,
-      created_by: INSTRUCTOR_ID,
+      created_by: supervisor,
       title: spec.title,
       description: spec.description,
       category: "Return Demonstration",
@@ -65,7 +74,7 @@ export function seedReturnDemos(
       patient_case: {},
       rubric: null,
       difficulty: "intermediate",
-      offering_id: OFFERING_MAIN,
+      offering_id: plan.offering,
       kind: "return_demo",
       // The vital signs one comes with its sheets (094).
       ...(d === 0 ? { form_keys: ["philpen"] } : {}),
@@ -101,9 +110,9 @@ export function seedReturnDemos(
         id: demoId(KIND.assignment, 9_000 + d * 100 + m),
         scenario_id: scenarioId,
         student_id: student.id,
-        assigned_by: INSTRUCTOR_ID,
+        assigned_by: supervisor,
         assigned_at: created,
-        deadline: d === 0 ? ago(3, 17) : ahead(4, 17),
+        deadline: plan.graded ? ago(3, 17) : ahead(4, 17),
         status: "pending",
         required: true,
         score: null,
@@ -116,7 +125,7 @@ export function seedReturnDemos(
         room_id: skillsLab,
       };
       tables.assignments.push(assignment);
-      if (d !== 0) return;
+      if (!plan.graded) return;
 
       // Graded at the skills lab: every step rated, a few N/A, the score from the rest.
       const graded = ago(4, 14, 10 + m * 7);
@@ -127,7 +136,7 @@ export function seedReturnDemos(
         let credit = 0;
         let counted = 0;
         (stepsOf.get(task.id) ?? []).forEach((st, j) => {
-          const rating: ChecklistRating = isNotApplicable(j, i)
+          const rating: ChecklistRating = d === 0 && isNotApplicable(j, i)
             ? "not_applicable"
             : (j + m + i) % (weak ? 3 : 7) === 0
               ? "needs_practice"
@@ -144,7 +153,7 @@ export function seedReturnDemos(
           assignment_id: assignment.id,
           task_id: task.id,
           rating: levelFor(taskCredit),
-          remarks: i === 3 && m === 0 ? "Recheck the cuff size before inflating." : null,
+          remarks: task.skill_id === "1-7" && m === 0 ? "Recheck the cuff size before inflating." : null,
           completed_via: "faculty",
           completed_at: graded,
         });
@@ -155,8 +164,9 @@ export function seedReturnDemos(
         status: "completed",
         score: total ? Math.round((earned / total) * 100) : 0,
         completed_at: graded,
-        finalized_by: INSTRUCTOR_ID,
+        finalized_by: supervisor,
       });
+      if (d !== 0) return;
       // The PhilPEN form they filled in on their partner at the skills lab.
       const handedIn = ago(4, 13, 40 + m * 3);
       const clients = [

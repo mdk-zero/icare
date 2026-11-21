@@ -53,8 +53,8 @@ export const TERM_PAST = demoId(KIND.misc, 502);
 export const COURSE_OLDER_PERSON = demoId(KIND.misc, 511);
 export const COURSE_OXYGENATION = demoId(KIND.misc, 512);
 export const OFFERING_MAIN = demoId(KIND.misc, 521);
-const OFFERING_OXYGENATION = demoId(KIND.misc, 522);
-const OFFERING_COLLEAGUE = demoId(KIND.misc, 524);
+export const OFFERING_OXYGENATION = demoId(KIND.misc, 522);
+export const OFFERING_COLLEAGUE = demoId(KIND.misc, 524);
 
 /** The academic year a date falls in, by its first year: it starts in June. */
 function academicYearOf(date: string): number {

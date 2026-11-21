@@ -1,8 +1,8 @@
 /**
- * The demo school's teaching record: the ward, its patients, eight patient
- * cases built on Taylor's checklists, five weeks of group case work at every
- * stage (graded, awaiting review, under way), the paired quizzes and their
- * attempts.
+ * The demo school's teaching record: the ward, its patients, fourteen patient
+ * cases built on Taylor's checklists, four blocks of group case work at every
+ * stage (graded, awaiting review, under way), the quizzes and their attempts.
+ * Each group works its own cases; every group sits the same quizzes.
  *
  * Everything is generated from a fixed random seed, so every demo starts from
  * the same data; only the dates move, relative to the day the demo starts.
@@ -16,9 +16,12 @@ import { CASES, WARD_ROOMS } from "./cases-data";
 export const DEMO_INSTITUTION = "Batangas State University - The NEU ARASOF Nasugbu";
 import { SKILL_QUESTIONS } from "@/scripts/data/skill-questions";
 import {
-  DEAN_ID,
   INSTRUCTOR_ID,
   KIND,
+  TEAM_A1,
+  TEAM_A2,
+  TEAM_B1,
+  TEAM_B2,
   ago,
   ahead,
   demoId,
@@ -26,6 +29,7 @@ import {
   type DemoUser,
 } from "./people";
 import type { ChecklistRating, TaskRating } from "@/app/lib/task-ratings";
+import { OFFERING_COLLEAGUE, OFFERING_MAIN, OFFERING_OXYGENATION } from "./courses";
 
 // ---------------------------------------------------------------------------
 // Row types
@@ -260,17 +264,42 @@ const SKILL_TITLE = new Map(
   caseTasks.flatMap((c) => c.tasks.map((t) => [t.skill_id, t.title.replace(/ \(Skill [\d-]+\)$/, "")] as const)),
 );
 
-/** The quiz paired with each case: its title, and the skills it tests (from seed-scenario-quizzes.ts). */
-const QUIZ_PLANS: { title: string; skills: string[] }[] = [
-  { title: "Temperature, Pulse, Respiration, and Pulse Oximetry", skills: ["1-1", "1-4", "1-6", "14-1"] },
-  { title: "Peripheral IV Therapy, Pulse, and Blood Pressure", skills: ["15-1", "15-3", "1-4", "1-7"] },
-  { title: "A Full Set of Vital Signs", skills: ["1-1", "1-4", "1-6", "1-7"] },
-  { title: "Blood Pressure, Apical Pulse, and Radial Pulse", skills: ["1-7", "1-5", "1-4"] },
-  { title: "Pulse Oximetry, Respiration, and Nasal Cannula Oxygen", skills: ["14-1", "1-6", "14-3"] },
-  { title: "Incentive Spirometry, IV Site Care, and Temperature", skills: ["14-2", "15-3", "15-4", "1-1"] },
-  { title: "Saline Lock, IV Site Monitoring, and Temperature", skills: ["15-5", "15-3", "1-1"] },
-  { title: "Blood Pressure, Pulse, and Pulse Oximetry", skills: ["1-7", "1-4", "14-1"] },
+/**
+ * The quizzes: a title, the skills each tests (from seed-scenario-quizzes.ts),
+ * and its course. Every group sits the same ones, two a block (QUIZ_BLOCKS).
+ */
+const QUIZ_PLANS: { title: string; skills: string[]; offering: string; category: string }[] = [
+  { title: "Temperature, Pulse, Respiration, and Pulse Oximetry", skills: ["1-1", "1-4", "1-6", "14-1"], offering: OFFERING_MAIN, category: "Vital Signs" },
+  { title: "Peripheral IV Therapy, Pulse, and Blood Pressure", skills: ["15-1", "15-3", "1-4", "1-7"], offering: OFFERING_OXYGENATION, category: "IV Therapy" },
+  { title: "A Full Set of Vital Signs", skills: ["1-1", "1-4", "1-6", "1-7"], offering: OFFERING_MAIN, category: "Vital Signs" },
+  { title: "Blood Pressure, Apical Pulse, and Radial Pulse", skills: ["1-7", "1-5", "1-4"], offering: OFFERING_MAIN, category: "Vital Signs" },
+  { title: "Pulse Oximetry, Respiration, and Nasal Cannula Oxygen", skills: ["14-1", "1-6", "14-3"], offering: OFFERING_OXYGENATION, category: "Oxygenation" },
+  { title: "Incentive Spirometry, IV Site Care, and Temperature", skills: ["14-2", "15-3", "15-4", "1-1"], offering: OFFERING_OXYGENATION, category: "Oxygenation" },
+  { title: "Saline Lock, IV Site Monitoring, and Temperature", skills: ["15-5", "15-3", "1-1"], offering: OFFERING_OXYGENATION, category: "IV Therapy" },
+  { title: "Blood Pressure, Pulse, and Pulse Oximetry", skills: ["1-7", "1-4", "14-1"], offering: OFFERING_MAIN, category: "Vital Signs" },
 ];
+
+/** The quizzes opened in each block, an NCM 114L one and an NCM 112L one: the same for every group. */
+const QUIZ_BLOCKS = [
+  [0, 1],
+  [2, 4],
+  [3, 5],
+  [7, 6],
+];
+
+/**
+ * Each group's own cases, a block at a time (index into CASES, null for none
+ * that block). No two groups share a case, so none shares a patient: NCM 114L
+ * (vital signs and assessment) in blocks 0 and 2, NCM 112L (oxygenation and
+ * IV therapy) in blocks 1 and 3. The colleague's Group B2 takes only NCM 112L,
+ * the course its instructor teaches it.
+ */
+const GROUP_CASES: Record<string, { cases: (number | null)[]; offerings: (string | null)[] }> = {
+  [TEAM_A1]: { cases: [0, 1, 7, 10], offerings: [OFFERING_MAIN, OFFERING_OXYGENATION, OFFERING_MAIN, OFFERING_OXYGENATION] },
+  [TEAM_A2]: { cases: [2, 4, 8, 6], offerings: [OFFERING_MAIN, OFFERING_OXYGENATION, OFFERING_MAIN, OFFERING_OXYGENATION] },
+  [TEAM_B1]: { cases: [3, 5, 9, 12], offerings: [OFFERING_MAIN, OFFERING_OXYGENATION, OFFERING_MAIN, OFFERING_OXYGENATION] },
+  [TEAM_B2]: { cases: [null, 11, null, 13], offerings: [null, OFFERING_COLLEAGUE, null, OFFERING_COLLEAGUE] },
+};
 
 /** Taylor's chapter skill areas (competency_areas ids) by chapter number. */
 const AREA_BY_CHAPTER: Record<string, string> = {
@@ -391,17 +420,30 @@ export function seedSchool(users: DemoUser[], teams: DemoTeam[]) {
   const steps: DemoStep[] = [];
   let taskN = 0;
   let stepN = 0;
+  // Who works each case, and so who made it and for which course.
+  // A course numbers its cases oldest first, so each group's are made one
+  // after another and read as consecutive numbers (Patient Case #1, #2 for
+  // the first group).
+  const caseOwner = new Map<number, { teamId: string; offering: string | null; order: number }>();
+  Object.entries(GROUP_CASES).forEach(([teamId, plan], g) => {
+    plan.cases.forEach((c, block) => {
+      if (c !== null) caseOwner.set(c, { teamId, offering: plan.offerings[block], order: g * plan.cases.length + block });
+    });
+  });
   CASES.forEach((c, i) => {
     const id = demoId(KIND.scenario, i + 1);
+    const owner = caseOwner.get(i);
+    const supervisor = teams.find((t) => t.id === owner?.teamId)?.faculty_id ?? INSTRUCTOR_ID;
     scenarios.push({
       id,
-      created_by: i % 3 === 2 ? DEAN_ID : INSTRUCTOR_ID,
+      created_by: supervisor,
+      offering_id: owner?.offering ?? null,
       title: c.scenario.title,
       description: c.scenario.description,
       category: c.scenario.category,
       learning_objectives: c.scenario.learning_objectives,
       is_ai_generated: false,
-      created_at: ago(60 - i * 2),
+      created_at: ago(60 - (owner?.order ?? i) * 2),
       updated_at: ago(30 - i),
       patient_id: patients[i].id,
       // The patient written into the case, as migration 098 copied it from the record.
@@ -439,9 +481,10 @@ export function seedSchool(users: DemoUser[], teams: DemoTeam[]) {
     });
   });
 
-  // --- Case work: five weekly blocks ------------------------------------------
-  // Block 0–2 graded, block 3 handed in and waiting for review, block 4 this
-  // week's case, still open. Each group shares one case per block.
+  // --- Case work: four blocks ---------------------------------------------------
+  // Blocks 0–1 graded, block 2 handed in and waiting for review, block 3 this
+  // week's case, still open. Each group works its own case each block, all its
+  // members on the same one (GROUP_CASES).
   const studentsOf = (teamId: string) => users.filter((u) => u.role === "student" && u.team_id === teamId);
   const ability = new Map(
     users
@@ -454,16 +497,18 @@ export function seedSchool(users: DemoUser[], teams: DemoTeam[]) {
   const stepRatings: DemoStepRating[] = [];
   let assignmentN = 0;
 
-  const BLOCK_START_DAYS_AGO = [32, 25, 18, 11, 3];
-  teams.forEach((team, g) => {
+  const BLOCK_START_DAYS_AGO = [32, 21, 11, 3];
+  teams.forEach((team) => {
     const supervisor = team.faculty_id ?? INSTRUCTOR_ID;
-    for (let block = 0; block < 5; block++) {
-      const caseIndex = (g * 2 + block) % CASES.length;
+    const plan = GROUP_CASES[team.id];
+    for (let block = 0; block < BLOCK_START_DAYS_AGO.length; block++) {
+      const caseIndex = plan?.cases[block] ?? null;
+      if (caseIndex === null) continue;
       const scenario = scenarios[caseIndex];
       // Performed in the room of the case's patient, as migration 098 filled it in.
       const roomId = patients.find((p) => p.id === scenario.patient_id)?.room_id ?? null;
       const assignedAgo = BLOCK_START_DAYS_AGO[block];
-      const deadline = block === 4 ? ahead(4, 17) : ago(assignedAgo - 6, 17);
+      const deadline = block === 3 ? ahead(4, 17) : ago(assignedAgo - 6, 17);
       for (const student of studentsOf(team.id)) {
         assignmentN += 1;
         const skill = ability.get(student.id) ?? 0.75;
@@ -487,7 +532,7 @@ export function seedSchool(users: DemoUser[], teams: DemoTeam[]) {
         };
         const weak = student.risk_level === "at_risk";
 
-        if (block <= 2) {
+        if (block <= 1) {
           // Graded: every sub-task rated, the score follows from the ratings.
           const started = ago(assignedAgo - 2, 9, Math.floor(random() * 50));
           const submitted = new Date(Date.parse(started) + (35 + random() * 40) * 60_000).toISOString();
@@ -524,7 +569,7 @@ export function seedSchool(users: DemoUser[], teams: DemoTeam[]) {
             time_taken: Math.round((Date.parse(submitted) - Date.parse(started)) / 1000),
             finalized_by: supervisor,
           });
-        } else if (block === 3) {
+        } else if (block === 2) {
           if (weak && random() < 0.7) {
             // Never handed in: past its deadline.
             Object.assign(base, { status: "overdue", started_at: ago(assignedAgo - 3, 10) });
@@ -557,8 +602,8 @@ export function seedSchool(users: DemoUser[], teams: DemoTeam[]) {
       id,
       created_by: INSTRUCTOR_ID,
       title: plan.title,
-      description: `A skill assessment built from Taylor’s skill checklists ${named} — the skills the “${CASES[i].scenario.title}” patient case calls for.`,
-      category: CASES[i].scenario.category,
+      description: `A skill assessment built from Taylor’s skill checklists ${named}.`,
+      category: plan.category,
       time_limit_seconds: 900,
       is_published: true,
       is_ai_generated: false,
@@ -567,7 +612,8 @@ export function seedSchool(users: DemoUser[], teams: DemoTeam[]) {
       max_attempts: 2,
       created_at: ago(58 - i * 2),
       updated_at: ago(40 - i),
-      scenario_id: scenarios[i].id,
+      scenario_id: null,
+      offering_id: plan.offering,
     });
     const weights = evenWeights(plan.skills.length);
     plan.skills.forEach((skill, ci) => {
@@ -602,15 +648,15 @@ export function seedSchool(users: DemoUser[], teams: DemoTeam[]) {
     });
   });
 
-  // Each group takes the quiz paired with every case it has worked so far.
+  // Every group sits the same quizzes, two a block (QUIZ_BLOCKS).
   const quizAssignments: DemoQuizAssignment[] = [];
   const attempts: DemoAttempt[] = [];
   let quizAssignN = 0;
   let attemptN = 0;
-  teams.forEach((team, g) => {
-    for (let block = 0; block < 5; block++) {
-      const caseIndex = (g * 2 + block) % CASES.length;
-      const quiz = quizzes[caseIndex];
+  const lastBlock = BLOCK_START_DAYS_AGO.length - 1;
+  teams.forEach((team) => {
+    QUIZ_BLOCKS.forEach((picks, block) => picks.forEach((pick) => {
+      const quiz = quizzes[pick];
       const assignedAgo = BLOCK_START_DAYS_AGO[block];
       for (const student of studentsOf(team.id)) {
         const skill = ability.get(student.id) ?? 0.75;
@@ -622,18 +668,19 @@ export function seedSchool(users: DemoUser[], teams: DemoTeam[]) {
           student_id: student.id,
           assigned_by: team.faculty_id ?? INSTRUCTOR_ID,
           assigned_at: ago(assignedAgo, 8),
-          deadline: block === 4 ? ahead(5, 23, 59) : ago(assignedAgo - 5, 23, 59),
+          deadline: block === lastBlock ? ahead(5, 23, 59) : ago(assignedAgo - 5, 23, 59),
           status: "pending",
           required: true,
         };
-        const takes = block < 4 ? (weak && random() < 0.35 ? 0 : 1 + (random() < 0.3 ? 1 : 0)) : random() < 0.35 ? 1 : 0;
+        const takes = block < lastBlock ? (weak && random() < 0.35 ? 0 : 1 + (random() < 0.3 ? 1 : 0)) : random() < 0.35 ? 1 : 0;
         let firstDaysAgo = 0;
         for (let t = 0; t < takes; t++) {
           attemptN += 1;
           const correct = Math.max(1, Math.min(6, Math.round(6 * (skill + (t ? 0.08 : 0) + (random() - 0.5) * 0.3))));
           // A second try comes the evening after the first. The draw is still
           // made, so every later random value stays the same.
-          const drawn = assignedAgo - 1 - t - random() * 2;
+          // Yesterday at the latest: an evening sitting today could still be ahead.
+          const drawn = Math.max(1, assignedAgo - 1 - t - random() * 2);
           if (t === 0) firstDaysAgo = drawn;
           const started = ago(t === 0 ? drawn : firstDaysAgo - 1, 19, Math.floor(random() * 50));
           const taken = 240 + Math.floor(random() * 520);
@@ -650,10 +697,10 @@ export function seedSchool(users: DemoUser[], teams: DemoTeam[]) {
             time_taken_seconds: taken,
           });
         }
-        qa.status = takes > 0 ? "completed" : block < 4 ? "overdue" : "pending";
+        qa.status = takes > 0 ? "completed" : block < lastBlock ? "overdue" : "pending";
         quizAssignments.push(qa);
       }
-    }
+    }));
   });
 
   return {

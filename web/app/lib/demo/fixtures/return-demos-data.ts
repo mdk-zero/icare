@@ -15,4 +15,14 @@ export const RETURN_DEMO_SPECS: { title: string; description: string; skills: st
     description: "Pulse oximetry, then oxygen by nasal cannula.",
     skills: ["14-1", "14-3"],
   },
+  {
+    title: "Blood Pressure and Apical Pulse Return Demonstration",
+    description: "Brachial blood pressure with a palpated estimate first, then the apical pulse counted for a full minute.",
+    skills: ["1-7", "1-5"],
+  },
+  {
+    title: "IV Site Care Return Demonstration",
+    description: "Checking a peripheral IV site and infusion, changing its dressing, then capping and flushing it for intermittent use.",
+    skills: ["15-3", "15-4", "15-5"],
+  },
 ];
