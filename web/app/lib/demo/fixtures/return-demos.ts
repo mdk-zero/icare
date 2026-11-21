@@ -14,17 +14,31 @@ import { RETURN_DEMO_SPECS } from "./return-demos-data";
 import returnDemoTasks from "./return-demo-tasks.json";
 
 /**
- * The demo's Return Demonstrations (072), one per group, each in its group's
- * course, since no two groups share an activity: two finalized a few days
- * ago (the vital signs one with a few steps graded N/A and the PhilPEN form),
- * two due later this week, not started. All are performed in Skills
- * Laboratory A (098).
+ * The demo's Return Demonstrations (072), by RETURN_DEMO_SPECS index. No two
+ * groups share one: each group has two of its own in each of its courses, as
+ * it has its own cases, the first finalized a few days ago (the vital signs
+ * one with a few steps graded N/A and the PhilPEN form), the second due later
+ * this week, not started. The colleague's Group B2 has its two in the NCM 112L
+ * its instructor teaches it. All are performed in Skills Laboratory A (098).
+ *
+ * `order` is when each was made, group by group, so a course numbers a group's
+ * Return Demonstrations one after another.
  */
-const PLAN: { team: string; offering: string; graded: boolean; createdAgo: number }[] = [
-  { team: TEAM_A1, offering: OFFERING_MAIN, graded: true, createdAgo: 12 },
-  { team: TEAM_B1, offering: OFFERING_OXYGENATION, graded: false, createdAgo: 2 },
-  { team: TEAM_A2, offering: OFFERING_MAIN, graded: true, createdAgo: 11 },
-  { team: TEAM_B2, offering: OFFERING_COLLEAGUE, graded: false, createdAgo: 3 },
+const PLAN: { team: string; offering: string; graded: boolean; gradedAgo: number; order: number }[] = [
+  { team: TEAM_A1, offering: OFFERING_MAIN, graded: true, gradedAgo: 6, order: 0 },
+  { team: TEAM_B1, offering: OFFERING_OXYGENATION, graded: true, gradedAgo: 4, order: 10 },
+  { team: TEAM_A2, offering: OFFERING_MAIN, graded: true, gradedAgo: 6, order: 4 },
+  { team: TEAM_B2, offering: OFFERING_COLLEAGUE, graded: true, gradedAgo: 5, order: 12 },
+  { team: TEAM_A1, offering: OFFERING_MAIN, graded: false, gradedAgo: 0, order: 1 },
+  { team: TEAM_A2, offering: OFFERING_MAIN, graded: false, gradedAgo: 0, order: 5 },
+  { team: TEAM_B1, offering: OFFERING_MAIN, graded: true, gradedAgo: 6, order: 8 },
+  { team: TEAM_B1, offering: OFFERING_MAIN, graded: false, gradedAgo: 0, order: 9 },
+  { team: TEAM_A1, offering: OFFERING_OXYGENATION, graded: true, gradedAgo: 4, order: 2 },
+  { team: TEAM_A1, offering: OFFERING_OXYGENATION, graded: false, gradedAgo: 0, order: 3 },
+  { team: TEAM_A2, offering: OFFERING_OXYGENATION, graded: true, gradedAgo: 4, order: 6 },
+  { team: TEAM_A2, offering: OFFERING_OXYGENATION, graded: false, gradedAgo: 0, order: 7 },
+  { team: TEAM_B1, offering: OFFERING_OXYGENATION, graded: false, gradedAgo: 0, order: 11 },
+  { team: TEAM_B2, offering: OFFERING_COLLEAGUE, graded: false, gradedAgo: 0, order: 13 },
 ];
 
 const CREDIT: Record<TaskRating, number> = { excellent: 1, satisfactory: 2 / 3, needs_practice: 1 / 3 };
@@ -59,7 +73,9 @@ export function seedReturnDemos(
     const supervisor = team.faculty_id ?? INSTRUCTOR_ID;
     const members = users.filter((u) => u.role === "student" && u.team_id === team.id);
     const scenarioId = demoId(KIND.scenario, 900 + d);
-    const created = ago(plan.createdAgo, 9);
+    // Made at the start of the term, one after another; given out when due.
+    const created = ago(30, 8, plan.order);
+    const assigned = plan.graded ? ago(plan.gradedAgo + 8, 9) : ago(2, 9);
     tables.scenarios.push({
       id: scenarioId,
       created_by: supervisor,
@@ -111,8 +127,8 @@ export function seedReturnDemos(
         scenario_id: scenarioId,
         student_id: student.id,
         assigned_by: supervisor,
-        assigned_at: created,
-        deadline: plan.graded ? ago(3, 17) : ahead(4, 17),
+        assigned_at: assigned,
+        deadline: plan.graded ? ago(plan.gradedAgo - 1, 17) : ahead(4, 17),
         status: "pending",
         required: true,
         score: null,
@@ -128,7 +144,7 @@ export function seedReturnDemos(
       if (!plan.graded) return;
 
       // Graded at the skills lab: every step rated, a few N/A, the score from the rest.
-      const graded = ago(4, 14, 10 + m * 7);
+      const graded = ago(plan.gradedAgo, 14, 10 + m * 7);
       const weak = student.risk_level === "at_risk";
       let earned = 0;
       let total = 0;
@@ -168,7 +184,7 @@ export function seedReturnDemos(
       });
       if (d !== 0) return;
       // The PhilPEN form they filled in on their partner at the skills lab.
-      const handedIn = ago(4, 13, 40 + m * 3);
+      const handedIn = ago(plan.gradedAgo, 13, 40 + m * 3);
       const clients = [
         { name: "Reyes, Ana, Lopez", sex: "female" },
         { name: "Garcia, Mark, Dizon", sex: "male" },

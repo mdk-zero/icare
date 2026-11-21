@@ -759,8 +759,8 @@ export default function ProgressTab({
         {auto ? (
           <>
             A cell shows the student&rsquo;s best score on that patient case,
-            quiz or case presentation, and fills in on its own once you grade
-            the work. Scores can&rsquo;t be entered here.
+            Return Demonstration, quiz or case presentation, and fills in on
+            its own once you grade the work. Scores can&rsquo;t be entered here.
             {split &&
               " The Grade column is the average of every scored item; work with no score yet is left out."}
           </>
