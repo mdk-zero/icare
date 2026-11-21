@@ -128,12 +128,12 @@ export default function CourseBrowser({
             { label: section.name },
           ]}
         />
-        <div className="mb-4">
-          <h2 className="font-display text-xl font-semibold text-gray-900">
-            {course.code} · {section.name}
-          </h2>
-          <TruncatedText as="p" text={course.title} className="text-sm text-gray-500" />
-        </div>
+        <TruncatedText
+          as="h2"
+          text={`${course.code} · ${section.name}`}
+          tip={course.title}
+          className="mb-4 w-fit max-w-full cursor-default font-display text-xl font-semibold text-gray-900"
+        />
         <div role="tablist" aria-label="Section" className="mb-4 flex gap-1 shadow-[inset_0_-1px_0_var(--color-hairline)]">
           {(
             [
@@ -271,8 +271,12 @@ export default function CourseBrowser({
         <Crumbs items={[{ label: "Courses", onClick: () => openCourse(null) }, { label: course.code }]} />
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <h2 className="font-display text-xl font-semibold text-gray-900">{course.code}</h2>
-            <TruncatedText as="p" text={course.title} className="text-sm text-gray-500" />
+            <TruncatedText
+              as="h2"
+              text={course.code}
+              tip={course.title}
+              className="w-fit max-w-full cursor-default font-display text-xl font-semibold text-gray-900"
+            />
           </div>
           <ActionsMenu
             variant="compact"
