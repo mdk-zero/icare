@@ -993,6 +993,7 @@ export default function AdminAnalyticsClient() {
               value={courseId}
               loading={coursesListLoading}
               onChange={selectCourse}
+              fullWidth
             />
           ) : undefined
         }
@@ -1018,8 +1019,7 @@ export default function AdminAnalyticsClient() {
         onDraftChange={setCustom}
         range={{ from, to }}
         refreshing={revalidating}
-      />
-
+      >
       {narrative.modal && (
         <AnalyticsSummaryModal
           narrative={narrative.modal.narrative}
@@ -1301,6 +1301,7 @@ export default function AdminAnalyticsClient() {
           </div>
         </>
       )}
+      </AnalyticsFilterBar>
     </div>
   );
 }

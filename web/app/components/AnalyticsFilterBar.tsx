@@ -119,7 +119,7 @@ function SectionPicker({
         type="button"
         onClick={() => setOpen((v) => !v)}
         disabled={sections.length === 0}
-        className="flex items-center gap-2 rounded-lg border border-hairline bg-surface px-3 py-1.5 text-sm text-gray-700 transition-colors hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex w-full items-center gap-2 rounded-lg border border-hairline bg-surface px-3 py-1.5 text-sm text-gray-700 transition-colors hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <FontAwesomeIcon icon={faLayerGroup} className="w-3.5 h-3.5 text-brand-600" />
         <span className="font-medium">{sectionScopeLabel(sections, selected)}</span>
@@ -170,8 +170,8 @@ function SectionPicker({
 }
 
 /**
- * Course, section + date-range filters for the analytics dashboards: the
- * course picker when the page passes one, the section multi-select, the preset
+ * Course, section + date-range filters for the analytics dashboards, as a
+ * sticky sidebar with the panels (its children) beside it: the course picker when the page passes one, the section multi-select, the preset
  * range buttons, and custom start/end dates. The page owns the state; this only
  * draws it and reports changes.
  */
@@ -190,6 +190,7 @@ export default function AnalyticsFilterBar({
   onDraftChange,
   range,
   refreshing,
+  children,
 }: {
   coursePicker?: ReactNode;
   /** A button at the end of the filters' row; it reads them but isn't one. */
@@ -210,85 +211,87 @@ export default function AnalyticsFilterBar({
   /** The applied range, shown as the read-out on the right. */
   range: { from: string; to: string };
   refreshing?: boolean;
+  /** The panels the filters apply to, laid out beside them. */
+  children?: ReactNode;
 }) {
   return (
-    <div className="mb-6 rounded-xl border border-hairline bg-surface shadow-tile">
-      <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-3">
-        {coursePicker && (
-          <>
-            <div className="flex min-w-0 items-center gap-2.5">
+    // The filters sit in a sidebar that stays in view while the panels scroll
+    // (beside them from lg up, above them below it). Not overflow-scrolled: the
+    // pickers' lists open over the panels and would be clipped.
+    <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start lg:gap-4">
+      <aside
+        aria-label="Filters"
+        className="mb-6 rounded-xl border border-hairline bg-surface shadow-tile lg:sticky lg:top-0 lg:z-20 lg:mb-0"
+      >
+        <div className="flex flex-col gap-4 p-4">
+          {coursePicker && (
+            <div className="flex flex-col gap-1.5">
               <CardLabel>Course</CardLabel>
               {coursePicker}
             </div>
+          )}
 
-            <span className="hidden h-6 w-px bg-hairline sm:block" />
-          </>
-        )}
-
-        <div className="flex items-center gap-2.5">
-          <CardLabel>Sections</CardLabel>
-          <SectionPicker
-            sections={sections}
-            selected={sectionIds}
-            counts={sectionCounts}
-            onChange={onSectionsChange}
-          />
-        </div>
-
-        {action}
-
-        {/* The range always takes a line of its own, so nothing wraps unevenly. */}
-        <span className="hidden basis-full sm:block" />
-
-        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2.5">
-          <CardLabel>Range</CardLabel>
-          <div className="flex flex-wrap items-center gap-1">
-            {(wholeTerm ? [TERM_PRESET, ...PRESETS] : PRESETS).map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => onPresetChange(p.id)}
-                aria-pressed={preset === p.id}
-                className={`rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
-                  preset === p.id
-                    ? "bg-brand-600 text-white"
-                    : "text-gray-600 hover:bg-subtle hover:text-gray-900"
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {preset === "custom" && (
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="date"
-              value={draft.from}
-              max={draft.to || undefined}
-              onChange={(e) => onDraftChange("from", e.target.value)}
-              className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-gray-700"
-              aria-label="Range start"
-            />
-            <span className="text-gray-400">–</span>
-            <input
-              type="date"
-              value={draft.to}
-              min={draft.from || undefined}
-              onChange={(e) => onDraftChange("to", e.target.value)}
-              className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-gray-700"
-              aria-label="Range end"
+          <div className="flex flex-col gap-1.5">
+            <CardLabel>Sections</CardLabel>
+            <SectionPicker
+              sections={sections}
+              selected={sectionIds}
+              counts={sectionCounts}
+              onChange={onSectionsChange}
             />
           </div>
-        )}
 
-        <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5 self-end text-right text-xs text-gray-400 sm:ml-auto sm:self-auto">
-          {refreshing && <EcgLoader size="xs" className="text-brand-600" />}
-          {scopeNote && <span>{scopeNote}</span>}
-          <span className="tabular-nums">{formatRangeLabel(range.from, range.to)}</span>
+          <div className="flex flex-col gap-1.5">
+            <CardLabel>Range</CardLabel>
+            <div className="flex flex-wrap items-center gap-1">
+              {(wholeTerm ? [TERM_PRESET, ...PRESETS] : PRESETS).map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => onPresetChange(p.id)}
+                  aria-pressed={preset === p.id}
+                  className={`rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
+                    preset === p.id
+                      ? "bg-brand-600 text-white"
+                      : "text-gray-600 hover:bg-subtle hover:text-gray-900"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            {preset === "custom" && (
+              <div className="flex flex-col gap-2">
+                <input
+                  type="date"
+                  value={draft.from}
+                  max={draft.to || undefined}
+                  onChange={(e) => onDraftChange("from", e.target.value)}
+                  className="w-full rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-gray-700"
+                  aria-label="Range start"
+                />
+                <input
+                  type="date"
+                  value={draft.to}
+                  min={draft.from || undefined}
+                  onChange={(e) => onDraftChange("to", e.target.value)}
+                  className="w-full rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-gray-700"
+                  aria-label="Range end"
+                />
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-400">
+              {refreshing && <EcgLoader size="xs" className="text-brand-600" />}
+              {scopeNote && <span>{scopeNote}</span>}
+              <span className="tabular-nums">{formatRangeLabel(range.from, range.to)}</span>
+            </div>
+          </div>
+
+          {action && <div className="flex [&>button]:ml-0! [&>button]:flex-1">{action}</div>}
         </div>
-      </div>
+      </aside>
+
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }
