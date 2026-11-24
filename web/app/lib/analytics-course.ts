@@ -13,8 +13,9 @@ import {
   type RosterStudent,
 } from './courses';
 import type { RequirementRow } from './course-progress';
+import { isMissingTeamTables, loadTeams } from './teams';
 import { isGraded, loadItemWork, readAll, type GradedWork, type HandedInWork } from './graded-work';
-import type { WorkKind } from './work-kinds';
+import { WORK_KINDS, type WorkKind } from './work-kinds';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -34,8 +35,10 @@ export interface CourseScope {
   offering: OwnOffering;
   /** On its roster, in the sections asked for. */
   students: RosterStudent[];
-  /** Its activities: id -> kind of work. */
+  /** Its activities: id -> kind of work. Only the kinds asked for when the criteria are narrowed. */
   items: Map<string, WorkKind>;
+  /** The kinds of work the course has at all, whatever is asked for, so the criteria filter can list them. */
+  kinds: WorkKind[];
   sectionNames: Map<string, string>;
 }
 
@@ -81,13 +84,57 @@ export async function loadCourseScope(
     (s) => (wanted.size === 0 || wanted.has(s.section_id)) && (!own || own.has(s.id)),
   );
 
+  // Criteria: only these kinds of work (an unknown one narrows to nothing, not to everything).
+  const askedKinds = splitParam(params.get('kinds'));
+  const kinds = new Set<WorkKind>();
   const items = new Map<string, WorkKind>();
   for (const item of activities ?? []) {
     const kind = item.activity_type ? KIND_OF_ITEM[item.activity_type] : undefined;
-    if (kind) items.set(item.id, kind);
+    if (!kind) continue;
+    kinds.add(kind);
+    if (askedKinds.length === 0 || askedKinds.includes(kind)) items.set(item.id, kind);
   }
-  const sections = await loadSectionNames(supabase, [...new Set(students.map((s) => s.section_id).filter(Boolean))]);
-  return { offering, students, items, sectionNames: new Map(sections.map((s) => [s.id, s.name])) };
+
+  // One group (or a few) of the roster. A student's group is as the performance chart
+  // draws them: their own group, else their section.
+  const askedGroups = splitParam(params.get('group_ids'));
+  let inGroups = students;
+  if (askedGroups.length > 0) {
+    const groupOf = await courseGroupOf(supabase, session, offering.section_ids, students);
+    inGroups = students.filter((s) => askedGroups.includes(groupOf.get(s.id) ?? ''));
+  }
+
+  const sections = await loadSectionNames(supabase, [...new Set(inGroups.map((s) => s.section_id).filter(Boolean))]);
+  return {
+    offering,
+    students: inGroups,
+    items,
+    kinds: WORK_KINDS.map((k) => k.kind).filter((k) => kinds.has(k)),
+    sectionNames: new Map(sections.map((s) => [s.id, s.name])),
+  };
+}
+
+const splitParam = (value: string | null) => (value ?? '').split(',').map((v) => v.trim()).filter(Boolean);
+
+/**
+ * Each rostered student's group id: the group an instructor supervises (every
+ * group, for a Dean), else `section:<id>`, the stand-in the performance chart
+ * gives a student in no group of the viewer's.
+ */
+async function courseGroupOf(
+  supabase: Supabase,
+  session: SessionPayload,
+  sectionIds: string[],
+  students: RosterStudent[],
+): Promise<Map<string, string>> {
+  const groupOf = new Map<string, string>();
+  const { teams, error } = await loadTeams(supabase, sectionIds);
+  if (error && !isMissingTeamTables(error)) throw error;
+  for (const t of session.role === 'faculty' ? teams.filter((t) => t.faculty_id === session.uid) : teams) {
+    for (const m of t.members) groupOf.set(m.id, t.id);
+  }
+  for (const s of students) if (!groupOf.has(s.id)) groupOf.set(s.id, `section:${s.section_id}`);
+  return groupOf;
 }
 
 /**
@@ -253,6 +300,7 @@ export async function courseFigures(supabase: Supabase, scope: CourseScope, args
       cohort: cohortFigures(scope, work, graded),
       weekly_trend: trendFigures(graded, args.p_bucket),
       top_students: rankCourseStudents(scope, graded).slice(0, 10),
+      course_kinds: scope.kinds,
       ...(await competencyFigures(supabase, work)),
     },
   };

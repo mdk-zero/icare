@@ -36,6 +36,8 @@ import AnalyticsSkeleton from "./AnalyticsSkeleton";
 import GroupPerformance, { useGroupSummaries } from "./GroupPerformance";
 import CoursePerformance from "./CoursePerformance";
 import CourseFilter from "./CourseFilter";
+import { GroupPicker, CriteriaFilter } from "./GroupCriteriaFilters";
+import type { WorkKind } from "../../lib/work-kinds";
 import ActivityBreakdown from "./ActivityBreakdown";
 import { courseRange, parseDay, formatRange } from "./dates";
 import { buildTrendSeries, TrendLegend, TrendBarChart, TrendTable } from "./GroupTrendChart";
@@ -382,6 +384,9 @@ export default function FacultyAnalyticsClient() {
   // the leaderboard. replaceState keeps useSearchParams in step without a navigation.
   const courseParam = useSearchParams().get("course");
   const [sectionIds, setSectionIds] = useState<string[]>([]);
+  // With a course picked: one of its groups and the kinds of work to look at.
+  const [groupId, setGroupId] = useState<string | null>(null);
+  const [kinds, setKinds] = useState<WorkKind[]>([]);
   const [preset, setPreset] = useState<PresetId>(courseParam ? "term" : "3m");
   // Lazily initialised so `new Date()` never runs during a server render —
   // the first paint is the skeleton, so there is nothing to mismatch.
@@ -407,7 +412,9 @@ export default function FacultyAnalyticsClient() {
   const sectionChoices: Section[] = course ? course.sections : sections;
 
   const { from, to } = courseRange(activePreset === "term", range, course?.term);
-  const sectionKey = [courseId ?? "", ...[...sectionIds].sort()].join(",");
+  const groupIds = courseId && groupId ? [groupId] : undefined;
+  const criteria = courseId && kinds.length > 0 ? kinds : undefined;
+  const sectionKey = [courseId ?? "", groupId ?? "", [...(criteria ?? [])].sort().join("+"), ...[...sectionIds].sort()].join(",");
 
   // One entry per filter combination. A late response lands on its own key
   // rather than on whatever the user has since selected, which is what the
@@ -419,11 +426,16 @@ export default function FacultyAnalyticsClient() {
     revalidating: refreshing,
   } = usePageData(
     awaitingCourse ? null : `faculty:analytics:${sectionKey}:${from}:${to}`,
-    () => fetchAnalyticsSummary({ courseId, sectionIds, from, to, groupTrend: true }),
+    () => fetchAnalyticsSummary({ courseId, sectionIds, from, to, groupTrend: true, groupIds, kinds: criteria }),
     { keepPreviousData: true },
   );
 
   const summary = analytics?.summary ?? null;
+  // Every group of the course (in the sections picked), for the group filter, and the kinds of work it has.
+  const groupChoices = (summary?.group_trend?.groups ?? []).filter(
+    (g) => sectionIds.length === 0 || sectionIds.includes(g.section_id),
+  );
+  const courseKinds = summary?.course_kinds ?? [];
   const bucket = analytics?.bucket ?? "week";
 
   // A second, quieter fetch for the immediately preceding period of equal
@@ -441,6 +453,8 @@ export default function FacultyAnalyticsClient() {
         sectionIds,
         from: prevRangeValue.from,
         to: prevRangeValue.to,
+        groupIds,
+        kinds: criteria,
       }),
     { keepPreviousData: true },
   );
@@ -490,6 +504,9 @@ export default function FacultyAnalyticsClient() {
     // Narrowed, not cleared: a section the new scope still has stays picked.
     const choices: Section[] = next ? next.sections : sections;
     setSectionIds((ids) => ids.filter((id) => choices.some((s) => s.id === id)));
+    // Groups and criteria belong to one course.
+    setGroupId(null);
+    setKinds([]);
     // A course opens on its whole term; leaving it, there is no term to show.
     if (next) setPreset("term");
     else if (preset === "term") applyPreset("3m");
@@ -633,9 +650,35 @@ export default function FacultyAnalyticsClient() {
               sections={sectionChoices}
               selected={sectionIds}
               counts={studentsBySection}
-              onChange={setSectionIds}
+              onChange={(ids) => {
+                setSectionIds(ids);
+                setGroupId(null);
+              }}
             />
           </div>
+
+          {course && (
+            <>
+              <span className="hidden basis-full sm:block" />
+              <div className="flex items-center gap-2.5">
+                <CardLabel>Group</CardLabel>
+                <GroupPicker
+                  groups={groupChoices}
+                  value={groupId}
+                  onChange={setGroupId}
+                />
+              </div>
+              {courseKinds.length > 0 && (
+                <>
+                  <span className="hidden h-6 w-px bg-hairline sm:block" />
+                  <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2.5">
+                    <CardLabel>Criteria</CardLabel>
+                    <CriteriaFilter available={courseKinds} selected={kinds} onChange={setKinds} />
+                  </div>
+                </>
+              )}
+            </>
+          )}
 
           <AiSummaryButton onClick={narrative.open} busy={narrative.busy} ready={narrative.ready} waiting={refreshing} />
 

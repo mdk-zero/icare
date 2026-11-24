@@ -639,7 +639,10 @@ function analyticsScope(ctx: Ctx) {
   const students = (offering ? offeringRoster(db, offering).students : visibleStudents(db, ctx.role, ctx.viewer.id)).filter(
     (s) => s.section_id && sectionIds.includes(s.section_id),
   );
-  const ids = new Set(students.map((s) => s.id));
+  // Narrowed to some groups, as a course's group filter does; a student in no group counts under their section.
+  const askedGroups = (query.get("group_ids") ?? "").split(",").filter(Boolean);
+  const inGroups = offering && askedGroups.length ? students.filter((s) => askedGroups.includes(s.team_id ?? `section:${s.section_id}`)) : students;
+  const ids = new Set(inGroups.map((s) => s.id));
   const askedFrom = query.get("from");
   const askedTo = query.get("to");
   const from = term && (!askedFrom || askedFrom < term.starts_on) ? term.starts_on : askedFrom;
@@ -660,8 +663,14 @@ function analyticsScope(ctx: Ctx) {
       !!a.submitted_at &&
       inWindow(a.submitted_at),
   );
-  const work = gradedWork(db, ids).filter((w) => inWindow(w.at) && (!items || items.has(w.item)));
-  return { sectionIds, students, attempts, work, bucket: deriveBucket(from, to), oneCourse: !!offering };
+  // Criteria: only these kinds of work, with a course.
+  const askedKinds = offering ? (query.get("kinds") ?? "").split(",").filter(Boolean) : [];
+  const allWork = gradedWork(db, new Set(students.map((s) => s.id))).filter((w) => !items || items.has(w.item));
+  const courseKinds = [...new Set(allWork.map((w) => w.kind))];
+  const work = gradedWork(db, ids).filter(
+    (w) => inWindow(w.at) && (!items || items.has(w.item)) && (askedKinds.length === 0 || askedKinds.includes(w.kind)),
+  );
+  return { sectionIds, students: inGroups, attempts: askedKinds.length && !askedKinds.includes("quiz") ? [] : attempts, work, courseKinds, bucket: deriveBucket(from, to), oneCourse: !!offering };
 }
 
 function topStudents(ctx: Ctx, scope: ReturnType<typeof analyticsScope>) {
@@ -768,6 +777,7 @@ route("GET", "/api/analytics/summary", (ctx) => {
         active_students_30d: students.filter(isActive).length,
       },
       weekly_trend,
+      course_kinds: scope.oneCourse ? scope.courseKinds : undefined,
       group_trend:
         ctx.query.get("group_trend") === "1"
           ? { groups: groups.map((g) => ({ id: g.id, name: g.name, section_id: g.section_id })), points: groupPoints }

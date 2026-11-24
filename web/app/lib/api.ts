@@ -1517,6 +1517,8 @@ export interface AnalyticsSummary {
     groups: { id: string; name: string; section_id: string }[];
     points: { group_id: string; week_start: string; average_score: number; attempts: number }[];
   } | null;
+  /** With a course: the kinds of graded work it has, whatever the criteria asked for. */
+  course_kinds?: WorkKind[];
   competency_breakdown: Record<string, number>;
   competency_detail: {
     name: string;
@@ -1576,6 +1578,10 @@ export interface AnalyticsFilters {
   courseId?: string | null;
   /** Summary only: also attach `group_trend`, one series per group. */
   groupTrend?: boolean;
+  /** With a course: only these groups' students (a group id from `group_trend.groups`). */
+  groupIds?: string[];
+  /** With a course: only these kinds of graded work, the criteria its grade is made of. */
+  kinds?: WorkKind[];
 }
 
 export async function fetchAnalyticsSummary(
@@ -1588,6 +1594,8 @@ export async function fetchAnalyticsSummary(
   if (filters.to) params.set('to', filters.to);
   if (filters.courseId) params.set('offering_id', filters.courseId);
   if (filters.groupTrend) params.set('group_trend', '1');
+  if (filters.courseId && filters.groupIds?.length) params.set('group_ids', filters.groupIds.join(','));
+  if (filters.courseId && filters.kinds?.length) params.set('kinds', filters.kinds.join(','));
   const query = params.toString();
 
   try {
