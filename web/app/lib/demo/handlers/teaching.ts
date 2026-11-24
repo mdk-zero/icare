@@ -641,7 +641,7 @@ function analyticsScope(ctx: Ctx) {
   );
   // Narrowed to some groups, as a course's group filter does; a student in no group counts under their section.
   const askedGroups = (query.get("group_ids") ?? "").split(",").filter(Boolean);
-  const inGroups = offering && askedGroups.length ? students.filter((s) => askedGroups.includes(s.team_id ?? `section:${s.section_id}`)) : students;
+  const inGroups = askedGroups.length ? students.filter((s) => askedGroups.includes(s.team_id ?? `section:${s.section_id}`)) : students;
   const ids = new Set(inGroups.map((s) => s.id));
   const askedFrom = query.get("from");
   const askedTo = query.get("to");
@@ -663,8 +663,8 @@ function analyticsScope(ctx: Ctx) {
       !!a.submitted_at &&
       inWindow(a.submitted_at),
   );
-  // Criteria: only these kinds of work, with a course.
-  const askedKinds = offering ? (query.get("kinds") ?? "").split(",").filter(Boolean) : [];
+  // Criteria: only these kinds of work.
+  const askedKinds = (query.get("kinds") ?? "").split(",").filter(Boolean);
   const allWork = gradedWork(db, new Set(students.map((s) => s.id))).filter((w) => !items || items.has(w.item));
   const courseKinds = [...new Set(allWork.map((w) => w.kind))];
   const work = gradedWork(db, ids).filter(

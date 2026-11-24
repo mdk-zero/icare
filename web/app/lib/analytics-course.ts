@@ -13,8 +13,8 @@ import {
   type RosterStudent,
 } from './courses';
 import type { RequirementRow } from './course-progress';
-import { isMissingTeamTables, loadTeams } from './teams';
-import { isGraded, loadItemWork, readAll, type GradedWork, type HandedInWork } from './graded-work';
+import { isMissingTeamTables, loadTeams, manageableSectionIds } from './teams';
+import { isGraded, loadGradedWork, loadItemWork, readAll, type GradedWork, type HandedInWork } from './graded-work';
 import { WORK_KINDS, type WorkKind } from './work-kinds';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
@@ -170,8 +170,14 @@ export function loadCourseWork(supabase: Supabase, scope: CourseScope, args: Sum
 const mean = (xs: number[]) => xs.reduce((sum, x) => sum + x, 0) / xs.length;
 const oneDecimal = (n: number) => Math.round(n * 10) / 10;
 
+/** Who the figures are about: a course's roster, or the viewer's students narrowed by a filter. */
+type Roster = {
+  students: Pick<RosterStudent, 'id' | 'name' | 'picture_url' | 'sex' | 'section_id'>[];
+  sectionNames: Map<string, string>;
+};
+
 /** Ranked the way dw_student_leaderboard ranks: average, then how much is graded, then id. */
-export function rankCourseStudents(scope: CourseScope, graded: GradedWork[]) {
+export function rankCourseStudents(scope: Roster, graded: GradedWork[]) {
   // The exact average: rounded ones can tie where the warehouse's don't.
   const average = new Map<string, number>();
   const ranked = scope.students.flatMap((s) => {
@@ -203,7 +209,7 @@ export function rankCourseStudents(scope: CourseScope, graded: GradedWork[]) {
   );
 }
 
-function cohortFigures(scope: CourseScope, work: HandedInWork[], graded: GradedWork[]) {
+function cohortFigures(scope: Roster, work: { student_id: string }[], graded: GradedWork[]) {
   const byKind: Partial<Record<WorkKind, { average_score: number; graded: number; students: number }>> = {};
   for (const kind of new Set(graded.map((w) => w.kind))) {
     const ofKind = graded.filter((w) => w.kind === kind);
@@ -224,7 +230,7 @@ function cohortFigures(scope: CourseScope, work: HandedInWork[], graded: GradedW
 }
 
 /** Per section, in the warehouse's order: who is on the roster, and who handed in the course's work. */
-function sectionFigures(scope: CourseScope, work: HandedInWork[]) {
+function sectionFigures(scope: Roster, work: { student_id: string }[]) {
   const active = new Set(work.map((w) => w.student_id));
   const sectionIds = [...new Set(scope.students.map((s) => s.section_id).filter(Boolean))];
   return sectionIds
@@ -303,5 +309,69 @@ export async function courseFigures(supabase: Supabase, scope: CourseScope, args
       course_kinds: scope.kinds,
       ...(await competencyFigures(supabase, work)),
     },
+  };
+}
+
+const NOBODY = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * `?group_ids=` without a course: only those groups' students count, which the
+ * warehouse already honours through `p_student_ids`. Faculty may name only
+ * groups they supervise. An unknown group narrows to nobody, not to everyone.
+ */
+export async function narrowToGroups(
+  supabase: Supabase,
+  session: SessionPayload,
+  args: SummaryArgs,
+  groupIds: string[],
+): Promise<SummaryArgs> {
+  const sectionIds = await manageableSectionIds(supabase, session.role, session.uid);
+  const { teams, error } = await loadTeams(supabase, sectionIds);
+  if (error && !isMissingTeamTables(error)) throw error;
+  const members = new Set<string>();
+  for (const t of session.role === 'faculty' ? teams.filter((t) => t.faculty_id === session.uid) : teams) {
+    if (groupIds.includes(t.id)) for (const m of t.members) members.add(m.id);
+  }
+  const allowed = args.p_student_ids ? new Set(args.p_student_ids) : null;
+  const ids = [...members].filter((id) => !allowed || allowed.has(id));
+  return { ...args, p_student_ids: ids.length > 0 ? ids : [NOBODY] };
+}
+
+/**
+ * The summary's graded-work figures for only some kinds of work, over the
+ * students `args` names. The warehouse can't filter by kind, so they are worked
+ * out from the graded rows, as for a course. Null when `args` names no students
+ * to read (an unlimited call).
+ */
+export async function kindFigures(supabase: Supabase, args: SummaryArgs, kinds: WorkKind[]) {
+  if (!args.p_student_ids) return null;
+  const rows = await readAll<{
+    id: string;
+    name: string;
+    picture_url: string | null;
+    sex: 'male' | 'female' | null;
+    section_id: string | null;
+  }>(args.p_student_ids, (part) =>
+    supabase.from('users').select('id, name, picture_url, sex, section_id').in('id', part),
+  );
+  const sectionIds = args.p_section_ids ? new Set(args.p_section_ids) : null;
+  const students = rows
+    .filter((r) => r.section_id && (!sectionIds || sectionIds.has(r.section_id)))
+    .map((r) => ({ ...r, section_id: r.section_id! }));
+  const sections = await loadSectionNames(supabase, [...new Set(students.map((s) => s.section_id))]);
+  const scope: Roster = { students, sectionNames: new Map(sections.map((s) => [s.id, s.name])) };
+
+  const graded = await loadGradedWork(
+    supabase,
+    students.map((s) => s.id),
+    { from: args.p_from ?? '1970-01-01', to: args.p_to, kinds },
+  );
+  return {
+    sections: sectionFigures(scope, graded),
+    cohort: cohortFigures(scope, graded, graded),
+    weekly_trend: trendFigures(graded, args.p_bucket),
+    top_students: rankCourseStudents(scope, graded).slice(0, 10),
+    // Skill areas come from quizzes alone.
+    ...(kinds.includes('quiz') ? {} : { competency_detail: [], competency_breakdown: {} }),
   };
 }

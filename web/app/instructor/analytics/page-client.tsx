@@ -37,7 +37,7 @@ import GroupPerformance, { useGroupSummaries } from "./GroupPerformance";
 import CoursePerformance from "./CoursePerformance";
 import CourseFilter from "./CourseFilter";
 import { GroupPicker, CriteriaFilter } from "./GroupCriteriaFilters";
-import type { WorkKind } from "../../lib/work-kinds";
+import { WORK_KINDS, type WorkKind } from "../../lib/work-kinds";
 import ActivityBreakdown from "./ActivityBreakdown";
 import { courseRange, parseDay, formatRange } from "./dates";
 import { buildTrendSeries, TrendLegend, TrendBarChart, TrendTable } from "./GroupTrendChart";
@@ -46,6 +46,7 @@ import { isActiveSkillArea } from "../../../scripts/taylors-chapters";
 /** Stable empty fallback, so nothing downstream sees a new array each render. */
 const NO_SECTIONS: Section[] = [];
 const NO_COURSES: FacultyCourseSummary[] = [];
+const ALL_KINDS: WorkKind[] = WORK_KINDS.map((k) => k.kind);
 
 /* ---------------------------------------------------------------- dates */
 
@@ -412,8 +413,8 @@ export default function FacultyAnalyticsClient() {
   const sectionChoices: Section[] = course ? course.sections : sections;
 
   const { from, to } = courseRange(activePreset === "term", range, course?.term);
-  const groupIds = courseId && groupId ? [groupId] : undefined;
-  const criteria = courseId && kinds.length > 0 ? kinds : undefined;
+  const groupIds = groupId ? [groupId] : undefined;
+  const criteria = kinds.length > 0 ? kinds : undefined;
   const sectionKey = [courseId ?? "", groupId ?? "", [...(criteria ?? [])].sort().join("+"), ...[...sectionIds].sort()].join(",");
 
   // One entry per filter combination. A late response lands on its own key
@@ -435,7 +436,8 @@ export default function FacultyAnalyticsClient() {
   const groupChoices = (summary?.group_trend?.groups ?? []).filter(
     (g) => sectionIds.length === 0 || sectionIds.includes(g.section_id),
   );
-  const courseKinds = summary?.course_kinds ?? [];
+  // A course offers the kinds it has; all courses together, every kind.
+  const courseKinds = course ? (summary?.course_kinds ?? []) : ALL_KINDS;
   const bucket = analytics?.bucket ?? "week";
 
   // A second, quieter fetch for the immediately preceding period of equal
@@ -504,7 +506,7 @@ export default function FacultyAnalyticsClient() {
     // Narrowed, not cleared: a section the new scope still has stays picked.
     const choices: Section[] = next ? next.sections : sections;
     setSectionIds((ids) => ids.filter((id) => choices.some((s) => s.id === id)));
-    // Groups and criteria belong to one course.
+    // A course has groups and criteria of its own.
     setGroupId(null);
     setKinds([]);
     // A course opens on its whole term; leaving it, there is no term to show.
@@ -657,8 +659,7 @@ export default function FacultyAnalyticsClient() {
             />
           </div>
 
-          {course && (
-            <>
+          <>
               <span className="hidden basis-full sm:block" />
               <div className="flex items-center gap-2.5">
                 <CardLabel>Group</CardLabel>
@@ -677,8 +678,7 @@ export default function FacultyAnalyticsClient() {
                   </div>
                 </>
               )}
-            </>
-          )}
+          </>
 
           <AiSummaryButton onClick={narrative.open} busy={narrative.busy} ready={narrative.ready} waiting={refreshing} />
 

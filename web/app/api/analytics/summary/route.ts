@@ -9,11 +9,17 @@ import {
   withStudentAvatars,
   type SummaryArgs,
 } from '@/app/lib/analytics';
-import { courseArgs, courseFigures, loadCourseScope, type CourseScope } from '@/app/lib/analytics-course';
+import { courseArgs, courseFigures, kindFigures, loadCourseScope, narrowToGroups, type CourseScope } from '@/app/lib/analytics-course';
 import { isMissingTeamTables, loadTeams, manageableSectionIds } from '@/app/lib/teams';
 import { viewerDeanId } from '@/app/lib/dean-scope';
 import { loadGradedWork, type GradedWork } from '@/app/lib/graded-work';
 import { WORK_KINDS, type WorkKind } from '@/app/lib/work-kinds';
+
+/** `?kinds=` as the kinds it names; none valid means no limit. */
+function askedKinds(params: URLSearchParams): WorkKind[] {
+  const wanted = (params.get('kinds') ?? '').split(',');
+  return WORK_KINDS.map((k) => k.kind).filter((k) => wanted.includes(k));
+}
 
 /**
  * Dashboard analytics read from the star-schema warehouse
@@ -223,7 +229,15 @@ export async function GET(request: NextRequest) {
     }
     const course = await loadCourseScope(supabase, session, request.nextUrl.searchParams);
     if (course === 'not_found') return NextResponse.json({ error: 'Course not found' }, { status: 404 });
-    const args = course ? courseArgs(resolved, course) : resolved;
+    // Without a course, the group and criteria filters apply across all of them.
+    const params = request.nextUrl.searchParams;
+    const groupIds = (params.get('group_ids') ?? '').split(',').map((g) => g.trim()).filter(Boolean);
+    const kinds = course ? [] : askedKinds(params);
+    const args = course
+      ? courseArgs(resolved, course)
+      : groupIds.length > 0
+        ? await narrowToGroups(supabase, session, resolved, groupIds)
+        : resolved;
 
     const { data, error } = await callAnalytics(supabase, 'dw_analytics_summary', { ...args });
 
@@ -251,19 +265,22 @@ export async function GET(request: NextRequest) {
     // Laid over the warehouse's figures; its ranked students bring their own avatars.
     const own = course && summary ? await courseFigures(supabase, course, args) : null;
     if (own) summary = { ...summary, ...own.figures };
+    // Only some kinds of work, across all courses: laid over the warehouse's figures the same way.
+    const byKind = !course && summary && kinds.length > 0 ? await kindFigures(supabase, args, kinds) : null;
+    if (byKind) summary = { ...summary, ...byKind };
 
     // Avatars and the per-group split don't depend on each other, so they
     // are read side by side. The split is opt-in: only the performance chart
     // needs it, not the previous-period comparison or the admin dashboard.
     const wantsTrend = !!summary && request.nextUrl.searchParams.get('group_trend') === '1';
     const [topStudents, groupTrend] = await Promise.all([
-      !own && summary?.top_students?.length ? withStudentAvatars(supabase, summary.top_students) : null,
+      !own && !byKind && summary?.top_students?.length ? withStudentAvatars(supabase, summary.top_students) : null,
       wantsTrend
         ? readGroupTrend(
             supabase,
             session,
             args,
-            summary?.cohort?.graded === undefined ? ['quiz'] : WORK_KINDS.map((k) => k.kind),
+            summary?.cohort?.graded === undefined ? ['quiz'] : kinds.length > 0 ? kinds : WORK_KINDS.map((k) => k.kind),
             course && own ? { scope: course, graded: own.graded } : null,
           )
         : null,
