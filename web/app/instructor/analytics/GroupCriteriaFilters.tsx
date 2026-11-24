@@ -56,7 +56,7 @@ export function GroupPicker({
         disabled={groups.length === 0}
         aria-expanded={open}
         aria-label={`Group: ${summary}`}
-        className="flex max-w-full items-center gap-2 rounded-lg border border-hairline bg-surface px-3 py-1.5 text-sm text-gray-700 transition-colors hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50 sm:max-w-56"
+        className="flex max-w-full items-center gap-2 rounded-lg border border-hairline bg-surface px-3 py-1.5 text-sm text-gray-700 transition-colors hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50 w-full"
       >
         <FontAwesomeIcon icon={faUserGroup} className="h-3.5 w-3.5 shrink-0 text-brand-600" />
         <span className="truncate font-medium">{summary}</span>

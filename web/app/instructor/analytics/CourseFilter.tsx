@@ -34,11 +34,14 @@ export default function CourseFilter<T extends CourseChoice>({
   value,
   loading,
   onChange,
+  fullWidth = false,
 }: {
   offerings: T[];
   value: string | null;
   loading: boolean;
   onChange: (offering: T | null) => void;
+  /** Fills its container, as in a sidebar, instead of sizing to its label. */
+  fullWidth?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -90,7 +93,9 @@ export default function CourseFilter<T extends CourseChoice>({
         disabled={loading}
         aria-expanded={open}
         aria-label={`Course: ${summary}`}
-        className="flex max-w-full items-center gap-2 rounded-lg border border-hairline bg-surface px-3 py-1.5 text-sm text-gray-700 transition-colors hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50 sm:max-w-56 xl:max-w-72"
+        className={`flex max-w-full items-center gap-2 rounded-lg border border-hairline bg-surface px-3 py-1.5 text-sm text-gray-700 transition-colors hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50 ${
+          fullWidth ? "w-full" : "sm:max-w-56 xl:max-w-72"
+        }`}
       >
         <FontAwesomeIcon icon={faBookMedical} className="h-3.5 w-3.5 shrink-0 text-brand-600" />
         <TruncatedText text={summary} className="font-medium" />

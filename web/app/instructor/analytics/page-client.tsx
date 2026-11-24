@@ -188,7 +188,7 @@ function SectionPicker({
         disabled={sections.length === 0}
         aria-expanded={open}
         aria-label={`Sections: ${summary}`}
-        className="flex items-center gap-2 rounded-lg border border-hairline bg-surface px-3 py-1.5 text-sm text-gray-700 transition-colors hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex w-full items-center gap-2 rounded-lg border border-hairline bg-surface px-3 py-1.5 text-sm text-gray-700 transition-colors hover:border-brand-300 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <FontAwesomeIcon icon={faLayerGroup} className="w-3.5 h-3.5 text-brand-600" />
         <span className="font-medium">{summary}</span>
@@ -628,354 +628,345 @@ export default function FacultyAnalyticsClient() {
         subtitle="Performance and clinical training data from the iCARE++ warehouse"
       />
 
-      <div className="mb-4 rounded-xl border border-hairline bg-surface shadow-tile">
-        <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-3">
-          {hasCourseFilter && (
-            <>
-              <div className="flex min-w-0 items-center gap-2.5">
+      {/* The filters sit in a sidebar that stays in view while the panels scroll
+          (beside them from lg up, above them below it). Not overflow-scrolled:
+          the pickers' lists open over the panels and would be clipped. */}
+      <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start lg:gap-4">
+        <aside
+          aria-label="Filters"
+          className="mb-4 rounded-xl border border-hairline bg-surface shadow-tile lg:sticky lg:top-0 lg:z-20 lg:mb-0"
+        >
+          <div className="flex flex-col gap-4 p-4">
+            {hasCourseFilter && (
+              <div className="flex flex-col gap-1.5">
                 <CardLabel>Course</CardLabel>
                 <CourseFilter
                   offerings={offerings}
                   value={courseId}
                   loading={coursesListLoading}
                   onChange={selectCourse}
+                  fullWidth
                 />
               </div>
+            )}
 
-              <span className="hidden h-6 w-px bg-hairline sm:block" />
-            </>
-          )}
-
-          <div className="flex items-center gap-2.5">
-            <CardLabel>Sections</CardLabel>
-            <SectionPicker
-              sections={sectionChoices}
-              selected={sectionIds}
-              counts={studentsBySection}
-              onChange={(ids) => {
-                setSectionIds(ids);
-                setGroupId(null);
-              }}
-            />
-          </div>
-
-          <>
-              <span className="hidden basis-full sm:block" />
-              <div className="flex items-center gap-2.5">
-                <CardLabel>Group</CardLabel>
-                <GroupPicker
-                  groups={groupChoices}
-                  value={groupId}
-                  onChange={setGroupId}
-                />
-              </div>
-              {courseKinds.length > 0 && (
-                <>
-                  <span className="hidden h-6 w-px bg-hairline sm:block" />
-                  <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2.5">
-                    <CardLabel>Criteria</CardLabel>
-                    <CriteriaFilter available={courseKinds} selected={kinds} onChange={setKinds} />
-                  </div>
-                </>
-              )}
-          </>
-
-          <AiSummaryButton onClick={narrative.open} busy={narrative.busy} ready={narrative.ready} waiting={refreshing} />
-
-          {/* The range always takes a line of its own, so nothing wraps unevenly. */}
-          <span className="hidden basis-full sm:block" />
-
-          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2.5">
-            <CardLabel>Range</CardLabel>
-            <div className="flex flex-wrap items-center gap-1">
-              {(course ? [TERM_PRESET, ...PRESETS] : PRESETS).map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => applyPreset(p.id)}
-                  aria-pressed={activePreset === p.id}
-                  className={`rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
-                    activePreset === p.id
-                      ? "bg-brand-600 text-white"
-                      : "text-gray-600 hover:bg-subtle hover:text-gray-900"
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {activePreset === "custom" && (
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="date"
-                value={draft.from}
-                max={draft.to || undefined}
-                onChange={(e) => setCustom("from", e.target.value)}
-                className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-gray-700"
-                aria-label="Range start"
-              />
-              <span className="text-gray-400">–</span>
-              <input
-                type="date"
-                value={draft.to}
-                min={draft.from || undefined}
-                onChange={(e) => setCustom("to", e.target.value)}
-                className="rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-gray-700"
-                aria-label="Range end"
+            <div className="flex flex-col gap-1.5">
+              <CardLabel>Sections</CardLabel>
+              <SectionPicker
+                sections={sectionChoices}
+                selected={sectionIds}
+                counts={studentsBySection}
+                onChange={(ids) => {
+                  setSectionIds(ids);
+                  setGroupId(null);
+                }}
               />
             </div>
-          )}
 
-          <div className="flex items-center gap-3 self-end sm:ml-auto sm:self-auto">
-            <div className="flex items-center gap-2 text-xs text-gray-400">
-              {refreshing && <EcgLoader size="xs" className="text-brand-600" />}
-              <span className="tabular-nums">{formatRange(from, to)}</span>
+            <div className="flex flex-col gap-1.5">
+              <CardLabel>Group</CardLabel>
+              <GroupPicker groups={groupChoices} value={groupId} onChange={setGroupId} />
             </div>
-          </div>
-        </div>
 
-        {sectionChoices.length === 0 && !course && (
-          <p className="border-t border-hairline px-4 py-2.5 text-xs text-amber-700">
-            You don&apos;t manage any sections yet, so there is nothing to report on. Your Dean or
-            Program Chair assigns sections from their Instructors page.
-          </p>
-        )}
-      </div>
-
-
-      {narrative.modal && (
-        <AnalyticsSummaryModal
-          narrative={narrative.modal.narrative}
-          generatedAt={narrative.modal.generatedAt}
-          loading={narrative.modal.loading}
-          error={narrative.modal.error}
-          scope={[
-            narrativeCourse?.course.code,
-            sectionScopeLabel(narrativeCourse ? narrativeCourse.sections : sections, narrative.modal.request.sectionIds),
-            formatRange(narrative.modal.request.from, narrative.modal.request.to),
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-          onRetry={narrative.modal.onRetry}
-          onClose={narrative.modal.onClose}
-        />
-      )}
-
-      {/* Refetches dim the panels in place rather than tearing the page down
-          to skeletons, so changing a filter doesn't make the layout jump —
-          only the very first load, with nothing cached yet, shows skeletons,
-          and even then the header and filters above stay live. The skeleton
-          follows the panels' own grid, so nothing moves when they land. */}
-      {firstLoad ? (
-        <AnalyticsSkeleton />
-      ) : (
-        <div
-          className={`transition-opacity duration-200 ${
-            refreshing || coursesRefreshing ? "opacity-60" : ""
-          }`}
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4 items-stretch">
-            {statCards.map((card) => (
-              <StatTile
-                key={card.label}
-                icon={card.icon}
-                value={card.value}
-                label={card.label}
-                change={card.change}
-                caption={card.comparisonLabel}
-                goodDirection={card.goodDirection}
-                iconBg={card.iconBg}
-                iconColor={card.iconColor}
-              />
-            ))}
-          </div>
-
-          {/* Every kind of graded work behind the average above (085). */}
-          {summary?.cohort.by_kind && (
-            <Card padding="md" className="mb-4">
-              <div className="mb-5 flex items-center gap-2.5">
-                <div className="rounded-xl bg-brand-600/10 p-2.5">
-                  <FontAwesomeIcon icon={faClipboardCheck} className="h-5 w-5 text-brand-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">Performance by Activity</h3>
-                  <p className="text-xs text-gray-400">
-                    Average grade for each kind of graded work, {formatRange(from, to)}
-                  </p>
-                </div>
+            {courseKinds.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <CardLabel>Criteria</CardLabel>
+                <CriteriaFilter available={courseKinds} selected={kinds} onChange={setKinds} />
               </div>
-              <ActivityBreakdown byKind={summary.cohort.by_kind} />
-            </Card>
-          )}
+            )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 items-stretch">
-            <Card padding="md" className="flex flex-col">
-              <div className="flex items-center gap-2.5 mb-5">
-                <div className="rounded-xl bg-amber-500/10 p-2.5">
-                  <FontAwesomeIcon icon={faTrophy} className="h-5 w-5 text-amber-600" />
-                </div>
-                <h3 className="font-semibold text-gray-900">Top Performing Students</h3>
-              </div>
-              <div className="flex-1 flex flex-col justify-center">
-                <Leaderboard students={topStudents.slice(0, 7)} />
-              </div>
-              {topStudents.length > 0 && (
-                <div className="mt-4 flex justify-end border-t border-hairline pt-3">
-                  <Link
-                    href={leaderboardHref}
-                    className="text-sm font-medium text-brand-600 transition-colors hover:text-brand-700"
+            <div className="flex flex-col gap-1.5">
+              <CardLabel>Range</CardLabel>
+              <div className="flex flex-wrap items-center gap-1">
+                {(course ? [TERM_PRESET, ...PRESETS] : PRESETS).map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => applyPreset(p.id)}
+                    aria-pressed={activePreset === p.id}
+                    className={`rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
+                      activePreset === p.id
+                        ? "bg-brand-600 text-white"
+                        : "text-gray-600 hover:bg-subtle hover:text-gray-900"
+                    }`}
                   >
-                    View full leaderboard →
-                  </Link>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              {activePreset === "custom" && (
+                <div className="flex flex-col gap-2">
+                  <input
+                    type="date"
+                    value={draft.from}
+                    max={draft.to || undefined}
+                    onChange={(e) => setCustom("from", e.target.value)}
+                    className="w-full rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-gray-700"
+                    aria-label="Range start"
+                  />
+                  <input
+                    type="date"
+                    value={draft.to}
+                    min={draft.from || undefined}
+                    onChange={(e) => setCustom("to", e.target.value)}
+                    className="w-full rounded-lg border border-hairline bg-surface px-2.5 py-1.5 text-sm text-gray-700"
+                    aria-label="Range end"
+                  />
                 </div>
               )}
-            </Card>
-            <Card padding="md" className="flex flex-col lg:col-span-2">
-              <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2 text-xs text-gray-400">
+                {refreshing && <EcgLoader size="xs" className="text-brand-600" />}
+                <span className="tabular-nums">{formatRange(from, to)}</span>
+              </div>
+            </div>
+
+            <div className="flex [&>button]:ml-0! [&>button]:flex-1">
+              <AiSummaryButton onClick={narrative.open} busy={narrative.busy} ready={narrative.ready} waiting={refreshing} />
+            </div>
+          </div>
+
+          {sectionChoices.length === 0 && !course && (
+            <p className="border-t border-hairline px-4 py-2.5 text-xs text-amber-700">
+              You don&apos;t manage any sections yet, so there is nothing to report on. Your Dean or
+              Program Chair assigns sections from their Instructors page.
+            </p>
+          )}
+        </aside>
+
+        <div className="min-w-0">
+          {narrative.modal && (
+            <AnalyticsSummaryModal
+              narrative={narrative.modal.narrative}
+              generatedAt={narrative.modal.generatedAt}
+              loading={narrative.modal.loading}
+              error={narrative.modal.error}
+              scope={[
+                narrativeCourse?.course.code,
+                sectionScopeLabel(narrativeCourse ? narrativeCourse.sections : sections, narrative.modal.request.sectionIds),
+                formatRange(narrative.modal.request.from, narrative.modal.request.to),
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+              onRetry={narrative.modal.onRetry}
+              onClose={narrative.modal.onClose}
+            />
+          )}
+
+          {/* Refetches dim the panels in place rather than tearing the page down
+              to skeletons, so changing a filter doesn't make the layout jump —
+              only the very first load, with nothing cached yet, shows skeletons,
+              and even then the header and filters above stay live. The skeleton
+              follows the panels' own grid, so nothing moves when they land. */}
+          {firstLoad ? (
+            <AnalyticsSkeleton />
+          ) : (
+            <div
+              className={`transition-opacity duration-200 ${
+                refreshing || coursesRefreshing ? "opacity-60" : ""
+              }`}
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4 items-stretch">
+                {statCards.map((card) => (
+                  <StatTile
+                    key={card.label}
+                    icon={card.icon}
+                    value={card.value}
+                    label={card.label}
+                    change={card.change}
+                    caption={card.comparisonLabel}
+                    goodDirection={card.goodDirection}
+                    iconBg={card.iconBg}
+                    iconColor={card.iconColor}
+                  />
+                ))}
+              </div>
+
+              {/* Every kind of graded work behind the average above (085). */}
+              {summary?.cohort.by_kind && (
+                <Card padding="md" className="mb-4">
+                  <div className="mb-5 flex items-center gap-2.5">
+                    <div className="rounded-xl bg-brand-600/10 p-2.5">
+                      <FontAwesomeIcon icon={faClipboardCheck} className="h-5 w-5 text-brand-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Performance by Activity</h3>
+                      <p className="text-xs text-gray-400">
+                        Average grade for each kind of graded work, {formatRange(from, to)}
+                      </p>
+                    </div>
+                  </div>
+                  <ActivityBreakdown byKind={summary.cohort.by_kind} />
+                </Card>
+              )}
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 items-stretch">
+                <Card padding="md" className="flex flex-col">
+                  <div className="flex items-center gap-2.5 mb-5">
+                    <div className="rounded-xl bg-amber-500/10 p-2.5">
+                      <FontAwesomeIcon icon={faTrophy} className="h-5 w-5 text-amber-600" />
+                    </div>
+                    <h3 className="font-semibold text-gray-900">Top Performing Students</h3>
+                  </div>
+                  <div className="flex-1 flex flex-col justify-center">
+                    <Leaderboard students={topStudents.slice(0, 7)} />
+                  </div>
+                  {topStudents.length > 0 && (
+                    <div className="mt-4 flex justify-end border-t border-hairline pt-3">
+                      <Link
+                        href={leaderboardHref}
+                        className="text-sm font-medium text-brand-600 transition-colors hover:text-brand-700"
+                      >
+                        View full leaderboard →
+                      </Link>
+                    </div>
+                  )}
+                </Card>
+                <Card padding="md" className="flex flex-col lg:col-span-2">
+                  <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="rounded-xl bg-brand-600/10 p-2.5">
+                        <FontAwesomeIcon icon={faChartBar} className="h-5 w-5 text-brand-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">Classroom Performance Overview</h3>
+                        <p className="text-xs text-gray-400">
+                          {trendSolo
+                            ? `Average ${gradeNoun} over time — ${trendSolo.name}`
+                            : `Average ${gradeNoun} over time, one bar per group`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400">
+                        {BUCKET_LABEL[bucket]}
+                      </span>
+                      {trendSeries.length > 0 && (
+                        <div
+                          className="flex rounded-lg border border-hairline p-0.5"
+                          role="group"
+                          aria-label="View"
+                        >
+                          {(["chart", "table"] as const).map((view) => (
+                            <button
+                              key={view}
+                              type="button"
+                              onClick={() => setTrendView(view)}
+                              aria-pressed={trendView === view}
+                              className={`rounded-md px-2 py-0.5 text-xs capitalize transition-colors ${
+                                trendView === view
+                                  ? "bg-brand-600 text-white"
+                                  : "text-gray-500 hover:bg-subtle hover:text-gray-900"
+                              }`}
+                            >
+                              {view}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex-1 flex flex-col justify-center">
+                    {trendUnavailable ? (
+                      <p className="text-gray-400 text-sm py-16 text-center">
+                        The per-group breakdown couldn&apos;t be loaded. Refresh to try again.
+                      </p>
+                    ) : summary?.group_trend?.groups.length === 0 ? (
+                      <p className="text-gray-400 text-sm py-16 text-center">
+                        No groups yet — the chart fills in once students are placed in groups.
+                      </p>
+                    ) : trendSeries.length === 0 ? (
+                      <p className="text-gray-400 text-sm py-16 text-center">
+                        No graded work in {formatRange(from, to)}.
+                      </p>
+                    ) : trendView === "table" ? (
+                      <TrendTable series={trendSeries} bucket={bucket} />
+                    ) : (
+                      <>
+                        <TrendLegend
+                          series={trendSeries}
+                          focused={trendFocused}
+                          onFocus={setTrendFocus}
+                        />
+                        <TrendBarChart series={trendSeries} focused={trendFocused} bucket={bucket} />
+                      </>
+                    )}
+                  </div>
+                </Card>
+              </div>
+
+              {/* Three columns, lined up with the row above; under xl the courses
+                  take a row of their own, as three would be too narrow. With no
+                  groups, skill areas and courses split the row. */}
+              <div
+                className={`grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-stretch ${
+                  hasGroups ? "xl:grid-cols-3" : ""
+                }`}
+              >
+                <GroupPerformance sectionIds={sectionIds} courseId={courseId} />
+                <Card padding="md" className="flex flex-col">
+                  <div className="flex items-center gap-2.5 mb-5">
+                    <div className="rounded-xl bg-brand-600/10 p-2.5">
+                      <FontAwesomeIcon icon={faLayerGroup} className="h-5 w-5 text-brand-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Performance per Skill Area</h3>
+                      <p className="text-xs text-gray-400">
+                        {course ? "Average score by skill area, from this course's quizzes" : "Average score by skill area"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex-1 flex flex-col justify-center">
+                    {competencies.length === 0 ? (
+                      <p className="text-gray-400 text-sm py-12 text-center">
+                        {course
+                          ? `No skill area scores from this course's quizzes in ${formatRange(from, to)}.`
+                          : "No validated skill area scores yet — record them from each student's profile."}
+                      </p>
+                    ) : (
+                      <CompetencyBarChart
+                        items={competencies.map(([name, value]) => ({
+                          key: name,
+                          label: name,
+                          value,
+                        }))}
+                      />
+                    )}
+                  </div>
+                </Card>
+                <CoursePerformance
+                  courses={courseData?.data?.courses ?? []}
+                  error={courseData?.error ?? null}
+                  rangeLabel={formatRange(from, to)}
+                  oneCourse={!!course}
+                  className={hasGroups ? "lg:col-span-2 xl:col-span-1" : ""}
+                />
+              </div>
+
+              {/* A student's whole record, so the range doesn't move it. */}
+              <Card padding="md" className="mb-4">
+                <div className="mb-5 flex items-center gap-2.5">
                   <div className="rounded-xl bg-brand-600/10 p-2.5">
-                    <FontAwesomeIcon icon={faChartBar} className="h-5 w-5 text-brand-600" />
+                    <FontAwesomeIcon icon={faBrain} className="h-5 w-5 text-brand-600" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900">Classroom Performance Overview</h3>
+                    <h3 className="font-semibold text-gray-900">Skill Mastery</h3>
                     <p className="text-xs text-gray-400">
-                      {trendSolo
-                        ? `Average ${gradeNoun} over time — ${trendSolo.name}`
-                        : `Average ${gradeNoun} over time, one bar per group`}
+                      {course ? "This course's students, weakest skill first." : "Your students, weakest skill first."}
                     </p>
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  <span className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400">
-                    {BUCKET_LABEL[bucket]}
-                  </span>
-                  {trendSeries.length > 0 && (
-                    <div
-                      className="flex rounded-lg border border-hairline p-0.5"
-                      role="group"
-                      aria-label="View"
-                    >
-                      {(["chart", "table"] as const).map((view) => (
-                        <button
-                          key={view}
-                          type="button"
-                          onClick={() => setTrendView(view)}
-                          aria-pressed={trendView === view}
-                          className={`rounded-md px-2 py-0.5 text-xs capitalize transition-colors ${
-                            trendView === view
-                              ? "bg-brand-600 text-white"
-                              : "text-gray-500 hover:bg-subtle hover:text-gray-900"
-                          }`}
-                        >
-                          {view}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="flex-1 flex flex-col justify-center">
-                {trendUnavailable ? (
-                  <p className="text-gray-400 text-sm py-16 text-center">
-                    The per-group breakdown couldn&apos;t be loaded. Refresh to try again.
-                  </p>
-                ) : summary?.group_trend?.groups.length === 0 ? (
-                  <p className="text-gray-400 text-sm py-16 text-center">
-                    No groups yet — the chart fills in once students are placed in groups.
-                  </p>
-                ) : trendSeries.length === 0 ? (
-                  <p className="text-gray-400 text-sm py-16 text-center">
-                    No graded work in {formatRange(from, to)}.
-                  </p>
-                ) : trendView === "table" ? (
-                  <TrendTable series={trendSeries} bucket={bucket} />
-                ) : (
-                  <>
-                    <TrendLegend
-                      series={trendSeries}
-                      focused={trendFocused}
-                      onFocus={setTrendFocus}
-                    />
-                    <TrendBarChart series={trendSeries} focused={trendFocused} bucket={bucket} />
-                  </>
-                )}
-              </div>
-            </Card>
-          </div>
-
-          {/* Three columns, lined up with the row above; under xl the courses
-              take a row of their own, as three would be too narrow. With no
-              groups, skill areas and courses split the row. */}
-          <div
-            className={`grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-stretch ${
-              hasGroups ? "xl:grid-cols-3" : ""
-            }`}
-          >
-            <GroupPerformance sectionIds={sectionIds} courseId={courseId} />
-            <Card padding="md" className="flex flex-col">
-              <div className="flex items-center gap-2.5 mb-5">
-                <div className="rounded-xl bg-brand-600/10 p-2.5">
-                  <FontAwesomeIcon icon={faLayerGroup} className="h-5 w-5 text-brand-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">Performance per Skill Area</h3>
-                  <p className="text-xs text-gray-400">
-                    {course ? "Average score by skill area, from this course's quizzes" : "Average score by skill area"}
-                  </p>
-                </div>
-              </div>
-              <div className="flex-1 flex flex-col justify-center">
-                {competencies.length === 0 ? (
-                  <p className="text-gray-400 text-sm py-12 text-center">
-                    {course
-                      ? `No skill area scores from this course's quizzes in ${formatRange(from, to)}.`
-                      : "No validated skill area scores yet — record them from each student's profile."}
-                  </p>
-                ) : (
-                  <CompetencyBarChart
-                    items={competencies.map(([name, value]) => ({
-                      key: name,
-                      label: name,
-                      value,
-                    }))}
-                  />
-                )}
-              </div>
-            </Card>
-            <CoursePerformance
-              courses={courseData?.data?.courses ?? []}
-              error={courseData?.error ?? null}
-              rangeLabel={formatRange(from, to)}
-              oneCourse={!!course}
-              className={hasGroups ? "lg:col-span-2 xl:col-span-1" : ""}
-            />
-          </div>
-
-          {/* A student's whole record, so the range doesn't move it. */}
-          <Card padding="md" className="mb-4">
-            <div className="mb-5 flex items-center gap-2.5">
-              <div className="rounded-xl bg-brand-600/10 p-2.5">
-                <FontAwesomeIcon icon={faBrain} className="h-5 w-5 text-brand-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">Skill Mastery</h3>
-                <p className="text-xs text-gray-400">
-                  {course ? "This course's students, weakest skill first." : "Your students, weakest skill first."}
-                </p>
-              </div>
+                <CohortMasteryBody data={mastery.data} loading={mastery.loading} />
+              </Card>
             </div>
-            <CohortMasteryBody data={mastery.data} loading={mastery.loading} />
-          </Card>
-        </div>
-      )}
+          )}
 
-      {summary?.etl?.last_run_at && (
-        <p className="text-xs text-gray-400">
-          Warehouse last refreshed {new Date(summary.etl.last_run_at).toLocaleString()}
-        </p>
-      )}
+          {summary?.etl?.last_run_at && (
+            <p className="text-xs text-gray-400">
+              Warehouse last refreshed {new Date(summary.etl.last_run_at).toLocaleString()}
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
