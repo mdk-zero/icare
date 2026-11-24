@@ -3,6 +3,7 @@ import { changesScope, getFacultySectionIds, getFacultyStudentIds, ROSTER_TABLES
 import { TtlCache } from './ttl-cache';
 import { onTableWrite } from './table-writes';
 import { deanFor, deanOwnershipLive, deanTeamIds } from './dean-scope';
+import { assignedInstructorIds } from './program-chairs';
 
 type Supabase = ReturnType<typeof getSupabaseAdmin>;
 
@@ -42,17 +43,54 @@ onTableWrite(ROSTER_TABLES, (table, body) => {
   if (changesScope(table, body)) adminScopes.clear();
 });
 
+/** A Program Chair's assigned instructors (100); null for a Dean, or before 100. */
+const chairAssignments = new TtlCache<string[] | null>(30_000, 500);
+onTableWrite(['program_chair_instructors', 'users'], () => chairAssignments.clear());
+
+async function chairInstructors(supabase: Supabase, adminId: string): Promise<string[] | null> {
+  return chairAssignments.fetch(adminId, async () => {
+    const { data, error } = await supabase.from('users').select('admin_title').eq('id', adminId).maybeSingle();
+    if (error || data?.admin_title !== 'program_chair') return null;
+    return assignedInstructorIds(supabase, adminId);
+  });
+}
+
+/**
+ * A Program Chair sees their Dean's space narrowed to the instructors the Dean
+ * assigned them: those instructors, the sections they supervise groups in, and
+ * the students in their groups and course rosters.
+ */
+async function narrowToChair(supabase: Supabase, scope: AdminScope, assigned: string[]): Promise<AdminScope> {
+  const mine = new Set(assigned);
+  const facultyIds = scope.facultyIds.filter((id) => mine.has(id));
+  const [sections, students] = await Promise.all([
+    Promise.all(facultyIds.map((id) => getFacultySectionIds(supabase, id))),
+    Promise.all(facultyIds.map((id) => getFacultyStudentIds(supabase, id))),
+  ]);
+  const sectionSet = new Set(sections.flat());
+  const studentSet = new Set(students.flat());
+  return {
+    leaderIds: scope.leaderIds,
+    facultyIds,
+    sectionIds: scope.sectionIds.filter((id) => sectionSet.has(id)),
+    studentIds: scope.studentIds.filter((id) => studentSet.has(id)),
+  };
+}
+
 export async function getAdminScope(supabase: Supabase, adminId: string): Promise<AdminScope | null> {
   const deanId = await deanFor(supabase, adminId);
   const scope = await adminScopes.fetch(deanId, () => loadAdminScope(supabase, deanId));
-  return (
-    scope && {
-      leaderIds: [...scope.leaderIds],
-      facultyIds: [...scope.facultyIds],
-      sectionIds: [...scope.sectionIds],
-      studentIds: [...scope.studentIds],
-    }
-  );
+  if (!scope) return scope;
+  const copy = {
+    leaderIds: [...scope.leaderIds],
+    facultyIds: [...scope.facultyIds],
+    sectionIds: [...scope.sectionIds],
+    studentIds: [...scope.studentIds],
+  };
+  // Only a linked Program Chair is narrowed; an unlinked one already sees just their own.
+  if (deanId === adminId) return copy;
+  const assigned = await chairInstructors(supabase, adminId);
+  return assigned ? narrowToChair(supabase, copy, assigned) : copy;
 }
 
 async function loadAdminScope(supabase: Supabase, adminId: string): Promise<AdminScope | null> {

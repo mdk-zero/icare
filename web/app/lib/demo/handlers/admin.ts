@@ -180,6 +180,10 @@ const deanProper = (ctx: Ctx) => ctx.role === "admin" && !ctx.viewer.admin_title
 const programChairs = (ctx: Ctx) =>
   ctx.db.users.filter((u) => u.role === "admin" && u.admin_title === "program_chair" && u.admin_id === ctx.viewer.id);
 
+// Which instructors the Dean gave each Program Chair, kept on the demo store by chair id.
+const chairInstructors = new Map<string, string[]>();
+const assignedIds = (_ctx: Ctx, u: DemoUser) => chairInstructors.get(u.id) ?? [];
+
 function programChairRow(ctx: Ctx, u: DemoUser) {
   const people = (role: DemoUser["role"]) => ctx.db.users.filter((p) => p.role === role && p.admin_id === u.id).length;
   return {
@@ -190,7 +194,8 @@ function programChairRow(ctx: Ctx, u: DemoUser) {
     sex: u.sex,
     created_at: u.created_at,
     last_login_at: u.last_sign_in_at,
-    instructor_count: people("faculty"),
+    instructor_count: assignedIds(ctx, u).length,
+    assigned_instructor_ids: assignedIds(ctx, u),
     student_count: people("student"),
   };
 }
@@ -254,6 +259,19 @@ route("PATCH", "/api/admin/program-chairs/:id", (ctx) => {
   if (body?.sex === "" || body?.sex === null) user.sex = null;
   audit(db, viewer, "user.update", "users", { message: `Edited ${user.name}'s account` }, user.id);
   return { user: programChairRow(ctx, user) };
+});
+
+route("PUT", "/api/admin/program-chairs/:id/instructors", (ctx) => {
+  if (!deanProper(ctx)) return forbidden();
+  const { db, body, params, viewer } = ctx;
+  const user = programChairs(ctx).find((u) => u.id === params.id);
+  if (!user) return notFound("Program Chair not found");
+  const ids: string[] = Array.isArray(body?.faculty_ids) ? body.faculty_ids : [];
+  const known = instructors(ctx).map((f) => f.id);
+  if (ids.some((id) => !known.includes(id))) return notFound("Some instructors were not found");
+  chairInstructors.set(user.id, [...new Set(ids)]);
+  audit(db, viewer, "user.update", "users", { message: `Assigned ${ids.length} instructors to ${user.name}` }, user.id);
+  return { success: true, faculty_ids: ids };
 });
 
 route("DELETE", "/api/admin/program-chairs/:id", (ctx) => {

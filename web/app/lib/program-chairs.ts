@@ -56,11 +56,33 @@ export async function peopleOf(
   return { instructor_count, student_count };
 }
 
+/**
+ * The instructors the Dean assigned to this Program Chair (100), or null
+ * before 100 is applied, when a Program Chair still sees the whole space.
+ */
+export async function assignedInstructorIds(supabase: Supabase, chairId: string): Promise<string[] | null> {
+  const { data, error } = await supabase
+    .from('program_chair_instructors')
+    .select('faculty_id')
+    .eq('chair_id', chairId);
+  if (error) {
+    if (isMissingMigration(error)) return null;
+    throw new Error(`Unable to read a Program Chair's instructors: ${error.message}`);
+  }
+  return (data ?? []).map((r) => r.faculty_id as string);
+}
+
 export async function listProgramChairs(supabase: Supabase, deanId: string) {
   const { data, error } = await programChairsOf(supabase, deanId, PROGRAM_CHAIR_COLUMNS).order('name');
   if (error) throw new Error(`Unable to read Program Chairs: ${error.message}`);
   const rows = (data ?? []) as unknown as Record<string, unknown>[];
-  return Promise.all(rows.map(async (row) => ({ ...row, ...(await peopleOf(supabase, row.id as string)) })));
+  return Promise.all(
+    rows.map(async (row) => {
+      const assigned = (await assignedInstructorIds(supabase, row.id as string)) ?? [];
+      // Their people are the instructors the Dean assigned (100), not rows they own.
+      return { ...row, ...(await peopleOf(supabase, row.id as string)), instructor_count: assigned.length, assigned_instructor_ids: assigned };
+    }),
+  );
 }
 
 /** This Dean's Program Chair with that id, or null when they have none. */

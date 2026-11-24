@@ -26,6 +26,7 @@ interface ProgramChair {
   last_login_at: string | null;
   instructor_count: number;
   student_count: number;
+  assigned_instructor_ids: string[];
 }
 
 type Role = "instructor" | "program_chair";
@@ -51,6 +52,7 @@ interface Person {
   student_count: number;
   /** A Program Chair's instructors. */
   instructor_count?: number;
+  assigned_instructor_ids?: string[];
   instructor?: Faculty;
 }
 
@@ -100,6 +102,11 @@ export default function FacultyClient() {
 
   const [selectedFaculty, setSelectedFaculty] = useState<Faculty | null>(null);
   const [filterSection, setFilterSection] = useState("");
+
+  // The Program Chair whose instructors are being picked, and the picks so far.
+  const [assigningChair, setAssigningChair] = useState<Person | null>(null);
+  const [chairPicks, setChairPicks] = useState<string[]>([]);
+  const [chairError, setChairError] = useState<string | null>(null);
 
   const [editing, setEditing] = useState<Person | null>(null);
   const [editForm, setEditForm] = useState({ name: "", sex: "" });
@@ -197,7 +204,7 @@ export default function FacultyClient() {
       groups: previous?.groups ?? NO_GROUPS,
       chairs:
         role === "program_chair"
-          ? [...(previous?.chairs ?? []), { instructor_count: 0, student_count: 0, ...user } as ProgramChair]
+          ? [...(previous?.chairs ?? []), { instructor_count: 0, student_count: 0, assigned_instructor_ids: [], ...user } as ProgramChair]
           : (previous?.chairs ?? null),
     }));
     setShowAddModal(false);
@@ -209,6 +216,47 @@ export default function FacultyClient() {
       flash(`${label} account created`);
     } else {
       flash(`${label} account created. Their temporary password was emailed to ${user.email}.`);
+    }
+  };
+
+  const openAssignInstructors = (chair: Person) => {
+    setChairPicks(chair.assigned_instructor_ids ?? []);
+    setChairError(null);
+    setAssigningChair(chair);
+  };
+
+  const handleSaveChairInstructors = async () => {
+    if (!assigningChair) return;
+    setBusy(true);
+    setChairError(null);
+    try {
+      const res = await apiFetch(`/api/admin/program-chairs/${assigningChair.id}/instructors`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ faculty_ids: chairPicks }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setChairError(json.error ?? "Unable to assign instructors");
+        return;
+      }
+      const chairId = assigningChair.id;
+      setData((previous) => ({
+        faculty: previous?.faculty ?? NO_FACULTY,
+        sections: previous?.sections ?? NO_SECTIONS,
+        groups: previous?.groups ?? NO_GROUPS,
+        chairs:
+          previous?.chairs?.map((c) =>
+            c.id === chairId ? { ...c, assigned_instructor_ids: chairPicks, instructor_count: chairPicks.length } : c,
+          ) ?? null,
+      }));
+      flash(`${assigningChair.name} now looks after ${plural(chairPicks.length, "instructor")}`);
+      setAssigningChair(null);
+    } catch {
+      setChairError("Unable to assign instructors");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -519,7 +567,7 @@ export default function FacultyClient() {
                             { label: "Edit Account", icon: faPenToSquare, onClick: () => openEdit(member) },
                             ...(member.instructor
                               ? [{ label: "Assign Groups", icon: faLayerGroup, onClick: () => openAssignModal(member.instructor!) }]
-                              : []),
+                              : [{ label: "Assign Instructors", icon: faUserTie, onClick: () => openAssignInstructors(member) }]),
                             { label: "Delete Account", icon: faTrashCan, danger: true, onClick: () => openDelete(member) },
                           ]}
                         />
@@ -612,6 +660,59 @@ export default function FacultyClient() {
                 className="px-4 py-2 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 disabled:opacity-60 transition-all"
               >
                 {busy ? "Creating…" : `Add ${ROLE_LABEL[newRole]}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {assigningChair && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Assign instructors to ${assigningChair.name}`}
+            className="bg-surface rounded-xl p-4 w-full max-w-lg mx-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline"
+          >
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Assign Instructors</h3>
+            <p className="text-sm text-gray-500 mb-3">
+              {assigningChair.name} sees only these instructors, their groups and their students.
+            </p>
+            {chairError && <p role="alert" className="text-sm text-red-600 mb-2">{chairError}</p>}
+            <div className="max-h-72 overflow-y-auto space-y-1 border border-hairline rounded-xl p-2">
+              {faculty.length === 0 ? (
+                <p className="text-sm text-gray-500 p-2">No instructors yet.</p>
+              ) : (
+                faculty.map((f) => (
+                  <label key={f.id} className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={chairPicks.includes(f.id)}
+                      onChange={(e) =>
+                        setChairPicks((picks) => (e.target.checked ? [...picks, f.id] : picks.filter((id) => id !== f.id)))
+                      }
+                    />
+                    <span className="text-sm text-gray-800">{f.name}</span>
+                    <span className="text-xs text-gray-500 truncate">{f.email}</span>
+                  </label>
+                ))
+              )}
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => setAssigningChair(null)}
+                className="px-4 py-2 rounded-xl font-medium text-gray-700 hover:bg-gray-100 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={handleSaveChairInstructors}
+                className="px-4 py-2 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 disabled:opacity-60 transition-all"
+              >
+                {busy ? "Saving…" : "Save"}
               </button>
             </div>
           </div>
