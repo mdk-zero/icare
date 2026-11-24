@@ -74,6 +74,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const now = new Date().toISOString();
     const updates: { id: string; points: number; feedback: string | null }[] = [];
+    // Essays that already had points (the AI's, as a rule) and now have different ones.
+    let pointsChanged = false;
     for (const g of raw) {
       const questionId = (g as { question_id?: unknown })?.question_id;
       const essay = typeof questionId === 'string' ? essayByQuestion.get(questionId) : undefined;
@@ -87,6 +89,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
       const rawFeedback = (g as { feedback?: unknown }).feedback;
       const feedback = typeof rawFeedback === 'string' && rawFeedback.trim() ? rawFeedback.trim().slice(0, ESSAY_FEEDBACK_MAX_LENGTH) : null;
+      if (essay.points_awarded !== null && essay.points_awarded !== points) pointsChanged = true;
       updates.push({ id: essay.id, points, feedback });
     }
 
@@ -112,6 +115,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         data: { assessment_id: attempt.assessment_id, attempt_id: attemptId },
       });
       if (notifyError) console.error('Failed to notify the student of the essay grade', notifyError);
+    }
+
+    // An instructor changing a grade the student has already seen (the AI's)
+    // is told to them too.
+    if (!wasAwaiting && pointsChanged) {
+      const { error: notifyError } = await insertNotifications(supabase, {
+        user_id: attempt.student_id as string,
+        type: 'quiz_graded',
+        title: 'Your essay grade was updated',
+        body: `${title}: your instructor reviewed your essay. Your score is now ${Math.round(regraded.score)}%.`,
+        data: { assessment_id: attempt.assessment_id, attempt_id: attemptId },
+      });
+      if (notifyError) console.error('Failed to notify the student of the changed essay grade', notifyError);
     }
 
     await logAudit(

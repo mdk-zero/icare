@@ -320,7 +320,9 @@ export default function AssessmentResultsClient({ assessmentId }: { assessmentId
                 <strong className="font-semibold">
                   {summary.to_grade} {summary.to_grade === 1 ? "try has" : "tries have"} an essay to grade.
                 </strong>{" "}
-                Until you grade it, the essay counts as 0 in the student&apos;s grade.
+                Essays are graded by AI when the student handed them in, so these are ones the AI could not grade (the
+                student has not allowed AI, or it was unavailable). Until you grade it, the essay counts as 0 in the
+                student&apos;s grade.
               </span>
               {(() => {
                 const next = results.find((r) => r.to_grade);

@@ -103,6 +103,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 points_awarded: e.points_awarded,
                 feedback: e.feedback,
                 graded_at: e.graded_at,
+                // Graded with no instructor's name on it: Claude did, right after the student handed it in.
+                // (A blank essay is also graded without a name, at 0, but nothing was written for the AI to read.)
+                ai_graded: e.graded_at !== null && e.graded_by === null && e.answer_text.trim().length > 0,
               };
             })
             .sort((x, y) => x.position - y.position),

@@ -46,6 +46,15 @@ const DEMO_ESSAY_ANSWERS = [
 ];
 
 const essayGrades = new Map<string, { points: number; feedback: string | null; graded_at: string }>();
+
+// Claude grades an essay when the student hands it in, so a demo essay arrives
+// already graded; the instructor's own grade replaces it.
+const DEMO_AI_SHARES = [0.85, 0.7, 0.4];
+const DEMO_AI_FEEDBACK = [
+  "You covered patient identification, hand hygiene and documentation well. Add how you would assess the patient's response during the procedure.",
+  "Your answer puts safety first, which is right. It needs the steps in order and what you would document.",
+  "You named the right steps but gave no detail on why each matters. Explain your reasoning and what you would watch for.",
+];
 const essayKey = (attemptId: string, questionId: string) => `${attemptId}:${questionId}`;
 
 function essaysOf(ctx: Ctx, quizId: string) {
@@ -55,17 +64,22 @@ function essaysOf(ctx: Ctx, quizId: string) {
 function essayAttempt(ctx: Ctx, quizId: string, attempt: { id: string; score: number | null }, index: number) {
   const essays = essaysOf(ctx, quizId);
   const rows = essays.map((q, i) => {
-    const grade = essayGrades.get(essayKey(attempt.id, q.id)) ?? null;
+    const given = essayGrades.get(essayKey(attempt.id, q.id)) ?? null;
+    const max = q.points || 10;
+    const k = (index + i) % DEMO_AI_SHARES.length;
+    const grade =
+      given ?? { points: Math.round(max * DEMO_AI_SHARES[k]), feedback: DEMO_AI_FEEDBACK[k], graded_at: new Date().toISOString() };
     return {
       question_id: q.id,
       question: q.content,
       guidance: q.explanation || null,
       position: q.position,
       answer_text: DEMO_ESSAY_ANSWERS[(index + i) % DEMO_ESSAY_ANSWERS.length],
-      max_points: q.points || 10,
-      points_awarded: grade?.points ?? null,
-      feedback: grade?.feedback ?? null,
-      graded_at: grade?.graded_at ?? null,
+      max_points: max,
+      points_awarded: grade.points,
+      feedback: grade.feedback,
+      graded_at: grade.graded_at,
+      ai_graded: given === null,
     };
   });
   const awaiting = rows.some((r) => r.points_awarded === null);

@@ -17,10 +17,11 @@ function formatDate(value: string | null) {
 }
 
 /**
- * A student's essays (097) on one quiz, newest try first, for the instructor
- * to grade: the question, what the student wrote, and
- * points out of what the essay is worth, with optional feedback. Grades can
- * be changed later; each Save scores that try again.
+ * A student's essays (097) on one quiz, newest try first. Claude grades each
+ * essay when the student hands it in; this is where the instructor reads the
+ * answer and the AI's points and feedback, and changes them. An essay the AI
+ * could not grade is left empty for the instructor to grade. A grade the
+ * instructor saves replaces the AI's; each Save scores that try again.
  */
 export default function EssayGradingModal({
   assessmentId,
@@ -82,10 +83,13 @@ export default function EssayGradingModal({
         toast(`Give a whole number from 0 to ${e.max_points}`);
         return;
       }
-      grades.push({ question_id: e.question_id, points, feedback: entry.feedback.trim() || null });
+      const feedback = entry.feedback.trim() || null;
+      // An essay left as it was graded isn't sent, so an AI grade you didn't touch stays the AI's.
+      if (e.points_awarded === points && (e.feedback?.trim() || null) === feedback) continue;
+      grades.push({ question_id: e.question_id, points, feedback });
     }
     if (grades.length === 0) {
-      toast("Give at least one essay its points");
+      toast("Nothing changed. Change an essay's points or feedback, then save.");
       return;
     }
     setSaving(attempt.attempt_id);
@@ -163,7 +167,17 @@ export default function EssayGradingModal({
                     setDraft((prev) => ({ ...prev, [key]: { ...entry, ...patch } }));
                   return (
                     <div key={essay.question_id} className="space-y-3 p-4">
-                      <p className="text-sm font-semibold text-gray-900">{essay.question}</p>
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm font-semibold text-gray-900">{essay.question}</p>
+                        {essay.ai_graded && (
+                          <span
+                            title="Claude graded this when the student handed it in. Change the points or feedback and save to replace it."
+                            className="shrink-0 rounded-full bg-brand-600/10 px-2.5 py-0.5 text-xs font-semibold text-brand-700"
+                          >
+                            Graded by AI
+                          </span>
+                        )}
+                      </div>
                       <div className="rounded-lg border border-hairline bg-surface px-3 py-2.5">
                         {essay.answer_text ? (
                           <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">{essay.answer_text}</p>
@@ -207,7 +221,7 @@ export default function EssayGradingModal({
                   className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-60"
                 >
                   {saving === attempt.attempt_id && <EcgLoader size="xs" />}
-                  Save grades
+                  Save changes
                 </button>
               </footer>
             </section>

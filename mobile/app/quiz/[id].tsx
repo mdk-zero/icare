@@ -665,6 +665,24 @@ export default function QuizInterfaceScreen() {
         {/* Reflections are on graded work; a review quiz isn't one. */}
         {result.practice ? null : <ReflectionCard source="assessment" sourceId={started.attempt.id} />}
 
+        {result.results
+          .filter((r) => r.essay && r.points_awarded != null && r.feedback)
+          .map((verdict) => {
+            const q = started.questions.find((x) => x.id === verdict.question_id);
+            return (
+              <Card key={verdict.question_id} style={styles.reviewCard}>
+                <View style={styles.reviewHeader}>
+                  <Text style={styles.reviewNumber}>Essay</Text>
+                  <Text style={styles.reviewNumber}>
+                    {verdict.points_awarded}/{verdict.max_points} points
+                  </Text>
+                </View>
+                {q ? <Text style={styles.reviewQuestion}>{q.content}</Text> : null}
+                <Text style={styles.reviewExplanation}>{verdict.feedback}</Text>
+              </Card>
+            );
+          })}
+
         {showReview && (
           <View onLayout={(e) => (reviewY.current = e.nativeEvent.layout.y)}>
             <Text style={styles.reviewHeading}>Missed questions</Text>
@@ -834,7 +852,7 @@ export default function QuizInterfaceScreen() {
       {isEssay && (
         <View style={styles.options}>
           <Text style={styles.essayNote}>
-            Essay{currentQuestion.points ? ` · ${currentQuestion.points} points` : ''} · your instructor grades it
+            Essay{currentQuestion.points ? ` · ${currentQuestion.points} points` : ''} · graded by AI if you allow it, otherwise by your instructor
           </Text>
           <TextInput
             key={currentQuestion.id}

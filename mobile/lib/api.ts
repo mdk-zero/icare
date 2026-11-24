@@ -400,6 +400,8 @@ export interface AttemptResult {
     essay?: boolean;
     max_points?: number;
     points_awarded?: number | null;
+    /** An essay graded by the AI: its note to the student. */
+    feedback?: string;
   }[];
 }
 

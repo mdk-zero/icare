@@ -2459,6 +2459,8 @@ export interface EssayToGrade {
   points_awarded: number | null;
   feedback: string | null;
   graded_at: string | null;
+  /** Claude graded it when the student handed it in; saving a change makes it the instructor's grade. */
+  ai_graded: boolean;
 }
 
 export interface EssayAttempt {

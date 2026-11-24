@@ -14,6 +14,9 @@ import {
   practiceLive,
 } from '@/app/lib/quiz-practice';
 import { quizGrade } from '@/app/lib/quiz-attempts';
+import { hasAiConsent } from '@/app/lib/ai-consent';
+import { gradeEssayWithAI } from '@/app/lib/essay-ai';
+import { regradeAttempt } from '@/app/lib/essay-grading';
 import {
   ESSAY_MAX_LENGTH,
   isEssay,
@@ -170,7 +173,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const { data: questionRows, error: qError } = await supabase
       .from('questions')
-      .select('id, correct_index, explanation, question_type, options, points')
+      .select('id, content, correct_index, explanation, question_type, options, points')
       .in(
         'id',
         served.map((s) => s.question_id),
@@ -200,6 +203,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           question_id: q.id,
           criteria_id: q.criteria_id,
           position: q.position,
+          question: q.content as string,
+          guidance: (q.explanation as string | null)?.trim() || null,
           answer_text: text,
           max_points: paperPoints(q),
           blank: text.length === 0,
@@ -290,7 +295,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const awaiting = !practice && essays.some((e) => !e.blank);
-    const respond = (finalScore: number, timeTaken: number, awaitingGrading = awaiting) =>
+    // Claude grades the written essays right after the submission is saved
+    // (see below); what it gave is what the student sees and the score counts.
+    const essayGrades = new Map<string, { points: number; feedback: string | null }>();
+    let awaitingNow = awaiting;
+    let scoreNow = score;
+    const respond = (finalScore: number, timeTaken: number, awaitingGrading = awaitingNow) =>
       NextResponse.json({
         score: finalScore,
         correct: correctCount,
@@ -328,7 +338,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             essay: true,
             answer_text: e.answer_text,
             max_points: e.max_points,
-            points_awarded: e.blank ? 0 : null,
+            points_awarded: e.blank ? 0 : (essayGrades.get(e.question_id)?.points ?? null),
+            ...(essayGrades.get(e.question_id)?.feedback ? { feedback: essayGrades.get(e.question_id)?.feedback } : {}),
           })),
         ]
           .sort((a, b) => a.position - b.position)
@@ -336,6 +347,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       });
 
     if (alreadySubmitted) {
+      // The essays may have been graded since: show them as they stand.
+      if (hasEssays && !practice) {
+        const { data: stored } = await supabase
+          .from('essay_answers')
+          .select('question_id, points_awarded, feedback')
+          .eq('attempt_id', attemptId);
+        for (const row of stored ?? []) {
+          if (row.points_awarded !== null) {
+            essayGrades.set(row.question_id as string, { points: row.points_awarded as number, feedback: (row.feedback as string | null) ?? null });
+          }
+        }
+        awaitingNow = essays.some((e) => !e.blank && !essayGrades.has(e.question_id));
+      }
       return respond(Number(attempt.score ?? score), Number(attempt.time_taken_seconds ?? 0));
     }
     // Essays can only be written once 097 is there, so the column is too.
@@ -454,6 +478,70 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         .eq('id', attempt.assignment_id);
     }
 
+    // Essays are graded by Claude, with no instructor in between: the points
+    // and a note for the student. Only with the student's AI consent (their
+    // answer goes to Claude alone, without their name). Without it, or when
+    // the AI can't be reached, the essay stays for the instructor to grade.
+    // The instructor can change any grade afterwards, AI-given or not.
+    if (!practice && awaiting) {
+      try {
+        const written = essays.filter((e) => !e.blank);
+        if (await hasAiConsent(supabase, session.uid)) {
+          const results = await Promise.allSettled(
+            written.map((e) =>
+              gradeEssayWithAI({ question: e.question, guidance: e.guidance, answer: e.answer_text, maxPoints: e.max_points }),
+            ),
+          );
+          const gradedAt = new Date().toISOString();
+          for (const [i, result] of results.entries()) {
+            const essay = written[i];
+            if (result.status === 'rejected') {
+              console.error('AI essay grading failed for attempt', attemptId, result.reason);
+              continue;
+            }
+            // Only an ungraded essay: an instructor who got there first keeps theirs.
+            const { data: saved, error: saveError } = await supabase
+              .from('essay_answers')
+              .update({
+                points_awarded: result.value.points,
+                feedback: result.value.feedback || null,
+                graded_by: null,
+                graded_at: gradedAt,
+              })
+              .eq('attempt_id', attemptId)
+              .eq('question_id', essay.question_id)
+              .is('points_awarded', null)
+              .select('id');
+            if (saveError || !saved || saved.length === 0) {
+              if (saveError) console.error('Failed to save the AI essay grade', attemptId, saveError);
+              continue;
+            }
+            essayGrades.set(essay.question_id, { points: result.value.points, feedback: result.value.feedback || null });
+          }
+          if (essayGrades.size > 0) {
+            // Scores the paper again from what is stored: the attempt's score
+            // and its criteria, the skill areas once nothing is left to grade,
+            // and the ML's picture of the student.
+            const regraded = await regradeAttempt(supabase, attemptId);
+            if (regraded) {
+              scoreNow = regraded.score;
+              awaitingNow = regraded.awaiting;
+              if (assessmentCriteria.length > 0) {
+                const gradedPaper = paper.map((p) => {
+                  const grade = essayGrades.get(p.question_id);
+                  return grade ? { ...p, earned: grade.points } : p;
+                });
+                criteriaBreakdown = scoreCriteria(gradedPaper, assessmentCriteria, { practice });
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // The submission is saved either way; the essays wait for the instructor.
+        console.error('AI essay grading failed for attempt', attemptId, err);
+      }
+    }
+
     await logAudit(
       session,
       {
@@ -462,13 +550,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         entityId: attemptId,
         details: {
           assessment_id: attempt.assessment_id,
-          score,
+          score: scoreNow,
           correct: correctCount,
           total: questions.length,
           time_taken_seconds: timeTaken,
           late,
           practice,
-          ...(hasEssays ? { essays: essays.length, awaiting_grading: awaiting } : {}),
+          ...(hasEssays ? { essays: essays.length, ai_graded: essayGrades.size, awaiting_grading: awaitingNow } : {}),
         },
       },
       request,
@@ -476,10 +564,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // A graded result moves the ML's picture of the student, so re-score them
     // after the response goes out. Review quizzes don't reach its features.
-    // An essay still to grade holds that back until the instructor grades it.
+    // An essay still to grade holds that back until it is graded (the AI's
+    // grading above has already re-scored the student when it finished them).
     if (!practice && !awaiting) refreshStudentInBackground(session.uid);
 
-    return respond(score, timeTaken);
+    return respond(scoreNow, timeTaken);
   } catch (err) {
     console.error('Submit attempt failed', err);
     return NextResponse.json({ error: 'Unable to submit attempt' }, { status: 500 });
