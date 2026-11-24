@@ -11,7 +11,6 @@ import {
   faFileLines,
   faHouse,
   faLifeRing,
-  faSitemap,
   faUserTie,
   faUsers,
 } from "@fortawesome/free-solid-svg-icons";
@@ -32,19 +31,11 @@ function getCurrentUser(): User | null {
   return userStr ? JSON.parse(userStr) : null;
 }
 
-/**
- * A Program Chair shares this portal with the Dean, apart from this page. The
- * page and its API refuse them on the server; hiding it here keeps it out of
- * their menu, and turns a demo Program Chair away, whose title only the browser
- * knows.
- */
-const PROGRAM_CHAIRS_HREF = "/dean/program-chairs";
-
 const navItems: NavItem[] = [
   { id: "overview", label: "Overview", href: "/dean", icon: faHouse, section: "General" },
   { id: "students", label: "Students", href: "/dean/student-management", icon: faUsers, section: "Management" },
-  { id: "faculty", label: "Instructors", href: "/dean/instructors", icon: faUserTie, section: "Management" },
-  { id: "program-chairs", label: "Program Chairs", href: PROGRAM_CHAIRS_HREF, icon: faSitemap, section: "Management" },
+  // Instructors and Program Chairs share this page; a Program Chair sees only the instructors on it.
+  { id: "faculty", label: "Faculty", href: "/dean/instructors", icon: faUserTie, section: "Management" },
   { id: "curriculum", label: "Curriculum", href: "/dean/curriculum", icon: faDiagramProject, section: "Management" },
   { id: "courses", label: "Courses", href: "/dean/courses", icon: faBookMedical, section: "Management" },
   // Patients and Rooms folded into one page, as on the faculty side.
@@ -68,12 +59,6 @@ export default function ClientAdminLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
-  const [isProgramChair, setIsProgramChair] = useState(false);
-  const turnedAway = isProgramChair && pathname.startsWith(PROGRAM_CHAIRS_HREF);
-
-  useEffect(() => {
-    if (turnedAway) router.replace("/dean");
-  }, [turnedAway, router]);
 
   /**
    * localStorage is only a mirror of the session cookie, and the two can
@@ -104,7 +89,6 @@ export default function ClientAdminLayout({
               : "/login",
         );
       else {
-        setIsProgramChair(user.admin_title === "program_chair");
         setReady(true);
       }
     }
@@ -114,12 +98,12 @@ export default function ClientAdminLayout({
     };
   }, [router]);
 
-  if (!ready || turnedAway) return null;
+  if (!ready) return null;
 
   return (
     <Shell
       role="admin"
-      navItems={isProgramChair ? navItems.filter((item) => item.href !== PROGRAM_CHAIRS_HREF) : navItems}
+      navItems={navItems}
       isActive={(item) => isActive(item, pathname)}
     >
       {children}

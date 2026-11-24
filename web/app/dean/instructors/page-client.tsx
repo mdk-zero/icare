@@ -4,7 +4,7 @@ import { apiFetch } from "@/app/lib/api";
 import { usePageData } from "@/app/lib/use-page-data";
 import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faUsers, faPlus, faPenToSquare, faTrashCan, faLayerGroup } from "@fortawesome/free-solid-svg-icons";
+import { faUsers, faUserTie, faSitemap, faPlus, faPenToSquare, faTrashCan, faLayerGroup } from "@fortawesome/free-solid-svg-icons";
 import PageHeader from "../../components/PageHeader";
 import FilterSelect from "../../components/FilterSelect";
 import Avatar from "../../components/Avatar";
@@ -14,6 +14,45 @@ import ConfirmModal from "../../components/ConfirmModal";
 import ChangeEmailDialog from "../../components/ChangeEmailDialog";
 import GenderField from "../../components/GenderField";
 import AssignGroupsModal, { type GroupRef, type SectionRef } from "./assign-groups-modal";
+
+/** A Program Chair, as GET /api/admin/program-chairs lists them. */
+interface ProgramChair {
+  id: string;
+  name: string;
+  email: string;
+  picture_url: string | null;
+  sex: "male" | "female" | null;
+  created_at: string;
+  last_login_at: string | null;
+  instructor_count: number;
+  student_count: number;
+}
+
+type Role = "instructor" | "program_chair";
+
+const ROLE_LABEL: Record<Role, string> = { instructor: "Instructor", program_chair: "Program Chair" };
+
+/** Where each role's accounts are written; Program Chairs have routes of their own. */
+const ACCOUNT_API: Record<Role, string> = {
+  instructor: "/api/admin/users",
+  program_chair: "/api/admin/program-chairs",
+};
+
+/** One row of the page: either kind of faculty account. */
+interface Person {
+  id: string;
+  name: string;
+  email: string;
+  picture_url: string | null;
+  sex: "male" | "female" | null;
+  created_at: string;
+  last_login_at: string | null;
+  role: Role;
+  student_count: number;
+  /** A Program Chair's instructors. */
+  instructor_count?: number;
+  instructor?: Faculty;
+}
 
 interface Faculty {
   id: string;
@@ -34,6 +73,7 @@ interface Faculty {
 const NO_FACULTY: Faculty[] = [];
 const NO_SECTIONS: SectionRef[] = [];
 const NO_GROUPS: GroupRef[] = [];
+const NO_CHAIRS: ProgramChair[] = [];
 
 function plural(count: number, word: string): string {
   return `${count} ${word}${count === 1 ? "" : "s"}`;
@@ -55,24 +95,27 @@ export default function FacultyClient() {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [newFaculty, setNewFaculty] = useState({ name: "", email: "", sex: "" });
+  const [newRole, setNewRole] = useState<Role>("instructor");
+  const [filterRole, setFilterRole] = useState<"" | Role>("");
 
   const [selectedFaculty, setSelectedFaculty] = useState<Faculty | null>(null);
   const [filterSection, setFilterSection] = useState("");
 
-  const [editing, setEditing] = useState<Faculty | null>(null);
+  const [editing, setEditing] = useState<Person | null>(null);
   const [editForm, setEditForm] = useState({ name: "", sex: "" });
   const [editError, setEditError] = useState<string | null>(null);
-  const [changingEmail, setChangingEmail] = useState<Faculty | null>(null);
+  const [changingEmail, setChangingEmail] = useState<Person | null>(null);
 
-  const [deleting, setDeleting] = useState<Faculty | null>(null);
+  const [deleting, setDeleting] = useState<Person | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const { data, loading, refresh: loadData, setData } = usePageData(
     "admin:faculty",
     async () => {
-      const [facultyRes, sectionsRes] = await Promise.all([
+      const [facultyRes, sectionsRes, chairsRes] = await Promise.all([
         apiFetch("/api/admin/faculty", { credentials: "include" }),
         apiFetch("/api/sections", { credentials: "include" }),
+        apiFetch("/api/admin/program-chairs", { credentials: "include" }),
       ]);
       const { faculty = NO_FACULTY, groups = NO_GROUPS } = facultyRes.ok
         ? ((await facultyRes.json()) as { faculty?: Faculty[]; groups?: GroupRef[] })
@@ -80,19 +123,34 @@ export default function FacultyClient() {
       const sections = sectionsRes.ok
         ? ((await sectionsRes.json()) as { sections?: SectionRef[] }).sections ?? NO_SECTIONS
         : NO_SECTIONS;
-      return { faculty, sections, groups };
+      // Only a Dean may see or manage Program Chairs; for a Program Chair the route refuses (403).
+      const chairs = chairsRes.ok
+        ? ((await chairsRes.json()) as { program_chairs?: ProgramChair[] }).program_chairs ?? NO_CHAIRS
+        : null;
+      return { faculty, sections, groups, chairs };
     },
   );
 
   const faculty = data?.faculty ?? NO_FACULTY;
   const sections = data?.sections ?? NO_SECTIONS;
   const groups = data?.groups ?? NO_GROUPS;
+  const canManageChairs = data?.chairs != null;
+  const chairs = data?.chairs ?? NO_CHAIRS;
 
-  const filteredFaculty = faculty.filter((f) => {
-    if (filterSection === "__none__") return f.groups.length === 0;
-    if (filterSection && !f.sections.some((s) => s.id === filterSection)) return false;
-    return true;
+  const people: Person[] = [
+    ...faculty.map((f): Person => ({ ...f, role: "instructor", instructor: f })),
+    ...chairs.map((c): Person => ({ ...c, role: "program_chair" })),
+  ].sort((a, b) => a.name.localeCompare(b.name));
+
+  // Groups and sections belong to instructors, so those filters leave Program Chairs out.
+  const filteredPeople = people.filter((p) => {
+    if (filterRole && p.role !== filterRole) return false;
+    if (!filterSection) return true;
+    if (!p.instructor) return false;
+    if (filterSection === "__none__") return p.instructor.groups.length === 0;
+    return p.instructor.sections.some((s) => s.id === filterSection);
   });
+  const filtering = Boolean(filterSection || filterRole);
 
   const flash = (text: string) => {
     setMessage(text);
@@ -106,45 +164,60 @@ export default function FacultyClient() {
       return;
     }
     setBusy(true);
-    const res = await apiFetch("/api/admin/users", {
+    const role = newRole;
+    const label = ROLE_LABEL[role];
+    const res = await apiFetch(ACCOUNT_API[role], {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ ...newFaculty, role: "faculty" }),
+      body: JSON.stringify(role === "instructor" ? { ...newFaculty, role: "faculty" } : newFaculty),
     });
     setBusy(false);
-    const json = (await res.json()) as {
-      user?: Omit<Faculty, "sections" | "groups" | "student_count" | "course_count" | "material_count">;
+    const json = (await res.json().catch(() => ({}))) as {
+      user?: Omit<Faculty, "sections" | "groups" | "student_count" | "course_count" | "material_count"> &
+        Partial<ProgramChair>;
       password?: string;
       warning?: string;
       error?: string;
     };
     if (!res.ok || !json.user) {
-      flash(json.error ?? "Failed to create instructor");
+      flash(json.error ?? `Failed to create ${label}`);
       return;
     }
+    const user = json.user;
     setData((previous) => ({
-      faculty: [
-        ...(previous?.faculty ?? []),
-        { ...json.user!, sections: [], groups: [], student_count: 0, course_count: 0, material_count: 0 },
-      ],
+      faculty:
+        role === "instructor"
+          ? [
+              ...(previous?.faculty ?? []),
+              { ...user, sections: [], groups: [], student_count: 0, course_count: 0, material_count: 0 },
+            ]
+          : (previous?.faculty ?? NO_FACULTY),
       sections: previous?.sections ?? NO_SECTIONS,
       groups: previous?.groups ?? NO_GROUPS,
+      chairs:
+        role === "program_chair"
+          ? [...(previous?.chairs ?? []), { instructor_count: 0, student_count: 0, ...user } as ProgramChair]
+          : (previous?.chairs ?? null),
     }));
     setShowAddModal(false);
     setNewFaculty({ name: "", email: "", sex: "" });
+    setNewRole("instructor");
     // The password comes back only when the welcome email could not go out.
     if (json.password) {
-      setTempPassword({ email: json.user.email, password: json.password, warning: json.warning });
-      flash("Instructor account created");
+      setTempPassword({ email: user.email, password: json.password, warning: json.warning });
+      flash(`${label} account created`);
     } else {
-      flash(`Instructor account created. Their temporary password was emailed to ${json.user.email}.`);
+      flash(`${label} account created. Their temporary password was emailed to ${user.email}.`);
     }
   };
 
   const openAssignModal = (member: Faculty) => {
     setSelectedFaculty(member);
   };
+
+  // An instructor's row opens their groups, a Program Chair's their account.
+  const openRow = (person: Person) => (person.instructor ? openAssignModal(person.instructor) : openEdit(person));
 
   // Failures go back to the dialog: the page's own message sits behind its backdrop.
   const handleSaveAssignments = async (groupIds: string[]): Promise<string | null> => {
@@ -170,7 +243,7 @@ export default function FacultyClient() {
     return null;
   };
 
-  const openEdit = (member: Faculty) => {
+  const openEdit = (member: Person) => {
     setEditing(member);
     setEditForm({ name: member.name, sex: member.sex ?? "" });
     setEditError(null);
@@ -192,7 +265,7 @@ export default function FacultyClient() {
     setBusy(true);
     setEditError(null);
     try {
-      const res = await apiFetch(`/api/admin/users/${editing.id}`, {
+      const res = await apiFetch(`${ACCOUNT_API[editing.role]}/${editing.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -204,7 +277,7 @@ export default function FacultyClient() {
         return;
       }
       setEditing(null);
-      flash("Instructor account updated");
+      flash(`${ROLE_LABEL[editing.role]} account updated`);
       // Reload: their name also shows on the groups they hold.
       await loadData();
     } catch {
@@ -214,7 +287,7 @@ export default function FacultyClient() {
     }
   };
 
-  const openDelete = (member: Faculty) => {
+  const openDelete = (member: Person) => {
     setDeleting(member);
     setDeleteError(null);
   };
@@ -224,7 +297,7 @@ export default function FacultyClient() {
     setBusy(true);
     setDeleteError(null);
     try {
-      const res = await apiFetch(`/api/admin/users/${deleting.id}`, {
+      const res = await apiFetch(`${ACCOUNT_API[deleting.role]}/${deleting.id}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -251,10 +324,14 @@ export default function FacultyClient() {
       <PageHeader
         badge={{
           icon: <FontAwesomeIcon icon={faUsers} className="w-3.5 h-3.5" />,
-          label: "Instructor Management",
+          label: "Faculty Management",
         }}
-        title="Instructors"
-        subtitle="Manage instructor accounts and the groups they handle"
+        title="Faculty"
+        subtitle={
+          canManageChairs
+            ? "Manage instructor and Program Chair accounts, and the groups instructors handle"
+            : "Manage instructor accounts and the groups they handle"
+        }
       />
 
       {message && (
@@ -280,8 +357,9 @@ export default function FacultyClient() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-        <StatTile icon={faUsers} value={faculty.length} label="Total Instructors" />
+      <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 ${canManageChairs ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
+        <StatTile icon={faUserTie} value={faculty.length} label="Instructors" />
+        {canManageChairs && <StatTile icon={faSitemap} value={chairs.length} label="Program Chairs" />}
         <StatTile icon={faUsers} value={groups.length} label="Groups" />
         <StatTile icon={faUsers} value={facultyWithoutGroups} label="Instructors Without Groups" />
       </div>
@@ -290,12 +368,19 @@ export default function FacultyClient() {
         {/* The action first, then the filter. */}
         <button
           onClick={() => setShowAddModal(true)}
-          aria-label="Add an instructor account"
+          aria-label="Add a faculty account"
           className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_2px_8px_-1px_rgb(27_107_123_/_0.35)] transition-all hover:bg-brand-700"
         >
           <FontAwesomeIcon icon={faPlus} className="h-4 w-4" />
-          Add Instructor
+          Add Faculty
         </button>
+        {canManageChairs && (
+          <FilterSelect value={filterRole} onChange={(e) => setFilterRole(e.target.value as "" | Role)}>
+            <option value="">All Roles</option>
+            <option value="instructor">Instructors</option>
+            <option value="program_chair">Program Chairs</option>
+          </FilterSelect>
+        )}
         <FilterSelect value={filterSection} onChange={(e) => setFilterSection(e.target.value)}>
           <option value="">All Sections</option>
           <option value="__none__">No Group</option>
@@ -304,9 +389,12 @@ export default function FacultyClient() {
           ))}
         </FilterSelect>
 
-        {filterSection && (
+        {filtering && (
           <button
-            onClick={() => setFilterSection("")}
+            onClick={() => {
+              setFilterSection("");
+              setFilterRole("");
+            }}
             className="text-xs text-brand-600 font-medium hover:underline ml-auto"
           >
             Clear filter
@@ -319,7 +407,10 @@ export default function FacultyClient() {
           <table className="w-full">
             <thead className="bg-subtle border-b border-gray-100">
               <tr>
-                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Instructor</th>
+                <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Name</th>
+                {canManageChairs && (
+                  <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Role</th>
+                )}
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Groups</th>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Students</th>
                 <th className="text-left py-3 px-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Joined</th>
@@ -362,17 +453,17 @@ export default function FacultyClient() {
                     </td>
                   </tr>
                 ))
-              ) : filteredFaculty.length === 0 ? (
+              ) : filteredPeople.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-gray-400">
-                    {filterSection ? "No instructors match the selected filter" : "No instructor accounts yet — add one to get started"}
+                  <td colSpan={canManageChairs ? 7 : 6} className="py-12 text-center text-gray-400">
+                    {filtering ? "No faculty match the selected filter" : "No faculty accounts yet — add one to get started"}
                   </td>
                 </tr>
               ) : (
-                filteredFaculty.map((member) => (
+                filteredPeople.map((member) => (
                   <tr
-                    key={member.id}
-                    onClick={() => openAssignModal(member)}
+                    key={`${member.role}:${member.id}`}
+                    onClick={() => openRow(member)}
                     className="hover:bg-subtle hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
                   >
                     <td className="py-3 px-4">
@@ -390,12 +481,19 @@ export default function FacultyClient() {
                         </div>
                       </div>
                     </td>
+                    {canManageChairs && (
+                      <td className="py-3 px-4 whitespace-nowrap text-sm text-gray-600">{ROLE_LABEL[member.role]}</td>
+                    )}
                     <td className="py-3 px-4">
-                      {member.groups.length === 0 ? (
+                      {!member.instructor ? (
+                        <span className="text-sm text-gray-500">
+                          {plural(member.instructor_count ?? 0, "instructor")}
+                        </span>
+                      ) : member.instructor.groups.length === 0 ? (
                         <span className="text-sm text-gray-400">None</span>
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
-                          {member.groups.map((g) => (
+                          {member.instructor.groups.map((g) => (
                             <span
                               key={g.id}
                               className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-600/10 text-brand-600 border border-brand-600/20"
@@ -419,7 +517,9 @@ export default function FacultyClient() {
                           label={`Actions for ${member.name}`}
                           actions={[
                             { label: "Edit Account", icon: faPenToSquare, onClick: () => openEdit(member) },
-                            { label: "Assign Groups", icon: faLayerGroup, onClick: () => openAssignModal(member) },
+                            ...(member.instructor
+                              ? [{ label: "Assign Groups", icon: faLayerGroup, onClick: () => openAssignModal(member.instructor!) }]
+                              : []),
                             { label: "Delete Account", icon: faTrashCan, danger: true, onClick: () => openDelete(member) },
                           ]}
                         />
@@ -435,9 +535,38 @@ export default function FacultyClient() {
 
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-surface rounded-xl p-4 w-full max-w-lg mx-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Instructor</h3>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Add New Faculty"
+            className="bg-surface rounded-xl p-4 w-full max-w-lg mx-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Faculty</h3>
             <div className="space-y-2">
+              {canManageChairs && (
+                <div>
+                  <p className="block text-sm font-medium text-gray-700 mb-2">Role</p>
+                  <div className="flex rounded-xl border border-gray-200 p-0.5" role="group" aria-label="Role">
+                    {(Object.keys(ROLE_LABEL) as Role[]).map((role) => (
+                      <button
+                        key={role}
+                        type="button"
+                        onClick={() => setNewRole(role)}
+                        aria-pressed={newRole === role}
+                        className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                          newRole === role ? "bg-brand-600 text-white" : "text-gray-600 hover:bg-subtle"
+                        }`}
+                      >
+                        {ROLE_LABEL[role]}
+                      </button>
+                    ))}
+                  </div>
+                  {newRole === "program_chair" && (
+                    <p className="text-xs text-gray-400 mt-2">
+                      A Program Chair works in your space with the same access, apart from managing other faculty accounts.
+                    </p>
+                  )}
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
                 <input
@@ -469,7 +598,10 @@ export default function FacultyClient() {
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <button
-                onClick={() => setShowAddModal(false)}
+                onClick={() => {
+                  setShowAddModal(false);
+                  setNewRole("instructor");
+                }}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
               >
                 Cancel
@@ -479,7 +611,7 @@ export default function FacultyClient() {
                 disabled={busy}
                 className="px-4 py-2 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 disabled:opacity-60 transition-all"
               >
-                {busy ? "Creating…" : "Add Instructor"}
+                {busy ? "Creating…" : `Add ${ROLE_LABEL[newRole]}`}
               </button>
             </div>
           </div>
@@ -499,9 +631,12 @@ export default function FacultyClient() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <form
             onSubmit={handleSaveEdit}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Edit ${ROLE_LABEL[editing.role]} Account`}
             className="bg-surface rounded-xl p-4 w-full max-w-lg mx-4 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-hairline"
           >
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Instructor Account</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit {ROLE_LABEL[editing.role]} Account</h3>
             <div className="space-y-2">
               <div>
                 <label htmlFor="edit-instructor-name" className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
@@ -577,29 +712,32 @@ export default function FacultyClient() {
           onClose={() => setDeleting(null)}
           config={{
             title: `Delete ${deleting.name}'s account?`,
-            message: `${deleting.email} will no longer be able to sign in. This cannot be undone.`,
+            message:
+              deleting.role === "program_chair"
+                ? `${deleting.email} will no longer be able to sign in. This cannot be undone. An account that still has instructors, students or records can't be deleted.`
+                : `${deleting.email} will no longer be able to sign in. This cannot be undone.`,
             confirmLabel: "Delete Account",
             loading: busy,
             error: deleteError,
             onConfirm: () => void handleDelete(),
-            children: (
+            children: deleting.instructor && (
               <ul className="mt-3 list-disc space-y-1.5 pl-4 text-sm text-gray-700">
-                {deleting.groups.length > 0 && (
+                {deleting.instructor.groups.length > 0 && (
                   <li>
-                    {plural(deleting.groups.length, "group")} with {plural(deleting.student_count, "student")}{" "}
+                    {plural(deleting.instructor.groups.length, "group")} with {plural(deleting.student_count, "student")}{" "}
                     will have no instructor until you assign another.
                   </li>
                 )}
-                {deleting.course_count > 0 && (
+                {deleting.instructor.course_count > 0 && (
                   <li>
-                    {plural(deleting.course_count, "course assignment")} will show &ldquo;No instructor&rdquo; until
-                    you change {deleting.course_count === 1 ? "it" : "them"}.
+                    {plural(deleting.instructor.course_count, "course assignment")} will show &ldquo;No instructor&rdquo; until
+                    you change {deleting.instructor.course_count === 1 ? "it" : "them"}.
                   </li>
                 )}
-                {deleting.material_count > 0 && (
+                {deleting.instructor.material_count > 0 && (
                   <li>
-                    {plural(deleting.material_count, "Library material")} will pass to you, so students keep{" "}
-                    {deleting.material_count === 1 ? "it" : "them"}.
+                    {plural(deleting.instructor.material_count, "Library material")} will pass to you, so students keep{" "}
+                    {deleting.instructor.material_count === 1 ? "it" : "them"}.
                   </li>
                 )}
                 <li>The grades they gave and the Patient Cases and quizzes they made will stay.</li>

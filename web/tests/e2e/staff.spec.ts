@@ -27,7 +27,7 @@ test.describe('Dean portal', () => {
   });
 
   test('management pages load', async ({ page }) => {
-    for (const path of ['/dean/student-management', '/dean/instructors', '/dean/program-chairs', '/dean/curriculum', '/dean/courses', '/dean/analytics']) {
+    for (const path of ['/dean/student-management', '/dean/instructors', '/dean/curriculum', '/dean/courses', '/dean/analytics']) {
       const res = await page.goto(path);
       expect(res?.ok(), path).toBeTruthy();
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
@@ -109,26 +109,26 @@ test.describe('Curriculum page', () => {
   });
 });
 
-test.describe('Program Chairs page', () => {
-  test('a Dean has it', async ({ page }) => {
-    await startDemo(page, 'Dean');
-    await page.getByRole('link', { name: 'Program Chairs', exact: true }).first().click();
-    await expect(page.getByRole('heading', { level: 1, name: 'Program Chairs' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add Program Chair' })).toBeVisible();
-  });
+test.describe('Program Chairs on the Faculty page', () => {
+  const openFaculty = async (page: Page) => {
+    await page.getByRole('link', { name: 'Faculty', exact: true }).first().click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Faculty' })).toBeVisible();
+  };
 
   test('a Dean adds, edits and deletes one', async ({ page }) => {
     await startDemo(page, 'Dean');
-    await page.getByRole('link', { name: 'Program Chairs', exact: true }).first().click();
+    await openFaculty(page);
 
-    await page.getByRole('button', { name: 'Add Program Chair' }).click();
-    const add = page.getByRole('dialog', { name: 'Add New Program Chair' });
+    await page.getByRole('button', { name: 'Add a faculty account' }).click();
+    const add = page.getByRole('dialog', { name: 'Add New Faculty' });
+    await add.getByRole('button', { name: 'Program Chair', exact: true }).click();
     await add.getByLabel('Full Name').fill('Test Chair');
     await add.getByLabel('Email').fill('test.chair@demo.icare.ph');
     await add.getByLabel(/Gender/).selectOption('female');
     await add.getByRole('button', { name: 'Add Program Chair' }).click();
     const row = page.getByRole('row', { name: /Test Chair/ });
     await expect(row).toBeVisible();
+    await expect(row.getByText('Program Chair', { exact: true })).toBeVisible();
 
     await chooseAction(row, 'Edit Account');
     const edit = page.getByRole('dialog', { name: 'Edit Program Chair Account' });
@@ -143,13 +143,19 @@ test.describe('Program Chairs page', () => {
     await expect(renamed).toHaveCount(0);
   });
 
-  test('a Program Chair does not', async ({ page }) => {
+  test('a Program Chair sees the instructors only', async ({ page }) => {
     await startDemo(page, 'Program Chair');
-    await expect(page.getByRole('link', { name: 'Instructors', exact: true }).first()).toBeVisible();
+    await openFaculty(page);
     await expect(page.getByRole('link', { name: 'Program Chairs', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('columnheader', { name: 'Role' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Add a faculty account' }).click();
+    await expect(page.getByRole('dialog', { name: 'Add New Faculty' }).getByRole('button', { name: 'Program Chair', exact: true })).toHaveCount(0);
+  });
+
+  test('the old Program Chairs address lands on the Faculty page', async ({ page }) => {
+    await startDemo(page, 'Dean');
     await page.goto('/dean/program-chairs');
-    await expect(page).toHaveURL(/\/dean(\?|$)/);
-    await expect(page.getByRole('heading', { level: 1, name: 'Program Chairs' })).toHaveCount(0);
+    await expect(page).toHaveURL(/\/dean\/instructors(\?|$)/);
   });
 });
 

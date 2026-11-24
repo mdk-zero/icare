@@ -17,13 +17,13 @@ test.describe('Dean: instructor accounts', () => {
     await page.getByRole('button', { name: 'Try a demo' }).click();
     await page.getByRole('dialog').getByRole('button', { name: /^Dean\b/ }).click();
     await expect(page).toHaveURL(/\/dean(\?|$)/);
-    await page.getByRole('link', { name: 'Instructors', exact: true }).first().click();
-    await expect(page.getByRole('heading', { level: 1, name: 'Instructors' })).toBeVisible();
+    await page.getByRole('link', { name: 'Faculty', exact: true }).first().click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Faculty' })).toBeVisible();
     await expect(firstRow(page).getByRole('button', { name: /^Actions for / })).toBeVisible();
   });
 
   test('adds one', async ({ page }) => {
-    await page.getByRole('button', { name: 'Add an instructor account' }).click();
+    await page.getByRole('button', { name: 'Add a faculty account' }).click();
     await page.getByPlaceholder('Dr. Juan dela Cruz').fill('Test Instructor');
     await page.getByLabel('Gender').selectOption('female');
     await page.getByPlaceholder('faculty@icare.edu').fill('test.instructor@example.com');
@@ -36,7 +36,7 @@ test.describe('Dean: instructor accounts', () => {
   });
 
   test('adds one without a gender', async ({ page }) => {
-    await page.getByRole('button', { name: 'Add an instructor account' }).click();
+    await page.getByRole('button', { name: 'Add a faculty account' }).click();
     await page.getByPlaceholder('Dr. Juan dela Cruz').fill('Test Instructor');
     await expect(page.getByLabel('Gender')).toHaveValue('');
     await page.getByPlaceholder('faculty@icare.edu').fill('no.gender@example.com');
